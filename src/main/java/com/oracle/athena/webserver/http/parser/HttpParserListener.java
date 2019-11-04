@@ -1,0 +1,137 @@
+package com.oracle.athena.webserver.http.parser;
+
+import com.oracle.athena.webserver.connectionstate.CasperHttpInfo;
+import org.eclipse.jetty.http.*;
+import org.eclipse.jetty.util.BufferUtil;
+
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+
+
+public class HttpParserListener implements HttpParser.RequestHandler {
+
+    private String _host;
+    private int _port;
+    private String _bad;
+    private String _content;
+    private String _methodOrVersion;
+    private String _uriOrStatus;
+    private String _versionOrReason;
+    private List<HttpField> _trailers = new ArrayList<>();
+    private boolean _early;
+    private boolean _headerCompleted;
+    private boolean _messageCompleted;
+    private final List<HttpComplianceSection> _complianceViolation = new ArrayList<>();
+
+    private CasperHttpInfo casperHttpInfo;
+
+    public HttpParserListener(final CasperHttpInfo httpHeaderInfo) {
+        casperHttpInfo = httpHeaderInfo;
+    }
+
+    @Override
+    public boolean content(ByteBuffer ref) {
+        if (_content == null)
+            _content = "";
+        String c = BufferUtil.toString(ref, StandardCharsets.UTF_8);
+        _content = _content + c;
+        ref.position(ref.limit());
+
+        System.out.println("content() _content: " + _content);
+
+        return false;
+    }
+
+    @Override
+    public boolean startRequest(String method, String uri, HttpVersion version) {
+        _methodOrVersion = method;
+        _uriOrStatus = uri;
+        _versionOrReason = version == null ? null : version.asString();
+        _messageCompleted = false;
+        _headerCompleted = false;
+        _early = false;
+
+        if (_versionOrReason != null) {
+            System.out.println("StartRequest() method: " + method + " uri: " + uri +
+                    " version: " + _versionOrReason);
+
+            casperHttpInfo.setHttpMethodAndVersion(method, _versionOrReason);
+        } else {
+            System.out.println("StartRequest() method: " + method + " uri: " + uri +
+                    " version: null");
+        }
+
+        return false;
+    }
+
+    @Override
+    public void parsedHeader(HttpField field) {
+        casperHttpInfo.addHeaderValue(field);
+    }
+
+    @Override
+    public boolean headerComplete() {
+        System.out.println("headerComplete()");
+        _content = null;
+        _headerCompleted = true;
+
+        casperHttpInfo.setHeaderComplete();
+        return false;
+    }
+
+    @Override
+    public void parsedTrailer(HttpField field) {
+        System.out.println("parsedTrailer() " + field.toString());
+
+        _trailers.add(field);
+    }
+
+    @Override
+    public boolean contentComplete() {
+        System.out.println("contentComplete()");
+
+        casperHttpInfo.setContentComplete();
+        return false;
+    }
+
+    @Override
+    public boolean messageComplete() {
+        System.out.println("messageComplete()");
+
+        _messageCompleted = true;
+
+        casperHttpInfo.setMessageComplete();
+        return true;
+    }
+
+    @Override
+    public void badMessage(BadMessageException failure) {
+        String reason = failure.getReason();
+        _bad = reason == null ? String.valueOf(failure.getCode()) : reason;
+
+        System.out.println("badMessage() reason: " + reason);
+    }
+
+    @Override
+    public void earlyEOF() {
+
+        _early = true;
+    }
+
+    @Override
+    public int getHeaderCacheSize() {
+        return 4096;
+    }
+
+    /*
+    @Override
+    public void onComplianceViolation(HttpCompliance compliance, HttpComplianceSection violation, String reason)
+    {
+        System.out.println("onComplianceViolation()" + reason);
+        _complianceViolation.add(violation);
+    }
+     */
+}
+
