@@ -29,6 +29,7 @@ public class ByteBufferHttpParser {
             int was_remaining = remaining;
             httpParser.parseNext(buffer);
             remaining = buffer.remaining();
+            System.out.println("parseHttpData() was_remaining: " + was_remaining + " remaining: " + remaining);
             if (remaining == was_remaining)
                 break;
         }

@@ -15,6 +15,7 @@ import java.nio.channels.CompletionHandler;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /*
@@ -62,6 +63,12 @@ public class ConnectionState {
     private int bufferReadIndex;
     private AtomicInteger outstandingReadCount;
 
+    private AtomicInteger httpBufferReadsCompleted;
+    private boolean initialHttpBuffer;
+
+    private AtomicBoolean httpHeaderParsed;
+
+
     /*
      ** bufferReadDoneIndex
      */
@@ -87,7 +94,6 @@ public class ConnectionState {
      **
      */
     private int allocatedHttpBufferCnt;
-    private int dataAvailHttpBufferCnt;
 
     /*
      ** The next four items are associated with the thread that is running the ConnectionState
@@ -119,7 +125,11 @@ public class ConnectionState {
         clientDataReadCallback = null;
 
         allocatedHttpBufferCnt = 0;
-        dataAvailHttpBufferCnt = 0;
+
+        httpBufferReadsCompleted = new AtomicInteger(0);
+        initialHttpBuffer = true;
+
+        httpHeaderParsed = new AtomicBoolean(false);
     }
 
     /*
@@ -127,7 +137,11 @@ public class ConnectionState {
      */
     void start() {
 
-        casperHttpInfo = new CasperHttpInfo();
+        /*
+         ** The CasperHttpInfo keeps track of the details of a particular
+         **   HTTP transfer and the parsed information.
+         */
+        casperHttpInfo = new CasperHttpInfo(this);
 
         httpParser = new ByteBufferHttpParser(casperHttpInfo);
     }
@@ -143,23 +157,24 @@ public class ConnectionState {
                 // Fall through
 
             case ALLOC_HTTP_BUFFER:
-                if (!allocHttpBufferState())
+                /*
+                 ** Do not continue if there are no buffers allocated
+                 */
+                if (allocHttpBufferState() == 0)
                     break;
             case READ_HTTP_BUFFER:
                 readIntoMultipleBuffers();
                 break;
 
-            case READ_NEXT_HTTP_BUFFER:
-                readIntoBuffer();
-                break;
-
             case PARSE_HTTP_BUFFER:
-                // Clean up the values in the ReadState class
-                displayBuffer();
                 parseHttp();
 
-                setOverallState(ConnectionStateEnum.SEND_XFR_DATA_RESP);
-                workerThread.put(this);
+                boolean headerReady = httpHeaderParsed.get();
+
+                if (headerReady) {
+                    setOverallState(ConnectionStateEnum.SEND_XFR_DATA_RESP);
+                    workerThread.put(this);
+                }
                 break;
 
             case SEND_XFR_DATA_RESP:
@@ -220,7 +235,7 @@ public class ConnectionState {
     /*
      ** Allocate a buffer to read data into and associate it with this ConnectionState
      */
-    private boolean allocHttpBufferState() {
+    private int allocHttpBufferState() {
         BufferState bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_FROM_CHAN, MemoryManager.SMALL_BUFFER_SIZE);
         if (bufferState != null) {
             if (addBufferState(bufferState)) {
@@ -228,21 +243,18 @@ public class ConnectionState {
                 setOverallState(ConnectionStateEnum.READ_HTTP_BUFFER);
 
                 allocatedHttpBufferCnt++;
-                return true;
-            } else {
-                return false;
             }
         }
 
-        return false;
+        return allocatedHttpBufferCnt;
     }
 
     private boolean allocClientReadBufferState() {
         System.out.println("ServerWorkerThread(" + connStateId + ") allocClientReadBufferState(1) " + Thread.currentThread().getName());
 
-        BufferState bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_FROM_CHAN, MemoryManager.MEDIUM_BUFFER_SIZE);
+        BufferState bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_FROM_CHAN, MemoryManager.SMALL_BUFFER_SIZE);
         if (bufferState != null) {
-            System.out.println("ServerWorkerThread(" + connStateId + ") allocClientReadBufferState(2) " + Thread.currentThread().getName());
+            System.out.println("ServerWorkerThread(" + connStateId + ") allocClientReadBufferState(2)");
 
             return addBufferState(bufferState);
         }
@@ -274,6 +286,10 @@ public class ConnectionState {
         }
     }
 
+    /*
+     ** This finds the first available BufferState with its state set to READ_FROM_CHAN
+     **   and then performs a read using it.
+     */
     private void readIntoBuffer() {
         BufferState buffState;
 
@@ -282,6 +298,7 @@ public class ConnectionState {
         buffState = getNextReadBufferState();
 
         if (buffState != null) {
+            allocatedHttpBufferCnt--;
             readFromChannel(buffState);
         } else {
             System.out.println("readIntoBuffer(" + connStateId + ") buffState null");
@@ -289,6 +306,10 @@ public class ConnectionState {
     }
 
 
+    /*
+     ** This is used to setup the state machine and associated information to allow
+     **   a write to take place on the passed in AsynchronousSocketChannel.
+     */
     void setChannelAndWrite(final AsynchronousSocketChannel chan) {
         connChan = chan;
         overallState = ConnectionStateEnum.INITIAL_SETUP;
@@ -309,6 +330,14 @@ public class ConnectionState {
         overallState = ConnectionStateEnum.INITIAL_SETUP;
     }
 
+    /*
+     ** This is called when the WorkerThread that this ConnectionState will execute on is
+     **   determined. It is done prior to the ConnectionState being queued to the
+     **   WorkerThread the first time.
+     **
+     ** NOTE: The ConnectionState is reused and may execute on different threads for each
+     **   lifetime of a connection.
+     */
     public void assignWorkerThread(final ServerWorkerThread thread) {
         workerThread = thread;
     }
@@ -326,12 +355,13 @@ public class ConnectionState {
         bufferStatePool = null;
 
         clientDataReadCallback = null;
+
+        httpHeaderParsed.set(false);
     }
 
-    public AsynchronousSocketChannel getChannel() {
-        return connChan;
-    }
-
+    /*
+     ** TODO: The overallState modifications and reads need to be made thread safe.
+     */
     public void setOverallState(final ConnectionStateEnum state) {
         overallState = state;
     }
@@ -344,7 +374,7 @@ public class ConnectionState {
         clientDataReadCallback = clientReadCb;
     }
 
-    public void callClientReadCallback(final int status, final ByteBuffer readBuffer) {
+    private void callClientReadCallback(final int status, final ByteBuffer readBuffer) {
         clientDataReadCallback.dataBufferRead(0, readBuffer);
     }
 
@@ -379,7 +409,10 @@ public class ConnectionState {
         httpParser.resetHttpParser();
     }
 
-    public boolean addBufferState(BufferState bufferState) {
+    /*
+     ** TODO: Need to handle the wrap case for the array.
+     */
+    private boolean addBufferState(BufferState bufferState) {
         if (currentFreeBufferState < MAX_OUTSTANDING_BUFFERS) {
             bufferStates[currentFreeBufferState] = bufferState;
             currentFreeBufferState++;
@@ -390,7 +423,12 @@ public class ConnectionState {
         return false;
     }
 
-    public void resetBufferReadIndex() {
+    /*
+     ** TODO: This is probably not needed as the BufferState array can have multiple buffers
+     **   on it in different states. Might need something besides an array to keep track of
+     **   the buffer states and what they are supposed to be used for. Maybe a FIFO...
+     */
+    private void resetBufferReadIndex() {
         int readCount = outstandingReadCount.get();
         if (readCount != 0) {
             System.out.println("outstandingReadCount != 0: " + readCount);
@@ -423,7 +461,7 @@ public class ConnectionState {
         return buffState;
     }
 
-    public void resetBufferReadDoneIndex() {
+    private void resetBufferReadDoneIndex() {
         bufferReadDoneIndex = 0;
     }
 
@@ -433,7 +471,7 @@ public class ConnectionState {
      ** NOTE: The expectation is that when the Java NIO.2 read operation performs it's callback,
      **   there is no more data to be transferred into the buffer being read into.
      */
-    public BufferState getNextReadDoneBufferState() {
+    private BufferState getNextReadDoneBufferState() {
         BufferState buffState = null;
         while (bufferReadDoneIndex < MAX_OUTSTANDING_BUFFERS) {
             buffState = bufferStates[bufferReadDoneIndex];
@@ -469,12 +507,14 @@ public class ConnectionState {
     void readCompleted(boolean lastRead) {
         int readCount = outstandingReadCount.decrementAndGet();
 
+        int readCompletedCount = httpBufferReadsCompleted.incrementAndGet();
+
         System.out.println("ConnectionState.readComplete() lastRead: " + lastRead + " readCount: " + readCount +
                 " overallState: " + overallState);
 
-        if (lastRead == false) {
+        if (!lastRead) {
             if (overallState == ConnectionStateEnum.READ_HTTP_BUFFER) {
-                overallState = ConnectionStateEnum.READ_NEXT_HTTP_BUFFER;
+                overallState = ConnectionStateEnum.ALLOC_HTTP_BUFFER;
             } else {
                 overallState = ConnectionStateEnum.READ_NEXT_BUFFER;
             }
@@ -526,52 +566,56 @@ public class ConnectionState {
         }
     }
 
-    public void displayBuffer() {
+    /*
+     ** This function walks through all the buffers that have reads completed and pushes
+     **   then through the HTTP Parser.
+     ** Once the header buffers have been parsed, they can be released. The goal is to not
+     **   recycle the data buffers, so those may not need to be sent through the HTTP Parser'
+     **   and instead should be handled directly.
+     */
+    private void parseHttp() {
         int bufferStateIndex = 0;
         ByteBuffer buffer;
 
-        while (bufferStateIndex < MAX_OUTSTANDING_BUFFERS) {
-            BufferState buffState = bufferStates[bufferStateIndex];
-            if (buffState != null) {
-                buffer = buffState.getCheckedBuffer(BufferStateEnum.READ_DONE);
+        int bufferReadsDone = httpBufferReadsCompleted.get();
+        if (bufferReadsDone > 0) {
+            while (bufferStateIndex < MAX_OUTSTANDING_BUFFERS) {
+                BufferState buffState = bufferStates[bufferStateIndex];
+                if (buffState != null) {
+                    buffer = buffState.getCheckedBuffer(BufferStateEnum.READ_DONE);
 
-                if (buffer != null) {
-                    System.out.println("buffer[" + bufferStateIndex + "] " + buffer.position() + " " + buffer.limit());
+                    if (buffer != null) {
+                        httpBufferReadsCompleted.decrementAndGet();
 
-                    String tmp = bb_to_str(buffer);
+                        int bufferTextCapacity = buffer.position();
+                        buffer.rewind();
+                        buffer.limit(bufferTextCapacity);
 
-                    System.out.println("ConnectionState buffer[" + bufferStateIndex + "]" + tmp);
+                        httpParser.parseHttpData(buffer, initialHttpBuffer);
+
+                        /*
+                         ** Set the BufferState to PARSE_DONE
+                         ** TODO: When can the buffers used for the header be released?
+                         */
+                        buffState.setHttpParseDone();
+
+                        initialHttpBuffer = false;
+                    }
                 }
-            }
 
-            bufferStateIndex++;
+                bufferStateIndex++;
+            }
         }
     }
 
-    public void parseHttp() {
-        int bufferStateIndex = 0;
-        boolean initialBuffer = true;
-        ByteBuffer buffer;
+    /*
+     ** This is used to tell the connection management that the HTTP header has been parsed
+     **   and the validation and authorization can take place.
+     */
+    void httpHeaderParseComplete() {
+        System.out.println("httpHeaderParseComplete(" + connStateId + ") curr: " + overallState);
 
-        while (bufferStateIndex < MAX_OUTSTANDING_BUFFERS) {
-            BufferState buffState = bufferStates[bufferStateIndex];
-            if (buffState != null) {
-                buffer = buffState.getCheckedBuffer(BufferStateEnum.READ_DONE);
-
-                if (buffer != null) {
-                    int bufferTextCapacity = buffer.position();
-                    buffer.rewind();
-                    buffer.limit(bufferTextCapacity);
-
-                    httpParser.parseHttpData(buffer, initialBuffer);
-
-                    initialBuffer = false;
-                }
-            }
-
-            bufferStateIndex++;
-        }
-
+        httpHeaderParsed.set(true);
     }
 
     public int getConnStateId() {
@@ -581,7 +625,7 @@ public class ConnectionState {
     /*
      ** Sets up the WriteConnection, but only does it once
      */
-    public void setupWriteConnection() {
+    private void setupWriteConnection() {
         if (writeConn == null) {
             writeConn = new WriteConnection(1);
 
@@ -589,11 +633,11 @@ public class ConnectionState {
         }
     }
 
-    public WriteConnection getWriteConnection() {
+    private WriteConnection getWriteConnection() {
         return writeConn;
     }
 
-    public BufferState allocateResponseBuffer() {
+    private BufferState allocateResponseBuffer() {
         BufferState respBuffer = bufferStatePool.allocBufferState(this, BufferStateEnum.SEND_GET_DATA_RESPONSE, MemoryManager.MEDIUM_BUFFER_SIZE);
 
         responseBuffer = respBuffer;
@@ -629,62 +673,20 @@ public class ConnectionState {
         responseBuffer = null;
     }
 
-    public void str_to_bb(ByteBuffer out, String in) {
-        Charset charset = Charset.forName("UTF-8");
-        CharsetEncoder encoder = charset.newEncoder();
-
-        try {
-            boolean endOfInput = true;
-
-            encoder.encode(CharBuffer.wrap(in), out, endOfInput);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-    }
-
-    public void charbuffer_to_bb(ByteBuffer out, CharBuffer in) {
-        Charset charset = Charset.forName("UTF-8");
-        CharsetEncoder encoder = charset.newEncoder();
-
-        try {
-            boolean endOfInput = true;
-
-            encoder.encode(in, out, endOfInput);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-    }
-
-    public String bb_to_str(ByteBuffer buffer) {
-        int bufferTextCapacity = buffer.position();
-        buffer.rewind();
-        buffer.limit(bufferTextCapacity);
-        /*
-        CharBuffer cbuf = buffer.asCharBuffer();
-        String tmp = cbuf.toString();
-        */
-
-        String tmp = StandardCharsets.UTF_8.decode(buffer).toString();
-
-        return tmp;
-    }
-
     /*
      ** This is what performs the actual read from the channel.
      */
     private void readFromChannel(final BufferState readBufferState) {
 
-        AsynchronousSocketChannel chan = getChannel();
-
         try {
-            SocketAddress addr = chan.getLocalAddress();
+            SocketAddress addr = connChan.getLocalAddress();
 
             System.out.println("readFromChannel(" + connStateId + "): socket: " + addr);
         } catch (IOException ex) {
             System.out.println("socket closed " + ex.getMessage());
 
             try {
-                chan.close();
+                connChan.close();
             } catch (IOException io_ex) {
                 System.out.println("socket closed " + io_ex.getMessage());
             }
@@ -699,7 +701,7 @@ public class ConnectionState {
 
         // Read the data from the channel
         ByteBuffer readBuffer = readBufferState.getBuffer();
-        chan.read(readBuffer, readBufferState, new CompletionHandler<Integer, BufferState>() {
+        connChan.read(readBuffer, readBufferState, new CompletionHandler<Integer, BufferState>() {
 
             @Override
             public void completed(final Integer bytesRead, final BufferState readBufferState) {
@@ -707,22 +709,16 @@ public class ConnectionState {
 
                 if (bytesRead == -1) {
                     try {
-                        getChannel().close();
+                        connChan.close();
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
 
                     readBufferState.setReadState(BufferStateEnum.READ_ERROR);
                 } else if (bytesRead > 0) {
-                    ByteBuffer buffer = readBufferState.getBuffer();
-                    if (buffer.remaining() == 0) {
-                        // Full buffer so there is likely more data to read
-                        allocClientReadBufferState();
-                    }
-                    // TODO: Need to check if all the data was read in
                     readBufferState.setReadState(BufferStateEnum.READ_DONE);
                 } else if (bytesRead == 0) {
-                    readBufferState.setReadState(BufferStateEnum.READ_DONE);
+                    readBufferState.setReadState(BufferStateEnum.READ_ERROR);
                 }
             }
 
@@ -731,7 +727,7 @@ public class ConnectionState {
                 System.out.println("readFromChannel(" + connStateId + ") bytesRead: " + exc.getMessage() + " thread: " + Thread.currentThread().getName());
 
                 try {
-                    getChannel().close();
+                    connChan.close();
                 } catch (IOException io_ex) {
                     System.out.println("Read() socket closed " + io_ex.getMessage());
                 }
@@ -771,5 +767,63 @@ public class ConnectionState {
         }
     }
 
+    /*
+     ** DEBUG FUNCTIONS BELOW
+     */
+
+    /*
+     ** This is a general debug function that dumps the buffer to the console.
+     */
+    private void displayBuffer() {
+        int bufferStateIndex = 0;
+        ByteBuffer buffer;
+
+        while (bufferStateIndex < MAX_OUTSTANDING_BUFFERS) {
+            BufferState buffState = bufferStates[bufferStateIndex];
+            if (buffState != null) {
+                buffer = buffState.getCheckedBuffer(BufferStateEnum.READ_DONE);
+
+                if (buffer != null) {
+                    System.out.println("buffer[" + bufferStateIndex + "] " + buffer.position() + " " + buffer.limit());
+
+                    String tmp = bb_to_str(buffer);
+
+                    System.out.println("ConnectionState buffer[" + bufferStateIndex + "]" + tmp);
+                }
+            }
+
+            bufferStateIndex++;
+        }
+    }
+
+    private void str_to_bb(ByteBuffer out, String in) {
+        Charset charset = StandardCharsets.UTF_8;
+        CharsetEncoder encoder = charset.newEncoder();
+
+        try {
+            boolean endOfInput = true;
+
+            encoder.encode(CharBuffer.wrap(in), out, endOfInput);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    private void charbuffer_to_bb(ByteBuffer out, CharBuffer in) {
+        Charset charset = StandardCharsets.UTF_8;
+        CharsetEncoder encoder = charset.newEncoder();
+
+        try {
+            encoder.encode(in, out, true);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    private String bb_to_str(ByteBuffer buffer) {
+        buffer.flip();
+
+        return StandardCharsets.UTF_8.decode(buffer).toString();
+    }
 
 }

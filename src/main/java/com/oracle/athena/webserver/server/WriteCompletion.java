@@ -2,7 +2,7 @@ package com.oracle.athena.webserver.server;
 
 import java.nio.ByteBuffer;
 
-public class WriteCompletion {
+abstract public class WriteCompletion {
 
     public ByteBuffer buffer;
     private long transactionId;
@@ -47,12 +47,5 @@ public class WriteCompletion {
      **   various components that use the WriteConnection infrastructure will
      **   extend this to have an operation specific callback.
      */
-    public void writeCompleted(final int result, final long transaction) {
-        if (result == 0) {
-            // Write completed without issue
-        } else {
-            // Write failed and will never be completed. In addition, the
-            // transaction has failed and it is closed.
-        }
-    }
+    abstract public void writeCompleted(final int result, final long transaction);
 }

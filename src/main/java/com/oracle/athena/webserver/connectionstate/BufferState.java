@@ -1,7 +1,6 @@
 package com.oracle.athena.webserver.connectionstate;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 
 /*
  ** This is used to manage the individual states a ByteBuffer goes through
@@ -56,7 +55,8 @@ public class BufferState {
      */
     public void setReadState(final BufferStateEnum newState) {
 
-        System.out.println("setReadState(): current " + bufferState.toString() + " new " + newState.toString());
+        System.out.println("setReadState(): current " + bufferState.toString() + " new " + newState.toString() +
+                " remaining: " + buffer.remaining());
 
         bufferState = newState;
 
@@ -75,16 +75,17 @@ public class BufferState {
         }
     }
 
+    /*
+     ** This is called after the buffer has been run through the HTTP parser. Buffers used
+     **   for the header can be released.
+     **
+     ** TODO: Need to figure out how data buffers are handled
+     */
+    public void setHttpParseDone() {
+        System.out.println("setHttpParseDone(): current " + bufferState.toString() +
+                " remaining: " + buffer.remaining());
 
-    public String displayBuffer() {
-        if (buffer.hasArray()) {
-            return new String(buffer.array(),
-                    buffer.arrayOffset() + buffer.position(),
-                    buffer.remaining(), StandardCharsets.UTF_8);
-        } else {
-            final byte[] b = new byte[buffer.remaining()];
-            buffer.duplicate().get(b);
-            return new String(b);
-        }
+        bufferState = BufferStateEnum.PARSE_HTTP_DONE;
     }
+
 }

@@ -25,7 +25,7 @@ public class ClientTest implements Runnable {
 
     private volatile WaitSignal writeDone;
 
-    private MemoryManager memoryManager;
+    private MemoryManager memoryAllocator;
 
     private HttpResponseListener responseListener;
     private HttpParser httpParser;
@@ -38,7 +38,7 @@ public class ClientTest implements Runnable {
         clientCount = threadCount;
         clientCount.incrementAndGet();
 
-        memoryManager = new MemoryManager();
+        memoryAllocator = new MemoryManager();
     }
 
     void start() {
@@ -51,18 +51,18 @@ public class ClientTest implements Runnable {
     }
 
     /*
-    ** This is the callback that is executed through the ClientWriteCompletion callback.
-    **  ClientWriteCompletion extends the WriteCompletion callback to make it specific
-    **  to the client who is performing the writes.
-    */
+     ** This is the callback that is executed through the ClientWriteCompletion callback.
+     **  ClientWriteCompletion extends the WriteCompletion callback to make it specific
+     **  to the client who is performing the writes.
+     */
     void writeCompleted(int result, ByteBuffer buffer) {
 
         userWriteCompleted(result);
     }
 
     /*
-    ** TODO: Extend this to perform data writes after the header is sent.
-    */
+     ** TODO: Extend this to perform data writes after the header is sent.
+     */
     public void run() {
 
         writeDone = new WaitSignal();
@@ -70,13 +70,13 @@ public class ClientTest implements Runnable {
         System.out.println("ClientTest serverConnId: " + serverConnId + " clientConnId: " + clientConnId);
 
         // This sets up the server side of the connection
-        ClientConnection client = new ClientConnection(memoryManager, serverConnId);
+        ClientConnection client = new ClientConnection(memoryAllocator, serverConnId);
         client.start();
 
         WriteConnection writeConn = client.addNewTarget(clientConnId);
 
         if (client.connectTarget(writeConn, 100)) {
-            ByteBuffer msgHdr = memoryManager.jniMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE);
+            ByteBuffer msgHdr = memoryAllocator.jniMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE);
 
             String tmp = new String("POST / HTTP/1.1\n" +
                     "Host: iaas.us-phoenix-1.oraclecloud.com\n" +
@@ -110,7 +110,7 @@ public class ClientTest implements Runnable {
 
             waitForWriteToComp();
 
-            memoryManager.jniMemFree(msgHdr);
+            memoryAllocator.jniMemFree(msgHdr);
 
             try {
                 Thread.sleep(10000);

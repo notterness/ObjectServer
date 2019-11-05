@@ -15,32 +15,38 @@ import java.util.concurrent.TimeUnit;
 public class ServerWorkerThread implements Runnable {
 
     private int maxQueueSize;
+
     private int threadId;
 
     private MemoryManager memoryManager;
 
     private BlockingQueue<ConnectionState> workQueue;
+
     private BufferStatePool bufferStatePool;
+
     /*
      ** When a write is needed, the request is queued up to the writeThread to
      **   take place in the background
      */
     private WriteConnThread writeThread;
+
     /*
      ** For now create a BuildHttpResult per worker thread
      */
     private BuildHttpResult resultBuilder;
+
     private boolean threadExit;
     private Thread connThread;
 
-    ServerWorkerThread(final int queueSize, MemoryManager allocator, final int identifier) {
+    ServerWorkerThread(final int queueSize, MemoryManager memoryManager, final int identifier) {
 
         maxQueueSize = queueSize;
         workQueue = new LinkedBlockingQueue<>(maxQueueSize);
 
-        memoryManager = allocator;
+        this.memoryManager = memoryManager;
 
         threadId = identifier;
+
         threadExit = false;
     }
 

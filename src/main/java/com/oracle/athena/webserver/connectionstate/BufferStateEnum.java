@@ -11,8 +11,9 @@ public enum BufferStateEnum {
     READ_WAIT_FOR_DATA(2),
     READ_DONE(3),
     READ_ERROR(4),
-    SEND_GET_DATA_RESPONSE(5),
-    SEND_FINAL_RESPONSE(6);
+    PARSE_HTTP_DONE(10),
+    SEND_GET_DATA_RESPONSE(20),
+    SEND_FINAL_RESPONSE(30);
 
     private int value;
 

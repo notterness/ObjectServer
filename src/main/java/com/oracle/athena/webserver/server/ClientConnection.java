@@ -3,6 +3,7 @@ package com.oracle.athena.webserver.server;
 import com.oracle.athena.webserver.memory.MemoryManager;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -17,12 +18,12 @@ import java.util.concurrent.TimeUnit;
 
 public class ClientConnection implements Runnable {
 
-    private static final int WORK_QUEUE_SIZE = 10;
+    private final int WORK_QUEUE_SIZE = 10;
 
     private int serverTargetId;
     private long nextTransactionId;
 
-    private Object clientConnListLock;
+    private ListLock clientConnListLock;
 
     private List<WriteConnection> clientConnections;
     private ServerChannelLayer targetServer;
@@ -48,7 +49,7 @@ public class ClientConnection implements Runnable {
 
         threadExit = false;
 
-        clientConnListLock = new Object();
+        clientConnListLock = new ListLock();
     }
 
     public void start() {
@@ -157,7 +158,7 @@ public class ClientConnection implements Runnable {
                         System.out.println("WriteConnectionHandler no write data ");
                     }
                 } else {
-                    // FIXME Check when last heartbeat was sent
+                    // Check when last heartbeat was sent
                 }
             }
         } catch (InterruptedException e) {
@@ -181,9 +182,10 @@ public class ClientConnection implements Runnable {
         WriteConnection clientConn = null;
 
         synchronized (clientConnListLock) {
+            Iterator iter = clientConnections.iterator();
 
-            for (WriteConnection clientConnection : clientConnections) {
-                clientConn = clientConnection;
+            while (iter.hasNext()) {
+                clientConn = (WriteConnection) iter.next();
 
                 if (clientConn.getTransactionId() == transactionId) {
                     found = true;
@@ -197,5 +199,11 @@ public class ClientConnection implements Runnable {
         }
 
         return clientConn;
+    }
+
+
+    // Need a class to use for the list lock to protect the clientConnections List
+    class ListLock {
+        int lockCount;
     }
 }

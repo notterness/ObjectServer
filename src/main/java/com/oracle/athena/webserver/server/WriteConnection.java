@@ -13,7 +13,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
-import java.nio.channels.SelectionKey;
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
 import java.util.Queue;
@@ -46,8 +45,6 @@ public class WriteConnection {
     private AsynchronousSocketChannel writeChannel;
 
     private AsynchronousChannelGroup writeCbThreadpool;
-
-    private SelectionKey key;
 
     public WriteConnection(final long transactionId) {
 
