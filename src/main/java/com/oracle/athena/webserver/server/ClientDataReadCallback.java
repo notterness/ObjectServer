@@ -2,13 +2,8 @@ package com.oracle.athena.webserver.server;
 
 import java.nio.ByteBuffer;
 
-public class ClientDataReadCallback {
+abstract public class ClientDataReadCallback {
 
-    public ClientDataReadCallback() {
+    abstract public void dataBufferRead(final int result, final ByteBuffer readBuffer);
 
-    }
-
-    public void dataBufferRead(final int result, final ByteBuffer readBuffer) {
-
-    }
 }

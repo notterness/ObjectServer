@@ -9,6 +9,11 @@ import java.util.List;
 
 public class CasperHttpInfo {
 
+    /*
+     ** The connection this HTTP information is associated with
+     */
+    private ConnectionState connectionState;
+
     private boolean headerComplete;
     private boolean contentComplete;
     private boolean messageComplete;
@@ -147,7 +152,7 @@ public class CasperHttpInfo {
     private int _headers;
 
 
-    CasperHttpInfo() {
+    CasperHttpInfo(final ConnectionState connState) {
         headerComplete = false;
         contentComplete = false;
         messageComplete = false;
@@ -157,6 +162,12 @@ public class CasperHttpInfo {
         _headers = -1;
         _hdr = new String[10];
         _val = new String[10];
+
+        /*
+         ** Need the ConnectionState to know who to inform when the different
+         **   HTTP parsing phases complete.
+         */
+        connectionState = connState;
     }
 
 
@@ -268,6 +279,8 @@ public class CasperHttpInfo {
      */
     public void setHeaderComplete() {
         headerComplete = true;
+
+        connectionState.httpHeaderParseComplete();
     }
 
     public void setContentComplete() {

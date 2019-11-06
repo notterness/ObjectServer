@@ -29,8 +29,7 @@ public class TestClientReadCallback extends ClientDataReadCallback {
             throw new IllegalStateException("!START");
 
         int remaining = readBuffer.remaining();
-        while (!httpParser.isState(HttpParser.State.END) && remaining > 0)
-        {
+        while (!httpParser.isState(HttpParser.State.END) && remaining > 0) {
             int was_remaining = remaining;
             httpParser.parseNext(readBuffer);
 
