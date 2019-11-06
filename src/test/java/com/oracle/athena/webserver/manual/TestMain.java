@@ -40,8 +40,9 @@ public class TestMain {
             } else {
                 break;
             }
-
         }
+
+        client_1.stop();
 
         System.out.println("Server shutting down");
     }

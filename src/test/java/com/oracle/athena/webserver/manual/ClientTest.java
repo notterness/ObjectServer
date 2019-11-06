@@ -50,6 +50,17 @@ public class ClientTest implements Runnable {
         httpParser = new HttpParser(responseListener);
     }
 
+    void stop() {
+        try {
+            clientThread.join(1000);
+        } catch (InterruptedException int_ex) {
+            System.out.println("clientThread.join() failed: " + int_ex.getMessage());
+        }
+
+        httpParser = null;
+        responseListener = null;
+    }
+
     /*
      ** This is the callback that is executed through the ClientWriteCompletion callback.
      **  ClientWriteCompletion extends the WriteCompletion callback to make it specific
@@ -108,7 +119,9 @@ public class ClientTest implements Runnable {
             ClientWriteCompletion comp = new ClientWriteCompletion(this, writeConn, msgHdr, 1, bytesToWrite, 0);
             //client.writeData(writeConn, comp);
 
-            waitForWriteToComp();
+            if (!waitForWriteToComp()) {
+                System.out.println("Request timed out");
+            }
 
             memoryAllocator.jniMemFree(msgHdr);
 

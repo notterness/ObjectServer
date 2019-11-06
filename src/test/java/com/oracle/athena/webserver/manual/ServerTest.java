@@ -13,7 +13,7 @@ public class ServerTest implements Runnable {
 
     private Thread serverThread;
 
-    public ServerTest(final int serverId, AtomicInteger threadCount) {
+    ServerTest(final int serverId, AtomicInteger threadCount) {
         serverConnId = serverId;
         exitThread = false;
 
@@ -21,13 +21,18 @@ public class ServerTest implements Runnable {
         serverCount.incrementAndGet();
     }
 
-    public void start() {
+    void start() {
         serverThread = new Thread(this);
         serverThread.start();
     }
 
-    public void stop() {
+    void stop() {
         exitThread = true;
+        try {
+            serverThread.join(1000);
+        } catch (InterruptedException int_ex) {
+            System.out.println("serverThread.join() failed: " + int_ex.getMessage());
+        }
     }
 
     public void run() {

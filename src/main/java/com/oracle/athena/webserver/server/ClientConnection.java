@@ -118,13 +118,6 @@ public class ClientConnection implements Runnable {
         writeConn.closeWriteConnection();
     }
 
-    public boolean writeData(WriteConnection writeConn, WriteCompletion completion) {
-        writeConn.writeData(completion);
-        workQueue.add(writeConn);
-
-        return true;
-    }
-
     /*
      ** This is how the client registers to receive data read callback.
      */
@@ -134,7 +127,9 @@ public class ClientConnection implements Runnable {
 
         serverWorkHandler = targetServer.getLoadBalancer();
 
-        serverWorkHandler.startNewClientReadConnection(writeConnection.getWriteChannel(), readCallback);
+        if (!serverWorkHandler.startNewClientReadConnection(writeConnection.getWriteChannel(), readCallback)) {
+            //TODO: How should this error condition be handled?
+        }
     }
 
     /*
