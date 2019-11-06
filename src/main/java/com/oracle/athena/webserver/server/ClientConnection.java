@@ -172,6 +172,13 @@ public class ClientConnection implements Runnable {
         return transaction;
     }
 
+    public boolean writeData(WriteConnection writeConn, WriteCompletion completion) {
+        writeConn.writeData(completion);
+        workQueue.add(writeConn);
+
+        return true;
+    }
+
     private WriteConnection findWriteConnection(long transactionId) {
         boolean found = false;
         WriteConnection clientConn = null;

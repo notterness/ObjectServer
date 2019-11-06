@@ -32,6 +32,11 @@ public class ConnectionState {
     private AsynchronousSocketChannel connChan;
 
     /*
+    ** This allows the ConnectionState to run as a target (Server) or a client
+     */
+    private boolean serverConn;
+
+    /*
      ** This is the WriteConnection used to write on the server connection
      */
     private WriteConnection writeConn;
@@ -130,6 +135,8 @@ public class ConnectionState {
         initialHttpBuffer = true;
 
         httpHeaderParsed = new AtomicBoolean(false);
+
+        serverConn = true;
     }
 
     /*
@@ -153,7 +160,16 @@ public class ConnectionState {
                 writeThread = workerThread.getWriteThread();
                 resultBuilder = workerThread.getResultBuilder();
 
-                overallState = ConnectionStateEnum.ALLOC_HTTP_BUFFER;
+                if (serverConn) {
+                    overallState = ConnectionStateEnum.ALLOC_HTTP_BUFFER;
+                } else {
+                    System.out.println("ServerWorkerThread(" + connStateId + ") INITIAL_SETUP client");
+
+                    overallState = ConnectionStateEnum.ALLOC_CLIENT_DATA_BUFFER;
+                    workerThread.put(this);
+                    break;
+                }
+
                 // Fall through
 
             case ALLOC_HTTP_BUFFER:
@@ -372,6 +388,8 @@ public class ConnectionState {
 
     void setClientReadCallback(ClientDataReadCallback clientReadCb) {
         clientDataReadCallback = clientReadCb;
+
+        serverConn = false;
     }
 
     private void callClientReadCallback(final int status, final ByteBuffer readBuffer) {
@@ -509,8 +527,8 @@ public class ConnectionState {
 
         int readCompletedCount = httpBufferReadsCompleted.incrementAndGet();
 
-        System.out.println("ConnectionState.readComplete() lastRead: " + lastRead + " readCount: " + readCount +
-                " overallState: " + overallState);
+        System.out.println("ConnectionState.readComplete(" + connStateId + ") lastRead: " + lastRead +
+                " readCount: " + readCount + " overallState: " + overallState);
 
         if (!lastRead) {
             if (overallState == ConnectionStateEnum.READ_HTTP_BUFFER) {
