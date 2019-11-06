@@ -120,7 +120,8 @@ public class ServerWorkerThread implements Runnable {
         try {
             String outStr;
 
-            outStr = String.format("ServerWorkerThread(%d) put connStateId: %d  state %s", this.threadId, work.getConnStateId(), work.getState().toString());
+            outStr = String.format("ServerWorkerThread(%d) put connStateId: %d  state %s",
+                    this.threadId, work.getConnStateId(), work.getState().toString());
             System.out.println(outStr);
 
             workQueue.put(work);

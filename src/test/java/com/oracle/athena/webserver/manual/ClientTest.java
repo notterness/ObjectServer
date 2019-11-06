@@ -10,6 +10,7 @@ import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ClientTest implements Runnable {
@@ -117,7 +118,7 @@ public class ClientTest implements Runnable {
 
             // Send the message
             ClientWriteCompletion comp = new ClientWriteCompletion(this, writeConn, msgHdr, 1, bytesToWrite, 0);
-            //client.writeData(writeConn, comp);
+            client.writeData(writeConn, comp);
 
             if (!waitForWriteToComp()) {
                 System.out.println("Request timed out");
@@ -177,13 +178,11 @@ public class ClientTest implements Runnable {
     }
 
     private void str_to_bb(ByteBuffer out, String in) {
-        Charset charset = Charset.forName("UTF-8");
+        Charset charset = StandardCharsets.UTF_8;
         CharsetEncoder encoder = charset.newEncoder();
 
         try {
-            boolean endOfInput = true;
-
-            encoder.encode(CharBuffer.wrap(in), out, endOfInput);
+            encoder.encode(CharBuffer.wrap(in), out, true);
         } catch (Exception ex) {
             ex.printStackTrace();
         }
