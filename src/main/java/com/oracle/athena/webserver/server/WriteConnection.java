@@ -6,6 +6,8 @@ package com.oracle.athena.webserver.server;
 // There can also be multiple WriteConnection instantiated to talk to different
 // target servers.
 
+import com.oracle.athena.webserver.connectionstate.ConnectionState;
+
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -46,6 +48,14 @@ public class WriteConnection {
 
     private AsynchronousChannelGroup writeCbThreadpool;
 
+    /*
+    ** The link to the ConnectionState is used to allow tests to close out the client
+    **   side of the channel at different points to exercise the error paths within
+    **   the server code.
+     */
+    ConnectionState writeClient;
+
+
     public WriteConnection(final long transactionId) {
 
         tgtWritePort = INVALID_SOCKET_PORT;
@@ -64,6 +74,8 @@ public class WriteConnection {
         }
 
         pendingWrites = new LinkedList<>();
+
+        writeClient = null;
     }
 
     /*
@@ -259,6 +271,18 @@ public class WriteConnection {
                 }
             }
         });
+    }
+
+    /*
+    ** Test APIs
+     */
+    public void setClientConnectionState(ConnectionState work) {
+        writeClient = work;
+    }
+
+    public void closeChannel() {
+        writeClient.closeChannel();
+        writeClient = null;
     }
 
 }

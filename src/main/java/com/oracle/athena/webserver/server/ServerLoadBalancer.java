@@ -87,15 +87,21 @@ class ServerLoadBalancer {
 
     /*
      ** The following is used to register a Connection state object used to perform
-     **   reads from the clients socket connection
+     **   reads from the clients socket connection.
+     **
+     ** NOTE: This returns ConnectionState to allow the client to perform close operations on
+     **   the connection during tests.
      */
-    boolean startNewClientReadConnection(final AsynchronousSocketChannel chan, final ClientDataReadCallback clientReadCb) {
+    ConnectionState startNewClientReadConnection(final AsynchronousSocketChannel chan, final ClientDataReadCallback clientReadCb) {
         ConnectionState work = connPool.allocConnectionState(chan, clientReadCb);
-        if (work == null) {
-            return false;
+        if (work != null) {
+            if (!addWorkToThread(work)) {
+                connPool.freeConnectionState(work);
+                work = null;
+            }
         }
 
-        return addWorkToThread(work);
+        return work;
     }
 
     private boolean addWorkToThread(ConnectionState work) {
