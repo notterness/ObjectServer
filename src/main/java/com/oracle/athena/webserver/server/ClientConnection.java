@@ -1,5 +1,6 @@
 package com.oracle.athena.webserver.server;
 
+import com.oracle.athena.webserver.connectionstate.ConnectionState;
 import com.oracle.athena.webserver.memory.MemoryManager;
 
 import java.util.ArrayList;
@@ -124,10 +125,14 @@ public class ClientConnection implements Runnable {
     public void registerClientReadCallback(WriteConnection writeConnection, ClientDataReadCallback readCallback) {
 
         ServerLoadBalancer serverWorkHandler;
+        ConnectionState work;
 
         serverWorkHandler = targetServer.getLoadBalancer();
 
-        if (!serverWorkHandler.startNewClientReadConnection(writeConnection.getWriteChannel(), readCallback)) {
+        work = serverWorkHandler.startNewClientReadConnection(writeConnection.getWriteChannel(), readCallback);
+        if (work != null) {
+            writeConnection.setClientConnectionState(work);
+        } else {
             //TODO: How should this error condition be handled?
         }
     }

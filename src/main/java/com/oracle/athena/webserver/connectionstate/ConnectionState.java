@@ -203,6 +203,7 @@ public class ConnectionState {
                 workerThread.put(this);
                 //readIntoMultipleBuffers(work);
                 break;
+
             case READ_WAIT_FOR_DATA:
                 break;
 
@@ -213,6 +214,13 @@ public class ConnectionState {
             case READ_DONE:
                 // Clean up the values in the ReadState class
                 displayBuffer();
+                break;
+
+            case READ_DONE_ERROR:
+                // Release all the outstanding buffer
+                releaseBufferState();
+                setOverallState(ConnectionStateEnum.CONN_FINISHED);
+                workerThread.put(this);
                 break;
 
             case ALLOC_CLIENT_DATA_BUFFER:
@@ -231,12 +239,17 @@ public class ConnectionState {
                 resetBufferReadDoneIndex();
                 BufferState readBufferState = getNextReadDoneBufferState();
                 if (readBufferState != null) {
-                    callClientReadCallback(0, readBufferState.getBuffer());
+                    if (readBufferState.getBufferState() == BufferStateEnum.READ_DONE) {
+                        callClientReadCallback(0, readBufferState.getBuffer());
+                    } else {
+                        callClientReadCallback(-1, null);
+                    }
                 } else {
                     System.out.println("ServerWorkerThread(" + connStateId + ") readBufferState null");
                 }
 
-                // TODO: Need to release the BufferState
+                setOverallState(ConnectionStateEnum.CONN_FINISHED);
+                workerThread.put(this);
                 break;
 
             case CONN_FINISHED:
@@ -278,6 +291,21 @@ public class ConnectionState {
         return false;
     }
 
+    /*
+    ** This is called following a channel read error to release all the BufferState objects
+    **   back to the free pool.
+     */
+    private void releaseBufferState() {
+        /*
+         ** Release all the memory back to the pool
+         */
+        for (int i = 0; i < MAX_OUTSTANDING_BUFFERS; i++) {
+            if (bufferStates[i] != null) {
+                bufferStatePool.freeBufferState(bufferStates[i]);
+                bufferStates[i] = null;
+            }
+        }
+    }
 
     /*
      ** This is used to start reads into one or more buffers. It looks for BufferState objects that have
@@ -393,7 +421,18 @@ public class ConnectionState {
     }
 
     private void callClientReadCallback(final int status, final ByteBuffer readBuffer) {
-        clientDataReadCallback.dataBufferRead(0, readBuffer);
+        clientDataReadCallback.dataBufferRead(status, readBuffer);
+    }
+
+    /*
+    ** This is a test API that allows the AsynchronousChannel to be closed.
+     */
+    public void closeChannel() {
+        try {
+            connChan.close();
+        } catch (IOException io_ex) {
+            System.out.println("ConnectionState(" + connStateId + ") closeChannel() " + io_ex.getMessage());
+        }
     }
 
     public void reset() {
@@ -402,6 +441,7 @@ public class ConnectionState {
          */
         for (int i = 0; i < MAX_OUTSTANDING_BUFFERS; i++) {
             if (bufferStates[i] != null) {
+                bufferStatePool.freeBufferState(bufferStates[i]);
                 bufferStates[i] = null;
             }
         }
@@ -500,7 +540,8 @@ public class ConnectionState {
             }
 
             if (buffState != null) {
-                if (buffState.getBufferState() == BufferStateEnum.READ_DONE) {
+                BufferStateEnum state = buffState.getBufferState();
+                if ((state == BufferStateEnum.READ_DONE) || (state == BufferStateEnum.READ_ERROR)) {
                     break;
                 } else {
                     buffState = null;
@@ -527,7 +568,7 @@ public class ConnectionState {
 
         int readCompletedCount = httpBufferReadsCompleted.incrementAndGet();
 
-        System.out.println("ConnectionState.readComplete(" + connStateId + ") lastRead: " + lastRead +
+        System.out.println("ConnectionState.readCompleted(" + connStateId + ") lastRead: " + lastRead +
                 " readCount: " + readCount + " overallState: " + overallState);
 
         if (!lastRead) {
@@ -553,7 +594,7 @@ public class ConnectionState {
                 overallState = ConnectionStateEnum.READ_DONE;
             }
 
-            System.out.println("ConnectionState.readComplete() overallState: " + overallState.toString());
+            System.out.println("ConnectionState.readCompleted(" + connStateId + ") overallState: " + overallState.toString());
             workerThread.put(this);
         }
     }
@@ -570,7 +611,7 @@ public class ConnectionState {
     void readCompletedError() {
         int readCount = outstandingReadCount.decrementAndGet();
 
-        System.out.println("ConnectionState.readComplete()  readCount: " + readCount +
+        System.out.println("ConnectionState.readCompletedError(" + connStateId + ") readCount: " + readCount +
                 " overallState: " + overallState);
 
         /*
@@ -579,7 +620,13 @@ public class ConnectionState {
          */
         int readsInProgress = outstandingReadCount.get();
         if (readsInProgress == 0) {
-            setOverallState(ConnectionStateEnum.READ_DONE);
+            if ((overallState == ConnectionStateEnum.READ_HTTP_BUFFER) || (overallState == ConnectionStateEnum.READ_NEXT_HTTP_BUFFER)) {
+                overallState = ConnectionStateEnum.READ_DONE_ERROR;
+            } else if (overallState == ConnectionStateEnum.READ_CLIENT_DATA) {
+                overallState = ConnectionStateEnum.CLIENT_READ_CB;
+            } else {
+                setOverallState(ConnectionStateEnum.CONN_FINISHED);
+            }
             workerThread.put(this);
         }
     }

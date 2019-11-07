@@ -17,6 +17,7 @@ public class HttpResponseListener implements HttpParser.ResponseHandler {
     private String _content;
     private String _methodOrVersion;
     private String _uriOrStatus;
+    private int _status;
     private String _versionOrReason;
     private List<HttpField> _fields = new ArrayList<>();
     private List<HttpField> _trailers = new ArrayList<>();
@@ -27,6 +28,12 @@ public class HttpResponseListener implements HttpParser.ResponseHandler {
     private boolean _headerCompleted;
     private boolean _messageCompleted;
     private final List<HttpComplianceSection> _complianceViolation = new ArrayList<>();
+
+    private HttpResponseCallback httpResponseCb;
+
+    public HttpResponseListener(final HttpResponseCallback callback) {
+        httpResponseCb = callback;
+    }
 
     @Override
     public boolean content(ByteBuffer ref) {
@@ -85,6 +92,8 @@ public class HttpResponseListener implements HttpParser.ResponseHandler {
         System.out.println("messageComplete(resp)");
 
         _messageCompleted = true;
+
+        httpResponseCb.httpResponse(_status, _headerCompleted, _messageCompleted);
         return true;
     }
 
@@ -104,6 +113,7 @@ public class HttpResponseListener implements HttpParser.ResponseHandler {
         _trailers.clear();
         _methodOrVersion = version.asString();
         _uriOrStatus = Integer.toString(status);
+        _status = status;
         _versionOrReason = reason;
         _headers = -1;
         _hdr = new String[10];

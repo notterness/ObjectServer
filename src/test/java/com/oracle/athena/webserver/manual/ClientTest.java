@@ -13,7 +13,7 @@ import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ClientTest implements Runnable {
+public abstract class ClientTest implements Runnable {
 
     private int serverConnId;
     private int clientConnId;
@@ -31,7 +31,12 @@ public class ClientTest implements Runnable {
     private HttpResponseListener responseListener;
     private HttpParser httpParser;
 
-    ClientTest(int myServerId, int myTargetId, AtomicInteger threadCount) {
+    private HttpResponseCompleted httpResponseCb;
+
+    WriteConnection writeConn;
+    ClientConnection client;
+
+    ClientTest(final ClientConnection clientConnection, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
 
         serverConnId = myServerId;
         clientConnId = myTargetId;
@@ -39,7 +44,7 @@ public class ClientTest implements Runnable {
         clientCount = threadCount;
         clientCount.incrementAndGet();
 
-        memoryAllocator = new MemoryManager();
+        client = clientConnection;
     }
 
     void start() {
@@ -47,8 +52,11 @@ public class ClientTest implements Runnable {
         clientThread = new Thread(this);
         clientThread.start();
 
-        responseListener = new HttpResponseListener();
+        httpResponseCb = new HttpResponseCompleted(this);
+        responseListener = new HttpResponseListener(httpResponseCb);
         httpParser = new HttpParser(responseListener);
+
+        memoryAllocator = new MemoryManager();
     }
 
     void stop() {
@@ -81,29 +89,12 @@ public class ClientTest implements Runnable {
 
         System.out.println("ClientTest serverConnId: " + serverConnId + " clientConnId: " + clientConnId);
 
-        // This sets up the server side of the connection
-        ClientConnection client = new ClientConnection(memoryAllocator, serverConnId);
-        client.start();
-
-        WriteConnection writeConn = client.addNewTarget(clientConnId);
+        writeConn = client.addNewTarget(clientConnId);
 
         if (client.connectTarget(writeConn, 100)) {
             ByteBuffer msgHdr = memoryAllocator.jniMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE);
 
-            String tmp = new String("POST / HTTP/1.1\n" +
-                    "Host: iaas.us-phoenix-1.oraclecloud.com\n" +
-                    "Content-Type: application/json\n" +
-                    "Connection: keep-alive\n" +
-                    "Accept: */*\n" +
-                    "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
-                    "Accept-Language: en-us\n" +
-                    "Accept-Encoding: gzip, deflate\n" +
-                    "Content-Length: 187\n\n" +
-                    "{\n" +
-                    "  \"cidrBlock\": \"172.16.0.0/16\",\n" +
-                    "  \"compartmentId\": \"ocid1.compartment.oc1..aaaaaaaauwjnv47knr7uuuvqar5bshnspi6xoxsfebh3vy72fi4swgrkvuvq\",\n" +
-                    "  \"displayName\": \"Apex Virtual Cloud Network\"\n" +
-                    "}\n\r\n");
+            String tmp = buildRequestString();
 
             str_to_bb(msgHdr, tmp);
             System.out.println("msgHdr " + msgHdr.position() + " " + msgHdr.remaining());
@@ -112,17 +103,14 @@ public class ClientTest implements Runnable {
             msgHdr.flip();
 
             // Setup the read callback before sending any data
-            TestClientReadCallback readDataCb = new TestClientReadCallback(httpParser);
+            TestClientReadCallback readDataCb = new TestClientReadCallback(this, httpParser);
 
             client.registerClientReadCallback(writeConn, readDataCb);
 
             // Send the message
-            ClientWriteCompletion comp = new ClientWriteCompletion(this, writeConn, msgHdr, 1, bytesToWrite, 0);
-            client.writeData(writeConn, comp);
+            writeHeader(msgHdr, bytesToWrite);
 
-            if (!waitForWriteToComp()) {
-                System.out.println("Request timed out");
-            }
+            clientTestStep_1();
 
             memoryAllocator.jniMemFree(msgHdr);
 
@@ -141,7 +129,7 @@ public class ClientTest implements Runnable {
         clientCount.decrementAndGet();
     }
 
-    private void userWriteCompleted(int result) {
+    void userWriteCompleted(int result) {
 
         System.out.println("ClientTest userWriteComp(): " + result);
 
@@ -151,7 +139,7 @@ public class ClientTest implements Runnable {
         }
     }
 
-    private boolean waitForWriteToComp() {
+    boolean waitForWriteToComp() {
         boolean status = true;
 
         synchronized (writeDone) {
@@ -188,4 +176,16 @@ public class ClientTest implements Runnable {
         }
     }
 
+    /*
+     ** These are classes the various tests need to provide to change the test case behavior.
+     */
+    abstract String buildRequestString();
+
+    abstract void clientTestStep_1();
+
+    abstract void writeHeader(ByteBuffer msgHdr, int bytesToWrite);
+
+    abstract void targetResponse(final int result, final ByteBuffer readBuffer);
+
+    abstract void httpResponse(final int status, final boolean headerCompleted, final boolean messageCompleted);
 }

@@ -9,37 +9,43 @@ import java.nio.charset.StandardCharsets;
 public class TestClientReadCallback extends ClientDataReadCallback {
 
     private HttpParser httpParser;
+    private ClientTest clientTest;
 
-    public TestClientReadCallback(final HttpParser parser) {
+    public TestClientReadCallback(final ClientTest test, final HttpParser parser) {
 
+        clientTest = test;
         httpParser = parser;
     }
 
     public void dataBufferRead(final int result, final ByteBuffer readBuffer) {
+        if (result == 0) {
+            displayBuffer(readBuffer);
 
-        displayBuffer(readBuffer);
-
-        readBuffer.flip();
-        System.out.println("buffer " + readBuffer.position() + " " + readBuffer.limit());
-
-        // continue parsing
-        if (httpParser.isState(HttpParser.State.END))
-            httpParser.reset();
-        if (!httpParser.isState(HttpParser.State.START))
-            throw new IllegalStateException("!START");
-
-        int remaining = readBuffer.remaining();
-        while (!httpParser.isState(HttpParser.State.END) && remaining > 0) {
-            int was_remaining = remaining;
-            httpParser.parseNext(readBuffer);
-
+            readBuffer.flip();
             System.out.println("buffer " + readBuffer.position() + " " + readBuffer.limit());
 
-            remaining = readBuffer.remaining();
-            if (remaining == was_remaining)
-                break;
+            // continue parsing
+            if (httpParser.isState(HttpParser.State.END))
+                httpParser.reset();
+            if (!httpParser.isState(HttpParser.State.START))
+                throw new IllegalStateException("!START");
+
+            int remaining = readBuffer.remaining();
+            while (!httpParser.isState(HttpParser.State.END) && remaining > 0) {
+                int was_remaining = remaining;
+                httpParser.parseNext(readBuffer);
+
+                System.out.println("buffer " + readBuffer.position() + " " + readBuffer.limit());
+
+                remaining = readBuffer.remaining();
+                if (remaining == was_remaining)
+                    break;
+            }
+        } else {
+            System.out.println("TestClientReadCallback() read failed");
         }
 
+        clientTest.targetResponse(result, readBuffer);
     }
 
     private void displayBuffer(final ByteBuffer buffer) {

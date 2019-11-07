@@ -1,5 +1,8 @@
 package com.oracle.athena.webserver.manual;
 
+import com.oracle.athena.webserver.memory.MemoryManager;
+import com.oracle.athena.webserver.server.ClientConnection;
+
 import java.util.concurrent.atomic.AtomicInteger;
 
 // Server class
@@ -22,8 +25,18 @@ public class TestMain {
          **   and it will be writing to (who the connect() is to)
          **    (ServerChannelLayer.baseTcpPort + baseTcpPortOffset)
          */
-        ClientTest client_1 = new ClientTest((baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        // This sets up the server side of the connection
+
+        MemoryManager memoryAllocator = new MemoryManager();
+
+        ClientConnection client = new ClientConnection(memoryAllocator, (baseTcpPortOffset + 1));
+        client.start();
+
+        ClientTest client_1 = new ClientTest_2(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_1.start();
+
+        ClientTest client_2 = new ClientTest_EarlyClose(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        client_2.start();
 
         System.out.println("Starting Server");
 
@@ -43,6 +56,7 @@ public class TestMain {
         }
 
         client_1.stop();
+        client_2.stop();
 
         System.out.println("Server shutting down");
     }
