@@ -48,17 +48,37 @@ public class BufferState {
     }
 
     /*
+    ** This is used to set the BufferState to a waiting for a read to complete state. This is called
+    **   just prior to a read from channel operation starting in ConnectionState.
+    **
+    ** TODO: Need to make the update of the bufferState thread safe
+     */
+    public void setReadInProgress() {
+         if (bufferState == BufferStateEnum.READ_HTTP_FROM_CHAN) {
+            bufferState = BufferStateEnum.READ_WAIT_FOR_HTTP;
+        } else if (bufferState == BufferStateEnum.READ_DATA_FROM_CHAN) {
+            bufferState = BufferStateEnum.READ_WAIT_FOR_DATA;
+        } else {
+             // TODO: Add Assert((bufferState == READ_HTTP_FROM_CHAN) || (bufferState == READ_DATA_FROM_CHAN))
+
+        }
+    }
+
+    /*
      ** This is called from the ServerWorkerThread chan.read() callback to update the state of the
      **   read buffer.
      **
-     ** TODO: Need to handle error cases
+     ** NOTE: This can only be called with the newState set to:
+     **   BufferStateEnum.READ_DONE -> read completed without errors
+     **   BufferStateEnum.READ_ERROR -> An error occurred while performing the read and the data in the buffer
+     **     must be considered invalid.
+     **
+     ** TODO: Need to make the following thread safe when it modifies BufferState
      */
     public void setReadState(final BufferStateEnum newState) {
 
-        System.out.println("setReadState(): current " + bufferState.toString() + " new " + newState.toString() +
+        System.out.println("setReadState() current: " + bufferState.toString() + " new: " + newState.toString() +
                 " remaining: " + buffer.remaining());
-
-        bufferState = newState;
 
         if (newState == BufferStateEnum.READ_ERROR) {
             /*
@@ -66,12 +86,23 @@ public class BufferState {
              **   was a channel error. Need to tell the ConnectionState to clean up and terminate this
              **   connection.
              */
-            connState.readCompletedError();
-        } else if (buffer.remaining() != 0) {
-            // Read of all the data is completed
-            connState.readCompleted(true);
+            connState.readCompletedError(this);
         } else {
-            connState.readCompleted(false);
+            boolean allDataRead = false;
+            if (buffer.remaining() != 0)
+                allDataRead = true;
+
+            if (bufferState == BufferStateEnum.READ_WAIT_FOR_HTTP) {
+                // Read of all the data is completed
+                bufferState = BufferStateEnum.READ_HTTP_DONE;
+                connState.httpReadCompleted(this, allDataRead);
+            } else if (bufferState == BufferStateEnum.READ_WAIT_FOR_DATA) {
+                // Read of all the data is completed
+                bufferState = BufferStateEnum.READ_DATA_DONE;
+                connState.dataReadCompleted(this, allDataRead);
+            } else {
+                System.out.println("ERROR: setReadState() invalid current state: " + bufferState.toString());
+            }
         }
     }
 

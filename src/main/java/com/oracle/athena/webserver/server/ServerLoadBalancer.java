@@ -57,7 +57,7 @@ class ServerLoadBalancer {
             threadPool[i] = worker;
         }
 
-        connPool = new ConnectionStatePool(workerThreads * maxQueueSize);
+        connPool = new ConnectionStatePool(workerThreads * maxQueueSize, serverBaseId);
 
         lastQueueUsed = 0;
     }

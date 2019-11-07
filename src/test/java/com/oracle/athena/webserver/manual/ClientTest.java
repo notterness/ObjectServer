@@ -18,7 +18,8 @@ public abstract class ClientTest implements Runnable {
     private int serverConnId;
     private int clientConnId;
 
-    private boolean signalSent;
+    private boolean writeSignalSent;
+    private boolean statusSignalSent;
 
     private AtomicInteger clientCount;
 
@@ -108,17 +109,17 @@ public abstract class ClientTest implements Runnable {
             client.registerClientReadCallback(writeConn, readDataCb);
 
             // Send the message
+            statusSignalSent = false;
+            writeSignalSent = false;
+
             writeHeader(msgHdr, bytesToWrite);
 
             clientTestStep_1();
 
             memoryAllocator.jniMemFree(msgHdr);
 
-            try {
-                Thread.sleep(10000);
-            } catch (InterruptedException int_ex) {
+            waitForStatus();
 
-            }
             System.out.println("ClientTest run(1): ");
 
             client.disconnectTarget(writeConn);
@@ -134,7 +135,7 @@ public abstract class ClientTest implements Runnable {
         System.out.println("ClientTest userWriteComp(): " + result);
 
         synchronized (writeDone) {
-            signalSent = true;
+            writeSignalSent = true;
             writeDone.notify();
         }
     }
@@ -144,8 +145,8 @@ public abstract class ClientTest implements Runnable {
 
         synchronized (writeDone) {
 
-            signalSent = false;
-            while (!signalSent) {
+            writeSignalSent = false;
+            while (!writeSignalSent) {
                 try {
                     writeDone.wait(100);
                 } catch (InterruptedException int_ex) {
@@ -156,7 +157,39 @@ public abstract class ClientTest implements Runnable {
             }
         }
 
-        System.out.println("ClientTest waitForWriteDone(): " + status);
+        System.out.println("ClientTest waitForWrite() done: " + status);
+
+        return status;
+    }
+
+    void statusReceived(int result) {
+        System.out.println("ClientTest statusReceived(): " + result);
+
+        synchronized (writeDone) {
+            statusSignalSent = true;
+            writeDone.notify();
+        }
+    }
+
+
+    boolean waitForStatus() {
+        boolean status = true;
+
+        synchronized (writeDone) {
+
+            statusSignalSent = false;
+            while (!statusSignalSent) {
+                try {
+                    writeDone.wait(100);
+                } catch (InterruptedException int_ex) {
+                    int_ex.printStackTrace();
+                    status = false;
+                    break;
+                }
+            }
+        }
+
+        System.out.println("ClientTest waitForStatus() done: " + status);
 
         return status;
     }

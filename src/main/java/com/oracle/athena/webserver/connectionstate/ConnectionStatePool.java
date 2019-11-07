@@ -30,7 +30,7 @@ public class ConnectionStatePool {
     private LinkedBlockingQueue<ConnectionState> connPoolFreeList;
 
 
-    public ConnectionStatePool(final int numConnections) {
+    public ConnectionStatePool(final int numConnections, final int serverBaseId) {
 
         allocatedConnectionStates = numConnections;
         freeConnCount = 0;
@@ -40,7 +40,7 @@ public class ConnectionStatePool {
         connectionStatePool = new ConnectionState[allocatedConnectionStates];
         connPoolFreeList = new LinkedBlockingQueue<>(allocatedConnectionStates);
         for (int i = 0; i < allocatedConnectionStates; i++) {
-            connectionStatePool[i] = new ConnectionState(i + 1);
+            connectionStatePool[i] = new ConnectionState(this, (serverBaseId + i + 1));
 
             connectionStatePool[i].start();
 
