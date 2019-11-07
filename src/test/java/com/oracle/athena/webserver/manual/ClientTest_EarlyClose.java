@@ -38,6 +38,7 @@ public class ClientTest_EarlyClose extends ClientTest {
 
         ClientWriteCompletion comp = new ClientWriteCompletion(this, writeConn, msgHdr, 1,
                 MemoryManager.SMALL_BUFFER_SIZE, 0);
+
         client.writeData(writeConn, comp);
 
         if (!waitForWriteToComp()) {
@@ -56,10 +57,12 @@ public class ClientTest_EarlyClose extends ClientTest {
     @Override
     void targetResponse(final int result, final ByteBuffer readBuffer) {
         if (result == -1) {
-            System.out.println("ClientTest_2 passed");
+            System.out.println("ClientTest_EarlyClose passed");
         } else {
-            System.out.println("ClientTest_2 failed");
+            System.out.println("ClientTest_EarlyClose failed");
         }
+
+        statusReceived(result);
     }
 
     /*

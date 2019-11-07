@@ -35,6 +35,7 @@ public class ClientTest_2 extends ClientTest {
     void writeHeader(ByteBuffer msgHdr, int bytesToWrite) {
         // Send the message
         ClientWriteCompletion comp = new ClientWriteCompletion(this, writeConn, msgHdr, 1, bytesToWrite, 0);
+
         client.writeData(writeConn, comp);
 
         if (!waitForWriteToComp()) {
@@ -59,6 +60,8 @@ public class ClientTest_2 extends ClientTest {
         } else {
             System.out.println("ClientTest_2 failed");
         }
+
+        statusReceived(result);
     }
 
     @Override

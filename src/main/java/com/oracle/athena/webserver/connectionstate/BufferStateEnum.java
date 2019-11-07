@@ -7,13 +7,17 @@ import java.util.stream.Collectors;
 
 public enum BufferStateEnum {
     INVALID_STATE(0),
-    READ_FROM_CHAN(1),
-    READ_WAIT_FOR_DATA(2),
-    READ_DONE(3),
-    READ_ERROR(4),
-    PARSE_HTTP_DONE(10),
-    SEND_GET_DATA_RESPONSE(20),
-    SEND_FINAL_RESPONSE(30);
+    READ_HTTP_FROM_CHAN(10),
+    READ_WAIT_FOR_HTTP(11),
+    READ_HTTP_DONE(12),
+    READ_DATA_FROM_CHAN(20),
+    READ_WAIT_FOR_DATA(21),
+    READ_DATA_DONE(22),
+    READ_DONE(30),
+    READ_ERROR(31),
+    PARSE_HTTP_DONE(40),
+    SEND_GET_DATA_RESPONSE(50),
+    SEND_FINAL_RESPONSE(60);
 
     private int value;
 
