@@ -16,15 +16,15 @@ import java.util.concurrent.TimeUnit;
 
 public class ServerChannelLayer implements Runnable {
 
-    public static final int baseTcpPort = 5000;
+    public static final int BASE_TCP_PORT = 5000;
+    private static final int CHAN_TIMEOUT = 100;
+    private static final int WORK_QUEUE_SIZE = 10;
 
     private int portNum;
     private int workerThreads;
     private int serverClientId;
 
     private boolean exitThreads;
-    private final int CHAN_TIMEOUT = 100;
-    private final int WORK_QUEUE_SIZE = 10;
 
     private Thread serverAcceptThread;
 
@@ -38,6 +38,11 @@ public class ServerChannelLayer implements Runnable {
 
     private ByteBufferHttpParser byteBufferHttpParser;
 
+    public ServerChannelLayer(int workerThreads, int serverClientId) {
+        portNum = BASE_TCP_PORT;
+        this.workerThreads = workerThreads;
+        this.serverClientId = serverClientId;
+    }
 
     public ServerChannelLayer(int numWorkerThreads, int listenPort, int clientId) {
         portNum = listenPort;

@@ -77,10 +77,10 @@ public class ClientConnection implements Runnable {
 
         boolean found = false;
 
-        tcpPort = ServerChannelLayer.baseTcpPort + clientTargetId;
+        tcpPort = ServerChannelLayer.BASE_TCP_PORT + clientTargetId;
         if (targetServer == null) {
             // Setup the server for this clientId
-            int serverTcpPort = ServerChannelLayer.baseTcpPort + serverTargetId;
+            int serverTcpPort = ServerChannelLayer.BASE_TCP_PORT + serverTargetId;
             targetServer = new ServerChannelLayer(2, serverTcpPort, serverTargetId);
             targetServer.start();
         }

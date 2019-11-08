@@ -91,7 +91,7 @@ public class WriteConnection {
          **   the server side.
          */
         tgtWritePort = writePort;
-        tgtClientId = writePort - ServerChannelLayer.baseTcpPort;
+        tgtClientId = writePort - ServerChannelLayer.BASE_TCP_PORT;
 
         try {
             Thread.sleep(1000);

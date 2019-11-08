@@ -36,7 +36,7 @@ public class ServerTest implements Runnable {
     }
 
     public void run() {
-        int tcpPort = ServerChannelLayer.baseTcpPort + serverConnId;
+        int tcpPort = ServerChannelLayer.BASE_TCP_PORT + serverConnId;
 
         System.out.println("ServerTest serverConnId: " + serverConnId);
 
