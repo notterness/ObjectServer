@@ -114,19 +114,19 @@ public class ServerWorkerThread implements Runnable {
      */
     public boolean put(final ConnectionState work) {
         if (workQueue.remainingCapacity() == 0) {
-            System.out.println("ServerWorkerThread() put out of space threadId: " + threadId + " " + Thread.currentThread().getName());
+            System.out.println("ServerWorkerThread() put connStateId [%d] out of space threadId: " + threadId + " " + Thread.currentThread().getName());
             return false;
         }
         try {
             String outStr;
 
-            outStr = String.format("ServerWorkerThread(%d) put connStateId: %d  state %s",
+            outStr = String.format("ServerWorkerThread(%d) put connStateId [%d]  state %s",
                     this.threadId, work.getConnStateId(), work.getState().toString());
             System.out.println(outStr);
 
             workQueue.put(work);
         } catch (InterruptedException int_ex) {
-            System.out.println("ServerWorkerThread() put failed threadId: " + threadId + " " + Thread.currentThread().getName());
+            System.out.println("ServerWorkerThread() connStateId [%d] put failed threadId: " + threadId + " " + Thread.currentThread().getName());
             return false;
         }
 

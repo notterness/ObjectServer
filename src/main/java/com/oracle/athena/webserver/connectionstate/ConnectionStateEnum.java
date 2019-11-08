@@ -12,6 +12,7 @@ public enum ConnectionStateEnum {
 
     INVALID_STATE(0),
     INITIAL_SETUP(1),
+    CHECK_SLOW_CHANNEL(2),
     ALLOC_HTTP_BUFFER(10),
     READ_HTTP_BUFFER(11),
     READ_NEXT_HTTP_BUFFER(12),

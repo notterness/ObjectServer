@@ -19,9 +19,14 @@ public class TestClientReadCallback extends ClientDataReadCallback {
 
     public void dataBufferRead(final int result, final ByteBuffer readBuffer) {
         if (result == 0) {
-            displayBuffer(readBuffer);
+            //displayBuffer(readBuffer);
 
+            /*
+            ** Need to set the buffer position and limit back after the read took place
+            **   into the buffer.
+             */
             readBuffer.flip();
+
             System.out.println("buffer " + readBuffer.position() + " " + readBuffer.limit());
 
             // continue parsing
@@ -56,12 +61,8 @@ public class TestClientReadCallback extends ClientDataReadCallback {
         System.out.println("TestClientReadCallback: client buffer " + tmp);
     }
 
-    String bb_to_str(ByteBuffer buffer) {
+    private String bb_to_str(ByteBuffer buffer) {
         buffer.flip();
-         /*
-        CharBuffer cbuf = buffer.asCharBuffer();
-        String tmp = cbuf.toString();
-        */
 
         return StandardCharsets.UTF_8.decode(buffer).toString();
     }

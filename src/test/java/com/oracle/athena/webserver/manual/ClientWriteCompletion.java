@@ -23,7 +23,7 @@ public class ClientWriteCompletion extends WriteCompletion {
 
         int result = bytesXfr;
 
-        System.out.println("ClientWriteCompletion writeCompleted() " + bytesXfr + " transaction: " + transaction);
+        System.out.println("ClientWriteCompletion[" + clientWriteConn.getTransactionId() + "] writeCompleted() " + bytesXfr + " transaction: " + transaction);
 
         // Convert the result into a more useful value to indicate completion
         if (bytesXfr > 0) {
