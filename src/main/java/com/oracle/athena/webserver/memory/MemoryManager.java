@@ -3,8 +3,6 @@ package com.oracle.athena.webserver.memory;
 import sun.jvm.hotspot.opto.Block;
 
 import java.nio.ByteBuffer;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * Basic class to encapsulate memory management.
@@ -13,41 +11,25 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public class MemoryManager {
 
+    // TODO:  Make MemoryManager own an array of pools of various sizes.
+    //        Add a high-water mark for each pool.
     public static final int SMALL_BUFFER_SIZE = 256;
     public static final int SMALL_BUFFER_COUNT = 256;
     public static final int MEDIUM_BUFFER_SIZE = 1024;
-    public static final int MEDIUM_BUFFER__COUNT = 1024;
+    public static final int MEDIUM_BUFFER_COUNT = 1024;
 
-    private BlockingQueue<ByteBuffer> freeQueue;
-    private BlockingQueue<ByteBuffer> inuseQueue;
+    private FixedSizeBufferPool thePool;
 
     public MemoryManager() {
-        freeQueue = new LinkedBlockingQueue<>(MEDIUM_BUFFER__COUNT) ;
-        inuseQueue = new LinkedBlockingQueue<>(MEDIUM_BUFFER__COUNT) ;
-        for (int i = 0; i < MEDIUM_BUFFER__COUNT; ++i) {
-            freeQueue.add( ByteBuffer.allocateDirect( MEDIUM_BUFFER_SIZE ));
-        }
+        thePool = new FixedSizeBufferPool( MEDIUM_BUFFER_SIZE, MEDIUM_BUFFER_COUNT );
     }
 
     public ByteBuffer jniMemAlloc(int bufferSize) {
-        // TODO instead of calling allocate, perhaps grab a ByteBuffer chunk out of a larger cache
-        ByteBuffer ret = null;
-        try {
-            ret = freeQueue.take();
-            inuseQueue.add(ret);
-        } catch (InterruptedException int_ex ) {
-            System.out.println( int_ex.getMessage());
-        }
-        System.out.println( "Size of inuseQueue is " + inuseQueue.size() );
-        return ret;
-        // return ByteBuffer.allocateDirect(bufferSize);
+        return thePool.jniMemAlloc( bufferSize );
     }
 
     public void jniMemFree(ByteBuffer buffer) {
-        inuseQueue.remove( buffer );
-        freeQueue.add( buffer );
-        System.out.println( "Size of inuseQueue is " + inuseQueue.size() );
-        // buffer.clear();
+        thePool.jniMemFree( buffer );
     }
 }
 
