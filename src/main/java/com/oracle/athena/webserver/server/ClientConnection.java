@@ -61,6 +61,7 @@ public class ClientConnection implements Runnable {
     }
 
     public void stop() {
+        System.out.println("ClientConnection stop()");
         threadExit = true;
 
         try {
@@ -150,7 +151,7 @@ public class ClientConnection implements Runnable {
             WriteConnection writeConn;
 
             while (!threadExit) {
-                if ((writeConn = workQueue.poll(1000, TimeUnit.MILLISECONDS)) != null) {
+                if ((writeConn = workQueue.poll(10000, TimeUnit.MILLISECONDS)) != null) {
                     // Perform write to this socket
                     if (writeConn != null) {
                         writeConn.writeAvailableData();

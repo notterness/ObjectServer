@@ -12,6 +12,12 @@ import java.util.List;
 
 public class HttpParserListener implements HttpParser.RequestHandler {
 
+    /*
+     ** TODO: These local variables will be removed from this class once the code is further along.
+     **   They are temporary placeholders until the rest of the HTTP response path is worked
+     **   through.
+     */
+
     private String _host;
     private int _port;
     private String _bad;

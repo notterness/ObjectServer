@@ -108,7 +108,7 @@ public class WriteConnection {
 
         InetSocketAddress addr = new InetSocketAddress(InetAddress.getLoopbackAddress(), tgtWritePort);
 
-        System.out.println("openWriteConnection client: " + addr);
+        System.out.println("WriteConnection[" + connTransactionId + "] openWriteConnection() client: " + addr);
 
         try {
             Future<Void> connectResult = clientChan.connect(addr);
@@ -116,13 +116,13 @@ public class WriteConnection {
 
             connectResult.get();
 
-            System.out.println("openWriteConnection connect() complete: ");
+            System.out.println("WriteConnection[" + connTransactionId + "] openWriteConnection() complete: ");
         } catch (Exception ex) {
-            System.out.println("openWriteConnection connect(2) " + ex.getMessage());
+            System.out.println("WriteConnection[" + connTransactionId + "] openWriteConnection(2) " + ex.getMessage());
             try {
                 clientChan.close();
             } catch (IOException io_ex) {
-                System.out.println("openWriteConnection connect(3) " + io_ex.getMessage());
+                System.out.println("WriteConnection[" + connTransactionId + "] openWriteConnection(3) " + io_ex.getMessage());
             }
 
             clientChan = null;
@@ -151,20 +151,15 @@ public class WriteConnection {
      */
     void closeWriteConnection() {
 
-        System.out.println("WriteConnection closeWriteConnection() " + connTransactionId);
+        System.out.println("WriteConnection[" + connTransactionId + "] closeWriteConnection()");
 
         /*
          ** Only close the connection if this is an initiator WriteConnection (meaning the tgtWritePort is valid)
          */
         if ((tgtWritePort != INVALID_SOCKET_PORT) && (writeChannel != null)) {
 
-            try {
-                writeChannel.close();
-            } catch (IOException io_ex) {
-                System.out.println("Unable to close connection: " + connTransactionId + " " + io_ex.getMessage());
-            }
+            closeChannel();
 
-            writeChannel = null;
             tgtWritePort = INVALID_SOCKET_PORT;
             tgtClientId = INVALID_SOCKET_PORT;
         }
@@ -194,7 +189,7 @@ public class WriteConnection {
         return tgtWritePort;
     }
 
-    long getTransactionId() {
+    public long getTransactionId() {
         return connTransactionId;
     }
 
@@ -222,7 +217,7 @@ public class WriteConnection {
         int userBufferSize = completion.getRemainingBytesToWrite();
         ByteBuffer buffer = completion.getBuffer();
 
-        System.out.println("WriteConnection writeAvailableData(1) " + userBufferSize);
+        System.out.println("WriteConnection[" + connTransactionId + "] writeAvailableData() " + userBufferSize);
 
         writeUserBuffer(buffer, completion);
     }
@@ -239,16 +234,11 @@ public class WriteConnection {
 
             @Override
             public void completed(final Integer result, final WriteCompletion completion) {
-                System.out.println("writeUserBuffer() bytesXfr: " + result);
+                System.out.println("WriteConnection[" + connTransactionId + "] writeUserBuffer() bytesXfr: " + result +
+                        " " + Thread.currentThread().getName());
 
-                System.out.println(String.format("Client: Write Completed in thread %s", Thread.currentThread().getName()));
                 if (result == -1) {
-                    try {
-                        writeChannel.close();
-                        writeChannel = null;
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
+                    closeChannel();
 
                     System.out.println("WriteConnection writeUserBuffer(2) bytesWritten -1");
                     completion.writeCompleted(-1, connTransactionId);
@@ -262,15 +252,25 @@ public class WriteConnection {
 
             @Override
             public void failed(final Throwable exc, final WriteCompletion completion) {
-                System.out.println("readFromChannel() bytesXfr: " + exc.getMessage());
-                try {
-                    writeChannel.close();
-                    writeChannel = null;
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+                System.out.println("WriteConnection[" + connTransactionId + "] readFromChannel() bytesXfr: " + exc.getMessage());
+                closeChannel();
+
+                completion.writeCompleted(-1, connTransactionId);
             }
         });
+    }
+
+    /*
+    ** This is the common call to close out the write connection channel.
+     */
+    public synchronized void closeChannel() {
+        try {
+            writeChannel.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        writeChannel = null;
     }
 
     /*
@@ -280,9 +280,5 @@ public class WriteConnection {
         writeClient = work;
     }
 
-    public void closeChannel() {
-        writeClient.closeChannel();
-        writeClient = null;
-    }
 
 }

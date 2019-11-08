@@ -88,9 +88,9 @@ public abstract class ClientTest implements Runnable {
 
         writeDone = new WaitSignal();
 
-        System.out.println("ClientTest serverConnId: " + serverConnId + " clientConnId: " + clientConnId);
-
         writeConn = client.addNewTarget(clientConnId);
+
+        System.out.println("ClientTest[" + writeConn.getTransactionId() + "] serverConnId: " + serverConnId + " clientConnId: " + clientConnId);
 
         if (client.connectTarget(writeConn, 100)) {
             ByteBuffer msgHdr = memoryAllocator.jniMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE);
@@ -98,7 +98,7 @@ public abstract class ClientTest implements Runnable {
             String tmp = buildRequestString();
 
             str_to_bb(msgHdr, tmp);
-            System.out.println("msgHdr " + msgHdr.position() + " " + msgHdr.remaining());
+            System.out.println("ClientTest[" + writeConn.getTransactionId() + "] msgHdr " + msgHdr.position() + " " + msgHdr.remaining());
 
             int bytesToWrite = msgHdr.position();
             msgHdr.flip();
@@ -120,24 +120,26 @@ public abstract class ClientTest implements Runnable {
 
             waitForStatus();
 
-            System.out.println("ClientTest run(1): ");
+            System.out.println("ClientTest[" + writeConn.getTransactionId() + "] run(1): ");
 
             client.disconnectTarget(writeConn);
         }
-
-        client.stop();
 
         clientCount.decrementAndGet();
     }
 
     void userWriteCompleted(int result) {
 
-        System.out.println("ClientTest userWriteComp(): " + result);
+        System.out.println("ClientTest[" + writeConn.getTransactionId() + "]userWriteComp(): " + result);
 
         synchronized (writeDone) {
             writeSignalSent = true;
             writeDone.notify();
         }
+    }
+
+    void resetWriteWaitFlag() {
+        writeSignalSent = false;
     }
 
     boolean waitForWriteToComp() {
@@ -157,13 +159,13 @@ public abstract class ClientTest implements Runnable {
             }
         }
 
-        System.out.println("ClientTest waitForWrite() done: " + status);
+        System.out.println("ClientTest[" + writeConn.getTransactionId() + "] waitForWrite() done: " + status);
 
         return status;
     }
 
     void statusReceived(int result) {
-        System.out.println("ClientTest statusReceived(): " + result);
+        System.out.println("ClientTest[" + writeConn.getTransactionId() + "]  statusReceived() : " + result);
 
         synchronized (writeDone) {
             statusSignalSent = true;
@@ -189,7 +191,7 @@ public abstract class ClientTest implements Runnable {
             }
         }
 
-        System.out.println("ClientTest waitForStatus() done: " + status);
+        System.out.println("ClientTest[" + writeConn.getTransactionId() + "] waitForStatus() done: " + status);
 
         return status;
     }
