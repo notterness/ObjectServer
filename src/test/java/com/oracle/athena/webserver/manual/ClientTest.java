@@ -93,7 +93,7 @@ public abstract class ClientTest implements Runnable {
         System.out.println("ClientTest[" + writeConn.getTransactionId() + "] serverConnId: " + serverConnId + " clientConnId: " + clientConnId);
 
         if (client.connectTarget(writeConn, 100)) {
-            ByteBuffer msgHdr = memoryAllocator.jniMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE);
+            ByteBuffer msgHdr = memoryAllocator.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE);
 
             String tmp = buildRequestString();
 
@@ -116,7 +116,7 @@ public abstract class ClientTest implements Runnable {
 
             clientTestStep_1();
 
-            memoryAllocator.jniMemFree(msgHdr);
+            memoryAllocator.poolMemFree(msgHdr);
 
             waitForStatus();
 
