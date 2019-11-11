@@ -28,7 +28,7 @@ public class TimeoutChecker {
     ** This function should be called whenever there is activity on a channel to indicate that
     **   progress is being made and the client is actually being responsive in terms of sending
     **   or receiving data.
-    ** This returns false if the delta is greater than the allowable time between operations on the
+    ** This returns true if the delta is greater than the allowable time between operations on the
     **   channel.
      */
     boolean updateTime() {
@@ -52,10 +52,10 @@ public class TimeoutChecker {
 
     /*
     ** If updateTime() has not been called within the CHANNEL_INACTIVITY_TIME this will return
-    **   false. It is up to the caller to then close out the channel and terminate the
+    **   true. It is up to the caller to then close out the channel and terminate the
     **   connection.
      */
-    boolean checkInactivity() {
+    boolean inactivityThresholdReached() {
         boolean exceededTime = false;
 
         long currTime = System.currentTimeMillis();
@@ -66,7 +66,7 @@ public class TimeoutChecker {
             Timestamp lastUpdate = new Timestamp(lastUpdateTimeMs);
             Timestamp curr = new Timestamp(currTime);
 
-            System.out.println("TimeoutChecker: lastUpdate - " + lastUpdate.toString() +
+            System.out.println("TimeoutChecker - exceeded timeout: lastUpdate - " + lastUpdate.toString() +
                     " current - " + curr.toString());
             exceededTime = true;
         }

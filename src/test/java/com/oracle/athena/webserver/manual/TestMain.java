@@ -32,11 +32,11 @@ public class TestMain {
         ClientConnection client = new ClientConnection(memoryAllocator, (baseTcpPortOffset + 1));
         client.start();
 
-        ClientTest client_1 = new ClientTest_2(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
-        client_1.start();
+        //ClientTest client_1 = new ClientTest_2(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        //client_1.start();
 
-        ClientTest client_2 = new ClientTest_EarlyClose(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
-        client_2.start();
+        //ClientTest client_2 = new ClientTest_EarlyClose(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        //client_2.start();
 
         ClientTest client_3 = new ClientTest_SlowHeaderSend(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_3.start();
@@ -58,8 +58,8 @@ public class TestMain {
             }
         }
 
-        client_1.stop();
-        client_2.stop();
+        //client_1.stop();
+        //client_2.stop();
         client_3.stop();
 
         /* Stop the ClientConnection */
