@@ -1005,6 +1005,17 @@ public class ConnectionState {
 
                 initialHttpBuffer = false;
             }
+
+            /*
+            ** Check if there needs to be another read to bring in more of the HTTP header
+             */
+            //boolean headerParsed = httpHeaderParsed.get();
+            //if (!headerParsed) {
+                /*
+                ** Allocate another buffer and read in more data
+                 */
+            //    requestedHttpBuffers++;
+            //}
         }
     }
 
