@@ -14,6 +14,12 @@ import java.util.concurrent.TimeUnit;
  */
 public class ServerWorkerThread implements Runnable {
 
+    /*
+    ** This is how many items to pull off the execution thread before going and checking the
+    **   timed wait queue for any work.
+     */
+    private final int MAX_EXEC_WORK_LOOP_COUNT = 20;
+
     private int maxQueueSize;
 
     private int threadId;
@@ -21,6 +27,8 @@ public class ServerWorkerThread implements Runnable {
     private MemoryManager memoryManager;
 
     private BlockingQueue<ConnectionState> workQueue;
+
+    private BlockingQueue<ConnectionState> timedWaitQueue;
 
     private BufferStatePool bufferStatePool;
 
@@ -41,7 +49,6 @@ public class ServerWorkerThread implements Runnable {
     ServerWorkerThread(final int queueSize, MemoryManager memoryManager, final int identifier) {
 
         maxQueueSize = queueSize;
-        workQueue = new LinkedBlockingQueue<>(maxQueueSize);
 
         this.memoryManager = memoryManager;
 
@@ -51,6 +58,10 @@ public class ServerWorkerThread implements Runnable {
     }
 
     void start() {
+
+        workQueue = new LinkedBlockingQueue<>(maxQueueSize);
+        timedWaitQueue = new LinkedBlockingQueue<>(maxQueueSize);
+
         bufferStatePool = new BufferStatePool(ConnectionState.MAX_OUTSTANDING_BUFFERS * maxQueueSize,
                 memoryManager);
 
@@ -133,19 +144,71 @@ public class ServerWorkerThread implements Runnable {
         return true;
     }
 
+    public boolean addToTimedQueue(final ConnectionState work) {
+        if (timedWaitQueue.remainingCapacity() == 0) {
+            System.out.println("ServerWorkerThread() addToTimedQueue connStateId [%d] out of space threadId: " + threadId + " " + Thread.currentThread().getName());
+            return false;
+        }
+        try {
+            String outStr;
+
+            outStr = String.format("ServerWorkerThread(%d) addToTimedQueue connStateId [%d]  state %s",
+                    this.threadId, work.getConnStateId(), work.getState().toString());
+            System.out.println(outStr);
+
+            timedWaitQueue.put(work);
+        } catch (InterruptedException int_ex) {
+            System.out.println("ServerWorkerThread() connStateId [%d] addToTimedQueue failed threadId: " + threadId + " " + Thread.currentThread().getName());
+            return false;
+        }
+
+        return true;
+    }
+
+    /*
+    ** Remove this element from the timedWaitQueue
+     */
+    public void removeFromTimedWaitQueue(final ConnectionState work) {
+        try {
+            if (!timedWaitQueue.remove(work)) {
+                System.out.println("ConnectionState[" + work.getConnStateId() + "] not on timedWaitQueue");
+            }
+        } catch (NullPointerException ex) {
+            ex.printStackTrace();
+        }
+    }
+
 
     public void run() {
 
         System.out.println("ServerWorkerThread(" + threadId + ") start " + Thread.currentThread().getName());
         try {
             ConnectionState work;
+            int workLoopCount;
 
             while (!threadExit) {
-                if ((work = workQueue.poll(1000, TimeUnit.MILLISECONDS)) != null) {
-                    // Perform read from this socket
+                workLoopCount = 0;
+                while (((work = workQueue.poll(100, TimeUnit.MILLISECONDS)) != null) &&
+                        (workLoopCount < MAX_EXEC_WORK_LOOP_COUNT)) {
+                    work.markRemovedFromQueue(false);
                     work.stateMachine();
-                } else {
-                    // TODO: Should there be a health check for the processing thread?
+                    workLoopCount++;
+                }
+
+                /*
+                ** Check if there are ConnectionState that are on the timedWaitQueue and their
+                **   wait time has elapsed. Currently, this is an ordered queue and everything
+                **   on the queue has the same wait time so only the head element needs to be
+                **   checked for the elapsed timeout.
+                 */
+                while ((work = timedWaitQueue.peek()) != null) {
+                    if (work.hasWaitTimeElapsed()) {
+                        timedWaitQueue.remove(work);
+                        work.markRemovedFromQueue(true);
+                        work.stateMachine();
+                    } else {
+                        break;
+                    }
                 }
             }
         } catch (InterruptedException e) {

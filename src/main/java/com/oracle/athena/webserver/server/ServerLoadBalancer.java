@@ -116,8 +116,12 @@ class ServerLoadBalancer {
                     System.out.println("addReadWork(" + (serverBaseId + currQueue) + "): currQueue: " +
                             currQueue + " queueCap: " + queueCap);
 
+                    /*
+                    ** Need to assign the thread this ConnectionState is going to run on prior to adding it
+                    **   to the execution queue for the worker thread.
+                     */
                     work.assignWorkerThread(threadPool[currQueue]);
-                    threadPool[currQueue].put(work);
+                    work.addToWorkQueue(false);
 
                     lastQueueUsed = currQueue + 1;
                     if (lastQueueUsed == workerThreads) {

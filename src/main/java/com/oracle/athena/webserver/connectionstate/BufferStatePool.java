@@ -24,7 +24,10 @@ public class BufferStatePool {
         BufferState bufferState = new BufferState(connState);
 
         if (bufferState != null) {
-            ByteBuffer buffer = memoryAllocator.poolMemAlloc(bufferSize);
+            MemoryAvailableCallback memAvailCb;
+
+            memAvailCb = new MemoryAvailableCallback(connState, 1);
+            ByteBuffer buffer = memoryAllocator.poolMemAlloc(bufferSize, memAvailCb);
             if (buffer != null) {
                 bufferState.assignBuffer(buffer, initialState);
                 return bufferState;
