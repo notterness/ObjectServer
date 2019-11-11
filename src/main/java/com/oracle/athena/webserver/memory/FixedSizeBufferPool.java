@@ -1,7 +1,5 @@
 package com.oracle.athena.webserver.memory;
 
-import sun.jvm.hotspot.opto.Block;
-
 import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -12,11 +10,11 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public class FixedSizeBufferPool {
 
-    private int bufferSize;
-    private int bufferCount;
+    final private int bufferSize;
+    final private int bufferCount;
 
-    private BlockingQueue<ByteBuffer> freeQueue;
-    private BlockingQueue<ByteBuffer> inuseQueue;
+    final private BlockingQueue<ByteBuffer> freeQueue;
+    final private BlockingQueue<ByteBuffer> inuseQueue;
 
     public FixedSizeBufferPool( int bufferSize, int bufferCount ) {
         this.bufferSize = bufferSize;
@@ -32,37 +30,28 @@ public class FixedSizeBufferPool {
 
     public int getBufferCount() { return bufferCount; }
 
-    public int getBuffersInUse() { return inuseQueue.size(); }
+    public int getNumBuffersInUse() { return inuseQueue.size(); }
 
-    public ByteBuffer jniMemAlloc(int bufferSize) {
-        // TODO instead of calling allocate, perhaps grab a ByteBuffer chunk out of a larger cache
-        ByteBuffer ret = null;
-        try {
-            // take() can block.  Don't really want that, but it shouldn't happen
-            // if we check for empty before taking.
-            if (!freeQueue.isEmpty()) {
-                ret = freeQueue.take();
-                inuseQueue.add(ret);
-            } else {
-                // OK, take this one off the heap as overflow.
-                ret = ByteBuffer.allocate( bufferSize );
-            }
-        } catch (InterruptedException int_ex ) {
-            System.out.println( int_ex.getMessage());
+    public ByteBuffer poolMemAlloc(int bufferSize) {
+        // Instead of calling allocate, perhaps grab a ByteBuffer chunk out of a larger cache
+        // If none available, will return null and queue up callback (if supplied) for next free.
+        ByteBuffer ret = freeQueue.poll();
+        if (ret != null) {
+            inuseQueue.add(ret);
         }
+        // } catch (InterruptedException int_ex ) {
+        //    System.out.println( int_ex.getMessage());
+        // }
         // System.out.println( "Size of inuseQueue is " + inuseQueue.size() );
         return ret;
-        // return ByteBuffer.allocateDirect(bufferSize);
     }
 
-    public void jniMemFree(ByteBuffer buffer) {
-        if (buffer.isDirect()) {
-            // Must be one of ours.
-            inuseQueue.remove( buffer );
+    public void poolMemFree(ByteBuffer buffer) {
+        if (inuseQueue.remove( buffer )) {
+            buffer.clear();
             freeQueue.add( buffer );
-            // System.out.println( "Size of inuseQueue is " + inuseQueue.size() );
-            // buffer.clear();
         }
+        // System.out.println( "Size of inuseQueue is " + inuseQueue.size() );
     }
 }
 

@@ -24,7 +24,7 @@ public class BufferStatePool {
         BufferState bufferState = new BufferState(connState);
 
         if (bufferState != null) {
-            ByteBuffer buffer = memoryAllocator.jniMemAlloc(bufferSize);
+            ByteBuffer buffer = memoryAllocator.poolMemAlloc(bufferSize);
             if (buffer != null) {
                 bufferState.assignBuffer(buffer, initialState);
                 return bufferState;
@@ -40,7 +40,7 @@ public class BufferStatePool {
     public void freeBufferState(BufferState bufferState) {
 
         ByteBuffer buffer = bufferState.getBuffer();
-        memoryAllocator.jniMemFree(buffer);
+        memoryAllocator.poolMemFree(buffer);
 
         bufferState.assignBuffer(null, BufferStateEnum.INVALID_STATE);
     }
