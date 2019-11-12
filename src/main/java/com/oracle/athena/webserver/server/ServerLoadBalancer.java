@@ -11,8 +11,10 @@ import java.nio.channels.AsynchronousSocketChannel;
  ** evenly (or at least make a best effort) spread the connections to the worker threads. The
  ** problem is that the amount of work per connection is not really known until the header is
  ** parsed and then there additional detail about what needs to be done.
+ *
+ * FIXME: This class shouldn't be public but is for ClientConnection code.
  */
-class ServerLoadBalancer {
+public class ServerLoadBalancer {
 
     private ServerWorkerThread[] threadPool;
 
@@ -91,8 +93,9 @@ class ServerLoadBalancer {
      **
      ** NOTE: This returns ConnectionState to allow the client to perform close operations on
      **   the connection during tests.
+     * FIXME: Made public for client test code. It's one thing to test a method, it's another for a client to reach into server code.
      */
-    ConnectionState startNewClientReadConnection(final AsynchronousSocketChannel chan, final ClientDataReadCallback clientReadCb) {
+    public ConnectionState startNewClientReadConnection(final AsynchronousSocketChannel chan, final ClientDataReadCallback clientReadCb) {
         ConnectionState work = connPool.allocConnectionState(chan, clientReadCb);
         if (work != null) {
             if (!addWorkToThread(work)) {
