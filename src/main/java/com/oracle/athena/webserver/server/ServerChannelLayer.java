@@ -17,43 +17,39 @@ import java.util.concurrent.TimeUnit;
 public class ServerChannelLayer implements Runnable {
 
     public static final int BASE_TCP_PORT = 5000;
+    public static final int DEFAULT_CLIENT_ID = 31415;
     private static final int CHAN_TIMEOUT = 100;
     private static final int WORK_QUEUE_SIZE = 10;
 
-    private int portNum;
-    private int workerThreads;
-    private int serverClientId;
+    private final int portNum;
+    private final int workerThreads;
+    private final int serverClientId;
+    private final MemoryManager memoryManager;
 
+    // TODO revist some of these mutable fields to see if there's a better way of structuring this class
     private boolean exitThreads;
-
     private Thread serverAcceptThread;
-
     private ServerLoadBalancer serverWorkHandler;
-    private MemoryManager memoryManager;
-
     private AsynchronousServerSocketChannel serverChannel;
     private AsynchronousChannelGroup serverCbThreadpool;
-
     private int serverConnTransactionId;
-
     private ByteBufferHttpParser byteBufferHttpParser;
 
+    public ServerChannelLayer(int workerThreads) {
+        this(workerThreads, DEFAULT_CLIENT_ID);
+    }
+
     public ServerChannelLayer(int workerThreads, int serverClientId) {
-        portNum = BASE_TCP_PORT;
-        this.workerThreads = workerThreads;
-        this.serverClientId = serverClientId;
+        this(workerThreads, BASE_TCP_PORT, serverClientId);
     }
 
     public ServerChannelLayer(int numWorkerThreads, int listenPort, int clientId) {
         portNum = listenPort;
         workerThreads = numWorkerThreads;
         serverClientId = clientId;
-
-        memoryManager = new MemoryManager();
-
         serverConnTransactionId = 0x5555;
-
         exitThreads = false;
+        memoryManager = new MemoryManager();
     }
 
     public void start() {
@@ -92,6 +88,12 @@ public class ServerChannelLayer implements Runnable {
             }
         } catch (InterruptedException int_ex) {
             System.out.println("Wait for threadpool shutdown failed: " + serverConnTransactionId + " " + int_ex.getMessage());
+        }
+
+        try {
+            serverAcceptThread.join(1000);
+        } catch (InterruptedException e) {
+            System.out.println("Unable to rejoin the accept thread: " + e.getMessage());
         }
     }
 
