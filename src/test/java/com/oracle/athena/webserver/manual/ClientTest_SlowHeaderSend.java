@@ -54,7 +54,7 @@ public class ClientTest_SlowHeaderSend extends ClientTest {
          **   the connection channel timeout handling code for headers.
          */
         try {
-            Thread.sleep(5500);
+            Thread.sleep(2500);
         } catch (InterruptedException int_ex) {
             int_ex.printStackTrace();
         }

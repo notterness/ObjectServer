@@ -56,12 +56,14 @@ public class MemoryManager {
         ** TODO: If there are already ConnectionState waiting for memory, need to wait for those to
         **   be handled first
          */
-        ByteBuffer buffer = null;
-
         for (int i = 0; i < numPools;  ++i) {
             if (requestedSize <= thePool[i].getBufferSize()) {
-                buffer = thePool[i].poolMemAlloc( requestedSize );
-                if ((buffer == null) && (memFreeCb != null)) {
+
+                System.out.println("poolMemAlloc [" + i + "] requestedSize: " + requestedSize);
+                ByteBuffer buffer = thePool[i].poolMemAlloc( requestedSize );
+                if (buffer != null) {
+                    return buffer;
+                } else if (memFreeCb != null) {
                     try {
                         waitingForBuffersQueue.put(memFreeCb);
                     } catch (InterruptedException int_ex) {
@@ -70,7 +72,7 @@ public class MemoryManager {
                 }
             }
         }
-        return buffer;
+        return null;
     }
 
     public void poolMemFree(ByteBuffer buffer) {
