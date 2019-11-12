@@ -1,14 +1,14 @@
 package com.oracle.athena.webserver.manual;
 
+import com.oracle.athena.webserver.client.TestClient;
 import com.oracle.athena.webserver.memory.MemoryManager;
-import com.oracle.athena.webserver.server.ClientConnection;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ClientTest_SlowHeaderSend extends ClientTest {
 
-    ClientTest_SlowHeaderSend(final ClientConnection client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
+    ClientTest_SlowHeaderSend(final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
         super(client, myServerId, myTargetId, threadCount);
     }
 

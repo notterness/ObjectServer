@@ -1,13 +1,13 @@
 package com.oracle.athena.webserver.manual;
 
-import com.oracle.athena.webserver.server.ClientConnection;
+import com.oracle.athena.webserver.client.TestClient;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ClientTest_2 extends ClientTest {
 
-    ClientTest_2(final ClientConnection client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
+    ClientTest_2(final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
         super(client, myServerId, myTargetId, threadCount);
     }
 
