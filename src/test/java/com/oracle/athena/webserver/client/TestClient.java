@@ -1,11 +1,7 @@
 package com.oracle.athena.webserver.client;
 
 import com.oracle.athena.webserver.connectionstate.ConnectionState;
-import com.oracle.athena.webserver.server.ClientDataReadCallback;
-import com.oracle.athena.webserver.server.ServerChannelLayer;
-import com.oracle.athena.webserver.server.ServerLoadBalancer;
-import com.oracle.athena.webserver.server.WriteCompletion;
-import com.oracle.athena.webserver.server.WriteConnection;
+import com.oracle.athena.webserver.server.*;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -17,10 +13,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 
 // A client connection is a single server port that can talk to multiple clients. The clients
-// can open connections to this server or this ClientConnection can be used to send
-// data to a client. The ClientConnection consists of a single stream of data back and forth
+// can open connections to this server or this TestClient can be used to send
+// data to a client. The TestClient consists of a single stream of data back and forth
 // between a client and a server.
-// The ClientConnection sits on top of the WriteConnection
+// The TestConnection sits on top of the WriteConnection
 
 public class TestClient implements Runnable {
 
@@ -32,9 +28,12 @@ public class TestClient implements Runnable {
     private final Object clientConnListLock;
 
     private final List<WriteConnection> clientConnections;
-    private ServerChannelLayer targetServer;
+    private InitiatorServer targetServer;
 
-    private final BlockingQueue<WriteConnection> workQueue;
+    private BlockingQueue<WriteConnection> workQueue;
+
+    private Thread clientWriteThread;
+
     private final AtomicBoolean threadExit;
 
     private int tcpPort;
@@ -46,7 +45,13 @@ public class TestClient implements Runnable {
         targetServer = null;
         threadExit = new AtomicBoolean(false);
         clientConnListLock = new Object();
+    }
+
+    public void start() {
         workQueue = new LinkedBlockingQueue<>(WORK_QUEUE_SIZE);
+
+        clientWriteThread = new Thread(this);
+        clientWriteThread.start();
     }
 
     public void stop() {
@@ -60,7 +65,7 @@ public class TestClient implements Runnable {
         if (targetServer == null) {
             // Setup the server for this clientId
             int serverTcpPort = ServerChannelLayer.BASE_TCP_PORT + serverTargetId;
-            targetServer = new ServerChannelLayer(2, serverTcpPort, serverTargetId);
+            targetServer = new InitiatorServer(2, serverTcpPort, serverTargetId);
             targetServer.start();
         }
 
@@ -100,8 +105,7 @@ public class TestClient implements Runnable {
      ** This is how the client registers to receive data read callback.
      */
     public void registerClientReadCallback(WriteConnection writeConnection, ClientDataReadCallback readCallback) {
-        //FIXME: A client connection shouldn't know about a server loadbalancer
-        ServerLoadBalancer serverWorkHandler;
+        InitiatorLoadBalancer serverWorkHandler;
         ConnectionState work;
 
         serverWorkHandler = targetServer.getLoadBalancer();
@@ -122,7 +126,7 @@ public class TestClient implements Runnable {
      **   work pending and then calling the writeAvailableData() might be a better solution.
      */
     public void run() {
-        System.out.println("ClientConnection thread() start");
+        System.out.println("TestClient thread() start");
         try {
             WriteConnection writeConn;
             while (!threadExit.get()) {
@@ -137,7 +141,7 @@ public class TestClient implements Runnable {
             e.printStackTrace();
         }
 
-        System.out.println("ClientConnection thread() exit");
+        System.out.println("TestClient thread() exit");
     }
 
 

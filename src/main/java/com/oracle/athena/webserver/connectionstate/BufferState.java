@@ -29,22 +29,8 @@ public class BufferState {
         return bufferState;
     }
 
-
-    public ByteBuffer getCheckedBuffer(final BufferStateEnum expectedState) {
-        if (bufferState == expectedState) {
-            return buffer;
-        }
-
-        return null;
-    }
-
-
     public ByteBuffer getBuffer() {
         return buffer;
-    }
-
-    public ConnectionState getConnState() {
-        return connState;
     }
 
     /*
@@ -86,20 +72,14 @@ public class BufferState {
              **   was a channel error. Need to tell the ConnectionState to clean up and terminate this
              **   connection.
              */
-            connState.readCompletedError(this);
+            bufferState = BufferStateEnum.READ_ERROR;
         } else {
-            boolean allDataRead = false;
-            if (buffer.remaining() != 0)
-                allDataRead = true;
-
             if (bufferState == BufferStateEnum.READ_WAIT_FOR_HTTP) {
                 // Read of all the data is completed
                 bufferState = BufferStateEnum.READ_HTTP_DONE;
-                connState.httpReadCompleted(this, allDataRead);
             } else if (bufferState == BufferStateEnum.READ_WAIT_FOR_DATA) {
                 // Read of all the data is completed
                 bufferState = BufferStateEnum.READ_DATA_DONE;
-                connState.dataReadCompleted(this, allDataRead);
             } else {
                 System.out.println("ERROR: setReadState() invalid current state: " + bufferState.toString());
             }

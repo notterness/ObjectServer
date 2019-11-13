@@ -2,6 +2,7 @@ package com.oracle.athena.webserver.server;
 
 import com.oracle.athena.webserver.connectionstate.ConnectionState;
 import com.oracle.athena.webserver.connectionstate.ConnectionStatePool;
+import com.oracle.athena.webserver.connectionstate.WebServerConnState;
 import com.oracle.athena.webserver.memory.MemoryManager;
 
 import java.nio.channels.AsynchronousSocketChannel;
@@ -11,21 +12,19 @@ import java.nio.channels.AsynchronousSocketChannel;
  ** evenly (or at least make a best effort) spread the connections to the worker threads. The
  ** problem is that the amount of work per connection is not really known until the header is
  ** parsed and then there additional detail about what needs to be done.
- *
- * FIXME: This class shouldn't be public but is for ClientConnection code.
  */
-public class ServerLoadBalancer {
+class ServerLoadBalancer {
 
-    private ServerWorkerThread[] threadPool;
+    ServerWorkerThread[] threadPool;
 
-    private MemoryManager memoryManager;
+    MemoryManager memoryManager;
 
-    private int workerThreads;
-    private int maxQueueSize;
-    private int lastQueueUsed;
+    int workerThreads;
+    int maxQueueSize;
+    int lastQueueUsed;
 
-    private int serverBaseId;
-    private ConnectionStatePool connPool;
+    int serverBaseId;
+    private ConnectionStatePool<WebServerConnState> connPool;
 
     /*
      ** The queueSize is the maximum number of outstanding connections a thread can manage
@@ -59,7 +58,20 @@ public class ServerLoadBalancer {
             threadPool[i] = worker;
         }
 
-        connPool = new ConnectionStatePool(workerThreads * maxQueueSize, serverBaseId);
+        connPool = new ConnectionStatePool<WebServerConnState>(workerThreads * maxQueueSize, serverBaseId);
+
+        /*
+        ** The following ugly code is due to the fact that you cannot create a object of generic type <T> within
+        **   and generic class that uses <T>
+         */
+        WebServerConnState conn;
+        for (int i = 0; i < (workerThreads * maxQueueSize); i++) {
+            conn = new WebServerConnState(connPool, (serverBaseId + i + 1));
+
+            conn.start();
+
+            connPool.freeConnectionState(conn);
+        }
 
         lastQueueUsed = 0;
     }
@@ -79,7 +91,7 @@ public class ServerLoadBalancer {
      */
     boolean startNewConnection(final AsynchronousSocketChannel chan) {
 
-        ConnectionState work = connPool.allocConnectionState(chan);
+        WebServerConnState work = connPool.allocConnectionState(chan);
         if (work == null) {
             return false;
         }
@@ -87,27 +99,7 @@ public class ServerLoadBalancer {
         return addWorkToThread(work);
     }
 
-    /*
-     ** The following is used to register a Connection state object used to perform
-     **   reads from the clients socket connection.
-     **
-     ** NOTE: This returns ConnectionState to allow the client to perform close operations on
-     **   the connection during tests.
-     * FIXME: Made public for client test code. It's one thing to test a method, it's another for a client to reach into server code.
-     */
-    public ConnectionState startNewClientReadConnection(final AsynchronousSocketChannel chan, final ClientDataReadCallback clientReadCb) {
-        ConnectionState work = connPool.allocConnectionState(chan, clientReadCb);
-        if (work != null) {
-            if (!addWorkToThread(work)) {
-                connPool.freeConnectionState(work);
-                work = null;
-            }
-        }
-
-        return work;
-    }
-
-    private boolean addWorkToThread(ConnectionState work) {
+    boolean addWorkToThread(ConnectionState work) {
 
         // Find the queue with the least amount of work
         int currQueue = lastQueueUsed;

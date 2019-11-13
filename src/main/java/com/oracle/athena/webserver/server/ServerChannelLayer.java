@@ -14,52 +14,45 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-public class ServerChannelLayer implements Runnable {
+abstract public class ServerChannelLayer implements Runnable {
 
     public static final int BASE_TCP_PORT = 5000;
     public static final int DEFAULT_CLIENT_ID = 31415;
     private static final int CHAN_TIMEOUT = 100;
-    private static final int WORK_QUEUE_SIZE = 10;
+    static final int WORK_QUEUE_SIZE = 10;
 
-    private final int portNum;
-    private final int workerThreads;
-    private final int serverClientId;
-    private final MemoryManager memoryManager;
+    private int portNum;
+    int workerThreads;
+    int serverClientId;
 
-    // TODO revist some of these mutable fields to see if there's a better way of structuring this class
+    Thread serverAcceptThread;
+    ServerLoadBalancer serverWorkHandler;
+
+    MemoryManager memoryManager;
+
+
     private boolean exitThreads;
-    private Thread serverAcceptThread;
-    private ServerLoadBalancer serverWorkHandler;
+
     private AsynchronousServerSocketChannel serverChannel;
     private AsynchronousChannelGroup serverCbThreadpool;
+
     private int serverConnTransactionId;
+
     private ByteBufferHttpParser byteBufferHttpParser;
 
-    public ServerChannelLayer(int workerThreads) {
-        this(workerThreads, DEFAULT_CLIENT_ID);
-    }
-
-    public ServerChannelLayer(int workerThreads, int serverClientId) {
-        this(workerThreads, BASE_TCP_PORT, serverClientId);
-    }
-
-    public ServerChannelLayer(int numWorkerThreads, int listenPort, int clientId) {
+    ServerChannelLayer(int numWorkerThreads, int listenPort, int clientId) {
         portNum = listenPort;
         workerThreads = numWorkerThreads;
         serverClientId = clientId;
-        serverConnTransactionId = 0x5555;
-        exitThreads = false;
+
         memoryManager = new MemoryManager();
+
+        serverConnTransactionId = 0x5555;
+
+        exitThreads = false;
     }
 
-    public void start() {
-        serverWorkHandler = new ServerLoadBalancer(WORK_QUEUE_SIZE, workerThreads, memoryManager,
-                (serverClientId * 100));
-        serverWorkHandler.start();
-
-        serverAcceptThread = new Thread(this);
-        serverAcceptThread.start();
-    }
+    abstract void start();
 
     /*
      ** Perform an orderly shutdown of the server channel and all of its associated resources.
@@ -89,18 +82,6 @@ public class ServerChannelLayer implements Runnable {
         } catch (InterruptedException int_ex) {
             System.out.println("Wait for threadpool shutdown failed: " + serverConnTransactionId + " " + int_ex.getMessage());
         }
-
-        try {
-            serverAcceptThread.join(1000);
-        } catch (InterruptedException e) {
-            System.out.println("Unable to rejoin the accept thread: " + e.getMessage());
-        }
-    }
-
-    public ServerLoadBalancer getLoadBalancer() {
-        System.out.println("ServerChannelLayer(" + serverClientId + ") getLoadBalancer() " + Thread.currentThread().getName());
-
-        return serverWorkHandler;
     }
 
     public void run() {
@@ -137,24 +118,15 @@ public class ServerChannelLayer implements Runnable {
             ** If the accept() with a callback is used, the thread must wait until the accept callback
             ** has taken place before calling accept again. Otherwise, there will be an error due to
             ** trying multiple accepts.
-            **
-            serverChannel.accept(null, new CompletionHandler<AsynchronousSocketChannel, Void>() {
-                public void completed(AsynchronousSocketChannel clientChan, Void att) {
-                    System.out.println("Server run(): accept completed: ");
-                    serverChannel.accept(null, this);
-                    selectHandler.handleAccept(clientChan);
-                }
-
-                public void failed(Throwable ex, Void att) {
-                    System.out.println("Server run(): accept error: " + ex.getMessage());
-                }
-            });
             */
             Future<AsynchronousSocketChannel> clientAcceptChan = serverChannel.accept();
             System.out.println("Server run(" + serverClientId + "): waiting on accept");
 
             try {
                 AsynchronousSocketChannel clientChan = clientAcceptChan.get();
+
+                System.out.println("Server run(" + serverClientId + "): accepted");
+
                 if (!serverWorkHandler.startNewConnection(clientChan)) {
                     /*
                      ** TODO: Need to return error to the client as there are no available ConnectionState objects

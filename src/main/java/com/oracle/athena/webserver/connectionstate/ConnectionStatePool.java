@@ -11,23 +11,21 @@ import java.util.concurrent.LinkedBlockingQueue;
  **
  ** numConnections is the total number allocated
  */
-public class ConnectionStatePool {
+public class ConnectionStatePool<T> {
 
     private int allocatedConnectionStates;
 
-    private ConnectionState[] connectionStatePool;
-
-
     private int connId;
+
+    private LinkedBlockingQueue<T> connPoolFreeList;
 
     /*
      ** The following are used to allow the LinkedBlockingQueue to not actually block
      **   by returning null when the queue is empty instead of waiting for an
      **   element to become available.
      */
-    private QueueMutex queueMutex;
-    private int freeConnCount;
-    private LinkedBlockingQueue<ConnectionState> connPoolFreeList;
+    QueueMutex queueMutex;
+    int freeConnCount;
 
 
     public ConnectionStatePool(final int numConnections, final int serverBaseId) {
@@ -37,46 +35,14 @@ public class ConnectionStatePool {
 
         queueMutex = new QueueMutex();
 
-        connectionStatePool = new ConnectionState[allocatedConnectionStates];
-        connPoolFreeList = new LinkedBlockingQueue<>(allocatedConnectionStates);
-        for (int i = 0; i < allocatedConnectionStates; i++) {
-            connectionStatePool[i] = new ConnectionState(this, (serverBaseId + i + 1));
-
-            connectionStatePool[i].start();
-
-            try {
-                connPoolFreeList.put(connectionStatePool[i]);
-                freeConnCount++;
-            } catch (InterruptedException int_ex) {
-                System.out.println(int_ex.getMessage());
-            }
-        }
+        connPoolFreeList = new LinkedBlockingQueue<>(numConnections);
     }
 
-    public ConnectionState allocConnectionState(final AsynchronousSocketChannel chan) {
-        ConnectionState conn = null;
-
-        synchronized (queueMutex) {
-            if (freeConnCount > 0) {
-                freeConnCount--;
-                try {
-                    conn = connPoolFreeList.take();
-                    conn.setChannelAndWrite(chan);
-                } catch (InterruptedException int_ex) {
-                    System.out.println(int_ex.getMessage());
-                    conn = null;
-                    freeConnCount++;
-                }
-            }
-        }
-
-        return conn;
-    }
 
     /*
      ** This is used for setting up a ConnectionState for the client side to perform reads
      */
-    public ConnectionState allocConnectionState(final AsynchronousSocketChannel chan, final ClientDataReadCallback clientReadCb) {
+    public T allocConnectionState(final AsynchronousSocketChannel chan) {
 
         ConnectionState conn = null;
 
@@ -84,31 +50,28 @@ public class ConnectionStatePool {
             if (freeConnCount > 0) {
                 freeConnCount--;
                 try {
-                    conn = connPoolFreeList.take();
+                    conn = (ConnectionState) connPoolFreeList.take();
                     conn.setChannel(chan);
-                    conn.setClientReadCallback(clientReadCb);
 
                 } catch (InterruptedException int_ex) {
                     System.out.println(int_ex.getMessage());
-                    conn = null;
                     freeConnCount++;
                 }
             }
         }
 
-        return conn;
+        return (T) conn;
     }
 
-    public void freeConnectionState(ConnectionState conn) {
-
-        conn.clearChannel();
-
+    public void freeConnectionState(T connectionState) {
         try {
-            connPoolFreeList.put(conn);
+            connPoolFreeList.put(connectionState);
+            freeConnCount++;
         } catch (InterruptedException int_ex) {
             System.out.println(int_ex.getMessage());
         }
     }
+
 
     public int getConnId() {
         return connId;

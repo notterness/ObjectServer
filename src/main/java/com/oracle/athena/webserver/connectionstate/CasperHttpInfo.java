@@ -12,7 +12,7 @@ public class CasperHttpInfo {
     /*
      ** The connection this HTTP information is associated with
      */
-    private ConnectionState connectionState;
+    private WebServerConnState connectionState;
 
     private boolean headerComplete;
     private boolean contentComplete;
@@ -46,11 +46,11 @@ public class CasperHttpInfo {
     private String httpHost;
     private int httpPort;
 
-    private String ContentType;
+    private String contentType;
 
     private String UserAgent;
 
-    private int ContentLength;
+    private long contentLength;
 
     /*
      **
@@ -124,7 +124,7 @@ public class CasperHttpInfo {
 
     private int approximateCount;
 
-    private int approiximateSize;
+    private int approximateSize;
 
     private boolean objectEventsEnabled;
 
@@ -152,7 +152,7 @@ public class CasperHttpInfo {
     private int _headers;
 
 
-    CasperHttpInfo(final ConnectionState connState) {
+    CasperHttpInfo(final WebServerConnState connState) {
         headerComplete = false;
         contentComplete = false;
         messageComplete = false;
@@ -204,10 +204,10 @@ public class CasperHttpInfo {
         httpHost = null;
         httpPort = 0;
 
-        ContentType = null;
+        contentType = null;
         UserAgent = null;
 
-        ContentLength = 0;
+        contentLength = 0;
 
         namespace = null;
         name = null;
@@ -228,7 +228,7 @@ public class CasperHttpInfo {
         definedTags = null;
 
         approximateCount = 0;
-        approiximateSize = 0;
+        approximateSize = 0;
 
         objectEventsEnabled = false;
         replicationEnabled = false;
@@ -271,6 +271,14 @@ public class CasperHttpInfo {
 
             System.out.println("addHeaderValue() _host: " + httpHost + " _port: " + httpPort);
         }
+
+        if (_hdr[_headers].compareTo("Content-Length") == 0) {
+            try {
+                contentLength = Long.parseLong(_val[_headers]);
+            } catch (NumberFormatException num_ex) {
+                System.out.println("addHeaderValue() " + _val[_headers] + " " + num_ex.getMessage());
+            }
+        }
     }
 
     /*
@@ -280,7 +288,7 @@ public class CasperHttpInfo {
     public void setHeaderComplete() {
         headerComplete = true;
 
-        connectionState.httpHeaderParseComplete();
+        connectionState.httpHeaderParseComplete(contentLength);
     }
 
     public void setContentComplete() {
