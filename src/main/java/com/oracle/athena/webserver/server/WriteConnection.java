@@ -8,6 +8,7 @@ package com.oracle.athena.webserver.server;
 
 import com.oracle.athena.webserver.connectionstate.ConnectionState;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -22,7 +23,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-public class WriteConnection {
+public class WriteConnection implements Closeable {
 
     /*
      ** This is the number of worker threads that are created to handle callbacks for
@@ -82,7 +83,7 @@ public class WriteConnection {
      ** This function opens up the Channel between the Server this WriteConnection is associated
      ** with and the target port that was specified when the WriteConnection was instantiated.
      */
-    AsynchronousSocketChannel openWriteConnection(final int writePort, final int timeoutMs) {
+    public AsynchronousSocketChannel open(final int writePort, final int timeoutMs) {
 
         AsynchronousSocketChannel clientChan;
 
@@ -149,8 +150,8 @@ public class WriteConnection {
     /*
      ** This function is used to close out the Channel and clean it up.
      */
-    void closeWriteConnection() {
-
+    @Override
+    public void close() {
         System.out.println("WriteConnection[" + connTransactionId + "] closeWriteConnection()");
 
         /*
@@ -181,8 +182,8 @@ public class WriteConnection {
         }
     }
 
-    public void writeData(WriteCompletion completion) {
-        pendingWrites.add(completion);
+    public boolean writeData(WriteCompletion completion) {
+        return pendingWrites.add(completion);
     }
 
     public int getClientId() {
@@ -201,7 +202,7 @@ public class WriteConnection {
      **   probably needs to be a better method than having one thread manage all write, but need to
      **   think about that.
      */
-    void writeAvailableData() {
+    public void writeAvailableData() {
 
         // Pull all the writes off the queue sequentially
         WriteCompletion completion;
@@ -261,6 +262,7 @@ public class WriteConnection {
     }
 
     /*
+    TODO: Is this method exposed just for test purposes?
     ** This is the common call to close out the write connection channel.
      */
     public synchronized void closeChannel() {
@@ -274,11 +276,10 @@ public class WriteConnection {
     }
 
     /*
-    ** Test APIs
+     * FIXME: Test APIs should never be part of the production object.
+     *    Test APIs
      */
     public void setClientConnectionState(ConnectionState work) {
         writeClient = work;
     }
-
-
 }

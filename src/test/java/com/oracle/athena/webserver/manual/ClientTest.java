@@ -1,8 +1,8 @@
 package com.oracle.athena.webserver.manual;
 
+import com.oracle.athena.webserver.client.TestClient;
 import com.oracle.athena.webserver.http.HttpResponseListener;
 import com.oracle.athena.webserver.memory.MemoryManager;
-import com.oracle.athena.webserver.server.ClientConnection;
 import com.oracle.athena.webserver.server.WriteConnection;
 import org.eclipse.jetty.http.HttpParser;
 
@@ -35,9 +35,9 @@ public abstract class ClientTest implements Runnable {
     private HttpResponseCompleted httpResponseCb;
 
     WriteConnection writeConn;
-    ClientConnection client;
+    TestClient client;
 
-    ClientTest(final ClientConnection clientConnection, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
+    ClientTest(final TestClient testClient, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
 
         serverConnId = myServerId;
         clientConnId = myTargetId;
@@ -45,7 +45,7 @@ public abstract class ClientTest implements Runnable {
         clientCount = threadCount;
         clientCount.incrementAndGet();
 
-        client = clientConnection;
+        client = testClient;
     }
 
     void start() {

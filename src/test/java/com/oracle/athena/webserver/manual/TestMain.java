@@ -1,7 +1,6 @@
 package com.oracle.athena.webserver.manual;
 
-import com.oracle.athena.webserver.memory.MemoryManager;
-import com.oracle.athena.webserver.server.ClientConnection;
+import com.oracle.athena.webserver.client.TestClient;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -27,10 +26,7 @@ public class TestMain {
          */
         // This sets up the server side of the connection
 
-        MemoryManager memoryAllocator = new MemoryManager();
-
-        ClientConnection client = new ClientConnection(memoryAllocator, (baseTcpPortOffset + 1));
-        client.start();
+        TestClient client = new TestClient((baseTcpPortOffset + 1));
 
         ClientTest client_1 = new ClientTest_2(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_1.start();
