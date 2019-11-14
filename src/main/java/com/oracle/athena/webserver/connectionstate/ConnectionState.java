@@ -487,36 +487,47 @@ abstract public class ConnectionState {
      **   readCompletedError() function.
      */
     void dataReadCompleted(final BufferState bufferState) {
-        int readCompletedCount;
-
         int readCount = outstandingDataReadCount.decrementAndGet();
-        try {
-            /*
-            ** Update the number of bytes actually read for a server connection.
-             */
-            int bytesRead = bufferState.getBuffer().position();
-            contentBytesRead.addAndGet(bytesRead);
 
-            dataReadDoneQueue.put(bufferState);
-            readCompletedCount = dataBufferReadsCompleted.incrementAndGet();
-        } catch (InterruptedException int_ex) {
-            /*
-            ** TODO: This is an error case and the connection needs to be closed
-             */
-            System.out.println("dataReadCompleted(" + connStateId + ") " + int_ex.getMessage());
-            readCompletedCount = dataBufferReadsCompleted.get();
-        }
+        int bytesRead = bufferState.getBuffer().position();
+        addDataBuffer(bufferState, bytesRead);
 
         /*
          ** Update the channel's health timeout
          */
         timeoutChecker.updateTime();
 
-        System.out.println("ConnectionState[" + connStateId + "].dataReadCompleted() HTTP outstandingReadCount: " + readCount +
-                " readCompletedCount: " + readCompletedCount);
+        System.out.println("ConnectionState[" + connStateId + "].dataReadCompleted() outstandingReadCount: " + readCount);
+
+        addToWorkQueue(false);
+    }
+
+    /*
+    ** This adds the remainder from the buffer used to read in the header to the
+    ** data buffer list and updates the detailes for how much to read.
+     */
+    void addDataBuffer(final BufferState bufferState, final int bytesRead) {
+        int readCompletedCount;
+
+        /*
+         ** Update the number of bytes actually read for a server connection.
+         */
+        contentBytesRead.addAndGet(bytesRead);
+
+        try {
+            dataReadDoneQueue.put(bufferState);
+            readCompletedCount = dataBufferReadsCompleted.incrementAndGet();
+        } catch (InterruptedException int_ex) {
+            /*
+             ** TODO: This is an error case and the connection needs to be closed
+             */
+            System.out.println("dataReadCompleted(" + connStateId + ") " + int_ex.getMessage());
+            readCompletedCount = dataBufferReadsCompleted.get();
+        }
+
+        System.out.println("ConnectionState[" + connStateId + "].addDataBuffer() readCompletedCount: " + readCompletedCount);
 
         determineNextContentRead();
-        addToWorkQueue(false);
     }
 
     /*
@@ -558,7 +569,14 @@ abstract public class ConnectionState {
              */
             int outstandingReads = outstandingDataReadCount.get();
             if (outstandingReads == 0) {
-               long actualBytesRead = contentBytesRead.get();
+                long actualBytesRead = contentBytesRead.get();
+                if (actualBytesRead > bytesToRead) {
+                    /*
+                    ** TODO: May want to go back and set the limit on the last buffer
+                     */
+                    actualBytesRead = bytesToRead;
+                }
+
                 long remainingToRead = bytesToRead - actualBytesRead;
                 if (remainingToRead == 0) {
                     /*
@@ -654,12 +672,20 @@ abstract public class ConnectionState {
     /*
      ** This is a general debug function that dumps the buffer to the console.
      */
-    private void displayBuffer(final BufferState bufferState) {
+    void displayBuffer(final BufferState bufferState) {
         ByteBuffer buffer = bufferState.getBuffer();
+        int position = buffer.position();
+        int limit = buffer.limit();
 
-        System.out.println("buffer " + buffer.position() + " " + buffer.limit());
         String tmp = bb_to_str(buffer);
-        System.out.println("ConnectionState buffer" + tmp);
+        System.out.println("ConnectionState buffer: " + tmp);
+
+        /*
+        ** Need to reset the values otherwise anything that tries to operate on this
+        **   this buffer later on will have the position and limit set to 0
+         */
+        buffer.position(position);
+        buffer.limit(limit);
     }
 
     private void str_to_bb(ByteBuffer out, String in) {
@@ -676,8 +702,6 @@ abstract public class ConnectionState {
     }
 
     private String bb_to_str(ByteBuffer buffer) {
-        buffer.flip();
-
         return StandardCharsets.UTF_8.decode(buffer).toString();
     }
 

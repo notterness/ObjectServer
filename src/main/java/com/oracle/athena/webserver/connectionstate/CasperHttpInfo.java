@@ -272,7 +272,8 @@ public class CasperHttpInfo {
             System.out.println("addHeaderValue() _host: " + httpHost + " _port: " + httpPort);
         }
 
-        if (_hdr[_headers].compareTo("Content-Length") == 0) {
+        int result = _hdr[_headers].indexOf("Content-Length");
+        if (result != -1) {
             try {
                 contentLength = Long.parseLong(_val[_headers]);
             } catch (NumberFormatException num_ex) {
@@ -289,6 +290,10 @@ public class CasperHttpInfo {
         headerComplete = true;
 
         connectionState.httpHeaderParseComplete(contentLength);
+    }
+
+    public boolean getHeaderComplete() {
+        return headerComplete;
     }
 
     public void setContentComplete() {

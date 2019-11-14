@@ -89,10 +89,6 @@ public class ClientConnState extends ConnectionState {
                 }
                 break;
 
-            case READ_FROM_CHAN:
-                addToWorkQueue(false);
-                break;
-
             case READ_DONE:
                 // TODO: Assert() if this state is ever reached
                 break;
@@ -167,6 +163,18 @@ public class ClientConnState extends ConnectionState {
         }
 
         /*
+        ** The check for clientCallbackCompleted needs to be before the contentAllRead check
+        **   otherwise the Connection will get stuck in the CLIENT_READ_CB state.
+        **
+        ** TODO: Is there value to moving the repsonse parsing into this state machine to properly handle
+        **   the setting of the contentAllRead flag. Currently, it is never sent as the "Content-Length" is
+        **   never parsed out of the HTTP response.
+         */
+        if (clientCallbackCompleted == true) {
+            return ConnectionStateEnum.CONN_FINISHED;
+        }
+
+        /*
          ** Check if the content has all been read in and then proceed to finishing the processing
          **
          ** TODO: Start adding in the steps to process the content data instead of just sending status
@@ -174,10 +182,6 @@ public class ClientConnState extends ConnectionState {
         boolean doneReadingContent = contentAllRead.get();
         if (doneReadingContent) {
             return ConnectionStateEnum.CLIENT_READ_CB;
-        }
-
-        if (clientCallbackCompleted == true) {
-            return ConnectionStateEnum.CONN_FINISHED;
         }
 
         /*

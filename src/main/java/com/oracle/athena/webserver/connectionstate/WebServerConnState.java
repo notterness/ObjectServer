@@ -518,13 +518,22 @@ public class WebServerConnState extends ConnectionState {
                 buffer.rewind();
                 buffer.limit(bufferTextCapacity);
 
-                httpParser.parseHttpData(buffer, initialHttpBuffer);
+                //displayBuffer(bufferState);
+                ByteBuffer remainingBuffer;
 
-                /*
-                 ** Set the BufferState to PARSE_DONE
-                 ** TODO: When can the buffers used for the header be released?
-                 */
-                bufferState.setHttpParseDone();
+                remainingBuffer = httpParser.parseHttpData(buffer, initialHttpBuffer);
+                if (remainingBuffer != null) {
+                    bufferState.swapByteBuffers(remainingBuffer);
+
+                    int bytesRead = remainingBuffer.limit();
+                    addDataBuffer(bufferState, bytesRead);
+                } else {
+                    /*
+                     ** Set the BufferState to PARSE_DONE
+                     ** TODO: When can the buffers used for the header be released?
+                     */
+                    bufferState.setHttpParseDone();
+                }
 
                 initialHttpBuffer = false;
             }
@@ -547,7 +556,7 @@ public class WebServerConnState extends ConnectionState {
      **   and the validation and authorization can take place.
      */
     void httpHeaderParseComplete(long contentLength) {
-        System.out.println("httpHeaderParseComplete(" + connStateId + ") contentLength: " + contentLength + " curr: " + overallState);
+        System.out.println("WebServerConnState[" + connStateId + "] httpHeaderParseComplete() contentLength: " + contentLength + " curr: " + overallState);
 
         httpHeaderParsed.set(true);
         contentBytesToRead.set(contentLength);
@@ -697,6 +706,4 @@ public class WebServerConnState extends ConnectionState {
         super.reset();
     }
 
-    public static class WebConnStatePool {
-    }
 }

@@ -87,6 +87,27 @@ public class BufferState {
     }
 
     /*
+    ** This will replace the current ByteBuffer with the newBuffer in the BufferState. The previous
+    **   ByteBuffer will be released back to the memory free pool.
+     */
+    public void swapByteBuffers(ByteBuffer newBuffer) {
+        ByteBuffer oldBuffer;
+
+        oldBuffer = buffer;
+        buffer = newBuffer;
+
+        /*
+        ** TODO: The oldBuffer needs to be released back to the memory pool. But, there is currently
+        **   an ownership problem with the memory that backs the ByteBuffers as they share the same
+        **   backing memory and it cannot be given back to the pool until the new reference is done
+        **   with it.
+        **   One solution (since this should not be for a very big piece of memory) is to perform a
+        **     new allocation and a copy in the StringChunk class.
+        **   Also, need to have access to the MemoryAllocator that is in charge of this buffer.
+         */
+    }
+
+    /*
      ** This is called after the buffer has been run through the HTTP parser. Buffers used
      **   for the header can be released.
      **
