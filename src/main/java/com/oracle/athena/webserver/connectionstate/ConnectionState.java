@@ -64,9 +64,19 @@ abstract public class ConnectionState {
     int connStateId;
 
     /*
-     ** THe connChan comes from the
+     ** The connChan comes from the either the accept() call in the ServerChannelLayer run() method
+     **   or from (the test path):
+     **     TestClient.registerClientReadCallback()
+     **       InitiatorLoadBalancer.startNewClientReadConnection()
+     **         ConnectionStatePool<T>.allocConnectionState()
+     **           ClientConnState.setChannel()
+     **  For the TestClient, the connChan is created when the test program opens a socket to
+     **    perform writes on.
      */
     AsynchronousSocketChannel connChan;
+
+    private Object connChanMutex;
+
 
     /*
     ** overallState is used to drive the ConnectionState through the operational state machine.
@@ -186,6 +196,13 @@ abstract public class ConnectionState {
         contentBytesAllocated = new AtomicLong(0);
         contentBytesRead = new AtomicLong(0);
         contentAllRead = new AtomicBoolean(false);
+
+        /*
+        ** connChan needs to be protected since the closeChannel() method can be accessed from
+        **   various threads.
+         */
+        connChan = null;
+        connChanMutex = new Object();
     }
 
     /*
@@ -407,6 +424,10 @@ abstract public class ConnectionState {
      */
     void clearChannel() {
         bufferStatePool = null;
+
+        synchronized (connChanMutex) {
+            connChan = null;
+        }
     }
 
     /*
@@ -425,19 +446,30 @@ abstract public class ConnectionState {
     **   it threads safe in the event that different threads attempt to close the channel
     **   at the same time.
      */
-    public synchronized  void closeChannel() {
-        try {
-            /*
-            ** Handle case where the channel has already been closed.
-             */
-            if (connChan != null) {
-                connChan.close();
+    public void closeChannel() {
+        synchronized (connChanMutex) {
+            try {
+                /*
+                 ** Handle case where the channel has already been closed.
+                 */
+                if (connChan != null) {
+                    connChan.close();
+                }
+            } catch (IOException io_ex) {
+                System.out.println("ConnectionState[" + connStateId + "] closeChannel() " + io_ex.getMessage());
             }
-        } catch (IOException io_ex) {
-            System.out.println("ConnectionState[" + connStateId + "] closeChannel() " + io_ex.getMessage());
-        }
 
-        connChan = null;
+            connChan = null;
+        }
+    }
+
+    /*
+    ** This is used to set the AsychronousSocketChannel within the super class so that it can be a
+    **   synchronized operation if needed. Currently, there are no operations that can take place
+    **   on the channel prior to it being set, so it is not synchronized.
+     */
+    void setAsyncChannel(AsynchronousSocketChannel chan) {
+        connChan = chan;
     }
 
     /*
@@ -609,9 +641,30 @@ abstract public class ConnectionState {
      ** This is what performs the actual read from the channel.
      */
     void readFromChannel(final BufferState readBufferState) {
+        AsynchronousSocketChannel readChan;
+
+        synchronized (connChanMutex) {
+            readChan = connChan;
+        }
+
+        /*
+        ** Make sure the connChan has not be closed out before trying to read or perform
+        **   any operations on it.
+         */
+        if (readChan == null) {
+            System.out.println("ConnectionState[" + connStateId + "] socket closed: connChan null");
+
+            /*
+             ** Mark the BufferState as READ_ERROR to indicate that the buffer is not valid and this
+             **   will call into the ConnectionState to move the cleanup of the connection along if
+             **   there are no more outstanding reads.
+             */
+            setReadState(readBufferState, BufferStateEnum.READ_ERROR);
+            return;
+        }
 
         try {
-            SocketAddress addr = connChan.getLocalAddress();
+            SocketAddress addr = readChan.getLocalAddress();
             System.out.println("readFromChannel[" + connStateId + "] socket: " + addr);
         } catch (IOException ex) {
             System.out.println("socket closed " + ex.getMessage());
@@ -623,7 +676,8 @@ abstract public class ConnectionState {
              **   will call into the ConnectionState to move the cleanup of the connection along if
              **   there are no more outstanding reads.
              */
-            readBufferState.setReadState(BufferStateEnum.READ_ERROR);
+            setReadState(readBufferState, BufferStateEnum.READ_ERROR);
+            return;
         }
 
         /*
@@ -634,7 +688,7 @@ abstract public class ConnectionState {
 
         // Read the data from the channel
         ByteBuffer readBuffer = readBufferState.getBuffer();
-        connChan.read(readBuffer, readBufferState, new CompletionHandler<Integer, BufferState>() {
+        readChan.read(readBuffer, readBufferState, new CompletionHandler<Integer, BufferState>() {
 
             @Override
             public void completed(final Integer bytesRead, final BufferState readBufferState) {
