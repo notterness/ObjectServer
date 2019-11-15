@@ -36,7 +36,7 @@ public class ClientTest_2 extends ClientTest {
         // Send the message
         ClientWriteCompletion comp = new ClientWriteCompletion(this, writeConn, msgHdr, 1, bytesToWrite, 0);
 
-        client.writeData(writeConn, comp);
+        super.client.writeData(writeConn, comp);
 
         if (!waitForWriteToComp()) {
             System.out.println("Request timed out");

@@ -1,6 +1,7 @@
 package com.oracle.athena.webserver.manual;
 
 import com.oracle.athena.webserver.server.ServerChannelLayer;
+import com.oracle.athena.webserver.server.WebServer;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -40,7 +41,7 @@ public class ServerTest implements Runnable {
 
         System.out.println("ServerTest serverConnId: " + serverConnId);
 
-        ServerChannelLayer server = new ServerChannelLayer(1, tcpPort, serverConnId);
+        WebServer server = new WebServer(1, tcpPort, serverConnId);
         server.start();
 
         while (!exitThread) {
@@ -50,6 +51,8 @@ public class ServerTest implements Runnable {
                 break;
             }
         }
+
+        System.out.println("ServerTest serverConnId: " + serverConnId + " exit");
 
         serverCount.decrementAndGet();
     }

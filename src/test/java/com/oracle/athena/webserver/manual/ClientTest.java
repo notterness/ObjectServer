@@ -27,7 +27,7 @@ public abstract class ClientTest implements Runnable {
 
     private volatile WaitSignal writeDone;
 
-    private MemoryManager memoryAllocator;
+    MemoryManager memoryAllocator;
 
     private HttpResponseListener responseListener;
     private HttpParser httpParser;
@@ -85,6 +85,12 @@ public abstract class ClientTest implements Runnable {
      ** TODO: Extend this to perform data writes after the header is sent.
      */
     public void run() {
+
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException int_ex) {
+            int_ex.printStackTrace();
+        }
 
         writeDone = new WaitSignal();
 

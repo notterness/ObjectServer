@@ -129,11 +129,14 @@ public class ServerWorkerThread implements Runnable {
             return false;
         }
         try {
+            /*
+            ** DEBUG
             String outStr;
 
             outStr = String.format("ServerWorkerThread(%d) put connStateId [%d]  state %s",
                     this.threadId, work.getConnStateId(), work.getState().toString());
             System.out.println(outStr);
+             */
 
             workQueue.put(work);
         } catch (InterruptedException int_ex) {

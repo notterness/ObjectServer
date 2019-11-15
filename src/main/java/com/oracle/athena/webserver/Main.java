@@ -1,6 +1,7 @@
 package com.oracle.athena.webserver;
 
 import com.oracle.athena.webserver.server.ServerChannelLayer;
+import com.oracle.athena.webserver.server.WebServer;
 
 /**
  * The entry point for the Athena web server.
@@ -12,7 +13,7 @@ public class Main {
     public static void main(String[] args) {
         System.out.println("ServerTest serverConnId: " + ServerChannelLayer.DEFAULT_CLIENT_ID);
         // TODO: Determine how many threads our webserver should actually consume when deployed
-        ServerChannelLayer server = new ServerChannelLayer(1);
+        WebServer server = new WebServer(1);
         server.start();
     }
 }

@@ -1,15 +1,16 @@
 package com.oracle.athena.webserver.server;
 
 import com.oracle.athena.webserver.connectionstate.ConnectionState;
+import com.oracle.athena.webserver.connectionstate.WebServerConnState;
 
 import java.nio.ByteBuffer;
 
 
 public class StatusWriteCompletion extends WriteCompletion {
-    private ConnectionState connectionState;
+    private WebServerConnState connectionState;
     private WriteConnection serverWriteConn;
 
-    public StatusWriteCompletion(ConnectionState work, WriteConnection conn, ByteBuffer userData, long transactionId, final int bytesToWrite, final int startingByte) {
+    public StatusWriteCompletion(WebServerConnState work, WriteConnection conn, ByteBuffer userData, long transactionId, final int bytesToWrite, final int startingByte) {
         super(userData, transactionId, bytesToWrite, startingByte);
 
         connectionState = work;

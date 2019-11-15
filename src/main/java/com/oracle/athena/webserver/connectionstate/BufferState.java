@@ -29,22 +29,8 @@ public class BufferState {
         return bufferState;
     }
 
-
-    public ByteBuffer getCheckedBuffer(final BufferStateEnum expectedState) {
-        if (bufferState == expectedState) {
-            return buffer;
-        }
-
-        return null;
-    }
-
-
     public ByteBuffer getBuffer() {
         return buffer;
-    }
-
-    public ConnectionState getConnState() {
-        return connState;
     }
 
     /*
@@ -86,24 +72,39 @@ public class BufferState {
              **   was a channel error. Need to tell the ConnectionState to clean up and terminate this
              **   connection.
              */
-            connState.readCompletedError(this);
+            bufferState = BufferStateEnum.READ_ERROR;
         } else {
-            boolean allDataRead = false;
-            if (buffer.remaining() != 0)
-                allDataRead = true;
-
             if (bufferState == BufferStateEnum.READ_WAIT_FOR_HTTP) {
                 // Read of all the data is completed
                 bufferState = BufferStateEnum.READ_HTTP_DONE;
-                connState.httpReadCompleted(this, allDataRead);
             } else if (bufferState == BufferStateEnum.READ_WAIT_FOR_DATA) {
                 // Read of all the data is completed
                 bufferState = BufferStateEnum.READ_DATA_DONE;
-                connState.dataReadCompleted(this, allDataRead);
             } else {
                 System.out.println("ERROR: setReadState() invalid current state: " + bufferState.toString());
             }
         }
+    }
+
+    /*
+    ** This will replace the current ByteBuffer with the newBuffer in the BufferState. The previous
+    **   ByteBuffer will be released back to the memory free pool.
+     */
+    public void swapByteBuffers(ByteBuffer newBuffer) {
+        ByteBuffer oldBuffer;
+
+        oldBuffer = buffer;
+        buffer = newBuffer;
+
+        /*
+        ** TODO: The oldBuffer needs to be released back to the memory pool. But, there is currently
+        **   an ownership problem with the memory that backs the ByteBuffers as they share the same
+        **   backing memory and it cannot be given back to the pool until the new reference is done
+        **   with it.
+        **   One solution (since this should not be for a very big piece of memory) is to perform a
+        **     new allocation and a copy in the StringChunk class.
+        **   Also, need to have access to the MemoryAllocator that is in charge of this buffer.
+         */
     }
 
     /*

@@ -23,7 +23,7 @@ public class ServerChannelLayerTest {
             Load tests should be handled in a separate test area similar to how the "manual" ones are handled today.
          */
 
-        server = new ServerChannelLayer(1, 1);
+        server = new WebServer(1, 1);
         server.start();
     }
 
