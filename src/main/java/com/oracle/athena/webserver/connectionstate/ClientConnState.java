@@ -66,7 +66,6 @@ public class ClientConnState extends ConnectionState {
                 addToWorkQueue(false);
                 break;
 
-                // Fall through
             case CHECK_SLOW_CHANNEL:
                 if (timeoutChecker.inactivityThresholdReached()) {
                     /*
@@ -292,7 +291,7 @@ public class ClientConnState extends ConnectionState {
 
         bufferState.setReadState(newState);
 
-        if (currBufferState == BufferStateEnum.READ_ERROR) {
+        if (newState == BufferStateEnum.READ_ERROR) {
             /*
              ** All the data has been read that will be read, but there is no point processing it as there
              **   was a channel error. Need to tell the ConnectionState to clean up and terminate this
@@ -326,7 +325,7 @@ public class ClientConnState extends ConnectionState {
 
         }
 
-        super.connChan = chan;
+        super.setAsyncChannel(chan);
         overallState = ConnectionStateEnum.INITIAL_SETUP;
     }
 

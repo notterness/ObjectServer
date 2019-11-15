@@ -129,7 +129,6 @@ public class WebServerConnState extends ConnectionState {
                 addToWorkQueue(false);
                 break;
 
-                // Fall through
             case CHECK_SLOW_CHANNEL:
                 if (timeoutChecker.inactivityThresholdReached()) {
                     /*
@@ -466,11 +465,7 @@ public class WebServerConnState extends ConnectionState {
      */
     void setReadState(final BufferState bufferState, final BufferStateEnum newState) {
 
-        BufferStateEnum currBufferState = bufferState.getBufferState();
-
-        bufferState.setReadState(newState);
-
-        if (currBufferState == BufferStateEnum.READ_ERROR) {
+        if (newState == BufferStateEnum.READ_ERROR) {
             /*
              ** All the data has been read that will be read, but there is no point processing it as there
              **   was a channel error. Need to tell the ConnectionState to clean up and terminate this
@@ -478,6 +473,8 @@ public class WebServerConnState extends ConnectionState {
              */
             readCompletedError(bufferState);
         } else {
+            BufferStateEnum currBufferState = bufferState.getBufferState();
+
             if (currBufferState == BufferStateEnum.READ_WAIT_FOR_HTTP) {
                 // Read of all the data is completed
                 httpReadCompleted(bufferState);
@@ -488,6 +485,8 @@ public class WebServerConnState extends ConnectionState {
                 System.out.println("ERROR: setReadState() invalid current state: " + bufferState.toString());
             }
         }
+
+        bufferState.setReadState(newState);
     }
 
 
@@ -567,7 +566,7 @@ public class WebServerConnState extends ConnectionState {
      **   a write to take place on the passed in AsynchronousSocketChannel.
      */
     public void setChannel(final AsynchronousSocketChannel chan) {
-        super.connChan = chan;
+        super.setAsyncChannel(chan);
         overallState = ConnectionStateEnum.INITIAL_SETUP;
 
         /*
@@ -687,7 +686,6 @@ public class WebServerConnState extends ConnectionState {
         super.clearChannel();
         httpHeaderParsed.set(false);
 
-        super.connChan = null;
         writeConn = null;
     }
 
