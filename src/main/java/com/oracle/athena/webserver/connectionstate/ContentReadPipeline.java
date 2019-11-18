@@ -10,16 +10,16 @@ public class ContentReadPipeline extends ConnectionPipeline {
 
         super(connState);
 
-        connectionState = connState;
+        this.connectionState = connState;
 
         initialStage = true;
 
         /*
          ** Reset the state of the pipeline
          */
-        connectionState.requestedDataBuffers = 0;
-        connectionState.allocatedDataBuffers = 0;
-        connectionState.outstandingDataReadCount.set(0);
+        connectionState.resetRequestedDataBuffers();
+        connectionState.resetBuffersWaiting();
+        connectionState.resetDataBufferReadsCompleted();
 
         connectionState.dataResponseSent.set(false);
         connectionState.finalResponseSent = false;
@@ -33,7 +33,7 @@ public class ContentReadPipeline extends ConnectionPipeline {
 
         /*
         ** First setup to perform the content reads. This is required since the buffer used to read in the
-        **   HTTP headers may have also had data for the conent at the end of it.
+        **   HTTP headers may have also had data for the content at the end of it.
          */
         if (initialStage) {
             initialStage = false;
@@ -47,11 +47,8 @@ public class ContentReadPipeline extends ConnectionPipeline {
          **   allocation right away.
          **
          */
-        boolean outOfMemory = connectionState.bufferAllocationFailed.get();
-        if (!outOfMemory) {
-            if (connectionState.requestedDataBuffers > 0) {
-                return ConnectionStateEnum.ALLOC_CLIENT_DATA_BUFFER;
-            }
+        if (!connectionState.isOutOfMemory() && connectionState.needsMoreDataBuffers()) {
+            return ConnectionStateEnum.ALLOC_CLIENT_DATA_BUFFER;
         }
 
         /*
@@ -59,7 +56,7 @@ public class ContentReadPipeline extends ConnectionPipeline {
          **
          ** TODO: Support the NIO.2 read that can be passed in an array of ByteBuffers
          */
-        if ((connectionState.allocatedDataBuffers > 0)  && (connectionState.outstandingDataReadCount.get() == 0)){
+        if (connectionState.dataBuffersWaitingForRead()){
             return ConnectionStateEnum.READ_CLIENT_DATA;
         }
 
@@ -69,9 +66,6 @@ public class ContentReadPipeline extends ConnectionPipeline {
         ** TODO: Start adding in the steps to process the content data instead of just sending status
          */
         boolean doneReadingContent = connectionState.contentAllRead.get();
-        System.out.println("WebServerConnState[" + connectionState.getConnStateId() + "] doneReadingContent: " +
-                doneReadingContent + " finalResponseSent: " + connectionState.finalResponseSent);
-
         if (doneReadingContent) {
             if (!connectionState.finalResponseSent) {
                 return ConnectionStateEnum.SEND_XFR_DATA_RESP;
@@ -80,12 +74,10 @@ public class ContentReadPipeline extends ConnectionPipeline {
 
         /*
          ** Check if there was a channel error and cleanup if there are no outstanding
-         **    reads.
+         **   reads.
          */
         if (connectionState.channelError.get()) {
-            int dataReadsPending = connectionState.outstandingDataReadCount.get();
-
-            if (dataReadsPending == 0) {
+            if (connectionState.getDataBufferReadsCompleted() == 0) {
                 return ConnectionStateEnum.CONN_FINISHED;
             }
         }

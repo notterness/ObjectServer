@@ -99,7 +99,10 @@ abstract public class ConnectionState {
     AtomicInteger outstandingDataReadCount;
     int requestedDataBuffers;
     int allocatedDataBuffers;
+    AtomicInteger dataBufferReadsCompleted;
     AtomicBoolean contentAllRead;
+
+    AtomicBoolean bufferAllocationFailed;
 
 
     /*
@@ -111,8 +114,6 @@ abstract public class ConnectionState {
     private boolean connOnExecutionQueue;
 
     private QueueMutex queueMutex;
-
-    AtomicBoolean bufferAllocationFailed;
 
     /*
     ** The following are used to keep track of the content being read in.
@@ -148,7 +149,6 @@ abstract public class ConnectionState {
     private LinkedList<BufferState> allocatedDataBufferQueue;
 
 
-    AtomicInteger dataBufferReadsCompleted;
     BlockingQueue<BufferState> dataReadDoneQueue;
 
     /*
@@ -294,7 +294,16 @@ abstract public class ConnectionState {
         return true;
     }
 
+    /*
+    ** Returns if there are outstanding requests for data buffers
+     */
+    boolean needsMoreDataBuffers() {
+        return (requestedDataBuffers > 0);
+    }
 
+    void resetRequestedDataBuffers() {
+        requestedDataBuffers = 0;
+    }
 
     /*
     ** This is the function to add BufferState to the available queue. This means the BufferState are
@@ -345,6 +354,19 @@ abstract public class ConnectionState {
     }
 
     /*
+    ** Returns if there are data buffers allocated and waiting to have data read into them. In addition, it will
+    **   only allow a single outstanding read to take place. This is due to the way sockets work in NIO.2.
+     */
+    boolean dataBuffersWaitingForRead() {
+        return ((allocatedDataBuffers > 0) && (outstandingDataReadCount.get() == 0));
+    }
+
+    void resetBuffersWaiting() {
+        allocatedDataBuffers = 0;
+        outstandingDataReadCount.set(0);
+    }
+
+    /*
     ** This is called following a channel read error to release all the BufferState objects
     **   back to the free pool.
      */
@@ -376,6 +398,14 @@ abstract public class ConnectionState {
     void memoryBuffersAreAvailable() {
         bufferAllocationFailed.set(false);
     }
+
+    /*
+    ** This returns if this connection is allowed to obtain buffers
+     */
+    boolean isOutOfMemory() {
+        return bufferAllocationFailed.get();
+    }
+
 
     /*
      ** This is used to start reads into one or more buffers. It looks for BufferState objects that have
@@ -545,11 +575,19 @@ abstract public class ConnectionState {
     }
 
     /*
+    ** This returns the number of data buffer reads that have completed (these are the reads to bring in the content)
+     */
+    int getDataBufferReadsCompleted() {
+        return dataBufferReadsCompleted.get();
+    }
+
+    void resetDataBufferReadsCompleted() {
+        dataBufferReadsCompleted.set(0);
+    }
+
+    /*
     ** This function determines what to do next with content buffers.
     **
-    ** It will return true if all the content data has been read and the state machine can move to the next
-    **   state.
-    ** It will return false if there is still data to be read.
      */
     void determineNextContentRead() {
         /*

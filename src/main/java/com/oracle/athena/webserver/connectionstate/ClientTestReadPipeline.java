@@ -10,16 +10,14 @@ public class ClientTestReadPipeline extends ConnectionPipeline {
 
         super(connState);
 
-        connectionState = connState;
+        this.connectionState = connState;
 
         initialStage = true;
 
-        connectionState.bufferAllocationFailed.set(false);
-
-        connectionState.requestedDataBuffers = 0;
-        connectionState.allocatedDataBuffers = 0;
-        connectionState.outstandingDataReadCount.set(0);
-        connectionState.dataBufferReadsCompleted.set(0);
+        connectionState.memoryBuffersAreAvailable();
+        connectionState.resetRequestedDataBuffers();
+        connectionState.resetBuffersWaiting();
+        connectionState.resetDataBufferReadsCompleted();
 
         connectionState.contentAllRead.set(false);
 
@@ -47,11 +45,8 @@ public class ClientTestReadPipeline extends ConnectionPipeline {
          **   allocation right away.
          **
          */
-        boolean outOfMemory = connectionState.bufferAllocationFailed.get();
-        if (!outOfMemory) {
-            if (connectionState.requestedDataBuffers > 0) {
-                return ConnectionStateEnum.ALLOC_CLIENT_DATA_BUFFER;
-            }
+        if (!connectionState.isOutOfMemory() && connectionState.needsMoreDataBuffers()) {
+            return ConnectionStateEnum.ALLOC_CLIENT_DATA_BUFFER;
         }
 
         /*
@@ -59,12 +54,11 @@ public class ClientTestReadPipeline extends ConnectionPipeline {
          **
          ** TODO: Support the NIO.2 read that can be passed in an array of ByteBuffers
          */
-        if ((connectionState.allocatedDataBuffers > 0)  && (connectionState.outstandingDataReadCount.get() == 0)){
+        if (connectionState.dataBuffersWaitingForRead()){
             return ConnectionStateEnum.READ_CLIENT_DATA;
         }
 
-        int dataReadComp = connectionState.dataBufferReadsCompleted.get();
-        if (dataReadComp > 0) {
+        if (connectionState.getDataBufferReadsCompleted() > 0) {
             return ConnectionStateEnum.CLIENT_READ_CB;
         }
 
