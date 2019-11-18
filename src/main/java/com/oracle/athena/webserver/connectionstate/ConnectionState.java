@@ -78,21 +78,31 @@ abstract public class ConnectionState {
     private Object connChanMutex;
 
 
-    /*
-    ** overallState is used to drive the ConnectionState through the operational state machine.
-     */
-    ConnectionStateEnum overallState;
-
     private long nextExecuteTime;
 
     /*
-    ** The following are used to track the number of outstanding reads in progress. There can
-    **   be HTTP header reads or Data reads in progress.
+    ** The following variables are used in the ContentReadPipeline and are used to keep track
+    **   of the state of the various content read operations through the sending of the final
+    **   status.
     **
-    ** NOTE: There should never be both HTTP header reads and Data reads in progress at the same
-    **   time. The HTTP header reads should all be completed prior to starting Data reads.
+    ** NOTE: There will never be both HTTP header reads and Data reads in progress at the same
+    **   time. The HTTP header reads must all be completed prior to starting Data reads.
+    **
+    ** The variables are as follows:
+    **    requestedDataBuffers - This is the number of content ByteBuffers that should be allocated. This may be less
+    **      than the actual number of buffers that are required to read all of the content data in.
+    **    allocatedDataBuffers - This is the number of buffers that have been allocated to read in content data and are
+    **      waiting to have reads performed on the.
+    **    outstandingDataReadCount - This is the number of outstanding content reads are currently in progress.
+    **    contentAllRead -
      */
     AtomicInteger outstandingDataReadCount;
+    int requestedDataBuffers;
+    int allocatedDataBuffers;
+    AtomicInteger dataBufferReadsCompleted;
+    AtomicBoolean contentAllRead;
+
+    AtomicBoolean bufferAllocationFailed;
 
 
     /*
@@ -106,21 +116,11 @@ abstract public class ConnectionState {
     private QueueMutex queueMutex;
 
     /*
-     **
-     */
-    int requestedDataBuffers;
-    int allocatedDataBuffers;
-
-    AtomicBoolean bufferAllocationFailed;
-
-    /*
     ** The following are used to keep track of the content being read in.
      */
-    boolean contentReadSetup;
     AtomicLong contentBytesToRead;
     private AtomicLong contentBytesAllocated;
     private AtomicLong contentBytesRead;
-    AtomicBoolean contentAllRead;
 
 
     /*
@@ -149,7 +149,6 @@ abstract public class ConnectionState {
     private LinkedList<BufferState> allocatedDataBufferQueue;
 
 
-    AtomicInteger dataBufferReadsCompleted;
     BlockingQueue<BufferState> dataReadDoneQueue;
 
     /*
@@ -166,16 +165,12 @@ abstract public class ConnectionState {
     TimeoutChecker timeoutChecker;
 
     ConnectionState(final int uniqueId) {
-        overallState = ConnectionStateEnum.INVALID_STATE;
-
         outstandingDataReadCount = new AtomicInteger(0);
 
         connStateId = uniqueId;
 
         bufferStatePool = null;
         resultBuilder = null;
-
-        contentReadSetup = false;
 
         channelError = new AtomicBoolean(false);
 
@@ -299,7 +294,16 @@ abstract public class ConnectionState {
         return true;
     }
 
+    /*
+    ** Returns if there are outstanding requests for data buffers
+     */
+    boolean needsMoreDataBuffers() {
+        return (requestedDataBuffers > 0);
+    }
 
+    void resetRequestedDataBuffers() {
+        requestedDataBuffers = 0;
+    }
 
     /*
     ** This is the function to add BufferState to the available queue. This means the BufferState are
@@ -350,6 +354,19 @@ abstract public class ConnectionState {
     }
 
     /*
+    ** Returns if there are data buffers allocated and waiting to have data read into them. In addition, it will
+    **   only allow a single outstanding read to take place. This is due to the way sockets work in NIO.2.
+     */
+    boolean dataBuffersWaitingForRead() {
+        return ((allocatedDataBuffers > 0) && (outstandingDataReadCount.get() == 0));
+    }
+
+    void resetBuffersWaiting() {
+        allocatedDataBuffers = 0;
+        outstandingDataReadCount.set(0);
+    }
+
+    /*
     ** This is called following a channel read error to release all the BufferState objects
     **   back to the free pool.
      */
@@ -381,6 +398,14 @@ abstract public class ConnectionState {
     void memoryBuffersAreAvailable() {
         bufferAllocationFailed.set(false);
     }
+
+    /*
+    ** This returns if this connection is allowed to obtain buffers
+     */
+    boolean isOutOfMemory() {
+        return bufferAllocationFailed.get();
+    }
+
 
     /*
      ** This is used to start reads into one or more buffers. It looks for BufferState objects that have
@@ -431,17 +456,6 @@ abstract public class ConnectionState {
     }
 
     /*
-     ** TODO: The overallState modifications and reads need to be made thread safe.
-     */
-    void setOverallState(final ConnectionStateEnum state) {
-        overallState = state;
-    }
-
-    public ConnectionStateEnum getState() {
-        return overallState;
-    }
-
-    /*
     ** This is the common api to close the AsynchronousChannel. It is synchronized to make
     **   it threads safe in the event that different threads attempt to close the channel
     **   at the same time.
@@ -483,8 +497,6 @@ abstract public class ConnectionState {
         releaseBufferState();
 
         closeChannel();
-
-        overallState = ConnectionStateEnum.INVALID_STATE;
 
         /*
          ** Clear the items associated with a particular worker thread that was used to execute this
@@ -536,7 +548,7 @@ abstract public class ConnectionState {
 
     /*
     ** This adds the remainder from the buffer used to read in the header to the
-    ** data buffer list and updates the detailes for how much to read.
+    ** data buffer list and updates the details for how much to read.
      */
     void addDataBuffer(final BufferState bufferState, final int bytesRead) {
         int readCompletedCount;
@@ -563,11 +575,19 @@ abstract public class ConnectionState {
     }
 
     /*
+    ** This returns the number of data buffer reads that have completed (these are the reads to bring in the content)
+     */
+    int getDataBufferReadsCompleted() {
+        return dataBufferReadsCompleted.get();
+    }
+
+    void resetDataBufferReadsCompleted() {
+        dataBufferReadsCompleted.set(0);
+    }
+
+    /*
     ** This function determines what to do next with content buffers.
     **
-    ** It will return true if all the content data has been read and the state machine can move to the next
-    **   state.
-    ** It will return false if there is still data to be read.
      */
     void determineNextContentRead() {
         /*
@@ -641,43 +661,40 @@ abstract public class ConnectionState {
      ** This is what performs the actual read from the channel.
      */
     void readFromChannel(final BufferState readBufferState) {
-        AsynchronousSocketChannel readChan;
 
         synchronized (connChanMutex) {
-            readChan = connChan;
-        }
-
-        /*
-        ** Make sure the connChan has not be closed out before trying to read or perform
-        **   any operations on it.
-         */
-        if (readChan == null) {
-            System.out.println("ConnectionState[" + connStateId + "] socket closed: connChan null");
-
             /*
-             ** Mark the BufferState as READ_ERROR to indicate that the buffer is not valid and this
-             **   will call into the ConnectionState to move the cleanup of the connection along if
-             **   there are no more outstanding reads.
+             ** Make sure the connChan has not be closed out before trying to read or perform
+             **   any operations on it.
              */
-            setReadState(readBufferState, BufferStateEnum.READ_ERROR);
-            return;
-        }
+            if (connChan == null) {
+                System.out.println("ConnectionState[" + connStateId + "] socket closed: connChan null");
 
-        try {
-            SocketAddress addr = readChan.getLocalAddress();
-            System.out.println("readFromChannel[" + connStateId + "] socket: " + addr);
-        } catch (IOException ex) {
-            System.out.println("socket closed " + ex.getMessage());
+                /*
+                 ** Mark the BufferState as READ_ERROR to indicate that the buffer is not valid and this
+                 **   will call into the ConnectionState to move the cleanup of the connection along if
+                 **   there are no more outstanding reads.
+                 */
+                setReadState(readBufferState, BufferStateEnum.READ_ERROR);
+                return;
+            }
 
-            closeChannel();
+            try {
+                SocketAddress addr = connChan.getLocalAddress();
+                System.out.println("readFromChannel[" + connStateId + "] socket: " + addr);
+            } catch (IOException ex) {
+                System.out.println("socket closed " + ex.getMessage());
 
-            /*
-             ** Mark the BufferState as READ_ERROR to indicate that the buffer is not valid and this
-             **   will call into the ConnectionState to move the cleanup of the connection along if
-             **   there are no more outstanding reads.
-             */
-            setReadState(readBufferState, BufferStateEnum.READ_ERROR);
-            return;
+                closeChannel();
+
+                /*
+                 ** Mark the BufferState as READ_ERROR to indicate that the buffer is not valid and this
+                 **   will call into the ConnectionState to move the cleanup of the connection along if
+                 **   there are no more outstanding reads.
+                 */
+                setReadState(readBufferState, BufferStateEnum.READ_ERROR);
+                return;
+            }
         }
 
         /*
@@ -688,7 +705,7 @@ abstract public class ConnectionState {
 
         // Read the data from the channel
         ByteBuffer readBuffer = readBufferState.getBuffer();
-        readChan.read(readBuffer, readBufferState, new CompletionHandler<Integer, BufferState>() {
+        connChan.read(readBuffer, readBufferState, new CompletionHandler<Integer, BufferState>() {
 
             @Override
             public void completed(final Integer bytesRead, final BufferState readBufferState) {

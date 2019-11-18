@@ -42,15 +42,20 @@ public class TestMain {
         ClientTest client_4 = new ClientTest_OneMbPost(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_4.start();
 
-        System.out.println("Starting Server");
+        System.out.println("Starting Tests");
 
         // running infinite loop for getting
         // client request
         while (true) {
             count = threadCount.get();
-            if (count != 0) {
+
+            /*
+            ** The TestClient() cannot finish until after all the tests have completed so there is always
+            **   a count of 1 even after all the tests have completed.
+             */
+            if (count != 1) {
                 try {
-                    Thread.sleep(100);
+                    Thread.sleep(1000);
                 } catch (InterruptedException ex) {
                     break;
                 }
@@ -64,10 +69,14 @@ public class TestMain {
         client_3.stop();
         client_4.stop();
 
+        System.out.println("Tests Completed");
+
         /* Stop the TestClient */
         client.stop();
 
         System.out.println("Server shutting down");
+
+        server_1.stop();
     }
 
 }
