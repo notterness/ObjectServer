@@ -19,14 +19,17 @@ public class MemoryManager {
     private BlockingQueue<MemoryAvailableCallback> waitingForBuffersQueue;
 
     // These are publicly visible.
-    public static final int SMALL_BUFFER_SIZE = 256;
-    public static final int MEDIUM_BUFFER_SIZE = 1024;
+    // TODO: Get rid of names from the interface.
+    public static final int SMALL_BUFFER_SIZE = 0x100;  // 256
+    public static final int MEDIUM_BUFFER_SIZE = 0x400;  // 1 kB;
+    public static final int XFER_BUFFER_SIZE = 0x10000;  // 64 kB
     public static final int LARGE_BUFFER_SIZE = 0x100000;  // 1 MB
     public static final int CHUNK_BUFFER_SIZE = 0x8000000;  // 128 MB
 
     // These really don't need to be.
     public static final int SMALL_BUFFER_COUNT = 10000;
     public static final int MEDIUM_BUFFER_COUNT = 1000;
+    public static final int XFER_BUFFER_COUNT = 100; 
     public static final int LARGE_BUFFER_COUNT =  100;
     public static final int CHUNK_BUFFER_COUNT =    2;  // If this is more than 2, get OOM in unit test.
 
@@ -37,15 +40,16 @@ public class MemoryManager {
 
     // Or we could infer this from an array of {count, size} tuples, if we didn't
     // need to expose the threshold values.
-    private static final int numPools = 4;
+    private static final int numPools = 5;
     private FixedSizeBufferPool[] thePool;
 
     public MemoryManager() {
         thePool = new FixedSizeBufferPool[numPools];
         thePool[0] = new FixedSizeBufferPool( SMALL_BUFFER_SIZE,  SMALL_BUFFER_COUNT );
         thePool[1] = new FixedSizeBufferPool( MEDIUM_BUFFER_SIZE, MEDIUM_BUFFER_COUNT );
-        thePool[2] = new FixedSizeBufferPool( LARGE_BUFFER_SIZE,  LARGE_BUFFER_COUNT );
-        thePool[3] = new FixedSizeBufferPool( CHUNK_BUFFER_SIZE,  CHUNK_BUFFER_COUNT );
+        thePool[2] = new FixedSizeBufferPool( XFER_BUFFER_SIZE,   XFER_BUFFER_COUNT );
+        thePool[3] = new FixedSizeBufferPool( LARGE_BUFFER_SIZE,  LARGE_BUFFER_COUNT );
+        thePool[4] = new FixedSizeBufferPool( CHUNK_BUFFER_SIZE,  CHUNK_BUFFER_COUNT );
 
         waitingForBuffersQueue = new LinkedBlockingQueue<>(MAX_WAITING_MEMORY_CONNECTIONS);
     }
@@ -70,9 +74,12 @@ public class MemoryManager {
                         int_ex.printStackTrace();
                     }
                 }
+                return null;
             }
         }
-        return null;
+
+        // Didn't find a matching fixed-size pool for the requested buffer size.
+        throw new IllegalArgumentException("Requested memory buffer size exceeds max: " + requestedSize );
     }
 
     public void poolMemFree(ByteBuffer buffer) {
@@ -96,6 +103,10 @@ public class MemoryManager {
                 }
             }
         }
+    }
+
+    public void cancelCallback( MemoryAvailableCallback memFreeCb ) {
+        waitingForBuffersQueue.remove(memFreeCb);
     }
 }
 
