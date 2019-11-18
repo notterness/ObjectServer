@@ -94,9 +94,9 @@ public class ClientTest_OneMbPost extends ClientTest {
     @Override
     void targetResponse(final int result, final ByteBuffer readBuffer) {
         if (result == -1) {
-            System.out.println("ClientTest_OneMbPost passed");
+            System.out.println("ClientTest_OneMbPut failed");
         } else {
-            System.out.println("ClientTest_OneMbPost failed");
+            System.out.println("ClientTest_OneMbPut passed");
         }
 
         statusReceived(result);
