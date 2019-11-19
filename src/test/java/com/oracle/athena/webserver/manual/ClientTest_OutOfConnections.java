@@ -1,13 +1,16 @@
 package com.oracle.athena.webserver.manual;
 
 import com.oracle.athena.webserver.client.TestClient;
+import org.eclipse.jetty.http.HttpStatus;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ClientTest_2 extends ClientTest {
+public class ClientTest_OutOfConnections extends ClientTest {
 
-    ClientTest_2(final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
+    private int httpStatus;
+
+    ClientTest_OutOfConnections(final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
         super(client, myServerId, myTargetId, threadCount);
     }
 
@@ -55,10 +58,10 @@ public class ClientTest_2 extends ClientTest {
      */
     @Override
     void targetResponse(final int result, final ByteBuffer readBuffer) {
-        if (result == 0) {
-            System.out.println("ClientTest_2 passed");
+        if ((result == 0) && (httpStatus == HttpStatus.TOO_MANY_REQUESTS_429)) {
+            System.out.println("ClientTest_OutOfConnections passed");
         } else {
-            System.out.println("ClientTest_2 failed");
+            System.out.println("ClientTest_OutOfConnections failed result: " + result + " httpStatus: " + httpStatus);
         }
 
         statusReceived(result);
@@ -66,6 +69,11 @@ public class ClientTest_2 extends ClientTest {
 
     @Override
     void httpResponse(final int status, final boolean headerCompleted, final boolean messageCompleted) {
+        if (headerCompleted) {
+            System.out.println("ClientTest_OutOfConnections httpResponse() status: " + status);
+
+            httpStatus = status;
+        }
 
     }
 

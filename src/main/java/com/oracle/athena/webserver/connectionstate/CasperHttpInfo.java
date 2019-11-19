@@ -5,7 +5,9 @@ import org.eclipse.jetty.http.HttpField;
 import org.eclipse.jetty.http.HttpStatus;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class CasperHttpInfo {
 
@@ -31,7 +33,9 @@ public class CasperHttpInfo {
     /*
      ** Method is one of POST, PUT, DELETE, GET, HEAD, TRACE
      */
-    private String httpMethod;
+    private String httpMethodString;
+    private HttpMethodEnum httpMethod;
+
 
     /*
      ** Response for this operation
@@ -151,6 +155,10 @@ public class CasperHttpInfo {
     private String[] _val;
     private int _headers;
 
+    /*
+    ** This is used to determine the method as an enum from the method string
+     */
+    private Map<HttpMethodEnum, String> httpMethodMap;
 
     CasperHttpInfo(final WebServerConnState connState) {
         headerComplete = false;
@@ -168,6 +176,15 @@ public class CasperHttpInfo {
          **   HTTP parsing phases complete.
          */
         connectionState = connState;
+
+        httpMethod = HttpMethodEnum.INVALID_METHOD;
+
+        /*
+        ** Create a map of the HTTP methods to make the parsing easier
+         */
+        httpMethodMap = new HashMap<>(2);
+        httpMethodMap.put(HttpMethodEnum.PUT_METHOD, "PUT");
+        httpMethodMap.put(HttpMethodEnum.POST_METHOD, "POST");
     }
 
 
@@ -197,7 +214,8 @@ public class CasperHttpInfo {
          */
         httpVersion = null;
 
-        httpMethod = null;
+        httpMethodString = null;
+        httpMethod = HttpMethodEnum.INVALID_METHOD;
 
         responseCode = HttpStatus.OK_200;
 
@@ -240,10 +258,25 @@ public class CasperHttpInfo {
         lastModified = null;
     }
 
-    public void setHttpMethodAndVersion(String method, String httpParsedVersion) {
-        httpMethod = method;
-
+    public void setHttpMethodAndVersion(String methodString, String httpParsedVersion) {
+        httpMethodString = methodString;
         httpVersion = httpParsedVersion;
+
+        /*
+        ** Determine the method enum based upon the passed in method string
+         */
+        for (Map.Entry<HttpMethodEnum, String> entry: httpMethodMap.entrySet()) {
+            int result = methodString.indexOf(entry.getValue());
+            if (result != -1) {
+                httpMethod = entry.getKey();
+                System.out.println("method: " + methodString + " enum: " + httpMethod.toString());
+                break;
+            }
+        }
+    }
+
+    public HttpMethodEnum getMethod() {
+        return httpMethod;
     }
 
     public void setHostAndPort(final String host, final int port) {

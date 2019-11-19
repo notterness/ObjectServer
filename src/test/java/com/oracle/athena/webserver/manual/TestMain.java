@@ -41,6 +41,9 @@ public class TestMain {
         ClientTest client_4 = new ClientTest_OneMbPut(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_4.start();
 
+        ClientTest client_5 = new ClientTest_OutOfConnections(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        client_5.start();
+
         System.out.println("Starting Tests");
 
         // running infinite loop for getting
@@ -67,6 +70,7 @@ public class TestMain {
         client_2.stop();
         client_3.stop();
         client_4.stop();
+        client_5.stop();
 
         System.out.println("Tests Completed");
 

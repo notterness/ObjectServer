@@ -33,7 +33,8 @@ public enum ConnectionStateEnum {
     WRTIE_ERROR(33),
     ALLOC_CLIENT_DATA_BUFFER(40),
     READ_CLIENT_DATA(41),
-    CLIENT_READ_CB(42);
+    CLIENT_READ_CB(42),
+    SEND_OUT_OF_RESOURCE_RESP(50);
 
     private int value;
 

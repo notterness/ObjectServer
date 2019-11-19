@@ -40,8 +40,6 @@ public class TestClientReadCallback extends ClientDataReadCallback {
                 int was_remaining = remaining;
                 httpParser.parseNext(readBuffer);
 
-                System.out.println("buffer " + readBuffer.position() + " " + readBuffer.limit());
-
                 remaining = readBuffer.remaining();
                 if (remaining == was_remaining)
                     break;
