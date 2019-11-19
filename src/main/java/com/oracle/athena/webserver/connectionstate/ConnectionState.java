@@ -98,10 +98,10 @@ abstract public class ConnectionState {
     ** TODO: outstandingDataReadCount and dataBufferReadsCompleted are marked public so the subclass
     **   ClientConnState can access them
      */
-    public AtomicInteger outstandingDataReadCount;
+    protected AtomicInteger outstandingDataReadCount;
     private int requestedDataBuffers;
     private int allocatedDataBuffers;
-    public AtomicInteger dataBufferReadsCompleted;
+    protected AtomicInteger dataBufferReadsCompleted;
     private AtomicBoolean contentAllRead;
 
     AtomicBoolean bufferAllocationFailed;
@@ -129,7 +129,7 @@ abstract public class ConnectionState {
      ** The next four items are associated with the thread that is running the ConnectionState
      **   state machine.
      */
-    ServerWorkerThread workerThread;
+    private ServerWorkerThread workerThread;
     BufferStatePool bufferStatePool;
     WriteConnThread writeThread;
     BuildHttpResult resultBuilder;
@@ -151,24 +151,22 @@ abstract public class ConnectionState {
     private LinkedList<BufferState> allocatedDataBufferQueue;
 
     /*
-     ** TODO: This is marked public so the subclass ClientConnState can access it
+     **
      */
-    public BlockingQueue<BufferState> dataReadDoneQueue;
+    protected BlockingQueue<BufferState> dataReadDoneQueue;
 
     /*
     ** The following is used to indicate that there was a channel error and the connection should be
     **   closed out.
-    **
-    ** TODO: This is marked public so the subclass ClientConnState can access it
      */
-    public AtomicBoolean channelError;
+    protected AtomicBoolean channelError;
 
 
     /*
     ** The following is used to check that progress is being made on a channel and the
     **   client is not slow sending or receiving data.
      */
-    public TimeoutChecker timeoutChecker;
+    protected TimeoutChecker timeoutChecker;
 
     public ConnectionState(final int uniqueId) {
         outstandingDataReadCount = new AtomicInteger(0);
@@ -237,7 +235,7 @@ abstract public class ConnectionState {
     ** This is to perform some initial setup and could be removed if the ConnectionState is tied to the
     **   thread it is going to run under.
      */
-    public void setupInitial() {
+    protected void setupInitial() {
         bufferStatePool = workerThread.getBufferStatePool();
         writeThread = workerThread.getWriteThread();
         resultBuilder = workerThread.getResultBuilder();
@@ -311,7 +309,7 @@ abstract public class ConnectionState {
         requestedDataBuffers = 0;
     }
 
-    public void addRequestedDataBuffer() {
+    protected void addRequestedDataBuffer() {
         requestedDataBuffers++;
     }
 
@@ -319,7 +317,7 @@ abstract public class ConnectionState {
     ** This is the function to add BufferState to the available queue. This means the BufferState are
     **   now ready to have data read into them.
      */
-    public int allocClientReadBufferState() {
+    protected int allocClientReadBufferState() {
         System.out.println("ServerWorkerThread(" + connStateId + ") allocClientReadBufferState(1) " + Thread.currentThread().getName());
 
         while (requestedDataBuffers > 0) {
@@ -421,7 +419,7 @@ abstract public class ConnectionState {
      ** This is used to start reads into one or more buffers. It looks for BufferState objects that have
      **   their state set to READ_FROM_CHAN. It then sends those buffers off to perform asynchronous reads.
      */
-    public void readIntoDataBuffers() {
+    protected void readIntoDataBuffers() {
         BufferState bufferState;
 
         /*
@@ -492,7 +490,7 @@ abstract public class ConnectionState {
     **   synchronized operation if needed. Currently, there are no operations that can take place
     **   on the channel prior to it being set, so it is not synchronized.
      */
-    public void setAsyncChannel(AsynchronousSocketChannel chan) {
+    protected void setAsyncChannel(AsynchronousSocketChannel chan) {
         connChan = chan;
     }
 
@@ -540,7 +538,7 @@ abstract public class ConnectionState {
      ** NOTE: This is only called for the good path for reads. The error path is handled in the
      **   readCompletedError() function.
      */
-    public void dataReadCompleted(final BufferState bufferState) {
+    protected void dataReadCompleted(final BufferState bufferState) {
         int readCount = outstandingDataReadCount.decrementAndGet();
 
         int bytesRead = bufferState.getBuffer().position();
