@@ -13,17 +13,17 @@ import java.nio.channels.AsynchronousSocketChannel;
  ** problem is that the amount of work per connection is not really known until the header is
  ** parsed and then there additional detail about what needs to be done.
  */
-class ServerLoadBalancer {
+public class ServerLoadBalancer {
 
-    ServerWorkerThread[] threadPool;
+    public ServerWorkerThread[] threadPool;
 
-    MemoryManager memoryManager;
+    public MemoryManager memoryManager;
 
-    int workerThreads;
-    int maxQueueSize;
-    int lastQueueUsed;
+    public int workerThreads;
+    public int maxQueueSize;
+    public int lastQueueUsed;
 
-    int serverBaseId;
+    public int serverBaseId;
     private ConnectionStatePool<WebServerConnState> connPool;
 
     /*
@@ -36,7 +36,7 @@ class ServerLoadBalancer {
      ** queueSize * numWorkerThreads is the maximum number of concurrent client connections that can
      **   be handled by the server.
      */
-    ServerLoadBalancer(final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId) {
+    public ServerLoadBalancer(final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId) {
 
         workerThreads = numWorkerThreads;
         maxQueueSize = queueSize;
@@ -99,7 +99,7 @@ class ServerLoadBalancer {
         return addWorkToThread(work);
     }
 
-    boolean addWorkToThread(ConnectionState work) {
+    public boolean addWorkToThread(ConnectionState work) {
 
         // Find the queue with the least amount of work
         int currQueue = lastQueueUsed;

@@ -1,7 +1,5 @@
 package com.oracle.athena.webserver.connectionstate;
 
-import com.oracle.athena.webserver.server.ClientDataReadCallback;
-
 import java.nio.channels.AsynchronousSocketChannel;
 import java.util.concurrent.LinkedBlockingQueue;
 

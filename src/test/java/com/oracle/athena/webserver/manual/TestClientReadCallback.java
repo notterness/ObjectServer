@@ -1,6 +1,6 @@
 package com.oracle.athena.webserver.manual;
 
-import com.oracle.athena.webserver.server.ClientDataReadCallback;
+import com.oracle.athena.webserver.client.ClientDataReadCallback;
 import org.eclipse.jetty.http.HttpParser;
 
 import java.nio.ByteBuffer;
@@ -11,7 +11,7 @@ public class TestClientReadCallback extends ClientDataReadCallback {
     private HttpParser httpParser;
     private ClientTest clientTest;
 
-    public TestClientReadCallback(final ClientTest test, final HttpParser parser) {
+    TestClientReadCallback(final ClientTest test, final HttpParser parser) {
 
         clientTest = test;
         httpParser = parser;

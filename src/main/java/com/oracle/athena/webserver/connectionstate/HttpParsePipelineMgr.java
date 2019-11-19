@@ -1,13 +1,13 @@
 package com.oracle.athena.webserver.connectionstate;
 
 
-public class HttpParsePipeline extends ConnectionPipeline {
+class HttpParsePipelineMgr extends ConnectionPipelineMgr {
 
     private WebServerConnState connectionState;
 
     private boolean initialStage;
 
-    HttpParsePipeline(WebServerConnState connState) {
+    HttpParsePipelineMgr(WebServerConnState connState) {
 
         super(connState);
 
@@ -18,24 +18,19 @@ public class HttpParsePipeline extends ConnectionPipeline {
         /*
         ** Reset the state of the pipeline
          */
-        connectionState.requestedHttpBuffers = 0;
-        connectionState.allocatedHttpBufferCount = 0;
-
-        connectionState.outstandingHttpReadCount.set(0);
-        connectionState.httpBufferReadsCompleted.set(0);
-        connectionState.httpHeaderParsed.set(false);
+        connectionState.resetHttpReadValues();
 
         /*
         ** This must be set to false here as there may be content data included in a buffer used to
         **   to read in the HTTP headers.
          */
-        connectionState.contentAllRead.set(false);
+        connectionState.resetContentAllRead();
     }
 
     /*
     ** This determines the pipeline stages used to read in and parse the HTTP headers.
      */
-    ConnectionStateEnum nextPipelineStage() {
+    public ConnectionStateEnum nextPipelineStage() {
 
         /*
         ** Perform the initial setup
@@ -53,8 +48,7 @@ public class HttpParsePipeline extends ConnectionPipeline {
          ** NOTE: This check is done prior to seeing if buffers need to be allocated to
          **   read in content data.
          */
-        boolean headerParsed = connectionState.httpHeaderParsed.get();
-        if (headerParsed) {
+        if (connectionState.httpHeadersParsed()) {
             /*
              ** Figure out how many buffers to read.
              */
@@ -67,38 +61,35 @@ public class HttpParsePipeline extends ConnectionPipeline {
          **   allocation right away.
          **
          */
-        boolean outOfMemory = connectionState.bufferAllocationFailed.get();
-        if (!outOfMemory) {
-            if (connectionState.requestedHttpBuffers > 0) {
-                return ConnectionStateEnum.ALLOC_HTTP_BUFFER;
-            }
+        if (!connectionState.outOfMemory() && connectionState.httpBuffersNeeded()) {
+            return ConnectionStateEnum.ALLOC_HTTP_BUFFER;
         }
 
         /*
          ** Are there buffers waiting to have a read performed?
          */
-        if (connectionState.allocatedHttpBufferCount > 0) {
+        if (connectionState.httpBuffersAllocated()) {
             return ConnectionStateEnum.READ_HTTP_BUFFER;
-        }
-
-        /*
-         ** Are there completed reads, priority is processing the HTTP header
-         */
-        int httpReadComp = connectionState.httpBufferReadsCompleted.get();
-        if (httpReadComp > 0) {
-            return ConnectionStateEnum.PARSE_HTTP_BUFFER;
         }
 
         /*
          ** Check if there was a channel error and cleanup if there are no outstanding
          **    reads.
          */
-        if (connectionState.channelError.get()) {
-            int httpReadsPending = connectionState.outstandingHttpReadCount.get();
-
-            if (httpReadsPending == 0) {
+        if (connectionState.hasChannelFailed()) {
+            if (connectionState.outstandingHttpBufferReads() == 0) {
                 return ConnectionStateEnum.CONN_FINISHED;
             }
+
+            // TODO: Need to log something to indicate waiting for reads to complete
+            return ConnectionStateEnum.CHECK_SLOW_CHANNEL;
+        }
+
+        /*
+         ** Are there completed reads, priority is processing the HTTP header
+         */
+        if (connectionState.httpBuffersReadyForParsing()) {
+            return ConnectionStateEnum.PARSE_HTTP_BUFFER;
         }
 
         return ConnectionStateEnum.CHECK_SLOW_CHANNEL;

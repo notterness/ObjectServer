@@ -13,7 +13,6 @@ import java.nio.channels.CompletionHandler;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.ListIterator;
 import java.util.concurrent.BlockingQueue;
@@ -75,7 +74,7 @@ abstract public class ConnectionState {
      */
     AsynchronousSocketChannel connChan;
 
-    private Object connChanMutex;
+    private final Object connChanMutex;
 
 
     private long nextExecuteTime;
@@ -95,12 +94,15 @@ abstract public class ConnectionState {
     **      waiting to have reads performed on the.
     **    outstandingDataReadCount - This is the number of outstanding content reads are currently in progress.
     **    contentAllRead -
+    **
+    ** TODO: outstandingDataReadCount and dataBufferReadsCompleted are marked public so the subclass
+    **   ClientConnState can access them
      */
-    AtomicInteger outstandingDataReadCount;
-    int requestedDataBuffers;
-    int allocatedDataBuffers;
-    AtomicInteger dataBufferReadsCompleted;
-    AtomicBoolean contentAllRead;
+    protected AtomicInteger outstandingDataReadCount;
+    private int requestedDataBuffers;
+    private int allocatedDataBuffers;
+    protected AtomicInteger dataBufferReadsCompleted;
+    private AtomicBoolean contentAllRead;
 
     AtomicBoolean bufferAllocationFailed;
 
@@ -113,7 +115,7 @@ abstract public class ConnectionState {
     private boolean connOnDelayedQueue;
     private boolean connOnExecutionQueue;
 
-    private QueueMutex queueMutex;
+    private final Object queueMutex;
 
     /*
     ** The following are used to keep track of the content being read in.
@@ -127,7 +129,7 @@ abstract public class ConnectionState {
      ** The next four items are associated with the thread that is running the ConnectionState
      **   state machine.
      */
-    ServerWorkerThread workerThread;
+    private ServerWorkerThread workerThread;
     BufferStatePool bufferStatePool;
     WriteConnThread writeThread;
     BuildHttpResult resultBuilder;
@@ -148,23 +150,25 @@ abstract public class ConnectionState {
      */
     private LinkedList<BufferState> allocatedDataBufferQueue;
 
-
-    BlockingQueue<BufferState> dataReadDoneQueue;
+    /*
+     **
+     */
+    protected BlockingQueue<BufferState> dataReadDoneQueue;
 
     /*
     ** The following is used to indicate that there was a channel error and the connection should be
     **   closed out.
      */
-    AtomicBoolean channelError;
+    protected AtomicBoolean channelError;
 
 
     /*
     ** The following is used to check that progress is being made on a channel and the
     **   client is not slow sending or receiving data.
      */
-    TimeoutChecker timeoutChecker;
+    protected TimeoutChecker timeoutChecker;
 
-    ConnectionState(final int uniqueId) {
+    public ConnectionState(final int uniqueId) {
         outstandingDataReadCount = new AtomicInteger(0);
 
         connStateId = uniqueId;
@@ -176,7 +180,7 @@ abstract public class ConnectionState {
 
         connOnDelayedQueue = false;
         connOnExecutionQueue = false;
-        queueMutex = new QueueMutex();
+        queueMutex = new Object();
 
         requestedDataBuffers = 0;
         allocatedDataBuffers = 0;
@@ -221,17 +225,17 @@ abstract public class ConnectionState {
      **      --> BufferState.setReadState()
      **
      */
-    abstract void readCompletedError(final BufferState bufferState);
+    abstract public void readCompletedError(final BufferState bufferState);
 
     abstract public void setChannel(final AsynchronousSocketChannel chan);
 
-    abstract void setReadState(final BufferState bufferState, final BufferStateEnum newState);
+    abstract public void setReadState(final BufferState bufferState, final BufferStateEnum newState);
 
     /*
     ** This is to perform some initial setup and could be removed if the ConnectionState is tied to the
     **   thread it is going to run under.
      */
-    void setupInitial() {
+    protected void setupInitial() {
         bufferStatePool = workerThread.getBufferStatePool();
         writeThread = workerThread.getWriteThread();
         resultBuilder = workerThread.getResultBuilder();
@@ -297,19 +301,23 @@ abstract public class ConnectionState {
     /*
     ** Returns if there are outstanding requests for data buffers
      */
-    boolean needsMoreDataBuffers() {
+    public boolean needsMoreDataBuffers() {
         return (requestedDataBuffers > 0);
     }
 
-    void resetRequestedDataBuffers() {
+    public void resetRequestedDataBuffers() {
         requestedDataBuffers = 0;
+    }
+
+    protected void addRequestedDataBuffer() {
+        requestedDataBuffers++;
     }
 
     /*
     ** This is the function to add BufferState to the available queue. This means the BufferState are
     **   now ready to have data read into them.
      */
-    int allocClientReadBufferState() {
+    protected int allocClientReadBufferState() {
         System.out.println("ServerWorkerThread(" + connStateId + ") allocClientReadBufferState(1) " + Thread.currentThread().getName());
 
         while (requestedDataBuffers > 0) {
@@ -357,11 +365,11 @@ abstract public class ConnectionState {
     ** Returns if there are data buffers allocated and waiting to have data read into them. In addition, it will
     **   only allow a single outstanding read to take place. This is due to the way sockets work in NIO.2.
      */
-    boolean dataBuffersWaitingForRead() {
+    public boolean dataBuffersWaitingForRead() {
         return ((allocatedDataBuffers > 0) && (outstandingDataReadCount.get() == 0));
     }
 
-    void resetBuffersWaiting() {
+    public void resetBuffersWaiting() {
         allocatedDataBuffers = 0;
         outstandingDataReadCount.set(0);
     }
@@ -370,7 +378,7 @@ abstract public class ConnectionState {
     ** This is called following a channel read error to release all the BufferState objects
     **   back to the free pool.
      */
-    void releaseBufferState() {
+    public void releaseBufferState() {
         /*
         ** Walk through the allocated buffer queues and release the memory back to the
         **  free pools
@@ -395,15 +403,15 @@ abstract public class ConnectionState {
     ** TODO: Should the memory allocations take part in the callback to insure that there is not a
     **   galloping herd trying to allocate the freed up memory?
      */
-    void memoryBuffersAreAvailable() {
+    public void memoryBuffersAreAvailable() {
         bufferAllocationFailed.set(false);
     }
 
     /*
     ** This returns if this connection is allowed to obtain buffers
      */
-    boolean isOutOfMemory() {
-        return bufferAllocationFailed.get();
+    public boolean outOfMemory() {
+        return (bufferAllocationFailed.get());
     }
 
 
@@ -411,7 +419,7 @@ abstract public class ConnectionState {
      ** This is used to start reads into one or more buffers. It looks for BufferState objects that have
      **   their state set to READ_FROM_CHAN. It then sends those buffers off to perform asynchronous reads.
      */
-    void readIntoDataBuffers() {
+    protected void readIntoDataBuffers() {
         BufferState bufferState;
 
         /*
@@ -447,7 +455,7 @@ abstract public class ConnectionState {
      ** This is called when the Server Connection is closed and this tracking object needs
      **   to be cleaned up.
      */
-    void clearChannel() {
+    public void clearChannel() {
         bufferStatePool = null;
 
         synchronized (connChanMutex) {
@@ -460,7 +468,7 @@ abstract public class ConnectionState {
     **   it threads safe in the event that different threads attempt to close the channel
     **   at the same time.
      */
-    public void closeChannel() {
+    private void closeChannel() {
         synchronized (connChanMutex) {
             try {
                 /*
@@ -482,7 +490,7 @@ abstract public class ConnectionState {
     **   synchronized operation if needed. Currently, there are no operations that can take place
     **   on the channel prior to it being set, so it is not synchronized.
      */
-    void setAsyncChannel(AsynchronousSocketChannel chan) {
+    protected void setAsyncChannel(AsynchronousSocketChannel chan) {
         connChan = chan;
     }
 
@@ -490,7 +498,7 @@ abstract public class ConnectionState {
     ** This is used to put the ConnectionState back into a pristine state so that it can be used
     **   to handle the next HTTP connection.
      */
-    void reset() {
+    public void reset() {
 
         System.out.println("ConnectionState[" + connStateId + "] reset()");
 
@@ -515,7 +523,7 @@ abstract public class ConnectionState {
         contentBytesToRead.set(0);
         contentBytesAllocated.set(0);
         contentBytesRead.set(0);
-        contentAllRead.set(false);
+        contentAllRead.set(false) ;
     }
 
 
@@ -530,7 +538,7 @@ abstract public class ConnectionState {
      ** NOTE: This is only called for the good path for reads. The error path is handled in the
      **   readCompletedError() function.
      */
-    void dataReadCompleted(final BufferState bufferState) {
+    protected void dataReadCompleted(final BufferState bufferState) {
         int readCount = outstandingDataReadCount.decrementAndGet();
 
         int bytesRead = bufferState.getBuffer().position();
@@ -577,11 +585,11 @@ abstract public class ConnectionState {
     /*
     ** This returns the number of data buffer reads that have completed (these are the reads to bring in the content)
      */
-    int getDataBufferReadsCompleted() {
+    public int getDataBufferReadsCompleted() {
         return dataBufferReadsCompleted.get();
     }
 
-    void resetDataBufferReadsCompleted() {
+    public void resetDataBufferReadsCompleted() {
         dataBufferReadsCompleted.set(0);
     }
 
@@ -652,6 +660,30 @@ abstract public class ConnectionState {
             }
         }
     }
+
+    /*
+    ** Returns if the content (data that follows the headers in a PUT operation) has all been
+    **   read in.
+     */
+    public boolean hasAllContentBeenRead() {
+        return contentAllRead.get();
+    }
+
+    public void resetContentAllRead() {
+        contentAllRead.set(false);
+    }
+
+    public int dataReadsPending() {
+        return outstandingDataReadCount.get();
+    }
+
+    /*
+     ** Returns if there has been an error on this AsynchronousConnectionChannel
+     */
+    public boolean hasChannelFailed() {
+        return channelError.get();
+    }
+
 
     public int getConnStateId() {
         return connStateId;
@@ -774,13 +806,6 @@ abstract public class ConnectionState {
 
     private String bb_to_str(ByteBuffer buffer) {
         return StandardCharsets.UTF_8.decode(buffer).toString();
-    }
-
-    /*
-    ** Used to protect the timed wait queues and the execution queues
-     */
-    static class QueueMutex {
-        int count;
     }
 
 }
