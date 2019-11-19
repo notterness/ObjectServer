@@ -13,7 +13,11 @@ public class ConnectionStatePool<T> {
 
     private int allocatedConnectionStates;
 
-    private int connId;
+    /*
+    ** reservedCount is the number of connections to keep in reserve to handle low resource conditions
+    **   and still be able to return an error back to the client
+     */
+    private int reservedCount;
 
     private LinkedBlockingQueue<T> connPoolFreeList;
 
@@ -22,30 +26,33 @@ public class ConnectionStatePool<T> {
      **   by returning null when the queue is empty instead of waiting for an
      **   element to become available.
      */
-    QueueMutex queueMutex;
-    int freeConnCount;
+    private final Object queueMutex;
+    private int freeConnCount;
 
 
-    public ConnectionStatePool(final int numConnections, final int serverBaseId) {
+    public ConnectionStatePool(final int numConnections, final int reserved) {
 
         allocatedConnectionStates = numConnections;
+        reservedCount = reserved;
         freeConnCount = 0;
 
-        queueMutex = new QueueMutex();
+        queueMutex = new Object();
 
-        connPoolFreeList = new LinkedBlockingQueue<>(numConnections);
+        connPoolFreeList = new LinkedBlockingQueue<>(numConnections + reservedCount);
     }
 
 
     /*
-     ** This is used for setting up a ConnectionState for the client side to perform reads
+     ** This is used for setting up a ConnectionState for the client side to perform reads. This will not block
+     **   if connections are not available.
+     ** If no connections are available it will return null.
      */
     public T allocConnectionState(final AsynchronousSocketChannel chan) {
 
         ConnectionState conn = null;
 
         synchronized (queueMutex) {
-            if (freeConnCount > 0) {
+            if (freeConnCount > reservedCount) {
                 freeConnCount--;
                 try {
                     conn = (ConnectionState) connPoolFreeList.take();
@@ -61,22 +68,38 @@ public class ConnectionStatePool<T> {
         return (T) conn;
     }
 
-    public void freeConnectionState(T connectionState) {
-        try {
-            connPoolFreeList.put(connectionState);
-            freeConnCount++;
-        } catch (InterruptedException int_ex) {
-            System.out.println(int_ex.getMessage());
+    /*
+     ** This is used for setting up a ConnectionState for the client side to perform reads. This will block
+     **   if connections are not available. It will still return null if there is an exception.
+     */
+    public T allocConnectionStateBlocking(final AsynchronousSocketChannel chan) {
+
+        ConnectionState conn = null;
+
+        synchronized (queueMutex) {
+            freeConnCount--;
+            try {
+                conn = (ConnectionState) connPoolFreeList.take();
+                conn.setChannel(chan);
+            } catch (InterruptedException int_ex) {
+                System.out.println(int_ex.getMessage());
+                freeConnCount++;
+            }
         }
+
+        return (T) conn;
     }
 
 
-    public int getConnId() {
-        return connId;
-    }
-
-    static class QueueMutex {
-        int count;
+    public void freeConnectionState(T connectionState) {
+        synchronized (queueMutex) {
+            try {
+                connPoolFreeList.put(connectionState);
+                freeConnCount++;
+            } catch (InterruptedException int_ex) {
+                System.out.println(int_ex.getMessage());
+            }
+        }
     }
 
 }
