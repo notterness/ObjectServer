@@ -46,7 +46,7 @@ public class ServerWorkerThread implements Runnable {
     private boolean threadExit;
     private Thread connThread;
 
-    ServerWorkerThread(final int queueSize, MemoryManager memoryManager, final int identifier) {
+    public ServerWorkerThread(final int queueSize, MemoryManager memoryManager, final int identifier) {
 
         maxQueueSize = queueSize;
 
@@ -57,7 +57,7 @@ public class ServerWorkerThread implements Runnable {
         threadExit = false;
     }
 
-    void start() {
+    public void start() {
 
         workQueue = new LinkedBlockingQueue<>(maxQueueSize);
         timedWaitQueue = new LinkedBlockingQueue<>(maxQueueSize);
@@ -74,7 +74,7 @@ public class ServerWorkerThread implements Runnable {
         connThread.start();
     }
 
-    void stop() {
+    public void stop() {
 
         threadExit = true;
 
@@ -155,8 +155,8 @@ public class ServerWorkerThread implements Runnable {
         try {
             String outStr;
 
-            outStr = String.format("ServerWorkerThread(%d) addToTimedQueue connStateId [%d]  state %s",
-                    this.threadId, work.getConnStateId(), work.getState().toString());
+            outStr = String.format("ServerWorkerThread(%d) addToTimedQueue connStateId [%d]",
+                    this.threadId, work.getConnStateId());
             System.out.println(outStr);
 
             timedWaitQueue.put(work);

@@ -1,4 +1,4 @@
-package com.oracle.athena.webserver.server;
+package com.oracle.athena.webserver.client;
 
 import java.nio.ByteBuffer;
 

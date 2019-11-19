@@ -1,6 +1,6 @@
-package com.oracle.athena.webserver.connectionstate;
+package com.oracle.athena.webserver.client;
 
-import com.oracle.athena.webserver.server.ClientDataReadCallback;
+import com.oracle.athena.webserver.connectionstate.*;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -11,6 +11,11 @@ import java.util.Iterator;
 public class ClientConnState extends ConnectionState {
 
     /*
+    **
+     */
+    private ConnectionPipelineMgr pipelineManager;
+
+    /*
      ** The following is used for client sockets reads to know what to callback when data is
      **   read from the socket. It is not used for server side connections.
      */
@@ -19,7 +24,7 @@ public class ClientConnState extends ConnectionState {
     /*
      ** The following is used to release this ConnectionState back to the free pool.
      */
-    ConnectionStatePool<ClientConnState> connectionStatePool;
+    private ConnectionStatePool<ClientConnState> connectionStatePool;
 
     /*
     ** clientCallbackCompleted is set to true when all of the client callbacks have been
@@ -28,7 +33,7 @@ public class ClientConnState extends ConnectionState {
     private boolean clientCallbackCompleted;
 
 
-    public ClientConnState(final ConnectionStatePool<ClientConnState> pool, final int uniqueId) {
+    ClientConnState(final ConnectionStatePool<ClientConnState> pool, final int uniqueId) {
 
         super(uniqueId);
 
@@ -39,30 +44,24 @@ public class ClientConnState extends ConnectionState {
     }
 
     public void start() {
+
         super.start();
+
+        pipelineManager = new ClientPutPipelineMgr(this);
     }
 
     public void stateMachine() {
+        ConnectionStateEnum overallState;
 
-        /*
-         ** First determine the state to execute
-         */
-        if (overallState != ConnectionStateEnum.INITIAL_SETUP) {
-            overallState = determineNextState();
-            System.out.println("ClientConnState[" + connStateId + "] state: " + overallState.toString());
-        }
+        overallState = pipelineManager.nextPipelineStage();
 
         switch (overallState) {
             case INITIAL_SETUP:
-                setupInitial();
-                System.out.println("ClientConnState[" + connStateId + "] INITIAL_SETUP client");
+                super.setupInitial();
+                System.out.println("ClientConnState[" + getConnStateId() + "] INITIAL_SETUP client");
 
-                requestedDataBuffers = 1;
+                addRequestedDataBuffer();
 
-                /*
-                 ** Have to advance past INITIAL_SETUP to prevent the state machine from getting stuck
-                 */
-                overallState = ConnectionStateEnum.CHECK_SLOW_CHANNEL;
                 addToWorkQueue(false);
                 break;
 
@@ -72,7 +71,7 @@ public class ClientConnState extends ConnectionState {
                      ** TOTDO: Need to close out the channel and this connection
                      */
                 } else {
-                    overallState = determineNextState();
+                    overallState = pipelineManager.nextPipelineStage();
 
                     /*
                      ** Need to wait for something to kick the state machine to a new state
@@ -99,13 +98,15 @@ public class ClientConnState extends ConnectionState {
                 break;
 
             case ALLOC_CLIENT_DATA_BUFFER:
-                if (allocClientReadBufferState() > 0) {
-                    // advance the Connection state and fall through
-                    setOverallState(ConnectionStateEnum.READ_CLIENT_DATA);
-                } else {
+                if (allocClientReadBufferState() == 0) {
                     addToWorkQueue(false);
                     break;
                 }
+
+                /*
+                ** If buffers were allocated, advance the Connection state and fall through to
+                **   ConnectionStateEnum.READ_CLIENT_DATA
+                */
 
             case READ_CLIENT_DATA:
                 readIntoDataBuffers();
@@ -118,7 +119,7 @@ public class ClientConnState extends ConnectionState {
                 break;
 
             case CONN_FINISHED:
-                System.out.println("ClientConnState[" + connStateId + "] CONN_FINISHED");
+                System.out.println("ClientConnState[" + getConnStateId() + "] CONN_FINISHED");
                 reset();
 
                 // Now release this back to the free pool so it can be reused
@@ -127,76 +128,6 @@ public class ClientConnState extends ConnectionState {
         }
     }
 
-    /*
-     ** This function is used to determine the next state for the ConnectionState processing.
-     **
-     ** NOTE: This is only called from the start of the state machine.
-     */
-    private ConnectionStateEnum determineNextState() {
-
-         /*
-         ** Are there outstanding buffers to be allocated. If the code had attempted to allocate
-         **   buffers and failed, check if there is other work to do. No point trying the buffer
-         **   allocation right away.
-         **
-         */
-        boolean outOfMemory = bufferAllocationFailed.get();
-        if (!outOfMemory) {
-            if (requestedDataBuffers > 0) {
-                return ConnectionStateEnum.ALLOC_CLIENT_DATA_BUFFER;
-            }
-        }
-
-        /*
-         ** The NIO.2 AsynchronousChannelRead can only have a single outstanding read at at time.
-         **
-         ** TODO: Support the NIO.2 read that can be passed in an array of ByteBuffers
-         */
-        if ((allocatedDataBuffers > 0)  && (outstandingDataReadCount.get() == 0)){
-            return ConnectionStateEnum.READ_CLIENT_DATA;
-        }
-
-        int dataReadComp = dataBufferReadsCompleted.get();
-        if (dataReadComp > 0) {
-            return ConnectionStateEnum.CLIENT_READ_CB;
-        }
-
-        /*
-        ** The check for clientCallbackCompleted needs to be before the contentAllRead check
-        **   otherwise the Connection will get stuck in the CLIENT_READ_CB state.
-        **
-        ** TODO: Is there value to moving the repsonse parsing into this state machine to properly handle
-        **   the setting of the contentAllRead flag. Currently, it is never sent as the "Content-Length" is
-        **   never parsed out of the HTTP response.
-         */
-        if (clientCallbackCompleted == true) {
-            return ConnectionStateEnum.CONN_FINISHED;
-        }
-
-        /*
-         ** Check if the content has all been read in and then proceed to finishing the processing
-         **
-         ** TODO: Start adding in the steps to process the content data instead of just sending status
-         */
-        boolean doneReadingContent = contentAllRead.get();
-        if (doneReadingContent) {
-            return ConnectionStateEnum.CLIENT_READ_CB;
-        }
-
-        /*
-         ** Check if there was a channel error and cleanup if there are no outstanding
-         **    reads.
-         */
-        if (channelError.get()) {
-            int dataReadsPending = outstandingDataReadCount.get();
-
-            if (dataReadsPending == 0) {
-                return ConnectionStateEnum.CONN_FINISHED;
-            }
-        }
-
-        return ConnectionStateEnum.CHECK_SLOW_CHANNEL;
-    }
 
     /*
      ** This walks through the array of BufferState to find the next one that has completed
@@ -205,9 +136,9 @@ public class ClientConnState extends ConnectionState {
      **   there is no more data to be transferred into the buffer being read into.
      */
     private void readClientBufferCallback() {
-        int readsCompleted = dataBufferReadsCompleted.get();
+        int readsCompleted = getDataBufferReadsCompleted();
 
-        System.out.println("ClientConnState[" + connStateId + "] readsCompleted: " + readsCompleted);
+        System.out.println("ClientConnState[" + getConnStateId() + "] readsCompleted: " + readsCompleted);
 
         if (readsCompleted > 0) {
             Iterator<BufferState> iter = dataReadDoneQueue.iterator();
@@ -236,6 +167,18 @@ public class ClientConnState extends ConnectionState {
     }
 
     /*
+    ** Returns if the client callback associated with a data read has completed
+     */
+    boolean hasClientCallbackCompleted() {
+        return clientCallbackCompleted;
+    }
+
+    void resetClientCallbackCompleted() {
+        clientCallbackCompleted = false;
+    }
+
+
+    /*
      ** The following is used to handle the case when a read error occurred and the ConnectionState needs
      **   to cleanup and release resources.
      **
@@ -245,11 +188,9 @@ public class ClientConnState extends ConnectionState {
      **
      */
     @Override
-    void readCompletedError(final BufferState bufferState) {
-        int dataReadCount = 0;
-
+    public void readCompletedError(final BufferState bufferState) {
         channelError.set(true);
-        dataReadCount = outstandingDataReadCount.decrementAndGet();
+        int dataReadCount = outstandingDataReadCount.decrementAndGet();
 
         /*
         ** Need to increment the number of data buffer reads completed so that the clients will
@@ -259,11 +200,10 @@ public class ClientConnState extends ConnectionState {
             dataReadDoneQueue.put(bufferState);
             dataBufferReadsCompleted.incrementAndGet();
         } catch (InterruptedException int_ex) {
-            System.out.println("ERROR ClientConnState[" + connStateId + "] readCompletedError() " + int_ex.getMessage());
+            System.out.println("ERROR ClientConnState[" + getConnStateId() + "] readCompletedError() " + int_ex.getMessage());
         }
 
-        System.out.println("ClientConnState[" + connStateId + "].readCompletedError() dataReadCount: " + dataReadCount +
-                " overallState: " + overallState);
+        System.out.println("ClientConnState[" + getConnStateId() + "].readCompletedError() dataReadCount: " + dataReadCount);
 
         /*
          ** If there are outstanding reads in progress, need to wait for those to
@@ -285,7 +225,7 @@ public class ClientConnState extends ConnectionState {
      **
      ** TODO: Need to make the following thread safe when it modifies BufferState
      */
-    void setReadState(final BufferState bufferState, final BufferStateEnum newState) {
+    public void setReadState(final BufferState bufferState, final BufferStateEnum newState) {
 
         BufferStateEnum currBufferState = bufferState.getBufferState();
 
@@ -316,21 +256,20 @@ public class ClientConnState extends ConnectionState {
             try {
                 SocketAddress addr = chan.getLocalAddress();
 
-                System.out.println("ClientConnState[" + connStateId + "] setChannel() addr: " + addr);
+                System.out.println("ClientConnState[" + getConnStateId() + "] setChannel() addr: " + addr);
             } catch (IOException io_ex) {
                 System.out.println("socket closed " + io_ex.getMessage());
             }
         } else {
-            System.out.println("ClientConnState[" + connStateId + "] setChannel(null)");
+            System.out.println("ClientConnState[" + getConnStateId() + "] setChannel(null)");
 
         }
 
         super.setAsyncChannel(chan);
-        overallState = ConnectionStateEnum.INITIAL_SETUP;
     }
 
-    public void setClientReadCallback(ClientDataReadCallback clientReadCb) {
-        System.out.println("ClientConnState[" + connStateId + "] setClientReadCallback()");
+    void setClientReadCallback(ClientDataReadCallback clientReadCb) {
+        System.out.println("ClientConnState[" + getConnStateId() + "] setClientReadCallback()");
 
         clientDataReadCallback = clientReadCb;
     }
@@ -339,7 +278,7 @@ public class ClientConnState extends ConnectionState {
         clientDataReadCallback.dataBufferRead(status, readBuffer);
     }
 
-    void clearChannel() {
+    public void clearChannel() {
         clientDataReadCallback = null;
 
         clientCallbackCompleted = false;

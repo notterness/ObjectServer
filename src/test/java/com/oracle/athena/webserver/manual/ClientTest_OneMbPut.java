@@ -7,11 +7,11 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
-public class ClientTest_OneMbPost extends ClientTest {
+public class ClientTest_OneMbPut extends ClientTest {
 
     private final int BYTES_IN_CONTENT = 10240;
 
-    ClientTest_OneMbPost(final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
+    ClientTest_OneMbPut(final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
         super(client, myServerId, myTargetId, threadCount);
     }
 
@@ -94,9 +94,9 @@ public class ClientTest_OneMbPost extends ClientTest {
     @Override
     void targetResponse(final int result, final ByteBuffer readBuffer) {
         if (result == -1) {
-            System.out.println("ClientTest_OneMbPost passed");
+            System.out.println("ClientTest_OneMbPut failed");
         } else {
-            System.out.println("ClientTest_OneMbPost failed");
+            System.out.println("ClientTest_OneMbPut passed");
         }
 
         statusReceived(result);
