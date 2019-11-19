@@ -19,16 +19,16 @@ abstract public class ServerChannelLayer implements Runnable {
     public static final int BASE_TCP_PORT = 5000;
     public static final int DEFAULT_CLIENT_ID = 31415;
     private static final int CHAN_TIMEOUT = 100;
-    static final int WORK_QUEUE_SIZE = 10;
+    public static final int WORK_QUEUE_SIZE = 10;
 
     private int portNum;
     int workerThreads;
     int serverClientId;
 
-    Thread serverAcceptThread;
+    public Thread serverAcceptThread;
     ServerLoadBalancer serverWorkHandler;
 
-    MemoryManager memoryManager;
+    public MemoryManager memoryManager;
 
 
     private boolean exitThreads;
@@ -40,7 +40,7 @@ abstract public class ServerChannelLayer implements Runnable {
 
     private ByteBufferHttpParser byteBufferHttpParser;
 
-    ServerChannelLayer(int numWorkerThreads, int listenPort, int clientId) {
+    public ServerChannelLayer(int numWorkerThreads, int listenPort, int clientId) {
         portNum = listenPort;
         workerThreads = numWorkerThreads;
         serverClientId = clientId;
@@ -52,7 +52,7 @@ abstract public class ServerChannelLayer implements Runnable {
         exitThreads = false;
     }
 
-    abstract void start();
+    abstract public void start();
 
     /*
      ** Perform an orderly shutdown of the server channel and all of its associated resources.

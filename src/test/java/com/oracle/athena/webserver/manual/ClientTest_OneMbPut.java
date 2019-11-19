@@ -7,11 +7,11 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
-public class ClientTest_OneMbPost extends ClientTest {
+public class ClientTest_OneMbPut extends ClientTest {
 
     private final int BYTES_IN_CONTENT = 10240;
 
-    ClientTest_OneMbPost(final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
+    ClientTest_OneMbPut(final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
         super(client, myServerId, myTargetId, threadCount);
     }
 

@@ -29,7 +29,6 @@ public class TestMain {
         TestClient client = new TestClient((baseTcpPortOffset + 1));
         client.start();
 
-
         ClientTest client_1 = new ClientTest_2(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_1.start();
 
@@ -39,7 +38,7 @@ public class TestMain {
         ClientTest client_3 = new ClientTest_SlowHeaderSend(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_3.start();
 
-        ClientTest client_4 = new ClientTest_OneMbPost(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        ClientTest client_4 = new ClientTest_OneMbPut(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_4.start();
 
         System.out.println("Starting Tests");

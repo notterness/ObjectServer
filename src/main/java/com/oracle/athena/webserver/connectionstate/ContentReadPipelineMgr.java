@@ -1,12 +1,12 @@
 package com.oracle.athena.webserver.connectionstate;
 
-public class ContentReadPipeline extends ConnectionPipeline {
+public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
 
     private WebServerConnState connectionState;
 
     private boolean initialStage;
 
-    ContentReadPipeline(WebServerConnState connState) {
+    ContentReadPipelineMgr(WebServerConnState connState) {
 
         super(connState);
 
@@ -21,15 +21,13 @@ public class ContentReadPipeline extends ConnectionPipeline {
         connectionState.resetBuffersWaiting();
         connectionState.resetDataBufferReadsCompleted();
 
-        connectionState.dataResponseSent.set(false);
-        connectionState.finalResponseSent = false;
-        connectionState.finalResponseSendDone.set(false);
+        connectionState.resetResponses();
     }
 
     /*
      ** This determines the pipeline stages used to read in the content data.
      */
-    ConnectionStateEnum nextPipelineStage() {
+    public ConnectionStateEnum nextPipelineStage() {
 
         /*
         ** First setup to perform the content reads. This is required since the buffer used to read in the
@@ -47,7 +45,7 @@ public class ContentReadPipeline extends ConnectionPipeline {
          **   allocation right away.
          **
          */
-        if (!connectionState.isOutOfMemory() && connectionState.needsMoreDataBuffers()) {
+        if (!connectionState.outOfMemory() && connectionState.needsMoreDataBuffers()) {
             return ConnectionStateEnum.ALLOC_CLIENT_DATA_BUFFER;
         }
 
@@ -65,18 +63,15 @@ public class ContentReadPipeline extends ConnectionPipeline {
         **
         ** TODO: Start adding in the steps to process the content data instead of just sending status
          */
-        boolean doneReadingContent = connectionState.contentAllRead.get();
-        if (doneReadingContent) {
-            if (!connectionState.finalResponseSent) {
+        if (connectionState.hasAllContentBeenRead() && !connectionState.hasFinalResponseBeenSent()) {
                 return ConnectionStateEnum.SEND_XFR_DATA_RESP;
-            }
         }
 
         /*
          ** Check if there was a channel error and cleanup if there are no outstanding
          **   reads.
          */
-        if (connectionState.channelError.get()) {
+        if (connectionState.hasChannelFailed()) {
             if (connectionState.getDataBufferReadsCompleted() == 0) {
                 return ConnectionStateEnum.CONN_FINISHED;
             }
@@ -86,7 +81,7 @@ public class ContentReadPipeline extends ConnectionPipeline {
          ** TODO: This is not really the exit point for the state machine, but until the
          **   steps for dealing with user data are added it is.
          */
-        if (connectionState.dataResponseSent.get() || connectionState.finalResponseSendDone.get()) {
+        if (connectionState.hasDataResponseBeenSent() || connectionState.finalResponseSent()) {
             return ConnectionStateEnum.CONN_FINISHED;
         }
 
