@@ -3,6 +3,7 @@ package com.oracle.athena.webserver.connectionstate;
 import com.oracle.athena.webserver.statemachine.StateEntry;
 import com.oracle.athena.webserver.statemachine.StateMachine;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
+import org.eclipse.jetty.http.HttpStatus;
 
 import java.util.function.Function;
 
@@ -51,7 +52,7 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
 
     private Function contentReadSendXferResponse = new Function<WebServerConnState, StateQueueResult>() {
         public StateQueueResult apply(WebServerConnState wsConn) {
-            wsConn.sendResponse();
+            wsConn.sendResponse(HttpStatus.OK_200);
             return StateQueueResult.STATE_RESULT_REQUEUE;
         }
     };

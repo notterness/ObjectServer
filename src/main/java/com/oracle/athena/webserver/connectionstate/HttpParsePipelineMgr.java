@@ -5,6 +5,7 @@ import com.oracle.athena.webserver.statemachine.StateEntry;
 import com.oracle.athena.webserver.statemachine.StateEntryResult;
 import com.oracle.athena.webserver.statemachine.StateMachine;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
+import org.eclipse.jetty.http.HttpStatus;
 
 import java.util.function.Function;
 
@@ -77,7 +78,7 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
 
     private Function httpParseSendXferResponse = new Function<WebServerConnState, StateQueueResult>() {
         public StateQueueResult apply(WebServerConnState wsConn) {
-            wsConn.sendResponse();
+            wsConn.sendResponse(HttpStatus.OK_200);
             return StateQueueResult.STATE_RESULT_REQUEUE;
         }
     };

@@ -100,6 +100,13 @@ public class WebServerConnState extends ConnectionState {
     private WriteConnection writeConn;
 
     /*
+    ** The following is set when this connection is being used to send an out of resource response back to the
+    **   client. This happens when the primary pool of connections has been depleted and the server cannot accept
+    **   more connections until some complete.
+     */
+    private boolean outOfResourcesResponse;
+
+    /*
      ** The following is used to release this ConnectionState back to the free pool.
      */
     private ConnectionStatePool<WebServerConnState> connectionStatePool;
@@ -127,6 +134,8 @@ public class WebServerConnState extends ConnectionState {
         httpReadDoneQueue = new LinkedBlockingQueue<>(MAX_OUTSTANDING_BUFFERS * 2);
 
         httpHeaderParsed = new AtomicBoolean(false);
+
+        outOfResourcesResponse = false;
 
         writeConn = null;
     }
@@ -158,7 +167,6 @@ public class WebServerConnState extends ConnectionState {
         StateQueueResult result;
 
         result = pipelineManager.executePipeline();
-        System.out.println("result " + result);
         switch (result) {
             case STATE_RESULT_COMPLETE:
                 // set next pipeline.
@@ -275,9 +283,29 @@ public class WebServerConnState extends ConnectionState {
      */
     public void setupNextPipeline() {
         /*
+        ** First check if this is an out of resources response
+         */
+        if (outOfResourcesResponse) {
+            pipelineManager = new OutOfResourcePipelineMgr(this);
+            return;
+        }
+
+        /*
          ** Now, based on the HTTP method, figure out the next pipeline
          */
-        pipelineManager = readPipelineMgr;
+        HttpMethodEnum method = casperHttpInfo.getMethod();
+        switch (method) {
+            case PUT_METHOD:
+                pipelineManager = readPipelineMgr;
+                break;
+
+            case POST_METHOD:
+                pipelineManager = readPipelineMgr;
+                break;
+
+            case INVALID_METHOD:
+                break;
+        }
     }
 
     /*
@@ -556,7 +584,7 @@ public class WebServerConnState extends ConnectionState {
     /*
      ** This will send out a particular response type on the server channel
      */
-    public void sendResponse() {
+    public void sendResponse(final int resultCode) {
 
         // Allocate the Completion object specific to this operation
         setupWriteConnection();
@@ -565,8 +593,7 @@ public class WebServerConnState extends ConnectionState {
         if (buffState != null) {
             finalResponseSent = true;
 
-            ByteBuffer respBuffer = resultBuilder.buildResponse(buffState, HttpStatus.OK_200, true);
-            //ByteBuffer respBuffer = resultBuilder.buildResponse(buffState, HttpStatus.CONTINUE_100, false);
+            ByteBuffer respBuffer = resultBuilder.buildResponse(buffState, resultCode, true);
 
             int bytesToWrite = respBuffer.position();
             respBuffer.flip();
@@ -576,9 +603,12 @@ public class WebServerConnState extends ConnectionState {
                     getConnStateId(), bytesToWrite, 0);
             writeThread.writeData(writeConn, statusComp);
 
-            System.out.println("sendResponse(" + connStateId + ") 2");
+            HttpStatus.Code result = HttpStatus.getCode(resultCode);
+            if (result != null) {
+                System.out.println("sendResponse[" + connStateId + "] resultCode: " + result.getCode() + " " + result.getMessage());
+            }
         } else {
-            System.out.println("sendResponse(" + connStateId + "): unable to allocate response buffer");
+            System.out.println("sendResponse[" + connStateId + "] unable to allocate response buffer");
         }
     }
 
@@ -587,7 +617,7 @@ public class WebServerConnState extends ConnectionState {
     ** This allocates the buffer to send the response
      */
     private BufferState allocateResponseBuffer() {
-        BufferState respBuffer = bufferStatePool.allocBufferState(this, BufferStateEnum.SEND_GET_DATA_RESPONSE, MemoryManager.MEDIUM_BUFFER_SIZE);
+        BufferState respBuffer = bufferStatePool.allocBufferState(this, BufferStateEnum.SEND_FINAL_RESPONSE, MemoryManager.MEDIUM_BUFFER_SIZE);
 
         responseBuffer = respBuffer;
 
@@ -606,7 +636,7 @@ public class WebServerConnState extends ConnectionState {
         }
 
         currState = responseBuffer.getBufferState();
-        System.out.println("statusWriteCompleted: " + connStateId + " " + currState.toString());
+        System.out.println("statusWriteCompleted[" + connStateId + "] " + currState.toString());
 
         switch (currState) {
             case SEND_GET_DATA_RESPONSE:
@@ -678,17 +708,43 @@ public class WebServerConnState extends ConnectionState {
         writeConn = null;
     }
 
+    /*
+    ** This is called just after the connection is allocated to tell that is will be used to send back an
+    **   error to the client indicating that there are insufficient resources currently.
+     */
+    public void setOutOfResourceResponse() {
+        System.out.println("WebServerConnState[" + connStateId + "] setOutOfResourceResponse()");
+
+        outOfResourcesResponse = true;
+    }
+
+
     public void reset() {
-        System.out.println("resetting connection");
         dataResponseSent.set(false);
 
-        httpParser.resetHttpParser();
+        /*
+        ** Setup the HTTP parser for a new ByteBuffer stream
+         */
+        casperHttpInfo = null;
+        casperHttpInfo = new CasperHttpInfo(this);
+
+        initialHttpBuffer = true;
+        //httpParser.resetHttpParser();
+        httpParser = null;
+        httpParser = new ByteBufferHttpParser(casperHttpInfo);
+
 
         /*
          ** Clear the write connection (it may already be null) since it will not be valid with the next
          **   use of this ConnectionState
          */
         writeConn = null;
+
+        outOfResourcesResponse = false;
+
+        /*
+        ** Reset the pipeline manager back to default
+         */
         pipelineManager = httpParsePipelineMgr;
 
         super.reset();

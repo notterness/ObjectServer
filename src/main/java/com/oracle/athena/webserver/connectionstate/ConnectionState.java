@@ -607,6 +607,8 @@ abstract public class ConnectionState {
         int maxBuffersToAllocate = MAX_OUTSTANDING_BUFFERS - (allocatedDataBuffers + requestedDataBuffers);
         if (buffersNeeded > maxBuffersToAllocate) {
             buffersNeeded = maxBuffersToAllocate;
+        } else if (buffersNeeded < 0) {
+            buffersNeeded = 0;
         }
 
         System.out.println("ConnectionState[" + connStateId + "] determineNextContentRead() buffersNeeded: " + buffersNeeded +

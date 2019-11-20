@@ -29,7 +29,7 @@ class InitiatorLoadBalancer extends ServerLoadBalancer {
 
         lastQueueUsed = 0;
 
-        connPool = new ConnectionStatePool<>(workerThreads * maxQueueSize, serverBaseId);
+        connPool = new ConnectionStatePool<>(workerThreads * maxQueueSize, 0);
 
         /*
          ** The following ugly code is due to the fact that you cannot create a object of generic type <T> within
