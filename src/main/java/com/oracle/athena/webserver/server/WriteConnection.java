@@ -93,7 +93,7 @@ public class WriteConnection implements Closeable {
          */
         tgtWritePort = writePort;
         tgtClientId = writePort - ServerChannelLayer.BASE_TCP_PORT;
-        // FIXME CA: Why is there a random sleep here?
+        // TODO CA: Why is there a random sleep here?
         try {
             Thread.sleep(1000);
         } catch (InterruptedException int_ex) {
@@ -270,7 +270,7 @@ public class WriteConnection implements Closeable {
             try {
                 writeChannel.close();
             } catch (IOException e) {
-                // TODO CA: Something more than just printing the stack trace should be done for this sort of method
+                // FIXME CA: Something more than just printing the stack trace should be done for this sort of method
                 e.printStackTrace();
             }
         }
