@@ -4,14 +4,14 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**
- * This class manges a pool of {@link ConnectionState} objects, allowing them to be allocated and deallocated without
+ * This class manages a pool of {@link ConnectionState} objects, allowing them to be allocated and deallocated without
  * being garbage collected.
  *
  * @param <T> the type of {@link ConnectionState} object that this pool is managing.
  */
 public class ConnectionStatePool<T extends ConnectionState> {
 
-    // TODO CA: This variable will need to be used for something at some point
+    // FIXME CA: This variable will need to be used for something at some point
     private final int allocatedConnectionStates;
     final LinkedBlockingQueue<T> connPoolFreeList;
 
@@ -55,7 +55,7 @@ public class ConnectionStatePool<T extends ConnectionState> {
             try {
                 connPoolFreeList.put(connectionState);
             } catch (InterruptedException int_ex) {
-                // TODO CA: Sort out how we're going to handle this exception
+                // FIXME CA: Sort out how we're going to handle this exception
                 System.out.println(int_ex.getMessage());
             }
         }

@@ -25,7 +25,7 @@ class ConnectionStatePoolTests {
     }
 
     /**
-     * FIXME CA: Is this desired behavior?
+     * TODO CA: Is this desired behavior?
      * Verify that when there is no provided {@link AsynchronousSocketChannel} the
      * {@link ConnectionStatePool#allocConnectionState(AsynchronousSocketChannel)} still returns an object.
      */
