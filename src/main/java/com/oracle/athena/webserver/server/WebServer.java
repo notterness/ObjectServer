@@ -1,17 +1,35 @@
 package com.oracle.athena.webserver.server;
 
-public class WebServer extends ServerChannelLayer {
+import com.oracle.athena.webserver.memory.MemoryManager;
+
+public class WebServer {
+
+    private ServerChannelLayer http_server;
+    private ServerChannelLayer https_server;
+    private ServerLoadBalancer serverWorkHandler;
+    private MemoryManager memoryManager;
 
     public WebServer(int workerThreads) {
-        this(workerThreads, DEFAULT_CLIENT_ID);
+        this(workerThreads, ServerChannelLayer.DEFAULT_CLIENT_ID);
     }
 
     public WebServer(int workerThreads, int serverClientId) {
-        super(workerThreads, ServerChannelLayer.BASE_TCP_PORT, serverClientId);
+        memoryManager = new MemoryManager();
+        serverWorkHandler = new ServerLoadBalancer(2, workerThreads, memoryManager,
+                (serverClientId * 100));
+
+        http_server = new ServerChannelLayer(serverWorkHandler, ServerChannelLayer.HTTP_TCP_PORT, serverClientId);
+        https_server = new ServerChannelLayer(serverWorkHandler, ServerChannelLayer.HTTPS_TCP_PORT, serverClientId + 1);
     }
 
     public WebServer(int workerThreads, int listenPort, int serverClientId) {
-        super(workerThreads, listenPort, serverClientId);
+        memoryManager = new MemoryManager();
+
+        serverWorkHandler = new ServerLoadBalancer(2, workerThreads, memoryManager,
+                (serverClientId * 100));
+
+        http_server = new ServerChannelLayer(serverWorkHandler, listenPort, serverClientId);
+        https_server = new ServerChannelLayer(serverWorkHandler, listenPort + 80, serverClientId + 1);
     }
 
     public void start() {
@@ -19,12 +37,20 @@ public class WebServer extends ServerChannelLayer {
         ** The queueSize is set to 2 to insure that the system runs out of connections and can be tested for
         **   the out of connections handling.
          */
-        serverWorkHandler = new ServerLoadBalancer(2, workerThreads, memoryManager,
-                (serverClientId * 100));
         serverWorkHandler.start();
-
-        serverAcceptThread = new Thread(this);
-        serverAcceptThread.start();
+        http_server.start();
+        https_server.start();
     }
+
+    public void stop() {
+        /*
+         ** The queueSize is set to 2 to insure that the system runs out of connections and can be tested for
+         **   the out of connections handling.
+         */
+        serverWorkHandler.stop();
+        http_server.stop();
+        https_server.stop();
+    }
+
 }
 

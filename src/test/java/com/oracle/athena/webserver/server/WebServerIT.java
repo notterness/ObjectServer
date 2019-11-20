@@ -35,7 +35,7 @@ class WebServerIT {
 
     private static final String TARGET_HOST = "http://localhost:" + ServerChannelLayer.BASE_TCP_PORT + "/";
     private static HttpClient client;
-    private static ServerChannelLayer server;
+    private static WebServer server;
 
     /**
      * Before any test in this class is run, start up a server.

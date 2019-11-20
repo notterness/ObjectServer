@@ -22,6 +22,8 @@ abstract public class ServerChannelLayer implements Runnable {
     private static final Logger LOG = LoggerFactory.getLogger(ServerChannelLayer.class);
 
     public static final int BASE_TCP_PORT = 5000;
+    public static final int HTTP_TCP_PORT = BASE_TCP_PORT + 80;
+    public static final int HTTPS_TCP_PORT = BASE_TCP_PORT + 443;
     public static final int DEFAULT_CLIENT_ID = 31415;
     private static final int CHAN_TIMEOUT = 100;
     public static final int WORK_QUEUE_SIZE = 10;
@@ -54,21 +56,31 @@ abstract public class ServerChannelLayer implements Runnable {
     //FIXME - remove or use instance variable
     private ByteBufferHttpParser byteBufferHttpParser;
 
-    //TODO: constructor parameters should have the same name as the instance variables to which they are assigned, and
-    // constructor code should read this.varname = varname
-    public ServerChannelLayer(int numWorkerThreads, int listenPort, int clientId) {
-        portNum = listenPort;
-        workerThreads = numWorkerThreads;
-        serverClientId = clientId;
-
-        this.memoryManager = new MemoryManager();
+     public ServerChannelLayer(ServerLoadBalancer serverWorkHandler, int portNum, int serverClientId) {
+        this.serverWorkHandler = serverWorkHandler;
+        this.portNum = portNum;
+        this.serverClientId = serverClientId;
 
         serverConnTransactionId = 0x5555;
 
+        serverAcceptThread = new Thread(this);
         exitThreads = false;
     }
 
-    abstract public void start();
+    public ServerChannelLayer(int listenPort, int clientId) {
+        this.serverWorkHandler = null;
+        portNum = listenPort;
+        serverClientId = clientId;
+
+        serverConnTransactionId = 0x5555;
+
+        serverAcceptThread = new Thread(this);
+        exitThreads = false;
+    }
+
+    public void start() {
+        serverAcceptThread.start();
+    }
 
     /*
      ** Perform an orderly shutdown of the server channel and all of its associated resources.

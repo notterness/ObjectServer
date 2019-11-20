@@ -13,7 +13,7 @@ public class InitiatorServer extends ServerChannelLayer {
     private MemoryManager memoryManager;
 
     InitiatorServer(int workerThreads, int listenPort, int uniqueId) {
-        super(workerThreads, listenPort, uniqueId);
+        super(listenPort, uniqueId);
 
         this.numberWorkerThreads = workerThreads;
         this.clientId = uniqueId;
