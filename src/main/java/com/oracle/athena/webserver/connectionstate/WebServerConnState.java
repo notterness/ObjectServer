@@ -173,11 +173,6 @@ public class WebServerConnState extends ConnectionState {
                 break;
         }
 
-        /*
-         ** First determine the state to execute
-         */
-        //overallState = pipelineManager.nextPipelineStage();
-
         switch (overallState) {
 
             case CHECK_SLOW_CHANNEL:
