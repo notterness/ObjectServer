@@ -38,6 +38,8 @@ public enum ConnectionStateEnum {
     SEND_TIMEOUT_RESPONSE(51),
     SEND_FINAL_RESPONSE(53),
     PROCESS_FINAL_RESPONSE_SEND(54),
+    SSL_HANDSHAKE(60),
+    SSL_READ_HTTP_BUFFER(61),
     RELEASE_CONTENT_BUFFERS(100);
 
     private int value;

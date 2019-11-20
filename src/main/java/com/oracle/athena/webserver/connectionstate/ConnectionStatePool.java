@@ -1,5 +1,6 @@
 package com.oracle.athena.webserver.connectionstate;
 
+import javax.net.ssl.SSLContext;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -39,10 +40,11 @@ public class ConnectionStatePool<T extends ConnectionState> {
      * @return <T> the {@link ConnectionState} with the channel assigned to it, null if no connections are available.
      *
      */
-    public T allocConnectionState(final AsynchronousSocketChannel chan) {
+    public T allocConnectionState(final AsynchronousSocketChannel chan, SSLContext sslContext) {
         T conn = connPoolFreeList.poll();
         if (conn != null) {
             conn.setChannel(chan);
+            conn.setSslContext(sslContext);
         }
         return conn;
     }

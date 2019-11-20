@@ -5,6 +5,8 @@ import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.server.*;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
@@ -17,6 +19,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedList;
 import java.util.ListIterator;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -80,6 +84,10 @@ abstract public class ConnectionState {
      */
     AsynchronousSocketChannel connChan;
 
+    SSLContext sslContext;
+
+    SSLEngine engine;
+
     private final Object connChanMutex;
 
 
@@ -132,6 +140,7 @@ abstract public class ConnectionState {
     private AtomicLong contentBytesAllocated;
     private AtomicLong contentBytesRead;
 
+    private SSLContext context;
 
     /*
      ** The next four items are associated with the thread that is running the ConnectionState
@@ -243,6 +252,9 @@ abstract public class ConnectionState {
          */
         connChan = null;
         connChanMutex = new Object();
+
+        sslContext = null;
+        engine = null;
     }
 
     /*
@@ -271,6 +283,8 @@ abstract public class ConnectionState {
     abstract public void readCompletedError(final BufferState bufferState);
 
     abstract public void setChannel(final AsynchronousSocketChannel chan);
+
+    abstract public void setSslContext(final SSLContext sslContext);
 
     abstract public void setReadState(final BufferState bufferState, final BufferStateEnum newState);
 
@@ -572,6 +586,16 @@ abstract public class ConnectionState {
      */
     protected void setAsyncChannel(AsynchronousSocketChannel chan) {
         connChan = chan;
+    }
+
+    protected void initSslEngine(SSLContext sslContext) {
+        this.sslContext = sslContext;
+
+        if (sslContext != null) {
+            engine = sslContext.createSSLEngine();
+            engine.setUseClientMode(false);
+            engine.setNeedClientAuth(false);
+        }
     }
 
     /*
@@ -883,6 +907,34 @@ abstract public class ConnectionState {
     }
 
     /*
+     ** Same as above, returns a future.
+     */
+    public Future<Integer> readFromChannelFuture(final ByteBuffer buffer) {
+        AsynchronousSocketChannel readChan;
+
+        synchronized (connChanMutex) {
+            readChan = connChan;
+        }
+
+        if (buffer.position() != 0) {
+            return (Future<Integer>) CompletableFuture.completedFuture(buffer.position());
+        } else {
+            return readChan.read(buffer);
+        }
+    }
+
+    public Future<Integer> writeToChannelFuture(final ByteBuffer buffer) {
+        AsynchronousSocketChannel writeChan;
+
+        synchronized (connChanMutex) {
+            writeChan = connChan;
+        }
+
+        // Read the data from the channel
+        return writeChan.write(buffer);
+    }
+
+    /*
      ** DEBUG FUNCTIONS BELOW
      */
 
@@ -922,4 +974,11 @@ abstract public class ConnectionState {
         return StandardCharsets.UTF_8.decode(buffer).toString();
     }
 
+    public SSLContext getSslContext() {
+        return sslContext;
+    }
+
+    public SSLEngine getEngine() {
+        return engine;
+    }
 }

@@ -7,12 +7,15 @@ import com.oracle.athena.webserver.server.WriteConnection;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
 import org.eclipse.jetty.http.HttpStatus;
 
+import javax.net.ssl.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.ListIterator;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -125,6 +128,7 @@ public class WebServerConnState extends ConnectionState {
      */
     private ConnectionStatePool<WebServerConnState> connectionStatePool;
 
+    private SSLEngineResult sslEngineResult;
 
     public WebServerConnState(final ConnectionStatePool<WebServerConnState> pool, final int uniqueId) {
 
@@ -154,6 +158,7 @@ public class WebServerConnState extends ConnectionState {
         outOfResourcesResponse = false;
 
         writeConn = null;
+        sslEngineResult = null;
     }
 
 
@@ -259,6 +264,252 @@ public class WebServerConnState extends ConnectionState {
         requestedHttpBuffers = 1;
     }
 
+    /**
+     * Implements the handshake protocol between two peers, required for the establishment of the SSL/TLS connection.
+     * During the handshake, encryption configuration information - such as the list of available cipher suites - will be exchanged
+     * and if the handshake is successful will lead to an established SSL/TLS session.
+     *
+     * <p/>
+     * A typical handshake will usually contain the following steps:
+     *
+     * <ul>
+     *   <li>1. wrap:     ClientHello</li>
+     *   <li>2. unwrap:   ServerHello/Cert/ServerHelloDone</li>
+     *   <li>3. wrap:     ClientKeyExchange</li>
+     *   <li>4. wrap:     ChangeCipherSpec</li>
+     *   <li>5. wrap:     Finished</li>
+     *   <li>6. unwrap:   ChangeCipherSpec</li>
+     *   <li>7. unwrap:   Finished</li>
+     * </ul>
+     * <p/>
+     * Handshake is also used during the end of the session, in order to properly close the connection between the two peers.
+     * A proper connection close will typically include the one peer sending a CLOSE message to another, and then wait for
+     * the other's CLOSE message to close the transport link. The other peer from his perspective would read a CLOSE message
+     * from his peer and then enter the handshake procedure to send his own CLOSE message as well.
+     *
+     * @return True if the connection handshake was successful or false if an error occurred.
+     */
+    private boolean doSslHandshake() {
+
+        SSLEngineResult.HandshakeStatus handshakeStatus;
+        SSLEngine engine = getEngine();
+
+        // NioSslPeer's fields appData and peerAppData are supposed to be large enough to hold all message data the peer
+        // will send and expects to receive from the other peer respectively. Since the messages to be exchanged will usually be less
+        // than 16KB long the capacity of these fields should also be smaller. Here we initialize these two local buffers
+        // to be used for the handshake, while keeping client's buffers at the same size.
+
+        ListIterator<BufferState> iter = allocatedHttpBufferQueue.listIterator(0);
+        BufferState clientAppDataState = iter.next();
+        ByteBuffer clientAppData = clientAppDataState.getBuffer();
+        BufferState clientNetDataState = iter.next();
+        ByteBuffer clientNetData = clientNetDataState.getBuffer();
+        BufferState appDataState = iter.next();
+        ByteBuffer appData = appDataState.getBuffer();
+        BufferState netDataState = iter.next();
+        ByteBuffer netData = netDataState.getBuffer();
+
+        if (sslEngineResult != null) {
+            handshakeStatus = sslEngineResult.getHandshakeStatus();
+            sslEngineResult = null;
+        } else {
+            handshakeStatus = engine.getHandshakeStatus();
+        }
+            switch (handshakeStatus) {
+                case NEED_UNWRAP:
+                    Future<Integer> rd = readFromChannelFuture(clientNetData);
+                    Integer res = -1;
+                    Boolean ex = false;
+                    try {
+                        res = rd.get();
+                    } catch (InterruptedException e) {
+                        ex = true;
+                    } catch (ExecutionException e) {
+                        ex = true;
+                    }
+                    if (res < 0 || ex) {
+                        if (engine.isInboundDone() && engine.isOutboundDone()) {
+                            return false;
+                        }
+                        try {
+                            engine.closeInbound();
+                        } catch (SSLException e) {
+                        }
+                        engine.closeOutbound();
+                        // After closeOutbound the engine will be set to WRAP state, in order to try to send a close message to the client.
+                        //handshakeStatus = engine.getHandshakeStatus();
+                        break;
+                    }
+                    clientNetData.flip();
+                    try {
+                        sslEngineResult = engine.unwrap(clientNetData, clientAppData);
+                        clientNetData.compact();
+                      //  handshakeStatus = result.getHandshakeStatus();
+                    } catch (SSLException sslException) {
+                        engine.closeOutbound();
+                       // handshakeStatus = engine.getHandshakeStatus();
+                        break;
+                    }
+                    switch (sslEngineResult.getStatus()) {
+                        case OK:
+                            break;
+                        case BUFFER_OVERFLOW:
+                            // Will occur when peerAppData's capacity is smaller than the data derived from peerNetData's unwrap.
+//                            peerAppData = enlargeApplicationBuffer(engine, peerAppData);
+                            break;
+                        case BUFFER_UNDERFLOW:
+                            // Will occur either when no data was read from the peer or when the peerNetData buffer was too small to hold all peer's data.
+//                            peerNetData = handleBufferUnderflow(engine, peerNetData);
+                            break;
+                        case CLOSED:
+                            if (engine.isOutboundDone()) {
+                                return false;
+                            } else {
+                                engine.closeOutbound();
+                              //  handshakeStatus = engine.getHandshakeStatus();
+                                break;
+                            }
+                        default:
+                            throw new IllegalStateException("Invalid SSL status: " + sslEngineResult.getStatus());
+                    }
+                    break;
+                case NEED_WRAP:
+                    netData.clear();
+                    try {
+                        sslEngineResult = engine.wrap(appData, netData);
+                       // handshakeStatus = result.getHandshakeStatus();
+                    } catch (SSLException sslException) {
+                        engine.closeOutbound();
+                       // handshakeStatus = engine.getHandshakeStatus();
+                        break;
+                    }
+                    switch (sslEngineResult.getStatus()) {
+                        case OK :
+                            netData.flip();
+                            while (netData.hasRemaining()) {
+                                Future <Integer> wr = writeToChannelFuture(netData);
+                                try {
+                                    wr.get();
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                } catch (ExecutionException e) {
+                                    e.printStackTrace();
+                                }
+                            }
+                            break;
+                        case BUFFER_OVERFLOW:
+                            // Will occur if there is not enough space in netData buffer to write all the data that would be generated by the method wrap.
+                            // Since netData is set to session's packet size we should not get to this point because SSLEngine is supposed
+                            // to produce messages smaller or equal to that, but a general handling would be the following:
+//                            netData = enlargePacketBuffer(engine, netData);
+                            break;
+                        case BUFFER_UNDERFLOW:
+                            //Buffer underflow occurred after a wrap. I don't think we should ever get here
+                        case CLOSED:
+                            try {
+                                netData.flip();
+                                while (netData.hasRemaining()) {
+                                    Future <Integer> wr = writeToChannelFuture(netData);
+                                    try {
+                                        wr.get();
+                                    } catch (InterruptedException e) {
+                                        e.printStackTrace();
+                                    } catch (ExecutionException e) {
+                                        e.printStackTrace();
+                                    }
+                                }
+                                // At this point the handshake status will probably be NEED_UNWRAP so we make sure that peerNetData is clear to read.
+                                //peerNetData.clear();
+                            } catch (Exception e) {
+//                                handshakeStatus = engine.getHandshakeStatus();
+                            }
+                            break;
+                        default:
+                            throw new IllegalStateException("Invalid SSL status: " + sslEngineResult.getStatus());
+                    }
+                    break;
+                case NEED_TASK:
+                    Runnable task;
+                    while ((task = engine.getDelegatedTask()) != null) {
+                        System.out.println("run task " + task);
+                        task.run();
+                    }
+ //                   handshakeStatus = engine.getHandshakeStatus();
+                    break;
+                case FINISHED:
+                    return false;
+                case NOT_HANDSHAKING:
+                    return false;
+                default:
+                    throw new IllegalStateException("Invalid SSL status: " + handshakeStatus);
+            }
+
+        return true;
+
+    }
+
+
+
+    private void read() {
+
+        //log.debug("About to read from a client...");
+        SSLEngine engine = getEngine();
+
+        ListIterator<BufferState> iter = allocatedHttpBufferQueue.listIterator(0);
+        BufferState peerAppData = iter.next();
+        BufferState peerNetData = iter.next();
+
+        peerNetData.getBuffer().clear();
+        int bytesRead = 0;
+        Future<Integer> rd = readFromChannelFuture(peerNetData.getBuffer());
+        try {
+            bytesRead = rd.get();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
+        if (bytesRead > 0) {
+            peerNetData.getBuffer().flip();
+            while (peerNetData.getBuffer().hasRemaining()) {
+                peerAppData.getBuffer().clear();
+                SSLEngineResult result;
+                try {
+                    result = engine.unwrap(peerNetData.getBuffer(), peerAppData.getBuffer());
+                } catch (SSLException e) {
+                    e.printStackTrace();
+                    return;
+                }
+                switch (result.getStatus()) {
+                    case OK:
+                        peerAppData.getBuffer().flip();
+                        System.out.println(peerAppData.getBuffer().toString());
+                        //("Incoming message: " + new String(peerAppData.array()));
+                        break;
+                    case BUFFER_OVERFLOW:
+                    //    peerAppData = enlargeApplicationBuffer(engine, peerAppData);
+                        break;
+                    case BUFFER_UNDERFLOW:
+                    //    peerNetData = handleBufferUnderflow(engine, peerNetData);
+                        break;
+                    case CLOSED:
+                        //("Client wants to close connection...");
+                        //closeConnection(socketChannel, engine);
+                        //("Goodbye client!");
+                        return;
+                    default:
+                        throw new IllegalStateException("Invalid SSL status: " + result.getStatus());
+                }
+            }
+
+            //write(socketChannel, engine, "Hello! I am your server!");
+
+        } else if (bytesRead < 0) {
+            //log.error("Received end of stream. Will try to close connection with client...");
+            //handleEndOfStream(socketChannel, engine);
+            //log.debug("Goodbye client!");
+        }
+    }
 
     /*
      ** The resets all the values for the HttpParsePipelineMgr
@@ -375,6 +626,33 @@ public class WebServerConnState extends ConnectionState {
         return allocatedHttpBufferCount;
     }
 
+    /*
+     ** Allocate a buffer to read HTTP header information into and associate it with this ConnectionState
+     **
+     ** The requestedHttpBuffers is not passed in since it is used to keep track of the number of buffers
+     **   needed by this connection to perform another piece of work. The idea is that there may not be
+     **   sufficient buffers available to allocate all that are requested, so there will be a wakeup call
+     **   when buffers are available and then the connection will go back and try the allocation again.
+     */
+    private int allocLargeBufferState() {
+        while (requestedHttpBuffers > 0) {
+            BufferState bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_HTTP_FROM_CHAN, MemoryManager.LARGE_BUFFER_SIZE);
+            if (bufferState != null) {
+                allocatedHttpBufferQueue.add(bufferState);
+
+                allocatedHttpBufferCount++;
+                requestedHttpBuffers--;
+            } else {
+                /*
+                 ** Unable to allocate memory, come back later
+                 */
+                bufferAllocationFailed.set(true);
+                break;
+            }
+        }
+
+        return allocatedHttpBufferCount;
+    }
 
     /*
      ** This is used to start reads into one or more buffers. It looks for BufferState objects that have
@@ -650,6 +928,11 @@ public class WebServerConnState extends ConnectionState {
         writeConn = new WriteConnection(connStateId);
 
         writeConn.assignAsyncWriteChannel(chan);
+    }
+
+    @Override
+    public void setSslContext(SSLContext sslContext) {
+        super.initSslEngine(sslContext);
     }
 
     /*

@@ -19,7 +19,7 @@ public class WebServer {
                 (serverClientId * 100));
 
         http_server = new ServerChannelLayer(serverWorkHandler, ServerChannelLayer.HTTP_TCP_PORT, serverClientId);
-        https_server = new ServerChannelLayer(serverWorkHandler, ServerChannelLayer.HTTPS_TCP_PORT, serverClientId + 1);
+        https_server = new ServerChannelLayer(serverWorkHandler, ServerChannelLayer.HTTPS_TCP_PORT, serverClientId + 1, true);
     }
 
     public WebServer(int workerThreads, int listenPort, int serverClientId) {

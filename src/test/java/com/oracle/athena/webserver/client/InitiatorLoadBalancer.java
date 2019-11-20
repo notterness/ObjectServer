@@ -55,7 +55,7 @@ class InitiatorLoadBalancer extends ServerLoadBalancer {
      **   the connection during tests.
      */
     ConnectionState startNewClientReadConnection(final AsynchronousSocketChannel chan, final ClientDataReadCallback clientReadCb) {
-        ClientConnState work = connPool.allocConnectionState(chan);
+        ClientConnState work = connPool.allocConnectionState(chan, null);
         if (work != null) {
             work.setClientReadCallback(clientReadCb);
             if (!addWorkToThread(work)) {
