@@ -1,10 +1,84 @@
 package com.oracle.athena.webserver.connectionstate;
 
+import com.oracle.athena.webserver.statemachine.StateEntry;
+import com.oracle.athena.webserver.statemachine.StateMachine;
+import com.oracle.athena.webserver.statemachine.StateQueueResult;
+
+import java.util.function.Function;
+
 public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
 
     private WebServerConnState connectionState;
 
     private boolean initialStage;
+
+    private StateMachine contentReadStateMachine;
+    private Function contentReadSetup = new Function<WebServerConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(WebServerConnState wsConn) {
+            wsConn.determineNextContentRead();
+            return StateQueueResult.STATE_RESULT_CONTINUE;
+        }
+    };
+    private Function contentReadRequestDataBuffers = new Function<WebServerConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(WebServerConnState wsConn) {
+            if (wsConn.allocClientReadBufferState() == 0) {
+                return StateQueueResult.STATE_RESULT_WAIT;
+            } else {
+                return StateQueueResult.STATE_RESULT_CONTINUE;
+            }
+        }
+    };
+
+    private Function contentReadDataBuffers = new Function<WebServerConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(WebServerConnState wsConn) {
+            wsConn.readIntoDataBuffers();
+            return StateQueueResult.STATE_RESULT_CONTINUE;
+        }
+    };
+
+    private Function contentReadCheckSlowChannel = new Function<WebServerConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(WebServerConnState wsConn) {
+            //if (wsConn.timeoutChecker.inactivityThresholdReached()) {
+
+            //} else return
+            return StateQueueResult.STATE_RESULT_CONTINUE;
+        }
+    };
+
+    private Function contentReadSendXferResponse = new Function<WebServerConnState, StateQueueResult>() {
+        public StateQueueResult apply(WebServerConnState wsConn) {
+            wsConn.sendResponse();
+            return StateQueueResult.STATE_RESULT_REQUEUE;
+        }
+    };
+
+    private Function contentReadConnFinished = new Function<WebServerConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(WebServerConnState wsConn) {
+            initialStage = true;
+            connectionState.resetRequestedDataBuffers();
+            connectionState.resetBuffersWaiting();
+            connectionState.resetDataBufferReadsCompleted();
+            connectionState.resetResponses();
+            return StateQueueResult.STATE_RESULT_FREE;
+        }
+    };
+
+    private Function contentReadSetNextPipeline = new Function<WebServerConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(WebServerConnState wsConn) {
+            initialStage = true;
+            connectionState.resetRequestedDataBuffers();
+            connectionState.resetBuffersWaiting();
+            connectionState.resetDataBufferReadsCompleted();
+            connectionState.resetResponses();
+            return StateQueueResult.STATE_RESULT_COMPLETE;
+        }
+    };
 
     ContentReadPipelineMgr(WebServerConnState connState) {
 
@@ -22,6 +96,14 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         connectionState.resetDataBufferReadsCompleted();
 
         connectionState.resetResponses();
+        contentReadStateMachine = new StateMachine();
+        contentReadStateMachine.addStateEntry(ConnectionStateEnum.SETUP_CONTENT_READ, new StateEntry(contentReadSetup));
+        contentReadStateMachine.addStateEntry(ConnectionStateEnum.ALLOC_CLIENT_DATA_BUFFER, new StateEntry(contentReadRequestDataBuffers));
+        contentReadStateMachine.addStateEntry(ConnectionStateEnum.READ_CLIENT_DATA, new StateEntry(contentReadDataBuffers));
+        contentReadStateMachine.addStateEntry(ConnectionStateEnum.CHECK_SLOW_CHANNEL,new StateEntry(contentReadCheckSlowChannel));
+        contentReadStateMachine.addStateEntry(ConnectionStateEnum.SEND_XFR_DATA_RESP, new StateEntry(contentReadSendXferResponse));
+        contentReadStateMachine.addStateEntry(ConnectionStateEnum.CONN_FINISHED, new StateEntry(contentReadConnFinished));
+        contentReadStateMachine.addStateEntry(ConnectionStateEnum.SETUP_NEXT_PIPELINE, new StateEntry(contentReadSetNextPipeline));
     }
 
     /*
@@ -86,5 +168,22 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         }
 
         return ConnectionStateEnum.CHECK_SLOW_CHANNEL;
+    }
+
+    public StateQueueResult executePipeline() {
+        StateQueueResult result;
+        ConnectionStateEnum nextVerb;
+
+        do {
+            nextVerb = nextPipelineStage();
+            result = contentReadStateMachine.stateMachineExecute(connectionState, nextVerb);
+
+        } while (result == StateQueueResult.STATE_RESULT_CONTINUE);
+
+        return result;
+    }
+
+    public void reset() {
+        initialStage = true;
     }
 }

@@ -3,6 +3,7 @@ package com.oracle.athena.webserver.statemachine;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * StateMachine class: An array of StateEntry objects.
@@ -11,9 +12,9 @@ import java.util.Map;
  */
 public class StateMachine<T,K> {
 
-    private Map<K,StateEntry> stateTable = new HashMap<>();
+    private Map<K,StateEntry<T,StateQueueResult> > stateTable = new HashMap<>();
 
-    public void addStateEntry(K verb, StateEntry entry) {
+    public void addStateEntry(K verb, StateEntry<T,StateQueueResult> entry) {
         stateTable.put(verb, entry);
     }
 
@@ -28,15 +29,16 @@ public class StateMachine<T,K> {
      * @return StateEntryResult - result
      */
     public StateQueueResult stateMachineExecute( T t, K k) {
-        StateQueueResult result = StateQueueResult.STATE_RESULT_CONTINUE;
+        StateQueueResult result = null;
 
         try {
-            StateEntry state = stateTable.get(k);
-            result = state.verbExecutor(t);
+            StateEntry entry = stateTable.get(k);
+            result = (StateQueueResult)entry.getVerbExecute().apply(t);
         } catch ( NullPointerException e) {
             System.out.println("no state entry for key " + k);
             e.printStackTrace();
         }
+
         return result;
     }
 }
