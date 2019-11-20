@@ -1,13 +1,14 @@
-package com.oracle.athena.webserver.server;
+package com.oracle.athena.webserver.client;
 
-import com.oracle.athena.webserver.connectionstate.ClientConnState;
 import com.oracle.athena.webserver.connectionstate.ConnectionState;
 import com.oracle.athena.webserver.connectionstate.ConnectionStatePool;
 import com.oracle.athena.webserver.memory.MemoryManager;
+import com.oracle.athena.webserver.server.ServerLoadBalancer;
+import com.oracle.athena.webserver.server.ServerWorkerThread;
 
 import java.nio.channels.AsynchronousSocketChannel;
 
-public class InitiatorLoadBalancer extends ServerLoadBalancer {
+class InitiatorLoadBalancer extends ServerLoadBalancer {
 
     private ConnectionStatePool<ClientConnState> connPool;
 
@@ -28,7 +29,7 @@ public class InitiatorLoadBalancer extends ServerLoadBalancer {
 
         lastQueueUsed = 0;
 
-        connPool = new ConnectionStatePool<>(workerThreads * maxQueueSize, serverBaseId);
+        connPool = new ConnectionStatePool<>(workerThreads * maxQueueSize, 0);
 
         /*
          ** The following ugly code is due to the fact that you cannot create a object of generic type <T> within
@@ -52,7 +53,7 @@ public class InitiatorLoadBalancer extends ServerLoadBalancer {
      ** NOTE: This returns ConnectionState to allow the client to perform close operations on
      **   the connection during tests.
      */
-    public ConnectionState startNewClientReadConnection(final AsynchronousSocketChannel chan, final ClientDataReadCallback clientReadCb) {
+    ConnectionState startNewClientReadConnection(final AsynchronousSocketChannel chan, final ClientDataReadCallback clientReadCb) {
         ClientConnState work = connPool.allocConnectionState(chan);
         if (work != null) {
             work.setClientReadCallback(clientReadCb);

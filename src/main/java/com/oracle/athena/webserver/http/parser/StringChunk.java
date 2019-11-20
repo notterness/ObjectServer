@@ -67,6 +67,9 @@ public class StringChunk {
         ByteBuffer bb = initialBuffer.slice();
         bb.limit(charCount);
 
+        //String str = bb_to_str(bb);
+        //System.out.println("StringChunk: " + str);
+
         currentPosition = i;
         initialBuffer.position(i);
 

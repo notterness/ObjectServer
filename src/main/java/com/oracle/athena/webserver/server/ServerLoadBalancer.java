@@ -5,6 +5,7 @@ import com.oracle.athena.webserver.connectionstate.ConnectionStatePool;
 import com.oracle.athena.webserver.connectionstate.WebServerConnState;
 import com.oracle.athena.webserver.memory.MemoryManager;
 
+import java.io.IOException;
 import java.nio.channels.AsynchronousSocketChannel;
 
 /*
@@ -13,18 +14,20 @@ import java.nio.channels.AsynchronousSocketChannel;
  ** problem is that the amount of work per connection is not really known until the header is
  ** parsed and then there additional detail about what needs to be done.
  */
-class ServerLoadBalancer {
+public class ServerLoadBalancer {
 
-    ServerWorkerThread[] threadPool;
+    protected ServerWorkerThread[] threadPool;
 
-    MemoryManager memoryManager;
+    protected MemoryManager memoryManager;
 
-    int workerThreads;
-    int maxQueueSize;
-    int lastQueueUsed;
+    protected int workerThreads;
+    protected int maxQueueSize;
+    protected int lastQueueUsed;
 
-    int serverBaseId;
+    protected int serverBaseId;
+
     private ConnectionStatePool<WebServerConnState> connPool;
+
 
     /*
      ** The queueSize is the maximum number of outstanding connections a thread can manage
@@ -36,7 +39,7 @@ class ServerLoadBalancer {
      ** queueSize * numWorkerThreads is the maximum number of concurrent client connections that can
      **   be handled by the server.
      */
-    ServerLoadBalancer(final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId) {
+    public ServerLoadBalancer(final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId) {
 
         workerThreads = numWorkerThreads;
         maxQueueSize = queueSize;
@@ -45,10 +48,11 @@ class ServerLoadBalancer {
         this.memoryManager = memoryManager;
 
         System.out.println("ServerLoadBalancer[" + serverClientId + "] workerThreads: " + workerThreads + " maxQueueSize: " + maxQueueSize);
-
     }
 
     void start() {
+        final int RESERVED_CONN_COUNT = 2;
+
         threadPool = new ServerWorkerThread[workerThreads];
 
         for (int i = 0; i < workerThreads; i++) {
@@ -58,14 +62,14 @@ class ServerLoadBalancer {
             threadPool[i] = worker;
         }
 
-        connPool = new ConnectionStatePool<WebServerConnState>(workerThreads * maxQueueSize, serverBaseId);
+        connPool = new ConnectionStatePool<>(workerThreads * maxQueueSize, RESERVED_CONN_COUNT);
 
         /*
         ** The following ugly code is due to the fact that you cannot create a object of generic type <T> within
         **   and generic class that uses <T>
          */
         WebServerConnState conn;
-        for (int i = 0; i < (workerThreads * maxQueueSize); i++) {
+        for (int i = 0; i < (workerThreads * maxQueueSize) + RESERVED_CONN_COUNT; i++) {
             conn = new WebServerConnState(connPool, (serverBaseId + i + 1));
 
             conn.start();
@@ -87,19 +91,42 @@ class ServerLoadBalancer {
     }
 
     /*
-     ** The following is used to start a new Server read connection
+     ** The following is used to start a new Server read connection. In the event there are no available connections,
+     **   a special connection will be allocated from a different pool that will return an error of
+     **   TOO_MANY_REQUESTS_429 after reading in the HTTP headers.
      */
     boolean startNewConnection(final AsynchronousSocketChannel chan) {
 
         WebServerConnState work = connPool.allocConnectionState(chan);
         if (work == null) {
-            return false;
+            /*
+            ** This means the primary pool of connections has been depleted and one needs to be allocated from the
+            **    special pool to return an error.
+             */
+            work = connPool.allocConnectionStateBlocking(chan);
+            if (work == null) {
+                /*
+                ** This means there was an exception while waiting to allocate the connection. Simply close the
+                **    connection and give up.
+                 */
+                try {
+                    chan.close();
+                } catch (IOException io_ex) {
+                    System.out.println("Unable to close");
+                }
+
+                return false;
+            }
+
+            System.out.println("Standard connection pool exhausted [" + work.getConnStateId() + "]");
+
+            work.setOutOfResourceResponse();
         }
 
         return addWorkToThread(work);
     }
 
-    boolean addWorkToThread(ConnectionState work) {
+    protected boolean addWorkToThread(ConnectionState work) {
 
         // Find the queue with the least amount of work
         int currQueue = lastQueueUsed;

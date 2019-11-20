@@ -55,7 +55,7 @@ public class TimeoutChecker {
     **   true. It is up to the caller to then close out the channel and terminate the
     **   connection.
      */
-    boolean inactivityThresholdReached() {
+    public boolean inactivityThresholdReached() {
         boolean exceededTime = false;
 
         long currTime = System.currentTimeMillis();

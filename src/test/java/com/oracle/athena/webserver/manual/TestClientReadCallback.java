@@ -1,6 +1,6 @@
 package com.oracle.athena.webserver.manual;
 
-import com.oracle.athena.webserver.server.ClientDataReadCallback;
+import com.oracle.athena.webserver.client.ClientDataReadCallback;
 import org.eclipse.jetty.http.HttpParser;
 
 import java.nio.ByteBuffer;
@@ -11,7 +11,7 @@ public class TestClientReadCallback extends ClientDataReadCallback {
     private HttpParser httpParser;
     private ClientTest clientTest;
 
-    public TestClientReadCallback(final ClientTest test, final HttpParser parser) {
+    TestClientReadCallback(final ClientTest test, final HttpParser parser) {
 
         clientTest = test;
         httpParser = parser;
@@ -39,8 +39,6 @@ public class TestClientReadCallback extends ClientDataReadCallback {
             while (!httpParser.isState(HttpParser.State.END) && remaining > 0) {
                 int was_remaining = remaining;
                 httpParser.parseNext(readBuffer);
-
-                System.out.println("buffer " + readBuffer.position() + " " + readBuffer.limit());
 
                 remaining = readBuffer.remaining();
                 if (remaining == was_remaining)

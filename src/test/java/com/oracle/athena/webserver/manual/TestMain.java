@@ -29,29 +29,35 @@ public class TestMain {
         TestClient client = new TestClient((baseTcpPortOffset + 1));
         client.start();
 
-
         ClientTest client_1 = new ClientTest_2(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_1.start();
-/*
+
         ClientTest client_2 = new ClientTest_EarlyClose(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_2.start();
 
         ClientTest client_3 = new ClientTest_SlowHeaderSend(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_3.start();
 
-
-        ClientTest client_4 = new ClientTest_OneMbPost(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        ClientTest client_4 = new ClientTest_OneMbPut(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_4.start();
-  */
-        System.out.println("Starting Server");
+
+        ClientTest client_5 = new ClientTest_OutOfConnections(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        client_5.start();
+
+        System.out.println("Starting Tests");
 
         // running infinite loop for getting
         // client request
         while (true) {
             count = threadCount.get();
-            if (count != 0) {
+
+            /*
+            ** The TestClient() cannot finish until after all the tests have completed so there is always
+            **   a count of 1 even after all the tests have completed.
+             */
+            if (count != 1) {
                 try {
-                    Thread.sleep(100);
+                    Thread.sleep(1000);
                 } catch (InterruptedException ex) {
                     break;
                 }
@@ -61,14 +67,19 @@ public class TestMain {
         }
 
         client_1.stop();
-        //client_2.stop();
-        //client_3.stop();
-        //client_4.stop();
+        client_2.stop();
+        client_3.stop();
+        client_4.stop();
+        client_5.stop();
+
+        System.out.println("Tests Completed");
 
         /* Stop the TestClient */
         client.stop();
 
         System.out.println("Server shutting down");
+
+        server_1.stop();
     }
 
 }
