@@ -18,8 +18,6 @@ class InitiatorLoadBalancer extends ServerLoadBalancer {
     }
 
     void start() {
-        threadPool = new ServerWorkerThread[workerThreads];
-
         for (int i = 0; i < workerThreads; i++) {
             ServerWorkerThread worker = new ServerWorkerThread(maxQueueSize, memoryManager,
                     (serverBaseId + i));
@@ -29,7 +27,7 @@ class InitiatorLoadBalancer extends ServerLoadBalancer {
 
         lastQueueUsed = 0;
 
-        connPool = new ConnectionStatePool<>(workerThreads * maxQueueSize, 0);
+        connPool = new ConnectionStatePool<>(workerThreads * maxQueueSize);
 
         /*
          ** The following ugly code is due to the fact that you cannot create a object of generic type <T> within

@@ -3,103 +3,61 @@ package com.oracle.athena.webserver.connectionstate;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.util.concurrent.LinkedBlockingQueue;
 
-/*
- ** This class provides a method to manage the allocation of the ConnectionState objects
- **   to allow them to be obtained from a pool to prevent garbage collection.
- **
- ** numConnections is the total number allocated
+/**
+ * This class manges a pool of {@link ConnectionState} objects, allowing them to be allocated and deallocated without
+ * being garbage collected.
+ *
+ * @param <T> the type of {@link ConnectionState} object that this pool is managing.
  */
-public class ConnectionStatePool<T> {
+public class ConnectionStatePool<T extends ConnectionState> {
 
-    private int allocatedConnectionStates;
+    // TODO CA: This variable will need to be used for something at some point
+    private final int allocatedConnectionStates;
+    final LinkedBlockingQueue<T> connPoolFreeList;
 
-    /*
-    ** reservedCount is the number of connections to keep in reserve to handle low resource conditions
-    **   and still be able to return an error back to the client
+    /**
+     * Primary constructor for a ConnectionStatePool.
+     *
+     * @param numConnections represents the total number of {@link ConnectionState} objects that can be tracked
+     *                       by this pool. There must be at least one connection.
      */
-    private int reservedCount;
-
-    private LinkedBlockingQueue<T> connPoolFreeList;
-
-    /*
-     ** The following are used to allow the LinkedBlockingQueue to not actually block
-     **   by returning null when the queue is empty instead of waiting for an
-     **   element to become available.
-     */
-    private final Object queueMutex;
-    private int freeConnCount;
-
-
-    public ConnectionStatePool(final int numConnections, final int reserved) {
-
+    public ConnectionStatePool(final int numConnections) {
         allocatedConnectionStates = numConnections;
-        reservedCount = reserved;
-        freeConnCount = 0;
-
-        queueMutex = new Object();
-
-        connPoolFreeList = new LinkedBlockingQueue<>(numConnections + reservedCount);
+        connPoolFreeList = new LinkedBlockingQueue<>(numConnections);
     }
 
-
-    /*
-     ** This is used for setting up a ConnectionState for the client side to perform reads. This will not block
-     **   if connections are not available.
-     ** If no connections are available it will return null.
+    /**
+     * A non-blocking method of setting up the {@link ConnectionState} for the client to perform reads.
+     *
+     * @param chan
+     *  an {@link AsynchronousSocketChannel} to assign to a {@link ConnectionState} from this {@link ConnectionStatePool}.
+     * @return <T> the {@link ConnectionState} with the channel assigned to it, null if no connections are available.
+     *
      */
     public T allocConnectionState(final AsynchronousSocketChannel chan) {
-
-        ConnectionState conn = null;
-
-        synchronized (queueMutex) {
-            if (freeConnCount > reservedCount) {
-                freeConnCount--;
-                try {
-                    conn = (ConnectionState) connPoolFreeList.take();
-                    conn.setChannel(chan);
-
-                } catch (InterruptedException int_ex) {
-                    System.out.println(int_ex.getMessage());
-                    freeConnCount++;
-                }
-            }
+        T conn = connPoolFreeList.poll();
+        if (conn != null) {
+            conn.setChannel(chan);
         }
-
-        return (T) conn;
+        return conn;
     }
 
-    /*
-     ** This is used for setting up a ConnectionState for the client side to perform reads. This will block
-     **   if connections are not available. It will still return null if there is an exception.
+    /**
+     * This method frees up a connection by adding it back to the pool. This method will block indefinitely until the
+     * connectionState can be added back to the pool.
+     * <p>
+     * TODO CA: Should the caller be forced to wait indefinitely?
+     *
+     * @param connectionState a {@link ConnectionState} object to return to the free pool. Null is a no-op.
      */
-    public T allocConnectionStateBlocking(final AsynchronousSocketChannel chan) {
-
-        ConnectionState conn = null;
-
-        synchronized (queueMutex) {
-            freeConnCount--;
-            try {
-                conn = (ConnectionState) connPoolFreeList.take();
-                conn.setChannel(chan);
-            } catch (InterruptedException int_ex) {
-                System.out.println(int_ex.getMessage());
-                freeConnCount++;
-            }
-        }
-
-        return (T) conn;
-    }
-
-
     public void freeConnectionState(T connectionState) {
-        synchronized (queueMutex) {
+        if (connectionState != null) {
             try {
                 connPoolFreeList.put(connectionState);
-                freeConnCount++;
             } catch (InterruptedException int_ex) {
+                // TODO CA: Sort out how we're going to handle this exception
                 System.out.println(int_ex.getMessage());
             }
         }
     }
-
 }
