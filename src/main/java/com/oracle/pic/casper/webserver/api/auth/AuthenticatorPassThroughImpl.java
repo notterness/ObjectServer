@@ -1,5 +1,6 @@
 package com.oracle.pic.casper.webserver.api.auth;
 
+import com.oracle.pic.casper.common.metrics.MetricScope;
 import com.oracle.pic.casper.webserver.auth.AuthTestConstants;
 import com.oracle.pic.casper.webserver.limit.ResourceLimitHelper;
 import com.oracle.pic.casper.webserver.limit.ResourceLimiter;
@@ -11,6 +12,7 @@ import com.oracle.pic.identity.authorization.sdk.AuthorizationRequest;
 import io.vertx.ext.web.RoutingContext;
 
 import javax.annotation.Nullable;
+import javax.ws.rs.core.HttpHeaders;
 
 /**
  * An {@link Authenticator} that accepts any request as authenticated.
@@ -38,9 +40,15 @@ public class AuthenticatorPassThroughImpl implements Authenticator {
     }
 
     @Override
+    public AuthenticationInfo authenticatePutObject(HttpHeaders headersOrig, String uriString, String namespace, String method, MetricScope metricScope) {
+        return authenticatePassThrough(headersOrig, uriString, namespace, method, metricScope);
+    }
+
+    @Override
     public AuthenticationInfo authenticatePutObject(RoutingContext context) {
         return authenticatePassThrough(context);
     }
+
 
     @Override
     public AuthenticationInfo authenticateSwiftOrCavage(RoutingContext context,
@@ -69,8 +77,8 @@ public class AuthenticatorPassThroughImpl implements Authenticator {
 
     private AuthenticationInfo authenticatePassThrough(RoutingContext context) {
         WSRequestContext.getMetricScope(context)
-            .annotate("tenantId", tenantId)
-            .annotate("subjectId", subjectId);
+                .annotate("tenantId", tenantId)
+                .annotate("subjectId", subjectId);
 
         final WSRequestContext wsRequestContext = WSRequestContext.get(context);
         wsRequestContext.setPrincipal(new PrincipalImpl(tenantId, subjectId));
@@ -79,10 +87,27 @@ public class AuthenticatorPassThroughImpl implements Authenticator {
         ResourceLimitHelper.withResourceControl(resourceLimiter,
                 ResourceType.IDENTITY, wsRequestContext.getNamespaceName().orElse(ResourceLimiter.UNKNOWN_NAMESPACE),
                 () -> {
-            return null;
-        });
+                    return null;
+                });
 
         if (context.request().getHeader("obo") != null) {
+            return new AuthenticationInfo(new PrincipalImpl(tenantId, subjectId),
+                    new PrincipalImpl(tenantId, subjectId),  AuthorizationRequest.Kind.OBO);
+        } else {
+            return AuthenticationInfo.fromPrincipal(new PrincipalImpl(tenantId, subjectId));
+        }
+    }
+
+    private AuthenticationInfo authenticatePassThrough(HttpHeaders headersOrig, String uriString, String namespace, String method, MetricScope metricScope) {
+        metricScope
+            .annotate("tenantId", tenantId)
+            .annotate("subjectId", subjectId);
+
+        ResourceLimitHelper.withResourceControl(resourceLimiter,
+                ResourceType.IDENTITY, namespace,
+                () -> null);
+
+        if (headersOrig.getHeaderString("obo") != null) {
             return new AuthenticationInfo(new PrincipalImpl(tenantId, subjectId),
                     new PrincipalImpl(tenantId, subjectId),  AuthorizationRequest.Kind.OBO);
         } else {

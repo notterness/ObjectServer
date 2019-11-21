@@ -110,11 +110,16 @@ public class TrafficRecorder {
      * @param recorder The {@link TrafficRecorder} to associate with the current Vert.x context.
      */
     public static void setVertxRecorder(TrafficRecorder recorder) {
-        Map<String, String> dimensions = ImmutableMap.of("thread", Thread.currentThread().getName());
-        recorder.bandwidthGuage = Metrics.gauge(MetricName.of("ws.tc.recorder.bandwidth", dimensions));
-        recorder.concurrencyGuage = Metrics.gauge(MetricName.of("ws.tc.recorder.concurrency", dimensions));
+        recorder.setBandwidthAndConcurrencyGagues();
         Vertx.currentContext().put(RECORDER_CONTEXT_KEY, recorder);
     }
+
+    public void setBandwidthAndConcurrencyGagues() {
+        Map<String, String> dimensions = ImmutableMap.of("thread", Thread.currentThread().getName());
+        bandwidthGuage = Metrics.gauge(MetricName.of("ws.tc.recorder.bandwidth", dimensions));
+        concurrencyGuage = Metrics.gauge(MetricName.of("ws.tc.recorder.concurrency", dimensions));
+    }
+
 
     /**
      * Return the {@link TrafficRecorder} associated with the current {@link io.vertx.core.Context}.

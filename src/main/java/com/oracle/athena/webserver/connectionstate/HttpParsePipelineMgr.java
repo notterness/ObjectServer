@@ -8,14 +8,6 @@ import com.oracle.athena.webserver.statemachine.StateQueueResult;
 
 import java.util.function.Function;
 
-import com.oracle.athena.webserver.statemachine.StateEntry;
-import com.oracle.athena.webserver.statemachine.StateEntryResult;
-import com.oracle.athena.webserver.statemachine.StateMachine;
-import com.oracle.athena.webserver.statemachine.StateQueueResult;
-import org.eclipse.jetty.http.HttpStatus;
-
-import java.util.function.Function;
-
 class HttpParsePipelineMgr extends ConnectionPipelineMgr {
 
     private WebServerConnState connectionState;
@@ -94,8 +86,8 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn){
             initialStage = true;
-            connectionState.resetHttpReadValues();
-            connectionState.resetContentAllRead();
+            wsConn.resetHttpReadValues();
+            wsConn.resetContentAllRead();
             wsConn.setupNextPipeline();
             return StateQueueResult.STATE_RESULT_COMPLETE;
         }

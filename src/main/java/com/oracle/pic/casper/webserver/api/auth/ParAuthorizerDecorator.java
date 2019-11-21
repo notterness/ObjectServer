@@ -1,6 +1,8 @@
 package com.oracle.pic.casper.webserver.api.auth;
 
+import com.oracle.pic.casper.common.metrics.MetricScope;
 import com.oracle.pic.casper.common.model.BucketPublicAccessType;
+import com.oracle.pic.casper.webserver.api.ratelimit.EmbargoContext;
 import com.oracle.pic.casper.webserver.auth.CasperPermission;
 import com.oracle.pic.casper.objectmeta.NamespaceKey;
 import com.oracle.pic.casper.webserver.api.backend.BucketBackend;
@@ -15,6 +17,7 @@ import javax.annotation.Nullable;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Wrapper impl of {@link Authorizer} that performs a specific check and if that passes,
@@ -66,6 +69,12 @@ public class ParAuthorizerDecorator implements Authorizer {
                 authorizeAll,
                 tenancyDeleted,
                 permissions);
+    }
+
+    // TODO implement
+    @Override
+    public Optional<AuthorizationResponse> authorize(AuthenticationInfo authInfo, @Nullable NamespaceKey namespaceKey, @Nullable String bucketName, String compartmentId, BucketPublicAccessType bucketAccessType, CasperOperation operation, String kmsKeyId, boolean authorizeAll, boolean tenancyDeleted, MetricScope rootScope, Set<CasperPermission> permissions, EmbargoContext embargoContext, String vcnId, String vcnDebugId, String namespace) {
+        return Optional.empty();
     }
 
     @Override

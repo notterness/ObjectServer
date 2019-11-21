@@ -1,7 +1,9 @@
 package com.oracle.pic.casper.webserver.api.auth;
 
+import com.oracle.pic.casper.common.metrics.MetricScope;
 import com.oracle.pic.casper.common.model.BucketPublicAccessType;
 import com.oracle.pic.casper.common.util.CommonRequestContext;
+import com.oracle.pic.casper.webserver.api.ratelimit.EmbargoContext;
 import com.oracle.pic.casper.webserver.auth.CasperPermission;
 import com.oracle.pic.casper.objectmeta.NamespaceKey;
 import com.oracle.pic.casper.webserver.api.model.exceptions.NamespaceDeletedException;
@@ -19,6 +21,7 @@ import javax.annotation.Nullable;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 
 public class AuthorizerPassThroughImpl implements Authorizer {
     private static final Logger LOG = LoggerFactory.getLogger(AuthorizerPassThroughImpl.class);
@@ -44,6 +47,25 @@ public class AuthorizerPassThroughImpl implements Authorizer {
                                                     boolean tenancyDeleted,
                                                     CasperPermission... permissions) {
         return doAuthorization(context, authInfo, compartmentId, operation, null, tenancyDeleted, permissions);
+    }
+
+    @Override
+    public Optional<AuthorizationResponse> authorize(AuthenticationInfo authInfo,
+                                                     @Nullable NamespaceKey namespaceKey,
+                                                     @Nullable String bucketName,
+                                                     String compartmentId,
+                                                     BucketPublicAccessType bucketAccessType,
+                                                     CasperOperation operation,
+                                                     String kmsKeyId,
+                                                     boolean authorizeAll,
+                                                     boolean tenancyDeleted,
+                                                     MetricScope rootScope,
+                                                     Set<CasperPermission> permissions,
+                                                     EmbargoContext embargoContext,
+                                                     String vcnId,
+                                                     String vcnDebugId,
+                                                     String namespace) {
+        return doAuthorization(authInfo, compartmentId, operation, null, tenancyDeleted, rootScope, embargoContext, namespace, permissions);
     }
 
     @Override
@@ -103,4 +125,35 @@ public class AuthorizerPassThroughImpl implements Authorizer {
         return Optional.of(new AuthorizationResponse(null, newTagSet, true, null,
                 new HashSet<>(Arrays.asList(permissions)), null));
     }
+    private Optional<AuthorizationResponse> doAuthorization(AuthenticationInfo authInfo,
+                                                            String compartmentId,
+                                                            CasperOperation operation,
+                                                            TagSet newTagSet,
+                                                            boolean tenancyDeleted,
+                                                            MetricScope metricScope,
+                                                            EmbargoContext embargoContext,
+                                                            String namespace,
+                                                            Set<CasperPermission> permissions) {
+        metricScope
+                .annotate("compartmentId", compartmentId)
+                .annotate("operation", operation.getSummary());
+
+        //Check our embargos first to avoid hitting authorization service
+        embargo.customs(metricScope, embargoContext, authInfo, operation);
+
+        ResourceLimitHelper.withResourceControl(resourceLimiter,
+                ResourceType.IDENTITY, namespace,
+                () -> null);
+
+        LOG.debug("Authorization request for user '{}' to compartment '{}' is authorized by pass-through",
+                authInfo.getMainPrincipal().getSubjectId(), compartmentId);
+        if (tenancyDeleted) {
+            throw new NamespaceDeletedException("This Tenancy is Deleted");
+        }
+
+        // For the set of permissions allowed, just return all of the permissions that were passed in.
+        return Optional.of(new AuthorizationResponse(null, newTagSet, true, null,
+                permissions, null));
+    }
+
 }

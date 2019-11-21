@@ -3,6 +3,7 @@ package com.oracle.pic.casper.webserver.server;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.oracle.pic.casper.common.certs.CertificateStore;
 import com.oracle.pic.casper.common.certs.CertificateStoreFactory;
 import com.oracle.pic.casper.common.config.v2.CasperConfig;
@@ -19,6 +20,7 @@ import com.oracle.pic.casper.common.host.StaticHostInfoProvider;
 import com.oracle.pic.casper.common.host.impl.DefaultStaticHostInfoProvider;
 import com.oracle.pic.casper.common.json.JacksonSerDe;
 import com.oracle.pic.casper.common.metrics.MetricScopeWriter;
+import com.oracle.pic.casper.common.metrics.Metrics;
 import com.oracle.pic.casper.common.metrics.MetricsInitializer;
 import com.oracle.pic.casper.common.metrics.Slf4jMetricScopeWriter;
 import com.oracle.pic.casper.common.metrics.T2MetricsInitializer;
@@ -29,6 +31,7 @@ import com.oracle.pic.casper.objectmeta.oracle.OracleMetrics;
 import com.oracle.pic.casper.webserver.api.eventing.DiskEventPublisherImpl;
 import com.oracle.pic.casper.webserver.api.eventing.EventPublisher;
 import com.oracle.pic.casper.webserver.api.eventing.NoOpEventPublisher;
+import com.oracle.pic.casper.webserver.api.v2.ObjectResource;
 import com.oracle.pic.casper.webserver.limit.ResourceLimiter;
 import com.oracle.pic.casper.webserver.traffic.KeyValueStoreUpdater;
 import com.oracle.pic.casper.webserver.traffic.TrafficController;
@@ -41,16 +44,25 @@ import com.oracle.pic.casper.webserver.util.MaximumContentLengthUpdater;
 import com.oracle.pic.casper.webserver.util.ObjectMappers;
 import com.oracle.pic.casper.webserver.util.WebServerMetrics;
 import com.oracle.pic.events.EventsIngestionClient;
+import com.oracle.pic.telemetry.commons.metrics.model.MetricName;
+import com.sun.net.httpserver.HttpContext;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
 import com.uber.jaeger.Tracer;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.dns.AddressResolverOptions;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.glassfish.jersey.server.ResourceConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.ws.rs.ext.RuntimeDelegate;
+import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.time.Clock;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -103,10 +115,10 @@ public final class WebServer {
         vertx = configureVertx(config.getWebServerConfigurations().getVertxConfiguration());
 
         metricsInitializer = new T2MetricsInitializer(
-            config.getCommonConfigurations().getT2Configuration().isEnabled(),
-            config.getCommonConfigurations().getT2Configuration().getProject(),
-            config.getCommonConfigurations().getT2Configuration().getEndpoint().getUrl(),
-            staticHostInfoProvider);
+                config.getCommonConfigurations().getT2Configuration().isEnabled(),
+                config.getCommonConfigurations().getT2Configuration().getProject(),
+                config.getCommonConfigurations().getT2Configuration().getEndpoint().getUrl(),
+                staticHostInfoProvider);
 
         //Use the real secret store if we are either STANDARD or we are using real auth
         if (flavor == WebServerFlavor.STANDARD || !WebServerAuths.skipAuth(flavor, config.getRegion())) {
@@ -118,7 +130,7 @@ public final class WebServer {
         } else {
             InMemorySecretStore inMemorySecretStore = new InMemorySecretStore();
             inMemorySecretStore.addSecret(new Secret(RandomStringUtils.randomAlphanumeric(32),
-                Secrets.ENCRYPTION_MASTER_KEY, "1"));
+                    Secrets.ENCRYPTION_MASTER_KEY, "1"));
             secretStore = inMemorySecretStore;
         }
 
@@ -168,20 +180,20 @@ public final class WebServer {
                 clients.getTelemetryClient(), config.getPublicTelemetryConfiguration(), true);
 
         apis = new WebServerAPIs(
-            flavor,
-            config,
-            clients,
-            auths,
-            backends,
-            mapper,
-            jacksonSerDe,
-            clock,
-            metricScopeWriter,
-            tracer,
-            encryption.getDecidingManagementServiceProvider(),
-            controller,
-            metricsReporter,
-            casper6145FixDisabled);
+                flavor,
+                config,
+                clients,
+                auths,
+                backends,
+                mapper,
+                jacksonSerDe,
+                clock,
+                metricScopeWriter,
+                tracer,
+                encryption.getDecidingManagementServiceProvider(),
+                controller,
+                metricsReporter,
+                casper6145FixDisabled);
 
         keyValueStoreUpdater = new KeyValueStoreUpdater(
                 mdsClients.getOperatorMdsExecutor(),
@@ -210,6 +222,29 @@ public final class WebServer {
         clients.start(config.getWebServerConfigurations().getApiConfiguration());
         mdsClients.start();
 
+
+        // START JERSEY HERE
+        final ResourceConfig rc = new ResourceConfig();
+        final TrafficRecorder recorder = new TrafficRecorder(controller.getTrafficRecorderConfiguration());
+        recorder.setBandwidthAndConcurrencyGagues();
+
+        rc.register(new ObjectResource(config, controller, new JacksonSerDe(mapper), auths, recorder,
+                backends.getBucketBackend(), mdsClients, clients.getVolumeAndVonPicker(), encryption.getDecidingManagementServiceProvider(),
+                clients.getVolumeMetadataCache(), clients.getAthenaVolumeStorageClient()));
+
+        HttpHandler h = RuntimeDelegate.getInstance().createEndpoint(rc, HttpHandler.class);
+        HttpServer server;
+        try {
+            server = HttpServer.create(new InetSocketAddress(9090), 0);
+        } catch (IOException e) {
+            System.out.println("Failed to create http server");
+            return;
+        }
+
+        HttpContext httpContext = server.createContext("/", h);
+        new Thread(() -> {
+            server.start();
+        }).start();
         final DeploymentOptions options = new DeploymentOptions()
                 .setInstances(Runtime.getRuntime().availableProcessors() * 2);
         final CompletableFuture<String> cf = new CompletableFuture<>();
@@ -221,7 +256,14 @@ public final class WebServer {
             }
         });
 
-        deploymentId = cf.join();
+        while (true) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                break;
+            }
+        }
+
         eventPublisher.start();
         keyValueStoreUpdater.start();
     }
@@ -230,7 +272,7 @@ public final class WebServer {
      * Stop the web server, close all client connections and un-deploy all verticles. It is safe to call this method
      * multiple times, and to call it without having first called start. It is not safe to do anything else with this
      * class once stop has been called.
-     *
+     * <p>
      * This method will not throw any exceptions, all internal exceptions are logged and ignored.
      */
     public void stop() {

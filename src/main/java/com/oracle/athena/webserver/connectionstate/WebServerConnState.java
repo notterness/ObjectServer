@@ -33,8 +33,7 @@ public class WebServerConnState extends ConnectionState {
     private ConnectionPipelineMgr pipelineManager;
     private ContentReadPipelineMgr readPipelineMgr;
     private HttpParsePipelineMgr httpParsePipelineMgr;
-
-
+    private OutOfResourcePipelineMgr outOfResourcePipelineMgr;
 
     /*
     ** The following variables are used in the ContentReadPipeline class. This is used to determine the
@@ -159,13 +158,17 @@ public class WebServerConnState extends ConnectionState {
 
         httpParsePipelineMgr = new HttpParsePipelineMgr(this);
         readPipelineMgr = new ContentReadPipelineMgr(this);
+        outOfResourcePipelineMgr = new OutOfResourcePipelineMgr(this);
 
         /*
-         ** start with the http manager.
-         */
+        ** start with the http manager.
+        */
         pipelineManager = httpParsePipelineMgr;
     }
 
+    /*
+     ** This is what actually performs the work
+     */
     @Override
     public void stateMachine() {
         StateQueueResult result;
@@ -256,7 +259,7 @@ public class WebServerConnState extends ConnectionState {
      ** This is used to determine which pipeline to execute after the parsing and validation of the HTTP headers
      **   has been completed.
      */
-    void setupNextPipeline() {
+    public void setupNextPipeline() {
         /*
          ** Get rid of the current pipeline
          */
@@ -268,7 +271,7 @@ public class WebServerConnState extends ConnectionState {
         ** First check if this is an out of resources response
          */
         if (outOfResourcesResponse) {
-            pipelineManager = new OutOfResourcePipelineMgr(this);
+            pipelineManager = outOfResourcePipelineMgr;
             return;
         }
 
@@ -787,7 +790,6 @@ public class WebServerConnState extends ConnectionState {
         return parsingStatus;
     }
 
-
     public void reset() {
         dataResponseSent.set(false);
 
@@ -822,6 +824,11 @@ public class WebServerConnState extends ConnectionState {
         writeConn = null;
 
         outOfResourcesResponse = false;
+
+        /*
+        ** Reset the pipeline manager back to default
+         */
+        pipelineManager = httpParsePipelineMgr;
 
         super.reset();
 

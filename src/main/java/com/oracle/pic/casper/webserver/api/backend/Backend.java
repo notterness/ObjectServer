@@ -280,7 +280,7 @@ public final class Backend {
      */
     private final String olmTenantId;
 
-    static final class BackendHelper {
+    public static final class BackendHelper {
 
         private BackendHelper() {
         }
@@ -290,7 +290,7 @@ public final class Backend {
             return toRuntimeException(mdsException);
         }
 
-        protected static RuntimeException toRuntimeException(MdsException mdsException) {
+        public static RuntimeException toRuntimeException(MdsException mdsException) {
             if (mdsException instanceof MdsBucketLockedForMigrationException) {
                 return new BucketLockedForMigrationException(mdsException.getMessage());
             } else if (mdsException instanceof MdsBucketLockedMigrationCompleteException) {
@@ -375,6 +375,19 @@ public final class Backend {
                                                                  CommonRequestContext context) {
         Metadata metadata = new Metadata();
         metadata.put(MdsRequestId.OPC_REQUEST_ID_KEY, context.getOpcRequestId());
+        return MetadataUtils.attachHeaders(
+                stub.withDeadlineAfter(requestDeadlineSeconds, TimeUnit.SECONDS),
+                metadata);
+    }
+
+    /**
+     * @return a ObjectClient with a deadline set and opcRequestId as metadata.
+     */
+    public static ObjectServiceBlockingStub getClientWithOptions(ObjectServiceBlockingStub stub,
+                                                                 long requestDeadlineSeconds,
+                                                                 String opcRequestId) {
+        Metadata metadata = new Metadata();
+        metadata.put(MdsRequestId.OPC_REQUEST_ID_KEY, opcRequestId);
         return MetadataUtils.attachHeaders(
                 stub.withDeadlineAfter(requestDeadlineSeconds, TimeUnit.SECONDS),
                 metadata);
@@ -2648,7 +2661,7 @@ public final class Backend {
                 .build();
     }
 
-    protected static MdsObjectKey objectKey(String objectName, String ns, String bucket, Api api) {
+    public static MdsObjectKey objectKey(String objectName, String ns, String bucket, Api api) {
         return MdsObjectKey.newBuilder()
                 .setBucketKey(bucketKey(ns, bucket, api))
                 .setObjectName(objectName)

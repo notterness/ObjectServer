@@ -98,6 +98,8 @@ public class ServerLoadBalancer {
      **   a special connection will be allocated from a different pool that will return an error of
      **   TOO_MANY_REQUESTS_429 after reading in the HTTP headers.
      */
+    //FIXME: avoid boolean return types in favor of void with exception handling, if all the return type means is
+    //"completed without surprises."  Throw exceptions instead of returning false.
     boolean startNewConnection(final AsynchronousSocketChannel chan) {
 
         WebServerConnState work = connPool.allocConnectionState(chan);
@@ -129,15 +131,18 @@ public class ServerLoadBalancer {
         return addWorkToThread(work);
     }
 
+    //FIXME: avoid boolean return types in favor of void with exception handling, if all the return type means is
+    //"completed without surprises."  Throw exceptions instead of returning false.
     protected boolean addWorkToThread(ConnectionState work) {
 
+        //FIXME: do least amount of work processing per comment
         // Find the queue with the least amount of work
         int currQueue = lastQueueUsed;
 
         while (true) {
             try {
                 int queueCap = threadPool[currQueue].getCurrentWorkload();
-                if ((maxQueueSize - queueCap) < maxQueueSize) {
+                if ((maxQueueSize - queueCap) < maxQueueSize) { //FIXME: simplify condition
                     System.out.println("addReadWork(" + (serverBaseId + currQueue) + "): currQueue: " +
                             currQueue + " queueCap: " + queueCap);
 

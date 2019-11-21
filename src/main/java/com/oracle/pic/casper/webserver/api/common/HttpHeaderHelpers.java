@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.net.MalformedURLException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -179,6 +180,68 @@ public final class HttpHeaderHelpers {
         }
     }
 
+    /**
+     * Get the names and values of user-defined metadata that start with the user-defined
+     * metadata prefix.
+     * @param path the HTTP path of the request
+     * @param prefix api specific user metadata header prefix.
+     * @param entries the entries of key value pair to look at
+     * @param throwWhenInvalid whether to throw an exception when metadata key does not start with prefix
+     * @return a map of user-defined metadata, which may be empty (but won't be null).
+     */
+    public static Map<String, String> getUserMetadata(String path, UserMetadataPrefix prefix,
+                                                      List<Map.Entry<String, List<String>>> entries,
+                                                      boolean throwWhenInvalid,
+                                                      boolean metadataMerge) {
+        HashMap<String, String> userMetadataMap = new HashMap<>();
+
+        for (Map.Entry<String, List<String>> entry : entries) {
+
+            if (entry.getValue().isEmpty()) {
+                continue;
+            }
+
+            String caseInsensitiveName = entry.getKey().toLowerCase(Locale.ENGLISH);
+
+            if (caseInsensitiveName.startsWith(prefix.getPrefix())) {
+
+                String userMetadataKey = caseInsensitiveName.substring(prefix.getLength());
+
+                // Sanity check.   TODO - validate that no other improper characters for HTTP headers are present
+                if (userMetadataKey.startsWith(ObjectMetadata.EXTENDED_USER_DATA_KEY_PREFIX)) {
+                    throw new HttpException(V2ErrorCode.INVALID_ATTRIBUTE_NAME,
+                            "Illegal user attribute name starting with " + ObjectMetadata.EXTENDED_USER_DATA_KEY_PREFIX,
+                            path);
+                }
+
+                // Concatenate values for the same key (case-insensitive).
+                String existingValue = userMetadataMap.putIfAbsent(userMetadataKey, entry.getValue().get(0));
+                if (existingValue != null) {
+                    userMetadataMap.put(userMetadataKey,
+                            existingValue + CommonHeaders.HEADER_VALUE_SEPARATOR + entry.getValue().get(0));
+                }
+
+            } else {
+                String contentHeaderKey  = PRESERVED_CONTENT_HEADERS.get(caseInsensitiveName);
+                if (contentHeaderKey != null) {
+                    userMetadataMap.put(contentHeaderKey, entry.getValue().get(0));
+                } else if (throwWhenInvalid) {
+                    //Key is neither prefixed nor content header
+                    throw new HttpException(V2ErrorCode.INVALID_METADATA, "The metadata key \"" + entry.getKey() +
+                            "\" must be prefixed with " + prefix, path);
+                }
+            }
+        }
+        // Immutable map will complain about value being null for a key. we need to return hashmap if
+        // we want map for merging. key who have null values will be removed from source metadata.
+        if (metadataMerge) {
+            return userMetadataMap;
+        } else {
+            return ImmutableMap.copyOf(userMetadataMap);
+        }
+    }
+
+
     public static Map<String, String> getUserMetadataHeaders(HttpServerRequest request, UserMetadataPrefix prefix) {
         return getUserMetadata(request, prefix, request.headers().entries(), false, false);
     }
@@ -188,6 +251,13 @@ public final class HttpHeaderHelpers {
         return getUserMetadataHeaders(request, UserMetadataPrefix.V2);
     }
 
+    public static Map<String, String> getUserMetadataHeaders(javax.ws.rs.core.HttpHeaders headers, String path) {
+        return getUserMetadataHeaders(headers, UserMetadataPrefix.V2, path);
+    }
+
+    public static Map<String, String> getUserMetadataHeaders(javax.ws.rs.core.HttpHeaders headers, UserMetadataPrefix prefix, String path) {
+        return getUserMetadata(path, prefix, new ArrayList<>(headers.getRequestHeaders().entrySet()), false, false);
+    }
 
     // Utility method to populate Http header with object metadata
     public static void addUserMetadataToHttpHeaders(HttpServerResponse response,

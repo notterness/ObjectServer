@@ -10,6 +10,7 @@ import com.oracle.pic.casper.common.metrics.MetricScope;
 import com.oracle.pic.casper.common.model.BucketPublicAccessType;
 import com.oracle.pic.casper.common.rest.HttpResponseStatus;
 import com.oracle.pic.casper.common.vertx.VertxUtil;
+import com.oracle.pic.casper.webserver.api.ratelimit.EmbargoContext;
 import com.oracle.pic.casper.webserver.auth.dataplane.AuthMetrics;
 import com.oracle.pic.casper.common.auth.dataplane.Tenant;
 import com.oracle.pic.casper.webserver.auth.limits.Limits;
@@ -59,6 +60,7 @@ import javax.annotation.Nullable;
 import javax.ws.rs.core.Response;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -211,6 +213,63 @@ public class AuthorizerImpl implements Authorizer {
             }
 
             response.ifPresent(r -> context.setTagSlug(r.getTagSlug()));
+            if (response.isPresent() && tenancyDeleted) {
+                throw new NamespaceDeletedException("This Tenancy is Deleted");
+            } else {
+                return response;
+            }
+        } catch (AuthorizationClientException | AuthClientException | NamespaceDeletedException e) {
+            AuthMetrics.WEB_SERVER_AUTHZ.getClientErrors().inc();
+            throw e;
+        } catch (Throwable throwable) {
+            AuthMetrics.WEB_SERVER_AUTHZ.getServerErrors().inc();
+            throw throwable;
+        } finally {
+            AuthMetrics.WEB_SERVER_AUTHZ.getOverallLatency().update(System.nanoTime() - startTime);
+        }
+    }
+
+    @Override
+    public Optional<AuthorizationResponse> authorize(AuthenticationInfo authInfo,
+                                                     @Nullable NamespaceKey namespaceKey,
+                                                     @Nullable String bucketName,
+                                                     String compartmentId,
+                                                     BucketPublicAccessType bucketAccessType,
+                                                     CasperOperation operation,
+                                                     String kmsKeyId,
+                                                     boolean authorizeAll,
+                                                     boolean tenancyDeleted,
+                                                     MetricScope rootScope,
+                                                     Set<CasperPermission> permissions,
+                                                     EmbargoContext embargoContext,
+                                                     String vcnId,
+                                                     String vcnDebugId,
+                                                     String namespace) {
+        final long startTime = System.nanoTime();
+        final Optional<AuthorizationResponse> response;
+        try {
+            // should never be executed from an event loop
+            VertxUtil.assertOnNonVertxEventLoop();
+
+            AuthMetrics.WEB_SERVER_AUTHZ.getRequests().inc();
+            response = doAuthorization(rootScope,
+                    authInfo,
+                    namespaceKey,
+                    bucketName,
+                    compartmentId,
+                    bucketAccessType,
+                    operation,
+                    null, // tagging operation
+                    null, // newTagSet
+                    null, // oldTagSet
+                    new KmsKeyUpdateAuth(kmsKeyId, null, false),
+                    authorizeAll,
+                    permissions, namespace, vcnId, vcnDebugId, embargoContext);
+
+            if (!response.isPresent()) {
+                AuthMetrics.WEB_SERVER_AUTHZ.getClientErrors().inc();
+            }
+
             if (response.isPresent() && tenancyDeleted) {
                 throw new NamespaceDeletedException("This Tenancy is Deleted");
             } else {
@@ -395,6 +454,95 @@ public class AuthorizerImpl implements Authorizer {
             return makeAuthRequest(newAuthorizationClient, serviceName, context, authInfo, namespaceKey, bucketName,
                 compartmentId, op, taggingOperation, newTagSet, oldTagSet, kmsKeyUpdateAuth, authorizeAll,
                 vcnOCID, permissions);
+        }
+    }
+
+    private Optional<AuthorizationResponse> doAuthorization(MetricScope rootScope,
+            AuthenticationInfo authInfo,
+                                                            @Nullable NamespaceKey namespaceKey,
+                                                            @Nullable String bucketName,
+                                                            String compartmentId,
+                                                            BucketPublicAccessType bucketAccessType,
+                                                            CasperOperation op,
+                                                            TaggingOperation taggingOperation,
+                                                            TagSet newTagSet,
+                                                            TagSet oldTagSet,
+                                                            KmsKeyUpdateAuth kmsKeyUpdateAuth,
+                                                            boolean authorizeAll,
+                                                            Set<CasperPermission> permissions,
+                                                            String namespace,
+                                                            String vcnId,
+                                                            String vcnDebugId,
+                                                            EmbargoContext embargoContext) {
+        rootScope
+                .annotate("compartmentId", compartmentId)
+                .annotate("operation", op.getSummary());
+
+        //Place the compartment name in routing context for audit and log.
+//        try {
+//            final Optional<Compartment> compartment = metadataClient.getCompartment(compartmentId,
+//                    context.getNamespaceName().orElse(ResourceLimiter.UNKNOWN_NAMESPACE));
+//            context.setCompartment(compartment.orElse(null));
+//        } catch (Throwable t) {
+//            LOG.error("Exception trying to get compartment {} from metadata client", t, compartmentId);
+//        }
+
+        //Check our embargos first to avoid hitting authorization service
+        embargo.customs(rootScope, embargoContext, authInfo, op);
+
+        // TODO(jfriedly):  Audit usage of the V1_USER and remove it if possible
+        if (authInfo == AuthenticationInfo.SUPER_USER || authInfo == AuthenticationInfo.V1_USER) {
+            LOG.debug("Super or V1 user by-passing authz for operation '{}', using permissions '{}'.", op, permissions);
+            return Optional.of(new AuthorizationResponse(null, newTagSet, true, permissions));
+        }
+
+        final String tenantOcid = authInfo.getMainPrincipal().getTenantId();
+
+        final boolean bucketAllowsPublicAccess = bucketAccessType != null &&
+                PublicOperations.bucketAllowsPublicAccess(op, namespaceKey, bucketName, bucketAccessType);
+
+        if (bucketAllowsPublicAccess) {
+            return Optional.of(new AuthorizationResponse(null, newTagSet, true, permissions));
+
+        } else if (authInfo == AuthenticationInfo.ANONYMOUS_USER) {
+            LOG.debug("Anonymous user rejected for operation {} against bucket {} in namespace {}",
+                    op, bucketName, namespaceKey);
+            return Optional.empty();
+        }
+
+        if (isSuspended(op, compartmentId, namespace)) {
+            LOG.debug("The tenant is suspended, and has failed authorization");
+            return Optional.empty();
+        }
+
+        final String vcnID = serviceGateway.chooseVcnID(
+                vcnId, vcnDebugId, tenantOcid).orElse(null);
+        final String vcnOCID = serviceGateway.mappingFromVcnID(vcnID).orElse(null);
+
+        if (vcnID != null) {
+            rootScope.annotate("vcnHeader", vcnID);
+            if (vcnOCID != null) {
+                rootScope.annotate("vcnOcid", vcnOCID);
+            }
+        }
+
+        if (vcnID != null && vcnOCID == null) {
+            LOG.warn("VCN ID {} was present, but there was no mapping for it.", vcnID);
+            return Optional.empty();
+        }
+
+        //CASPER-5633 We are trying to move to new service name, but we shouldn't fail requests targeting the old name
+        final boolean useOldServiceName = useOldServiceName(authInfo);
+        if (useOldServiceName) {
+            LOG.warn("AuthZ using old service name '{}'.", WebServerAuths.OLD_AUTHORIZATION_SERVICE_NAME);
+            WebServerMetrics.OLD_SERVICE_NAME_REQUESTS.inc();
+            return makeAuthRequest(oldAuthorizationClient, WebServerAuths.OLD_AUTHORIZATION_SERVICE_NAME, rootScope,
+                    authInfo, namespaceKey, bucketName, compartmentId, op, taggingOperation, newTagSet,
+                    oldTagSet, kmsKeyUpdateAuth, authorizeAll, vcnOCID, null, namespace, permissions);
+        } else {
+            return makeAuthRequest(newAuthorizationClient, serviceName, rootScope, authInfo, namespaceKey, bucketName,
+                    compartmentId, op, taggingOperation, newTagSet, oldTagSet, kmsKeyUpdateAuth, authorizeAll,
+                    vcnOCID, null, namespace, permissions);
         }
     }
 
@@ -629,6 +777,200 @@ public class AuthorizerImpl implements Authorizer {
         } catch (AuthServerUnavailableException e) {
             throw new AuthDataPlaneServerException(HttpResponseStatus.SERVICE_UNAVAILABLE,
                 "Auth server unavailable", e);
+        }
+
+        return parseAuthZResponse(request, response, rootScope, op, namespaceKey, bucketName, authorizeAll);
+    }
+
+    private Optional<AuthorizationResponse> makeAuthRequest(AuthorizationClient authorizationClient,
+                                                            String serviceName,
+                                                            MetricScope rootScope,
+                                                            AuthenticationInfo authInfo,
+                                                            NamespaceKey namespaceKey,
+                                                            String bucketName,
+                                                            String compartmentId,
+                                                            CasperOperation op,
+                                                            TaggingOperation taggingOperation,
+                                                            TagSet newTagSet,
+                                                            TagSet oldTagSet,
+                                                            KmsKeyUpdateAuth kmsKeyUpdateAuth,
+                                                            boolean authorizeAll,
+                                                            String vcnOCID,
+                                                            String ipAddress,
+                                                            String namespace,
+                                                            Set<CasperPermission> permissions) {
+        final AuthorizationRequest request = applyTags(
+                AuthorizationRequestFactory.newRequest(
+                        serviceName,
+                        authInfo.getRequestKind(),
+                        authInfo.getUserPrincipal().orElse(null),
+                        authInfo.getServicePrincipal().orElse(null)),
+                taggingOperation,
+                newTagSet,
+                oldTagSet);
+
+        request.setActionKind(op.getActionKind());
+
+        final String[] resourceKinds = permissions.stream().map(CasperPermission::getResourceKind)
+                .filter(Objects::nonNull)
+                .map(CasperResourceKind::getName)
+                .distinct()
+                .toArray(String[]::new);
+        //Add associations for the operations being used
+        //https://jira.oci.oraclecorp.com/browse/CASPER-3017
+        //https://confluence.oci.oraclecorp.com/display/~dmvogel/Authorization+Mark+Three+for+Service+Owners
+        //https://confluence.oci.oraclecorp.com/display/~hailuo/cross+tenancy+policy
+        request.addVariable(OptionalVariableFactory.resourceKinds(resourceKinds));
+
+        for (CasperPermission permission : permissions) {
+            request.addPermission(Permission.get(permission.name()));
+        }
+
+        //cross tenancy support _mostly_ just works, but there were complications for certain bad cases (associations)
+        //which require additional work.
+        //However, cross-tenancy support to date has been somewhat user hostile (due to security needs):
+        //you need to write `endorse` & `admit`, but the ability to write `endorse` statements was on a whitelisted
+        //tenancy basis; and to make a cross-tenancy request, you must include a header specifying
+        //the ocid of the cross-tenancy target.
+        //https://confluence.oci.oraclecorp.com/display/~dmvogel/Authority+of+Association+-+November+2017 talks about
+        //the certain bad cases and how to resolve.
+        //What we want to do to make generally available cross-tenancy less user hostile is to explicitly indicate
+        //the requests which are not bad cases (unfortunate).
+        // That’s the OPERATION_ASSOCIATION_REVIEWED thing;
+        // “I affirm that this API is okay for cross-tenancy purposes”, and then the header is no longer required.
+        request.addVariable(
+                ContextVariableFactory.getTrue(FixedVariableNames.OPERATION_ASSOCIATION_REVIEWED.toString()));
+
+        request.addCompartmentId(compartmentId);
+        request.addVariable(MandatoryVariableFactory.operation(op.getSummary()));
+
+        //Annotate the identity request id
+        rootScope.annotate(IDENTITY_REQUEST_ID_KEY, request.getRequestId());
+        final String tenantOcid = authInfo.getMainPrincipal().getTenantId();
+
+        request.addVariable(ContextVariableFactory.subnet(IP_ADDRESS_VARIABLE, ipAddress));
+
+        // To be deprecated
+        // Include a 'NULL' VCN ID in Identity context when traffic is not coming from Service Gateway
+        // For more details, see https://jira.oci.oraclecorp.com/browse/CASPER-4714
+        if (vcnOCID != null) {
+            request.addVariable(ContextVariableFactory.entity(ServiceGateway.VCN_IDENTITY_VARIABLE, vcnOCID));
+        } else {
+            request.addVariable(ContextVariableFactory.entity(ServiceGateway.VCN_IDENTITY_VARIABLE, "NULL"));
+        }
+
+        // For more info, refer: https://jira.oci.oraclecorp.com/browse/CASPER-7056
+        if (vcnOCID != null) {
+            request.addVariable(ContextVariableFactory.entity(REQUEST_NETWORK_SOURCE_TYPE, "vcn"));
+            request.addVariable(ContextVariableFactory.entity(REQUEST_NETWORK_SOURCE_VCN_ID, vcnOCID));
+        } else {
+            request.addVariable(ContextVariableFactory.entity(REQUEST_NETWORK_SOURCE_TYPE, "public"));
+        }
+        request.addVariable(ContextVariableFactory.entity(REQUEST_NETWORK_SOURCE_IP, ipAddress));
+
+        final String kmsKeyId = kmsKeyUpdateAuth.getKmsKeyUpdate();
+        if (!Strings.isNullOrEmpty(kmsKeyId)) {
+            // TODO: will replace "request.kms-key.id" with the new variable defined in FixedVariableNames
+            request.addVariable(ContextVariableFactory.entity(REQUEST_KMSKEY_ID, kmsKeyId));
+        }
+
+        if (bucketName != null) {
+            request.addVariable(ContextVariableFactory.string("target.bucket.name", bucketName));
+        }
+
+        authInfo.getUserPrincipal().ifPresent(pr ->
+                LOG.debug("Authorizing user '{}' to access compartment '{}' for operation '{}', " +
+                        "using permissions '{}'.", pr.getSubjectId(), compartmentId, op, permissions));
+
+        authInfo.getServicePrincipal().ifPresent(pr ->
+                LOG.debug("Authorizing service '{}' to access compartment '{}' for operation '{}', " +
+                        "using permissions '{}'.", pr.getSubjectId(), compartmentId, op, permissions));
+
+        final Map<String, KeyDelegatePermission> keyDelegatePermissions = kmsKeyUpdateAuth.getKeyDelegatePermissions();
+        Preconditions.checkState(keyDelegatePermissions.size() <= 2,
+                "Support at most two KeyDelegatePermission.");
+        if (kms != null && !keyDelegatePermissions.isEmpty() && kmsKeyUpdateAuth.isPerformAssociationAuthz()) {
+            /* How do we authorize operations that want to associate or disassociate keys with bucket?
+             * We can NOT directly authorize those operation with identity, instead we first call KMS with information
+             * about the key association/deassociation. KMS returns the AuthorizationRequest which should be passed to
+             * identity.
+
+             * This means we can end up with up to 3 AuthorizationRequests for bucket operations. If we are changing
+             * the key associated with a bucket we have to request:
+             *   1. KEY_DISASSOCIATE for the old key.
+             *   2. KEY_ASSOCIATE for the new key.
+             *   3. BUCKET_UPDATE to change the bucket.
+             * The process for this is:
+             *   1. We create an AuthorizationRequest for the operation being performed (i.e. UPDATE_BUCKET).
+             *   2. The KmsKeyUpdateAuth object determines the additional set of key permissions to request.
+             *   3. We pass the key permissions we need to the KMS getKeyDelegateAuthRequest method, which returns the
+             *      AuthorizationRequests that should be passed to identity.
+             *   4. All of the AuthorizationRequests are passed to the Identity makeAuthorizationCall method, which does
+             *     the AuthZ.
+             * This means we can get back multiple responses from the AuthZ call. We have to loop through the responses
+             * to make sure that ALL of them are allowed.
+             */
+            final List<AuthorizationRequest> requests = new ArrayList<>();
+            for (Map.Entry<String, KeyDelegatePermission> entry : keyDelegatePermissions.entrySet()) {
+                AuthorizationRequest kmsAuthZRequest = kms.getRemoteKms().getKeyDelegateAuthRequest(
+                        request, entry.getKey(), entry.getValue());
+                if (kmsAuthZRequest.getActionKind() == ActionKind.NOT_DEFINED) {
+                    kmsAuthZRequest.setActionKind(op.getActionKind());
+                }
+                requests.add(kmsAuthZRequest);
+
+                //Annotate the identity request id for the KMS authz request
+                rootScope.annotate(IDENTITY_REQUEST_ID_KEY, kmsAuthZRequest.getRequestId());
+            }
+
+            requests.add(request);
+            AssociationAuthorizationResponse associationAuthZResponse;
+            try {
+                associationAuthZResponse = makeAssociationAuthZCallWithRetryAndMetrics(
+                        authorizationClient, requests, namespace);
+            } catch (AuthServerUnavailableException e) {
+                throw new AuthDataPlaneServerException(HttpResponseStatus.SERVICE_UNAVAILABLE,
+                        "Auth server unavailable", e);
+            }
+
+            if (associationAuthZResponse.getAssociationResult() != AssociationVerificationResult.SUCCESS) {
+                LOG.debug("Association Authorization failed when trying to create bucket {} with kmsKey {} " +
+                        "in compartment {}", bucketName, kmsKeyId, compartmentId);
+
+                return Optional.empty();
+            }
+            // Associate new kmsKey response, dissociate old kmsKey response, bucket[create/update] response
+            final List<com.oracle.pic.identity.authorization.sdk.AuthorizationResponse> responses =
+                    associationAuthZResponse.getAuthorizationResponses();
+            Preconditions.checkState(responses.size() == 2 || responses.size() == 3,
+                    "Either 2 or 3 authorization responses should return.");
+            Preconditions.checkState(responses.size() == requests.size(),
+                    "Authorization responses should match the requests.");
+
+            Optional<AuthorizationResponse> response = parseAuthZResponse(requests.get(0), responses.get(0), rootScope,
+                    op, namespaceKey, bucketName, authorizeAll);
+            for (int i = 1; i < requests.size(); i++) {
+                final AuthorizationRequest req = requests.get(i);
+                final com.oracle.pic.identity.authorization.sdk.AuthorizationResponse resp = responses.get(i);
+                response = response.flatMap(ignored ->
+                        parseAuthZResponse(req, resp, rootScope, op, namespaceKey, bucketName, authorizeAll));
+            }
+            return response;
+        }
+
+        /*
+         * https://jira.oci.oraclecorp.com/browse/CASPER-3265
+         * Identity wants to now control the service code and messaging returned to clients for failed AuthZ calls.
+         * This will now potentially change the service code & status code for AuthZ calls --
+         * API board & Security team are both aware
+         */
+        final com.oracle.pic.identity.authorization.sdk.AuthorizationResponse response;
+        try {
+            response = makeAuthZCallWithRetryAndMetrics(
+                    authorizationClient, request, namespace);
+        } catch (AuthServerUnavailableException e) {
+            throw new AuthDataPlaneServerException(HttpResponseStatus.SERVICE_UNAVAILABLE,
+                    "Auth server unavailable", e);
         }
 
         return parseAuthZResponse(request, response, rootScope, op, namespaceKey, bucketName, authorizeAll);

@@ -73,6 +73,29 @@ public final class HttpMatchHelpers {
         validateConditionalHeaders(request, ifMatch, ifNoneMatch, ifMatchAllowed, ifNoneMatchAllowed);
     }
 
+    /**
+     * Validate any existing If-Match and If-None-Match headers.
+     *
+     * Swift details:
+     * The only time Swift returns 400 for an OCC header is when you pass a non-wildcard value for PUT If-None-Match,
+     * but we're going to be a bit more restrictive.  We return 400 when clients pass in both If-Match and If-None-Match
+     * at the same time, and we also return 400 in a few cases where Swift simply ignores OCC headers (i.e. PUT
+     * If-Match).
+     * Swift doesn't have any API calls that disallow stars; wildcards are always accepted and always match.  So, our
+     * swift implementation does not use the YES enum constants and those blocks of this method are unused.
+     *
+     * @param headers the HTTP headers
+     * @param ifMatchAllowed NO to disallow If-Match, YES to allow it without "*", YES_WITH_STAR to allow with "*".
+     * @param ifNoneMatchAllowed same interpretation as ifMatchAllowed but for If-None-Match.
+     */
+    public static void validateConditionalHeaders(
+            javax.ws.rs.core.HttpHeaders headers, IfMatchAllowed ifMatchAllowed, IfNoneMatchAllowed ifNoneMatchAllowed, String path) {
+        final String ifMatch = headers.getHeaderString(HttpHeaders.IF_MATCH.toString());
+        final String ifNoneMatch = headers.getHeaderString(HttpHeaders.IF_NONE_MATCH.toString());
+        validateConditionalHeaders(headers, ifMatch, ifNoneMatch, ifMatchAllowed, ifNoneMatchAllowed, path);
+    }
+
+
     public static void validateConditionalHeaders(HttpServerRequest request,
                                                   String ifMatch,
                                                   String ifNoneMatch,
@@ -116,6 +139,53 @@ public final class HttpMatchHelpers {
         if (ifNoneMatch != null && ifNoneMatch.contains(",")) {
             throw new HttpException(V2ErrorCode.NO_COND_MULT_ENTITIES,
                 "This request does not allow multiple entity tags in the If-None-Match header", request.path());
+        }
+    }
+
+    public static void validateConditionalHeaders(javax.ws.rs.core.HttpHeaders headers,
+                                                  String ifMatch,
+                                                  String ifNoneMatch,
+                                                  IfMatchAllowed ifMatchAllowed,
+                                                  IfNoneMatchAllowed ifNoneMatchAllowed,
+                                                  String path) {
+        if (ifMatch != null && ifNoneMatch != null) {
+            throw new HttpException(V2ErrorCode.INVALID_CONDITIONAL_HEADERS,
+                    "Requests must not contain both If-Match and If-None-Match", path);
+        }
+
+        if (ifMatchAllowed == IfMatchAllowed.NO && ifMatch != null) {
+            throw new HttpException(V2ErrorCode.IF_MATCH_DISALLOWED,
+                    "This request does not permit the use of the If-Match header", path);
+        }
+
+        if (ifMatchAllowed == IfMatchAllowed.YES && ifMatch != null && ifMatch.equals("*")) {
+            throw new HttpException(V2ErrorCode.IF_MATCH_DISALLOWED,
+                    "This request does not permit the If-Match header with value '*'", path);
+        }
+
+        if (ifMatch != null && ifMatch.contains(",")) {
+            throw new HttpException(V2ErrorCode.NO_COND_MULT_ENTITIES,
+                    "This request does not allow multiple entity tags in the If-Match header", path);
+        }
+
+        if (ifNoneMatchAllowed == IfNoneMatchAllowed.NO && ifNoneMatch != null) {
+            throw new HttpException(V2ErrorCode.IF_NONE_MATCH_DISALLOWED,
+                    "This request does not permit the use of the If-None-Match header", path);
+        }
+
+        if (ifNoneMatchAllowed == IfNoneMatchAllowed.STAR_ONLY && ifNoneMatch != null && !ifNoneMatch.equals("*")) {
+            throw new HttpException(V2ErrorCode.IF_NONE_MATCH_DISALLOWED,
+                    "This request only allows the If-None-Match header to have the value '*'", path);
+        }
+
+        if (ifNoneMatchAllowed == IfNoneMatchAllowed.YES && ifNoneMatch != null && ifNoneMatch.equals("*")) {
+            throw new HttpException(V2ErrorCode.IF_NONE_MATCH_DISALLOWED,
+                    "This request does not permit the If-None-Match header with value '*'", path);
+        }
+
+        if (ifNoneMatch != null && ifNoneMatch.contains(",")) {
+            throw new HttpException(V2ErrorCode.NO_COND_MULT_ENTITIES,
+                    "This request does not allow multiple entity tags in the If-None-Match header", path);
         }
     }
 

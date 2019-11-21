@@ -10,12 +10,15 @@ import io.netty.channel.nio.AbstractNioChannel;
 import io.vertx.core.http.HttpConnection;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.net.impl.ConnectionBase;
+import org.apache.http.client.methods.HttpHead;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sun.nio.ch.SelChImpl;
 
 import javax.annotation.Nullable;
+import javax.servlet.http.HttpServletRequest;
 import javax.validation.constraints.NotNull;
+import javax.ws.rs.core.HttpHeaders;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.SocketChannel;
@@ -24,7 +27,7 @@ import java.util.Optional;
 /**
  * Extract request metadata.
  */
-class ExtractsRequestMetadata {
+public class ExtractsRequestMetadata {
     private static final Logger LOG = LoggerFactory.getLogger(ExtractsRequestMetadata.class);
     /**
      * The port on which the Eagle server is listening.
@@ -67,6 +70,10 @@ class ExtractsRequestMetadata {
 
     boolean isEagle(HttpServerRequest request) {
         return request.localAddress().port() == eaglePort;
+    }
+
+    boolean isEagle(HttpServletRequest request) {
+        return request.getLocalPort() == eaglePort;
     }
 
     /**
@@ -176,6 +183,30 @@ class ExtractsRequestMetadata {
         } else {
             return request.getHeader(CommonHeaders.X_VCN_ID);
         }
+    }
+
+    /**
+     * Return the VCN ID, if any, in the request.  If this is an Eagle request, the VCN ID is extracted from the socket.
+     * Otherwise, it's extracted from the X-Vcn-Id header.
+     *
+     * NB: This has a potential side effect: it removes X-Vcn-Id header from Eagle requests to ensure
+     * they cannot affect other code.*
+     *
+     * @param request The client's request
+     * @return The VCN ID or null if none was provided.
+     */
+    @Nullable
+    public static String vcnIDFromRequest(HttpHeaders headers) {
+        // TODO determine if any of this commented-out code is necessary
+//        if (isEagle(request)) {
+            //request.headers().remove(CommonHeaders.X_VCN_ID);
+  //          LOG.debug("Eagle IPv4 request - looking for VCN ID in IP options");
+            //byte[] ipOptions = ipOptions(request);
+            //return vcnIDFromIPOptions(ipOptions);
+    //        return null;
+      //  } else {
+            return headers.getHeaderString(CommonHeaders.X_VCN_ID.toString());
+        //}
     }
 
     /**

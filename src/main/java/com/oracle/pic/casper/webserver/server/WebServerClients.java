@@ -18,10 +18,15 @@ import com.oracle.pic.casper.common.scheduling.vertx.PerHostVertxContextProvider
 import com.oracle.pic.casper.lifecycle.FakeLifecycleEngineClient;
 import com.oracle.pic.casper.lifecycle.LifecycleEngineClient;
 import com.oracle.pic.casper.lifecycle.LifecycleEngineClientImpl;
+import com.oracle.pic.casper.storageclient.AthenaVolumeStorageClient;
 import com.oracle.pic.casper.storageclient.HttpClientProvider;
 import com.oracle.pic.casper.storageclient.VolumeStorageClient;
+import com.oracle.pic.casper.storageclient.core.AthenaRequestHandlerFactory;
 import com.oracle.pic.casper.storageclient.core.RequestHandlerFactory;
+import com.oracle.pic.casper.storageclient.core.replicated.AthenaReplicatedRequestHandlerFactory;
 import com.oracle.pic.casper.storageclient.core.replicated.ReplicatedRequestHandlerFactory;
+import com.oracle.pic.casper.storageclient.impl.AthenaInMemoryVolumeStorageClient;
+import com.oracle.pic.casper.storageclient.impl.AthenaVolumeStorageClientImpl;
 import com.oracle.pic.casper.storageclient.impl.InMemoryVolumeStorageClient;
 import com.oracle.pic.casper.storageclient.impl.VolumeStorageClientImpl;
 import com.oracle.pic.casper.volumemeta.VolumeMetadataClientCache;
@@ -60,6 +65,7 @@ public final class WebServerClients {
 
     private final VolumeMetadataClientCache volumeMetadataCache;
     private final VolumeAndVonPicker volumeAndVonPicker;
+    private final AthenaVolumeStorageClient athenaVolumeStorageClient;
     private final VolumeStorageClient volumeStorageClient;
     private final VolumeServiceClient volumeServiceClient;
     private final LifecycleEngineClient lifecycleEngineClient;
@@ -79,6 +85,7 @@ public final class WebServerClients {
             volumeMetadataCache = VolumeMetadataTestHelpers.fakeVolumeMetadataClientCache();
 
             volumeAndVonPicker = new InMemoryVolumeAndVonPickerImpl(volumeMetadataCache);
+            athenaVolumeStorageClient = new AthenaInMemoryVolumeStorageClient();
             volumeStorageClient = new InMemoryVolumeStorageClient();
             lifecycleEngineClient = new FakeLifecycleEngineClient();
             eventsClient = null;
@@ -106,8 +113,11 @@ public final class WebServerClients {
             final PerHostVertxContextProvider perHostVertxContextProvider =
                     new PerHostVertxContextProviderImpl(vertx);
             perHostVertxContextProvider.initializeVertxContexts();
+            final AthenaRequestHandlerFactory athenaRequestHandlerFactory = new AthenaReplicatedRequestHandlerFactory(
+                    vertx,  volumeClientConfig, httpClientProvider, perHostVertxContextProvider);
             final RequestHandlerFactory requestHandlerFactory = new ReplicatedRequestHandlerFactory(
                     vertx,  volumeClientConfig, httpClientProvider, perHostVertxContextProvider);
+            athenaVolumeStorageClient = new AthenaVolumeStorageClientImpl(athenaRequestHandlerFactory);
             volumeStorageClient = new VolumeStorageClientImpl(requestHandlerFactory);
 
             final String lifecycleUrl =
@@ -207,6 +217,9 @@ public final class WebServerClients {
 
     public VolumeStorageClient getVolumeStorageClient() {
         return volumeStorageClient;
+    }
+    public AthenaVolumeStorageClient getAthenaVolumeStorageClient() {
+        return athenaVolumeStorageClient;
     }
 
     public LifecycleEngineClient getLifecycleEngineClient() {
