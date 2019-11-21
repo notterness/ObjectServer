@@ -235,7 +235,11 @@ abstract public class ConnectionState {
     ** This is to perform some initial setup and could be removed if the ConnectionState is tied to the
     **   thread it is going to run under.
      */
-    protected void setupInitial() {
+    public void setupInitial() {
+        System.out.println( "workerThread is " +workerThread);
+        if (workerThread == null) {
+            System.out.println( "workerThread is " +workerThread);
+        }
         bufferStatePool = workerThread.getBufferStatePool();
         writeThread = workerThread.getWriteThread();
         resultBuilder = workerThread.getResultBuilder();
@@ -250,6 +254,7 @@ abstract public class ConnectionState {
     public void addToWorkQueue(final boolean delayedExecution) {
 
         synchronized (queueMutex) {
+            System.out.println("addToWorkQ(" + connStateId + ") " + delayedExecution + " work " + this);
             if (delayedExecution) {
                 /*
                  ** If this ConnectionState is already on a queue, it cannot be added
@@ -317,7 +322,7 @@ abstract public class ConnectionState {
     ** This is the function to add BufferState to the available queue. This means the BufferState are
     **   now ready to have data read into them.
      */
-    protected int allocClientReadBufferState() {
+    public int allocClientReadBufferState() {
         System.out.println("ServerWorkerThread(" + connStateId + ") allocClientReadBufferState(1) " + Thread.currentThread().getName());
 
         while (requestedDataBuffers > 0) {
@@ -419,7 +424,7 @@ abstract public class ConnectionState {
      ** This is used to start reads into one or more buffers. It looks for BufferState objects that have
      **   their state set to READ_FROM_CHAN. It then sends those buffers off to perform asynchronous reads.
      */
-    protected void readIntoDataBuffers() {
+    public void readIntoDataBuffers() {
         BufferState bufferState;
 
         /*
@@ -524,6 +529,7 @@ abstract public class ConnectionState {
         contentBytesAllocated.set(0);
         contentBytesRead.set(0);
         contentAllRead.set(false) ;
+
     }
 
 

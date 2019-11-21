@@ -2,7 +2,6 @@ package com.oracle.athena.webserver.connectionstate;
 
 
 import com.oracle.athena.webserver.statemachine.StateEntry;
-import com.oracle.athena.webserver.statemachine.StateEntryResult;
 import com.oracle.athena.webserver.statemachine.StateMachine;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
 import org.eclipse.jetty.http.HttpStatus;
@@ -60,8 +59,9 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         public StateQueueResult apply(WebServerConnState wsConn) {
             initialStage = true;
 
-            connectionState.resetHttpReadValues();
-            connectionState.resetContentAllRead();
+            wsConn.resetHttpReadValues();
+            wsConn.resetContentAllRead();
+            wsConn.reset();
             return StateQueueResult.STATE_RESULT_FREE;
         }
     };
@@ -69,17 +69,17 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
     private Function httpParseCheckSlowConnection = new Function<WebServerConnState, StateQueueResult>() {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
-            //if (wsConn.timeoutChecker.inactivityThresholdReached()) {
+            //if (wsConn.checkSlowClientChannel()) {
 
             //} else return
-            return StateQueueResult.STATE_RESULT_CONTINUE;
+            return StateQueueResult.STATE_RESULT_REQUEUE;
         }
     };
 
     private Function httpParseSendXferResponse = new Function<WebServerConnState, StateQueueResult>() {
         public StateQueueResult apply(WebServerConnState wsConn) {
             wsConn.sendResponse(HttpStatus.OK_200);
-            return StateQueueResult.STATE_RESULT_REQUEUE;
+            return StateQueueResult.STATE_RESULT_WAIT;
         }
     };
 
@@ -87,9 +87,10 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn){
             initialStage = true;
-            connectionState.resetHttpReadValues();
-            connectionState.resetContentAllRead();
+            wsConn.resetHttpReadValues();
+            wsConn.resetContentAllRead();
             wsConn.setupNextPipeline();
+            wsConn.resetResponses();
             return StateQueueResult.STATE_RESULT_COMPLETE;
         }
     };

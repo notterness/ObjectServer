@@ -33,6 +33,7 @@ public class WebServerConnState extends ConnectionState {
     private ConnectionPipelineMgr pipelineManager;
     private ContentReadPipelineMgr readPipelineMgr;
     private HttpParsePipelineMgr httpParsePipelineMgr;
+    private OutOfResourcePipelineMgr outOfResourcePipelineMgr;
 
     /*
     ** The following variables are used in the ContentReadPipeline class. This is used to determine the
@@ -154,6 +155,7 @@ public class WebServerConnState extends ConnectionState {
 
         httpParsePipelineMgr = new HttpParsePipelineMgr(this);
         readPipelineMgr = new ContentReadPipelineMgr(this);
+        outOfResourcePipelineMgr = new OutOfResourcePipelineMgr(this);
 
         /*
         ** start with the http manager.
@@ -163,7 +165,6 @@ public class WebServerConnState extends ConnectionState {
 
     @Override
     public void stateMachine() {
-        ConnectionStateEnum overallState = ConnectionStateEnum.INVALID_STATE;
         StateQueueResult result;
 
         result = pipelineManager.executePipeline();
@@ -173,54 +174,12 @@ public class WebServerConnState extends ConnectionState {
                 addToWorkQueue(false);
                 break;
             case STATE_RESULT_WAIT:
+                addToWorkQueue(true);
+                break;
             case STATE_RESULT_REQUEUE:
                 addToWorkQueue(false);
-                return;
+                break;
             case STATE_RESULT_FREE:
-                overallState = ConnectionStateEnum.CONN_FINISHED;
-                break;
-        }
-
-        switch (overallState) {
-
-            case CHECK_SLOW_CHANNEL:
-                if (timeoutChecker.inactivityThresholdReached()) {
-                    /*
-                     ** TOTDO: Need to close out the channel and this connection
-                     */
-                } else {
-                    overallState = pipelineManager.nextPipelineStage();
-
-                    /*
-                     ** Need to wait for something to kick the state machine to a new state
-                     **
-                     ** The ConnectionState will get put back on the execution queue when an external
-                     **   operation completes.
-                     */
-                    if (overallState != ConnectionStateEnum.CHECK_SLOW_CHANNEL) {
-                        addToWorkQueue(false);
-                    } else {
-                        addToWorkQueue(true);
-                    }
-                }
-                break;
-
-            case READ_DONE:
-                // TODO: Assert() if this state is ever reached
-                break;
-
-            case READ_DONE_ERROR:
-                // Release all the outstanding buffer
-                releaseBufferState();
-                addToWorkQueue(false);
-                break;
-
-            case CONN_FINISHED:
-                System.out.println("WebServerConnState[" + connStateId + "] CONN_FINISHED");
-                reset();
-
-                // Now release this back to the free pool so it can be reused
-                connectionStatePool.freeConnectionState(this);
                 break;
         }
     }
@@ -286,7 +245,7 @@ public class WebServerConnState extends ConnectionState {
         ** First check if this is an out of resources response
          */
         if (outOfResourcesResponse) {
-            pipelineManager = new OutOfResourcePipelineMgr(this);
+            pipelineManager = outOfResourcePipelineMgr;
             return;
         }
 
@@ -748,6 +707,7 @@ public class WebServerConnState extends ConnectionState {
         pipelineManager = httpParsePipelineMgr;
 
         super.reset();
+
     }
 
     public int getRequestedHttpBuffers() {

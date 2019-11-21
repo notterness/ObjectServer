@@ -24,7 +24,7 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
     private Function contentReadRequestDataBuffers = new Function<WebServerConnState, StateQueueResult>() {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
-            if (wsConn.allocClientReadBufferState() == 0) {
+            if (wsConn.allocClientReadBufferState() == 0 ) {
                 return StateQueueResult.STATE_RESULT_WAIT;
             } else {
                 return StateQueueResult.STATE_RESULT_CONTINUE;
@@ -46,14 +46,14 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
             //if (wsConn.timeoutChecker.inactivityThresholdReached()) {
 
             //} else return
-            return StateQueueResult.STATE_RESULT_CONTINUE;
+            return StateQueueResult.STATE_RESULT_REQUEUE;
         }
     };
 
     private Function contentReadSendXferResponse = new Function<WebServerConnState, StateQueueResult>() {
         public StateQueueResult apply(WebServerConnState wsConn) {
             wsConn.sendResponse(HttpStatus.OK_200);
-            return StateQueueResult.STATE_RESULT_REQUEUE;
+            return StateQueueResult.STATE_RESULT_WAIT;
         }
     };
 
@@ -61,10 +61,11 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
             initialStage = true;
-            connectionState.resetRequestedDataBuffers();
-            connectionState.resetBuffersWaiting();
-            connectionState.resetDataBufferReadsCompleted();
-            connectionState.resetResponses();
+            wsConn.resetRequestedDataBuffers();
+            wsConn.resetBuffersWaiting();
+            wsConn.resetDataBufferReadsCompleted();
+            wsConn.resetResponses();
+            wsConn.reset();
             return StateQueueResult.STATE_RESULT_FREE;
         }
     };
@@ -73,10 +74,10 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
             initialStage = true;
-            connectionState.resetRequestedDataBuffers();
-            connectionState.resetBuffersWaiting();
-            connectionState.resetDataBufferReadsCompleted();
-            connectionState.resetResponses();
+            wsConn.resetRequestedDataBuffers();
+            wsConn.resetBuffersWaiting();
+            wsConn.resetDataBufferReadsCompleted();
+            wsConn.resetResponses();
             return StateQueueResult.STATE_RESULT_COMPLETE;
         }
     };
