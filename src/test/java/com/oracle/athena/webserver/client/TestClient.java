@@ -38,6 +38,8 @@ public class TestClient implements Runnable {
 
     private int tcpPort;
 
+    private String failedTestName;
+
     public TestClient(final int srcClientId) {
         serverTargetId = srcClientId;
         nextTransactionId = 1;
@@ -45,6 +47,8 @@ public class TestClient implements Runnable {
         targetServer = null;
         threadExit = new AtomicBoolean(false);
         clientConnListLock = new Object();
+
+        failedTestName = null;
     }
 
     public void start() {
@@ -104,7 +108,7 @@ public class TestClient implements Runnable {
     /*
      ** This is how the client registers to receive data read callback.
      */
-    public void registerClientReadCallback(WriteConnection writeConnection, ClientDataReadCallback readCallback) {
+    public ConnectionState registerClientReadCallback(WriteConnection writeConnection, ClientDataReadCallback readCallback) {
         InitiatorLoadBalancer serverWorkHandler;
         ConnectionState work;
 
@@ -116,6 +120,8 @@ public class TestClient implements Runnable {
         } else {
             //TODO: How should this error condition be handled?
         }
+
+        return work;
     }
 
     /*
@@ -158,6 +164,19 @@ public class TestClient implements Runnable {
             return workQueue.add(writeConn);
         }
         return false;
+    }
+
+    /*
+    ** This logs the first test that failed. If multiple tests fail, only the first one is retained
+     */
+    public void setTestFailed(final String failedTest) {
+        if (failedTestName != null) {
+            failedTestName = failedTest;
+        }
+    }
+
+    public String getFailedTestName() {
+        return failedTestName;
     }
 
     private WriteConnection findWriteConnection(long transactionId) {

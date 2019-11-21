@@ -9,8 +9,6 @@ public class TestMain {
     public static void main(String[] args) {
         final int baseTcpPortOffset = 1;
 
-        int count;
-
         AtomicInteger threadCount = new AtomicInteger(0);
 
         ServerTest server_1 = new ServerTest(baseTcpPortOffset, threadCount);
@@ -24,36 +22,90 @@ public class TestMain {
          **   and it will be writing to (who the connect() is to)
          **    (ServerChannelLayer.baseTcpPort + baseTcpPortOffset)
          */
-        // This sets up the server side of the connection
-
         TestClient client = new TestClient((baseTcpPortOffset + 1));
         client.start();
 
-        ClientTest client_1 = new ClientTest_2(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        ClientTest client_1 = new ClientTest_2("ClientTest_2", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_1.start();
 
-        ClientTest client_2 = new ClientTest_EarlyClose(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
-        client_2.start();
+        ClientTest earlyClose = new ClientTest_EarlyClose("EarlyClose", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        earlyClose.start();
 
-        ClientTest client_3 = new ClientTest_SlowHeaderSend(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
-        client_3.start();
+        ClientTest slowHeaderSend = new ClientTest_SlowHeaderSend("SlowHeaderSend", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        slowHeaderSend.start();
 
-        ClientTest client_4 = new ClientTest_OneMbPut(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
-        client_4.start();
+        ClientTest oneMbPut = new ClientTest_OneMbPut("OneMbPut", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        oneMbPut.start();
 
-        ClientTest client_5 = new ClientTest_OutOfConnections(client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
-        client_5.start();
+        ClientTest outOfConnections = new ClientTest_OutOfConnections("OutOfConnections", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        outOfConnections.start();
 
         System.out.println("Starting Tests");
 
+        waitForTestsToComplete(threadCount);
+
+        String failedTestName = client.getFailedTestName();
+        if (failedTestName == null) {
+            System.out.println("\nData Transfer Tests Completed With No Failures\n");
+        } else {
+            System.out.println("FAILURE: At Least One Test Failed - first failed test " + failedTestName);
+        }
+
+        client_1.stop();
+        earlyClose.stop();
+        slowHeaderSend.stop();
+        oneMbPut.stop();
+        outOfConnections.stop();
+
+        if (failedTestName == null) {
+            /*
+             ** Start next set of tests to validate the HTTP Parser handling for incorrect HTTP Requests
+             */
+            ClientTest malformedRequest_1 = new ClientTest_MalformedRequest_1("MalformedRequest_1", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            malformedRequest_1.start();
+
+            ClientTest invalidContentLength = new ClientTest_InvalidContentLength("InvalidContentLength", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            invalidContentLength.start();
+
+            ClientTest noContentLength = new ClientTest_NoContentLength("NoContentLength", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            noContentLength.start();
+
+            waitForTestsToComplete(threadCount);
+
+            //malformedRequest_1.stop();
+            //invalidContentLength.stop();
+            noContentLength.stop();
+
+            failedTestName = client.getFailedTestName();
+            if (failedTestName == null) {
+                System.out.println("All HTTP Request Tests Completed With No Failures");
+            } else {
+                System.out.println("FAILURE: At Least One Test Failed - first failed test " + failedTestName);
+            }
+        }
+
+        /* Stop the TestClient */
+        client.stop();
+
+        System.out.println("Server shutting down");
+
+        server_1.stop();
+    }
+
+    /*
+    ** This waits until the test have completed. When a test starts, it increments an atomic variable and
+    **   decrements it when it completes. This allows the code to wait for a group of tests to complete
+    **   prior to moving onto another set of tests or exiting.
+     */
+    static void waitForTestsToComplete(AtomicInteger testRunningCount) {
         // running infinite loop for getting
         // client request
         while (true) {
-            count = threadCount.get();
+            int count = testRunningCount.get();
 
             /*
-            ** The TestClient() cannot finish until after all the tests have completed so there is always
-            **   a count of 1 even after all the tests have completed.
+             ** The TestClient() cannot finish until after all the tests have completed so there is always
+             **   a count of 1 even after all the tests have completed.
              */
             if (count != 1) {
                 try {
@@ -65,21 +117,6 @@ public class TestMain {
                 break;
             }
         }
-
-        client_1.stop();
-        client_2.stop();
-        client_3.stop();
-        client_4.stop();
-        client_5.stop();
-
-        System.out.println("Tests Completed");
-
-        /* Stop the TestClient */
-        client.stop();
-
-        System.out.println("Server shutting down");
-
-        server_1.stop();
     }
 
 }

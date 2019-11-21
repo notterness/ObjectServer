@@ -1,5 +1,6 @@
 package com.oracle.athena.webserver.connectionstate;
 
+import org.eclipse.jetty.http.BadMessageException;
 import org.eclipse.jetty.http.HostPortHttpField;
 import org.eclipse.jetty.http.HttpField;
 import org.eclipse.jetty.http.HttpStatus;
@@ -43,6 +44,16 @@ public class CasperHttpInfo {
      ** See values in HttpStatus
      */
     private int responseCode;
+
+    /*
+    ** The following variables are set when httpHeaderError() is called to indicate there was a problem with the
+    **   buffer passed into the HTTP Parser.
+     */
+    private int parseFailureCode;
+    private String parseFailureReason;
+
+    private boolean contentLengthReceived;
+
 
     /*
      **
@@ -171,6 +182,10 @@ public class CasperHttpInfo {
         _hdr = new String[10];
         _val = new String[10];
 
+        parseFailureCode = 0;
+        parseFailureReason = null;
+        contentLengthReceived = false;
+
         /*
          ** Need the ConnectionState to know who to inform when the different
          **   HTTP parsing phases complete.
@@ -208,6 +223,13 @@ public class CasperHttpInfo {
         _headers = -1;
         _hdr = new String[10];
         _val = new String[10];
+
+        /*
+        ** Clear the failure reasons
+         */
+        parseFailureCode = 0;
+        parseFailureReason = null;
+        contentLengthReceived = false;
 
         /*
          ** Clear the strings from the various fields so the resources can be released.
@@ -269,7 +291,6 @@ public class CasperHttpInfo {
             int result = methodString.indexOf(entry.getValue());
             if (result != -1) {
                 httpMethod = entry.getKey();
-                System.out.println("method: " + methodString + " enum: " + httpMethod.toString());
                 break;
             }
         }
@@ -308,7 +329,22 @@ public class CasperHttpInfo {
         int result = _hdr[_headers].indexOf("Content-Length");
         if (result != -1) {
             try {
+                contentLengthReceived = true;
                 contentLength = Long.parseLong(_val[_headers]);
+
+                /*
+                 ** TODO: Are there specific limits for the Content-Length that need to be validated
+                 */
+                if (contentLength < 0) {
+                    contentLength = 0;
+                    parseFailureCode = HttpStatus.RANGE_NOT_SATISFIABLE_416;
+                    parseFailureReason = HttpStatus.getMessage(parseFailureCode);
+
+                    System.out.println("Invalid Content-Length [" + connectionState.getConnStateId() +  "] code: " +
+                            parseFailureCode + " reason: " + parseFailureReason);
+
+                    connectionState.setHttpParsingError();
+                }
             } catch (NumberFormatException num_ex) {
                 System.out.println("addHeaderValue() " + _val[_headers] + " " + num_ex.getMessage());
             }
@@ -316,10 +352,23 @@ public class CasperHttpInfo {
     }
 
     /*
-     ** When the header has been completely read in, that will be the time to insure it is valid
+     ** When the headers have been completely read in, that will be the time to insure it is valid
      **   and the field values make sense.
      */
     public void setHeaderComplete() {
+        /*
+        ** Verify that the "Content-Length" header has been received. It is an error if it has not
+         */
+        if (!contentLengthReceived) {
+            parseFailureCode = HttpStatus.NO_CONTENT_204;
+            parseFailureReason = HttpStatus.getMessage(parseFailureCode);
+
+            System.out.println("No Content-Length [" + connectionState.getConnStateId() +  "] code: " +
+                    parseFailureCode + " reason: " + parseFailureReason);
+
+            connectionState.setHttpParsingError();
+        }
+
         headerComplete = true;
 
         connectionState.httpHeaderParseComplete(contentLength);
@@ -336,6 +385,25 @@ public class CasperHttpInfo {
     public void setMessageComplete() {
         messageComplete = true;
     }
+
+    /*
+    ** This is called when the Jetty HTTP parser calls badMessage() to set the parsing error
+     */
+    public void httpHeaderError(final BadMessageException failure) {
+        String reason = failure.getReason();
+
+        parseFailureCode = failure.getCode();
+        parseFailureReason = (reason == null) ? String.valueOf(failure.getCode()) : reason;
+        System.out.println("badMessage() [" + connectionState.getConnStateId() + "] code: " +
+                parseFailureCode + " reason: " + parseFailureReason);
+
+        connectionState.setHttpParsingError();
+    }
+
+    public int getParseFailureCode() {
+        return parseFailureCode;
+    }
+
 
     /*
      ** Something terminated the HTTP transfer early.

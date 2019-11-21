@@ -8,10 +8,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class ClientTest_OutOfConnections extends ClientTest {
 
-    private int httpStatus;
-
-    ClientTest_OutOfConnections(final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
-        super(client, myServerId, myTargetId, threadCount);
+    ClientTest_OutOfConnections(final String testName, final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
+        super(testName, client, myServerId, myTargetId, threadCount);
     }
 
     @Override
@@ -34,24 +32,6 @@ public class ClientTest_OutOfConnections extends ClientTest {
         return tmp;
     }
 
-    @Override
-    void writeHeader(ByteBuffer msgHdr, int bytesToWrite) {
-        // Send the message
-        ClientWriteCompletion comp = new ClientWriteCompletion(this, writeConn, msgHdr, 1, bytesToWrite, 0);
-
-        super.client.writeData(writeConn, comp);
-
-        if (!waitForWriteToComp()) {
-            System.out.println("Request timed out");
-        }
-    }
-
-
-    @Override
-    void clientTestStep_1() {
-        //Do nothing in this test case
-    }
-
     /*
      ** In this test, the full HTTP message is written and then a response is expected from the server.
      ** The response must have a result code of 200, indicating success.
@@ -59,22 +39,12 @@ public class ClientTest_OutOfConnections extends ClientTest {
     @Override
     void targetResponse(final int result, final ByteBuffer readBuffer) {
         if ((result == 0) && (httpStatus == HttpStatus.TOO_MANY_REQUESTS_429)) {
-            System.out.println("ClientTest_OutOfConnections passed");
+            System.out.println(super.clientTestName + " passed");
         } else {
-            System.out.println("ClientTest_OutOfConnections failed result: " + result + " httpStatus: " + httpStatus);
+            System.out.println(super.clientTestName + " failed result: " + result + " httpStatus: " + httpStatus);
+            super.client.setTestFailed(super.clientTestName);
         }
 
         statusReceived(result);
     }
-
-    @Override
-    void httpResponse(final int status, final boolean headerCompleted, final boolean messageCompleted) {
-        if (headerCompleted) {
-            System.out.println("ClientTest_OutOfConnections httpResponse() status: " + status);
-
-            httpStatus = status;
-        }
-
-    }
-
 }

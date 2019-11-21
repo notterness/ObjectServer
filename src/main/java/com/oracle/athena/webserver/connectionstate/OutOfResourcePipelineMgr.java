@@ -35,7 +35,7 @@ public class OutOfResourcePipelineMgr extends ConnectionPipelineMgr {
         if (initialStage) {
             initialStage = false;
 
-            return ConnectionStateEnum.SEND_OUT_OF_RESOURCE_RESP;
+            return ConnectionStateEnum.SEND_OUT_OF_RESOURCE_RESPONSE;
         }
 
         /*

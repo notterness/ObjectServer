@@ -1,6 +1,7 @@
 package com.oracle.athena.webserver.client;
 
 import com.oracle.athena.webserver.connectionstate.*;
+import org.eclipse.jetty.http.HttpStatus;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -128,6 +129,17 @@ public class ClientConnState extends ConnectionState {
         }
     }
 
+    /*
+     **
+     */
+    @Override
+    public void setupInitial() {
+        super.setupInitial();
+
+        System.out.println("WebServerConnState[" + getConnStateId() + "] INITIAL_SETUP server");
+        addRequestedDataBuffer();
+    }
+
 
     /*
      ** This walks through the array of BufferState to find the next one that has completed
@@ -175,6 +187,23 @@ public class ClientConnState extends ConnectionState {
 
     void resetClientCallbackCompleted() {
         clientCallbackCompleted = false;
+    }
+
+    /*
+     ** Accessor function related to the HTTP Parser and when an error occurs.
+     **
+     ** getHttpParserError() will return HttpStatus.OK_200 if there is no error, otherwise it will return
+     **   the value set to indicate the parsing error.
+     **
+     ** TODO: Need to wire the response parsing error in
+     */
+    public int getHttpParseStatus() {
+        int parsingStatus = HttpStatus.OK_200;
+        if (httpParsingError.get()) {
+            parsingStatus = HttpStatus.OK_200;
+        }
+
+        return parsingStatus;
     }
 
 

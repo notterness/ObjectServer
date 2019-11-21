@@ -17,6 +17,14 @@ public class ByteBufferHttpParser {
         httpParser = new HttpParser(listener);
     }
 
+    /*
+    ** This is the method that does the actual feeding of the buffers into the Jetty HTTP Parser.
+    **   The ByteBuffer is broken up in pieces delineated by CR/LF to allow determination of when
+    **   the headers have actually been all parsed. This is due to the fact that a ByteBuffer may
+    **   contain information for both the headers and the content and the processing of the
+    **   content is handled differently.
+    **   The content data is not feed through the HTTP Parser to avoid copies.
+     */
     public ByteBuffer parseHttpData(ByteBuffer buffer, boolean initiallBuffer) {
 
         if (initiallBuffer) {

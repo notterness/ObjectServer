@@ -11,8 +11,8 @@ public class ClientTest_OneMbPut extends ClientTest {
 
     private final int BYTES_IN_CONTENT = 10240;
 
-    ClientTest_OneMbPut(final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
-        super(client, myServerId, myTargetId, threadCount);
+    ClientTest_OneMbPut(final String testName, final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
+        super(testName, client, myServerId, myTargetId, threadCount);
     }
 
     @Override
@@ -26,23 +26,6 @@ public class ClientTest_OneMbPut extends ClientTest {
                 "Accept-Language: en-us\n" +
                 "Accept-Encoding: gzip, deflate\n" +
                 "Content-Length: " + BYTES_IN_CONTENT + "\n\n");
-    }
-
-    @Override
-    void writeHeader(ByteBuffer msgHdr, int bytesToWrite) {
-        int totalBytesToWrite = msgHdr.limit();
-
-        ClientWriteCompletion comp = new ClientWriteCompletion(this, writeConn, msgHdr, 1,
-                totalBytesToWrite, 0);
-
-        System.out.println(java.time.LocalTime.now() + " OneMbPut - writeHeader(1) position:" + msgHdr.position() +
-                " remaining: " + msgHdr.remaining() + " limit: " + totalBytesToWrite);
-
-        client.writeData(writeConn, comp);
-
-        if (!waitForWriteToComp()) {
-            System.out.println("Request timed out");
-        }
     }
 
     @Override
@@ -94,20 +77,13 @@ public class ClientTest_OneMbPut extends ClientTest {
     @Override
     void targetResponse(final int result, final ByteBuffer readBuffer) {
         if (result == -1) {
-            System.out.println("ClientTest_OneMbPut failed");
+            System.out.println(super.clientTestName + " failed");
         } else {
-            System.out.println("ClientTest_OneMbPut passed");
+            System.out.println(super.clientTestName + " passed");
+            super.client.setTestFailed(super.clientTestName);
         }
 
         statusReceived(result);
-    }
-
-    /*
-    ** This test should not get the httpResponse() callback
-     */
-    @Override
-    void httpResponse(final int status, final boolean headerCompleted, final boolean messageCompleted) {
-
     }
 
 }
