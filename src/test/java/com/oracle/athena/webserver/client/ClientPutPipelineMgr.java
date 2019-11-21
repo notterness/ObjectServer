@@ -73,6 +73,17 @@ public class ClientPutPipelineMgr extends ConnectionPipelineMgr {
         }
     };
 
+    private Function clientPutProcessReadError = new Function<ClientConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(ClientConnState conn) {
+            if (conn.processReadErrorQueue()) {
+                return StateQueueResult.STATE_RESULT_CONTINUE;
+            }
+            return StateQueueResult.STATE_RESULT_REQUEUE;
+        }
+    };
+
+
     ClientPutPipelineMgr(ClientConnState connState) {
 
         super(connState);
@@ -97,6 +108,7 @@ public class ClientPutPipelineMgr extends ConnectionPipelineMgr {
         clientPutStateMachine.addStateEntry(ConnectionStateEnum.CLIENT_READ_CB, new StateEntry(clientPutReadCb));
         clientPutStateMachine.addStateEntry(ConnectionStateEnum.CONN_FINISHED, new StateEntry(clientPutConnFinished));
         clientPutStateMachine.addStateEntry(ConnectionStateEnum.CHECK_SLOW_CHANNEL, new StateEntry(clientPutCheckSlowConn));
+        clientPutStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_READ_ERROR, new StateEntry(clientPutProcessReadError));
     }
 
     /*
@@ -135,6 +147,13 @@ public class ClientPutPipelineMgr extends ConnectionPipelineMgr {
 
         if (connectionState.getDataBufferReadsCompleted() > 0) {
             return ConnectionStateEnum.CLIENT_READ_CB;
+        }
+
+        /*
+         ** Check if there are buffers in error that need to be processed.
+         */
+        if (connectionState.readErrorQueueNotEmpty()) {
+            return ConnectionStateEnum.PROCESS_READ_ERROR;
         }
 
         /*

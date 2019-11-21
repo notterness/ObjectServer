@@ -73,8 +73,9 @@ public class ServerLoadBalancer {
             connPool.freeConnectionState(conn);
         }
         // also populate the reserved connection pool
+        int startingId = serverBaseId + (workerThreads * maxQueueSize) + 1;
         for (int i = 0; i < RESERVED_CONN_COUNT; i++) {
-            conn = new WebServerConnState(reservedBlockingConnPool, (serverBaseId + i + 1));
+            conn = new WebServerConnState(reservedBlockingConnPool, (startingId + i));
             conn.start();
             reservedBlockingConnPool.freeConnectionState(conn);
         }
