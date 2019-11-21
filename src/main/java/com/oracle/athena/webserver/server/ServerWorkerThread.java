@@ -43,10 +43,16 @@ public class ServerWorkerThread implements Runnable {
      */
     private BuildHttpResult resultBuilder;
 
+    /*
+    ** Mutex to protect the addition and removal from the work and timed queues
+     */
+    private final Object queueMutex;
+
+
     private boolean threadExit;
     private Thread connThread;
 
-    ServerWorkerThread(final int queueSize, MemoryManager memoryManager, final int identifier) {
+    public ServerWorkerThread(final int queueSize, MemoryManager memoryManager, final int identifier) {
 
         maxQueueSize = queueSize;
 
@@ -55,9 +61,11 @@ public class ServerWorkerThread implements Runnable {
         threadId = identifier;
 
         threadExit = false;
+
+        queueMutex = new Object();
     }
 
-    void start() {
+    public void start() {
 
         workQueue = new LinkedBlockingQueue<>(maxQueueSize);
         timedWaitQueue = new LinkedBlockingQueue<>(maxQueueSize);
@@ -74,7 +82,7 @@ public class ServerWorkerThread implements Runnable {
         connThread.start();
     }
 
-    void stop() {
+    public void stop() {
 
         threadExit = true;
 
@@ -123,62 +131,48 @@ public class ServerWorkerThread implements Runnable {
      ** space or while waiting for space to add the element, the threads shuts
      ** down.
      */
-    public boolean put(final ConnectionState work) {
-        if (workQueue.remainingCapacity() == 0) {
-            System.out.println("ServerWorkerThread() put connStateId [%d] out of space threadId: " + threadId + " " + Thread.currentThread().getName());
-            return false;
+    public boolean put(final ConnectionState work, final boolean delayedExecution) {
+
+        System.out.println("ServerWorkerThread(" + this.threadId + ") put connStateId [" + work.getConnStateId() + "] delayed: " +
+                delayedExecution);
+
+        if (workQueue.contains(work)) {
+            System.out.println("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue() already on workQueue");
+            return true;
         }
-        try {
+
+        if (delayedExecution) {
             /*
-            ** DEBUG
-            String outStr;
-
-            outStr = String.format("ServerWorkerThread(%d) put connStateId [%d]  state %s",
-                    this.threadId, work.getConnStateId(), work.getState().toString());
-            System.out.println(outStr);
+            ** If this ConnectionState is already on a queue, it cannot be added
+            **   to the delayed execution queue
              */
-
-            workQueue.put(work);
-        } catch (InterruptedException int_ex) {
-            System.out.println("ServerWorkerThread() connStateId [%d] put failed threadId: " + threadId + " " + Thread.currentThread().getName());
-            return false;
-        }
-
-        return true;
-    }
-
-    public boolean addToTimedQueue(final ConnectionState work) {
-        if (timedWaitQueue.remainingCapacity() == 0) {
-            System.out.println("ServerWorkerThread() addToTimedQueue connStateId [%d] out of space threadId: " + threadId + " " + Thread.currentThread().getName());
-            return false;
-        }
-        try {
-            String outStr;
-
-            outStr = String.format("ServerWorkerThread(%d) addToTimedQueue connStateId [%d]",
-                    this.threadId, work.getConnStateId());
-            System.out.println(outStr);
-
-            timedWaitQueue.put(work);
-        } catch (InterruptedException int_ex) {
-            System.out.println("ServerWorkerThread() connStateId [%d] addToTimedQueue failed threadId: " + threadId + " " + Thread.currentThread().getName());
-            return false;
-        }
-
-        return true;
-    }
-
-    /*
-    ** Remove this element from the timedWaitQueue
-     */
-    public void removeFromTimedWaitQueue(final ConnectionState work) {
-        try {
-            if (!timedWaitQueue.remove(work)) {
-                System.out.println("ConnectionState[" + work.getConnStateId() + "] not on timedWaitQueue");
+            if (!timedWaitQueue.contains(work)) {
+                work.markAddedToDelayedQueue();
+                if (!timedWaitQueue.offer(work)) {
+                    System.out.println("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue(delayed) unable to add");
+                    return false;
+                }
+            } else {
+                System.out.println("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue(delayed) already on queue");
             }
-        } catch (NullPointerException ex) {
-            ex.printStackTrace();
+        } else {
+            if (timedWaitQueue.contains(work)) {
+                /*
+                ** Need to remove this from the delayed queue and then put it on the execution
+                **   queue
+                 */
+                System.out.println("ConnectionState[" + work.getConnStateId() + "] remove from delayed queue");
+                work.markRemovedFromQueue(true);
+                timedWaitQueue.remove(work);
+            }
+
+            if (!workQueue.offer(work)) {
+                System.out.println("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue() unable to add");
+                return false;
+            }
         }
+
+        return true;
     }
 
 
@@ -193,6 +187,8 @@ public class ServerWorkerThread implements Runnable {
                 workLoopCount = 0;
                 while (((work = workQueue.poll(100, TimeUnit.MILLISECONDS)) != null) &&
                         (workLoopCount < MAX_EXEC_WORK_LOOP_COUNT)) {
+                    System.out.println("ServerWorkerThread(" + threadId + ") [" + work.getConnStateId() + "]");
+
                     work.markRemovedFromQueue(false);
                     work.stateMachine();
                     workLoopCount++;
@@ -205,6 +201,8 @@ public class ServerWorkerThread implements Runnable {
                 **   checked for the elapsed timeout.
                  */
                 while ((work = timedWaitQueue.peek()) != null) {
+                    System.out.println("ServerWorkerThread(" + threadId + ") [" + work.getConnStateId() + "] currTime: " +
+                            System.currentTimeMillis());
                     if (work.hasWaitTimeElapsed()) {
                         timedWaitQueue.remove(work);
                         work.markRemovedFromQueue(true);

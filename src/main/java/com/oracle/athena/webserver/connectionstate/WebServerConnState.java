@@ -4,6 +4,7 @@ import com.oracle.athena.webserver.http.parser.ByteBufferHttpParser;
 import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.server.StatusWriteCompletion;
 import com.oracle.athena.webserver.server.WriteConnection;
+import com.oracle.athena.webserver.statemachine.StateQueueResult;
 import org.eclipse.jetty.http.HttpStatus;
 
 import java.nio.ByteBuffer;
@@ -29,7 +30,10 @@ public class WebServerConnState extends ConnectionState {
     **   pipelines that implement the actual requests. The first pipeline is always the
     **   HttpParsePipeline
      */
-    private ConnectionPipeline pipelineManager;
+    private ConnectionPipelineMgr pipelineManager;
+    private ContentReadPipelineMgr readPipelineMgr;
+    private HttpParsePipelineMgr httpParsePipelineMgr;
+
 
 
     /*
@@ -41,15 +45,13 @@ public class WebServerConnState extends ConnectionState {
     **   finalResponseSendDone - This is set to true when the callback from the socket write has taken place. This
     **     means that the ConnectionState can now be released back to the free pool.
      */
-    AtomicBoolean dataResponseSent;
-    boolean finalResponseSent;
-    AtomicBoolean finalResponseSendDone;
+    private AtomicBoolean dataResponseSent;
+    private boolean finalResponseSent;
+    private AtomicBoolean finalResponseSendDone;
 
 
     /*
-     ** The following variables are used to manage the read and parse HTTP headers pipeline. Currently,
-     **   they are just package public instead of requiring that an access function be written for
-     **   each variable.
+     ** The following variables are used to manage the read and parse HTTP headers pipeline.
      **
      ** The variables are used for the following:
      **    requestedHttpBuffers - This is how many buffers need to be allocated to read in the HTTP header. This
@@ -62,12 +64,12 @@ public class WebServerConnState extends ConnectionState {
      **    httpHeaderParsed - This is set by a callback from the HTTP Parser when it determines that all the header
      **      data has been parsed and anything that follows will be content data.
      */
-    int requestedHttpBuffers;
-    int allocatedHttpBufferCount;
+    private int requestedHttpBuffers;
+    private int allocatedHttpBufferCount;
 
-    AtomicInteger outstandingHttpReadCount;
-    AtomicInteger httpBufferReadsCompleted;
-    AtomicBoolean httpHeaderParsed;
+    private AtomicInteger outstandingHttpReadCount;
+    private AtomicInteger httpBufferReadsCompleted;
+    private AtomicBoolean httpHeaderParsed;
 
 
     /*
@@ -100,6 +102,13 @@ public class WebServerConnState extends ConnectionState {
     private WriteConnection writeConn;
 
     /*
+    ** The following is set when this connection is being used to send an out of resource response back to the
+    **   client. This happens when the primary pool of connections has been depleted and the server cannot accept
+    **   more connections until some complete.
+     */
+    private boolean outOfResourcesResponse;
+
+    /*
      ** The following is used to release this ConnectionState back to the free pool.
      */
     private ConnectionStatePool<WebServerConnState> connectionStatePool;
@@ -128,6 +137,8 @@ public class WebServerConnState extends ConnectionState {
 
         httpHeaderParsed = new AtomicBoolean(false);
 
+        outOfResourcesResponse = false;
+
         writeConn = null;
     }
 
@@ -143,143 +154,135 @@ public class WebServerConnState extends ConnectionState {
 
         httpParser = new ByteBufferHttpParser(casperHttpInfo);
 
-        pipelineManager = new HttpParsePipeline(this);
+        httpParsePipelineMgr = new HttpParsePipelineMgr(this);
+        readPipelineMgr = new ContentReadPipelineMgr(this);
+
+        /*
+         ** start with the http manager.
+         */
+        pipelineManager = httpParsePipelineMgr;
     }
 
     @Override
     public void stateMachine() {
-        ConnectionStateEnum overallState;
+        StateQueueResult result;
 
-        /*
-         ** First determine the state to execute
-         */
-        overallState = pipelineManager.nextPipelineStage();
-
-        switch (overallState) {
-            case INITIAL_SETUP:
-                setupInitial();
-
-                System.out.println("WebServerConnState[" + connStateId + "] INITIAL_SETUP server");
-                requestedHttpBuffers = 1;
-
+        result = pipelineManager.executePipeline();
+        switch (result) {
+            case STATE_RESULT_COMPLETE:
+                // set next pipeline.
                 addToWorkQueue(false);
                 break;
-
-            case CHECK_SLOW_CHANNEL:
-                if (timeoutChecker.inactivityThresholdReached()) {
-                    /*
-                     ** TOTDO: Need to close out the channel and this connection
-                     */
-                } else {
-                    overallState = pipelineManager.nextPipelineStage();
-
-                    /*
-                     ** Need to wait for something to kick the state machine to a new state
-                     **
-                     ** The ConnectionState will get put back on the execution queue when an external
-                     **   operation completes.
-                     */
-                    if (overallState != ConnectionStateEnum.CHECK_SLOW_CHANNEL) {
-                        addToWorkQueue(false);
-                    } else {
-                        addToWorkQueue(true);
-                    }
-                }
+            case STATE_RESULT_WAIT:
+                addToWorkQueue(true);
                 break;
 
-            case ALLOC_HTTP_BUFFER:
-                /*
-                 ** Do not continue if there are no buffers allocated. allocHttpBufferState() returns
-                 **   the number of buffers that were allocated.
-                 */
-                if (allocHttpBufferState() == 0) {
-                    /*
-                     ** There may be other work that can be done while waiting to allocate buffers
-                     */
-                    addToWorkQueue(false);
-                    break;
-                } else {
-                    // Fall through
-                    overallState = ConnectionStateEnum.READ_HTTP_BUFFER;
-                }
-
-            case READ_HTTP_BUFFER:
-                readIntoMultipleBuffers();
+            case STATE_RESULT_REQUEUE:
                 addToWorkQueue(false);
                 break;
-
-            case PARSE_HTTP_BUFFER:
-                parseHttp();
-
-                addToWorkQueue(false);
-                break;
-
-            case SEND_XFR_DATA_RESP:
-                // Send the response to the client to request they send data
-                sendResponse();
-                break;
-
-            case SETUP_NEXT_PIPELINE:
-                setupNextPipeline();
-                addToWorkQueue(false);
-                break;
-
-            case SETUP_CONTENT_READ:
-                determineNextContentRead();
-                addToWorkQueue(false);
-                break;
-
-            case READ_FROM_CHAN:
-                addToWorkQueue(false);
-                break;
-
-            case READ_DONE:
-                // TODO: Assert() if this state is ever reached
-                break;
-
-            case READ_DONE_ERROR:
-                // Release all the outstanding buffer
-                releaseBufferState();
-                addToWorkQueue(false);
-                break;
-
-            case ALLOC_CLIENT_DATA_BUFFER:
-                if (allocClientReadBufferState() > 0) {
-                    // advance the Connection state and fall through
-                    overallState = ConnectionStateEnum.READ_CLIENT_DATA;
-                } else {
-                    addToWorkQueue(false);
-                    break;
-                }
-
-            case READ_CLIENT_DATA:
-                readIntoDataBuffers();
-                break;
-
-            case CONN_FINISHED:
-                System.out.println("WebServerConnState[" + connStateId + "] CONN_FINISHED");
-                reset();
-
-                // Now release this back to the free pool so it can be reused
-                connectionStatePool.freeConnectionState(this);
+            case STATE_RESULT_FREE:
                 break;
         }
     }
 
-     /*
+    /*
+    **
+    */
+    @Override
+    public void setupInitial() {
+        super.setupInitial();
+
+        System.out.println("WebServerConnState[" + connStateId + "] INITIAL_SETUP server");
+        requestedHttpBuffers = 1;
+    }
+
+
+    /*
+     ** The resets all the values for the HttpParsePipelineMgr
+     */
+    void resetHttpReadValues() {
+        outstandingHttpReadCount.set(0);
+        requestedHttpBuffers = 0;
+        allocatedHttpBufferCount = 0;
+        httpBufferReadsCompleted.set(0);
+        httpHeaderParsed.set(false);
+    }
+
+    /*
+    ** This returns if the Http headers have all been parsed. This is set via a callback
+    **   from the HTTP parser.
+     */
+    boolean httpHeadersParsed() {
+        return httpHeaderParsed.get();
+    }
+
+    /*
+    ** Returns true if there is an outstanding request to allocate buffers to read in
+    **   HTTP header data.
+     */
+    boolean httpBuffersNeeded() {
+        return (requestedHttpBuffers > 0);
+    }
+
+    /*
+    ** Returns true if buffers have been allocated to read in HTTP header data
+    **   and the reads have not been started yet. This means the buffers are
+    **   sitting on the allocatedHttpBufferQueue queue.
+     */
+    boolean httpBuffersAllocated() {
+        return (allocatedHttpBufferCount > 0);
+    }
+
+    /*
+    ** Returns true if there are buffers that have HTTP header data read into them
+    **   and are waiting to be parsed. This means the buffers are sitting on the
+    **   httpReadDoneQueue queue.
+     */
+    boolean httpBuffersReadyForParsing() {
+        return (httpBufferReadsCompleted.get() > 0);
+    }
+
+    /*
+    ** Returns the number of outstanding HTTP buffer reads there currently are.
+     */
+    int outstandingHttpBufferReads() {
+        return outstandingHttpReadCount.get();
+    }
+
+    /*
      ** This is used to determine which pipeline to execute after the parsing and validation of the HTTP headers
      **   has been completed.
      */
-    private void setupNextPipeline() {
+    void setupNextPipeline() {
         /*
          ** Get rid of the current pipeline
          */
         pipelineManager = null;
 
         /*
+        ** First check if this is an out of resources response
+         */
+        if (outOfResourcesResponse) {
+            pipelineManager = new OutOfResourcePipelineMgr(this);
+            return;
+        }
+
+        /*
          ** Now, based on the HTTP method, figure out the next pipeline
          */
-        pipelineManager = new ContentReadPipeline(this);
+        HttpMethodEnum method = casperHttpInfo.getMethod();
+        switch (method) {
+            case PUT_METHOD:
+                pipelineManager = readPipelineMgr;
+                break;
+
+            case POST_METHOD:
+                pipelineManager = readPipelineMgr;
+                break;
+
+            case INVALID_METHOD:
+                break;
+        }
     }
 
     /*
@@ -290,7 +293,7 @@ public class WebServerConnState extends ConnectionState {
      **   sufficient buffers available to allocate all that are requested, so there will be a wakeup call
      **   when buffers are available and then the connection will go back and try the allocation again.
      */
-    private int allocHttpBufferState() {
+    int allocHttpBufferState() {
         while (requestedHttpBuffers > 0) {
             BufferState bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_HTTP_FROM_CHAN, MemoryManager.SMALL_BUFFER_SIZE);
             if (bufferState != null) {
@@ -315,7 +318,7 @@ public class WebServerConnState extends ConnectionState {
      ** This is used to start reads into one or more buffers. It looks for BufferState objects that have
      **   their state set to READ_FROM_CHAN. It then sends those buffers off to perform asynchronous reads.
      */
-    private void readIntoMultipleBuffers() {
+    void readIntoMultipleBuffers() {
         BufferState bufferState;
 
         /*
@@ -363,7 +366,7 @@ public class WebServerConnState extends ConnectionState {
          */
         timeoutChecker.updateTime();
 
-        System.out.println("WebServerConnState[" + connStateId + "].httpReadCompleted() HTTP readCount: " + readCount +
+        System.out.println("WebServerConnState[" + connStateId + "] httpReadCompleted() HTTP readCount: " + readCount +
                 " readCompletedCount: " + readCompletedCount);
 
         addToWorkQueue(false);
@@ -380,7 +383,7 @@ public class WebServerConnState extends ConnectionState {
      **
      */
     @Override
-    void readCompletedError(final BufferState bufferState) {
+    public void readCompletedError(final BufferState bufferState) {
         int httpReadCount = 0;
         int dataReadCount = 0;
 
@@ -426,7 +429,7 @@ public class WebServerConnState extends ConnectionState {
      **
      ** TODO: Need to make the following thread safe when it modifies BufferState
      */
-    void setReadState(final BufferState bufferState, final BufferStateEnum newState) {
+    public void setReadState(final BufferState bufferState, final BufferStateEnum newState) {
 
         if (newState == BufferStateEnum.READ_ERROR) {
             /*
@@ -460,7 +463,7 @@ public class WebServerConnState extends ConnectionState {
      **   recycle the data buffers, so those may not need to be sent through the HTTP Parser'
      **   and instead should be handled directly.
      */
-    private void parseHttp() {
+    void parseHttp() {
         BufferState bufferState;
         ByteBuffer buffer;
 
@@ -494,7 +497,7 @@ public class WebServerConnState extends ConnectionState {
                      ** Set the BufferState to PARSE_DONE
                      ** TODO: When can the buffers used for the header be released?
                      */
-                    bufferState.setHttpParseDone();
+                    bufferState.setBufferHttpParseDone();
                 }
 
                 initialHttpBuffer = false;
@@ -506,9 +509,16 @@ public class WebServerConnState extends ConnectionState {
             boolean headerParsed = httpHeaderParsed.get();
             if (!headerParsed) {
                 /*
-                 ** Allocate another buffer and read in more data
+                 ** Allocate another buffer and read in more data. But, do not
+                 **   allocate if there was a parsing error.
                  */
-                requestedHttpBuffers++;
+                if (!httpParsingError.get()) {
+                    requestedHttpBuffers++;
+                } else {
+                    System.out.println("WebServerConnState[" + connStateId + "] parsing error, no allocation");
+                }
+            } else {
+                System.out.println("WebServerConnState[" + connStateId + "] header was parsed");
             }
         }
     }
@@ -521,6 +531,7 @@ public class WebServerConnState extends ConnectionState {
         System.out.println("WebServerConnState[" + connStateId + "] httpHeaderParseComplete() contentLength: " + contentLength);
 
         httpHeaderParsed.set(true);
+
         contentBytesToRead.set(contentLength);
     }
 
@@ -558,7 +569,7 @@ public class WebServerConnState extends ConnectionState {
     /*
      ** This will send out a particular response type on the server channel
      */
-    private void sendResponse() {
+    void sendResponse(final int resultCode) {
 
         // Allocate the Completion object specific to this operation
         setupWriteConnection();
@@ -567,8 +578,7 @@ public class WebServerConnState extends ConnectionState {
         if (buffState != null) {
             finalResponseSent = true;
 
-            ByteBuffer respBuffer = resultBuilder.buildResponse(buffState, HttpStatus.OK_200, true);
-            //ByteBuffer respBuffer = resultBuilder.buildResponse(buffState, HttpStatus.CONTINUE_100, false);
+            ByteBuffer respBuffer = resultBuilder.buildResponse(buffState, resultCode, true);
 
             int bytesToWrite = respBuffer.position();
             respBuffer.flip();
@@ -578,9 +588,12 @@ public class WebServerConnState extends ConnectionState {
                     getConnStateId(), bytesToWrite, 0);
             writeThread.writeData(writeConn, statusComp);
 
-            System.out.println("sendResponse(" + connStateId + ") 2");
+            HttpStatus.Code result = HttpStatus.getCode(resultCode);
+            if (result != null) {
+                System.out.println("sendResponse[" + connStateId + "] resultCode: " + result.getCode() + " " + result.getMessage());
+            }
         } else {
-            System.out.println("sendResponse(" + connStateId + "): unable to allocate response buffer");
+            System.out.println("sendResponse[" + connStateId + "] unable to allocate response buffer");
         }
     }
 
@@ -589,7 +602,7 @@ public class WebServerConnState extends ConnectionState {
     ** This allocates the buffer to send the response
      */
     private BufferState allocateResponseBuffer() {
-        BufferState respBuffer = bufferStatePool.allocBufferState(this, BufferStateEnum.SEND_GET_DATA_RESPONSE, MemoryManager.MEDIUM_BUFFER_SIZE);
+        BufferState respBuffer = bufferStatePool.allocBufferState(this, BufferStateEnum.SEND_FINAL_RESPONSE, MemoryManager.MEDIUM_BUFFER_SIZE);
 
         responseBuffer = respBuffer;
 
@@ -608,7 +621,7 @@ public class WebServerConnState extends ConnectionState {
         }
 
         currState = responseBuffer.getBufferState();
-        System.out.println("statusWriteCompleted: " + connStateId + " " + currState.toString());
+        System.out.println("statusWriteCompleted[" + connStateId + "] " + currState.toString());
 
         switch (currState) {
             case SEND_GET_DATA_RESPONSE:
@@ -626,8 +639,38 @@ public class WebServerConnState extends ConnectionState {
         addToWorkQueue(false);
     }
 
+    /*
+    ** Returns if the data response has been sent. This is the intermediate response
+    **   asking the client to send the content data
+     */
+    boolean hasDataResponseBeenSent() {
+        return dataResponseSent.get();
+    }
 
-    void releaseBufferState() {
+    /*
+    ** Returns if the final response (either good or bad) has been sent to the
+    **   client. This means it has been queued up to be written on the wire,
+    **   but does not mean it has actually been sent.
+     */
+    boolean hasFinalResponseBeenSent() {
+        return finalResponseSent;
+    }
+
+    /*
+    ** Returns true when the write of the final response to the client has been
+    **   successfully written on the wire.
+     */
+    boolean finalResponseSent() {
+        return finalResponseSendDone.get();
+    }
+
+    void resetResponses() {
+        dataResponseSent.set(false);
+        finalResponseSent = false;
+        finalResponseSendDone.set(false);
+    }
+
+    public void releaseBufferState() {
 
         super.releaseBufferState();
 
@@ -644,16 +687,58 @@ public class WebServerConnState extends ConnectionState {
 
     }
 
-    void clearChannel() {
+    public void clearChannel() {
         super.clearChannel();
 
         writeConn = null;
     }
 
-    void reset() {
+    /*
+    ** This is called just after the connection is allocated to tell that is will be used to send back an
+    **   error to the client indicating that there are insufficient resources currently.
+     */
+    public void setOutOfResourceResponse() {
+        System.out.println("WebServerConnState[" + connStateId + "] setOutOfResourceResponse()");
+
+        outOfResourcesResponse = true;
+    }
+
+    /*
+     ** Accessor function related to the HTTP Parser and when an error occurs.
+     **
+     ** getHttpParserError() will return HttpStatus.OK_200 if there is no error, otherwise it will return
+     **   the value set to indicate the parsing error.
+     */
+    @Override
+    public int getHttpParseStatus() {
+        int parsingStatus = HttpStatus.OK_200;
+        if (httpParsingError.get()) {
+            parsingStatus = casperHttpInfo.getParseFailureCode();
+        }
+
+        return parsingStatus;
+    }
+
+
+    public void reset() {
         dataResponseSent.set(false);
 
-        httpParser.resetHttpParser();
+        /*
+        ** Setup the HTTP parser for a new ByteBuffer stream
+         */
+        casperHttpInfo = null;
+        casperHttpInfo = new CasperHttpInfo(this);
+
+        initialHttpBuffer = true;
+
+        // TODO: Why does resetHttpParser() not do what is expected (meaning leaving it in a state to start parsing a new stream)?
+        //httpParser.resetHttpParser();
+        httpParser = null;
+        httpParser = new ByteBufferHttpParser(casperHttpInfo);
+
+        resetHttpReadValues();
+        resetContentAllRead();
+
 
         /*
          ** Clear the write connection (it may already be null) since it will not be valid with the next
@@ -661,7 +746,12 @@ public class WebServerConnState extends ConnectionState {
          */
         writeConn = null;
 
+        outOfResourcesResponse = false;
+
         super.reset();
+
+        // Now release this back to the free pool so it can be reused
+        connectionStatePool.freeConnectionState(this);
     }
 
 }

@@ -93,7 +93,7 @@ public class WriteConnection implements Closeable {
          */
         tgtWritePort = writePort;
         tgtClientId = writePort - ServerChannelLayer.BASE_TCP_PORT;
-
+        // TODO CA: Why is there a random sleep here?
         try {
             Thread.sleep(1000);
         } catch (InterruptedException int_ex) {
@@ -262,16 +262,18 @@ public class WriteConnection implements Closeable {
     }
 
     /*
-    TODO: Is this method exposed just for test purposes?
+    TODO CA: Is this method exposed just for test purposes?
     ** This is the common call to close out the write connection channel.
      */
     public synchronized void closeChannel() {
-        try {
-            writeChannel.close();
-        } catch (IOException e) {
-            e.printStackTrace();
+        if (writeChannel != null) {
+            try {
+                writeChannel.close();
+            } catch (IOException e) {
+                // FIXME CA: Something more than just printing the stack trace should be done for this sort of method
+                e.printStackTrace();
+            }
         }
-
         writeChannel = null;
     }
 

@@ -27,11 +27,11 @@ public class MemoryManager {
     public static final int CHUNK_BUFFER_SIZE = 0x8000000;  // 128 MB
 
     // These really don't need to be.
-    public static final int SMALL_BUFFER_COUNT = 10000;
-    public static final int MEDIUM_BUFFER_COUNT = 1000;
-    public static final int XFER_BUFFER_COUNT = 100; 
-    public static final int LARGE_BUFFER_COUNT =  100;
-    public static final int CHUNK_BUFFER_COUNT =    2;  // If this is more than 2, get OOM in unit test.
+    public static final int SMALL_BUFFER_COUNT = 1000;
+    public static final int MEDIUM_BUFFER_COUNT = 100;
+    public static final int XFER_BUFFER_COUNT = 10;
+    public static final int LARGE_BUFFER_COUNT =  10;
+    public static final int CHUNK_BUFFER_COUNT =    1;  // If this is more than 2, get OOM in unit test.
 
     /*
     ** TODO: This should be the number of ConnectionState objects

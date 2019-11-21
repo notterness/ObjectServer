@@ -1,6 +1,7 @@
 package com.oracle.athena.webserver.manual;
 
 import com.oracle.athena.webserver.client.TestClient;
+import com.oracle.athena.webserver.connectionstate.ConnectionState;
 import com.oracle.athena.webserver.http.HttpResponseListener;
 import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.server.WriteConnection;
@@ -37,7 +38,10 @@ public abstract class ClientTest implements Runnable {
     WriteConnection writeConn;
     TestClient client;
 
-    ClientTest(final TestClient testClient, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
+    protected int httpStatus;
+    protected String clientTestName;
+
+    ClientTest(final String testName, final TestClient testClient, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
 
         serverConnId = myServerId;
         clientConnId = myTargetId;
@@ -46,6 +50,10 @@ public abstract class ClientTest implements Runnable {
         clientCount.incrementAndGet();
 
         client = testClient;
+
+        httpStatus = 0;
+
+        clientTestName = testName;
     }
 
     void start() {
@@ -96,9 +104,20 @@ public abstract class ClientTest implements Runnable {
 
         writeConn = client.addNewTarget(clientConnId);
 
-        System.out.println("ClientTest[" + writeConn.getTransactionId() + "] serverConnId: " + serverConnId + " clientConnId: " + clientConnId);
+        System.out.println("ClientTest[" + writeConn.getTransactionId() + "] " + clientTestName +
+                " serverConnId: " + serverConnId + " clientConnId: " + clientConnId);
 
         if (client.connectTarget(writeConn, 100)) {
+            // Setup the read callback before sending any data
+            TestClientReadCallback readDataCb = new TestClientReadCallback(this, httpParser);
+
+            ConnectionState work = client.registerClientReadCallback(writeConn, readDataCb);
+
+            System.out.println("Starting TestClient[" + work.getConnStateId() + "] " + clientTestName);
+
+            /*
+            ** Build the HTTP request to send
+             */
             ByteBuffer msgHdr = memoryAllocator.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE, null);
 
             String tmp = buildRequestString();
@@ -109,10 +128,6 @@ public abstract class ClientTest implements Runnable {
             int bytesToWrite = msgHdr.position();
             msgHdr.flip();
 
-            // Setup the read callback before sending any data
-            TestClientReadCallback readDataCb = new TestClientReadCallback(this, httpParser);
-
-            client.registerClientReadCallback(writeConn, readDataCb);
 
             // Send the message
             statusSignalSent = false;
@@ -126,7 +141,8 @@ public abstract class ClientTest implements Runnable {
 
             waitForStatus();
 
-            System.out.println("ClientTest[" + writeConn.getTransactionId() + "] run(1): ");
+            System.out.println("Completed ClientTest[" + writeConn.getTransactionId() + "] TestClient[" + work.getConnStateId() + "] " +
+                    clientTestName);
 
             client.disconnectTarget(writeConn);
         }
@@ -222,11 +238,32 @@ public abstract class ClientTest implements Runnable {
      */
     abstract String buildRequestString();
 
-    abstract void clientTestStep_1();
+    void clientTestStep_1() {
+        /*
+        ** The default case it to do nothing
+         */
+    }
 
-    abstract void writeHeader(ByteBuffer msgHdr, int bytesToWrite);
+    /*
+    ** This writes the entire buffer used to hold the message out the write socket channel
+     */
+    void writeHeader(ByteBuffer msgHdr, int bytesToWrite) {
+        ClientWriteCompletion comp = new ClientWriteCompletion(this, writeConn, msgHdr, 1,
+                bytesToWrite, 0);
+
+        client.writeData(writeConn, comp);
+
+        if (!waitForWriteToComp()) {
+            System.out.println("Request timed out");
+        }
+    }
+
 
     abstract void targetResponse(final int result, final ByteBuffer readBuffer);
 
-    abstract void httpResponse(final int status, final boolean headerCompleted, final boolean messageCompleted);
+    void httpResponse(final int status, final boolean headerCompleted, final boolean messageCompleted) {
+        if (headerCompleted) {
+            httpStatus = status;
+        }
+    }
 }

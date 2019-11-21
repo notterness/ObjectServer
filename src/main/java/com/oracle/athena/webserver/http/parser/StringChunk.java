@@ -1,6 +1,5 @@
 package com.oracle.athena.webserver.http.parser;
 
-import software.amazon.ion.SystemSymbols;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -66,6 +65,9 @@ public class StringChunk {
         /* Return a ByteBuffer that is a copy */
         ByteBuffer bb = initialBuffer.slice();
         bb.limit(charCount);
+
+        //String str = bb_to_str(bb);
+        //System.out.println("StringChunk: " + str);
 
         currentPosition = i;
         initialBuffer.position(i);

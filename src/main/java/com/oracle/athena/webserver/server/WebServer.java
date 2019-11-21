@@ -15,7 +15,11 @@ public class WebServer extends ServerChannelLayer {
     }
 
     public void start() {
-        serverWorkHandler = new ServerLoadBalancer(ServerChannelLayer.WORK_QUEUE_SIZE, workerThreads, memoryManager,
+        /*
+        ** The queueSize is set to 2 to insure that the system runs out of connections and can be tested for
+        **   the out of connections handling.
+         */
+        serverWorkHandler = new ServerLoadBalancer(2, workerThreads, memoryManager,
                 (serverClientId * 100));
         serverWorkHandler.start();
 

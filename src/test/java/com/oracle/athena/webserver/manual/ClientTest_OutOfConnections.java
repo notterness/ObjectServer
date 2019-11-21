@@ -1,13 +1,14 @@
 package com.oracle.athena.webserver.manual;
 
 import com.oracle.athena.webserver.client.TestClient;
+import org.eclipse.jetty.http.HttpStatus;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ClientTest_2 extends ClientTest {
+public class ClientTest_OutOfConnections extends ClientTest {
 
-    ClientTest_2(final String testName, final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
+    ClientTest_OutOfConnections(final String testName, final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
         super(testName, client, myServerId, myTargetId, threadCount);
     }
 
@@ -37,10 +38,10 @@ public class ClientTest_2 extends ClientTest {
      */
     @Override
     void targetResponse(final int result, final ByteBuffer readBuffer) {
-        if (result == 0) {
+        if ((result == 0) && (httpStatus == HttpStatus.TOO_MANY_REQUESTS_429)) {
             System.out.println(super.clientTestName + " passed");
         } else {
-            System.out.println(super.clientTestName + " failed");
+            System.out.println(super.clientTestName + " failed result: " + result + " httpStatus: " + httpStatus);
             super.client.setTestFailed(super.clientTestName);
         }
 

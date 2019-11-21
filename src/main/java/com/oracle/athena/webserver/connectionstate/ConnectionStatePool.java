@@ -1,84 +1,63 @@
 package com.oracle.athena.webserver.connectionstate;
 
-import com.oracle.athena.webserver.server.ClientDataReadCallback;
-
 import java.nio.channels.AsynchronousSocketChannel;
 import java.util.concurrent.LinkedBlockingQueue;
 
-/*
- ** This class provides a method to manage the allocation of the ConnectionState objects
- **   to allow them to be obtained from a pool to prevent garbage collection.
- **
- ** numConnections is the total number allocated
+/**
+ * This class manages a pool of {@link ConnectionState} objects, allowing them to be allocated and deallocated without
+ * being garbage collected.
+ *
+ * @param <T> the type of {@link ConnectionState} object that this pool is managing.
  */
-public class ConnectionStatePool<T> {
+public class ConnectionStatePool<T extends ConnectionState> {
 
-    private int allocatedConnectionStates;
+    // FIXME CA: This variable will need to be used for something at some point
+    private final int allocatedConnectionStates;
+    final LinkedBlockingQueue<T> connPoolFreeList;
 
-    private int connId;
-
-    private LinkedBlockingQueue<T> connPoolFreeList;
-
-    /*
-     ** The following are used to allow the LinkedBlockingQueue to not actually block
-     **   by returning null when the queue is empty instead of waiting for an
-     **   element to become available.
+    /**
+     * Primary constructor for a ConnectionStatePool.
+     *
+     * @param numConnections represents the total number of {@link ConnectionState} objects that can be tracked
+     *                       by this pool. There must be at least one connection.
      */
-    QueueMutex queueMutex;
-    int freeConnCount;
-
-
-    public ConnectionStatePool(final int numConnections, final int serverBaseId) {
-
+    public ConnectionStatePool(final int numConnections) {
         allocatedConnectionStates = numConnections;
-        freeConnCount = 0;
-
-        queueMutex = new QueueMutex();
-
         connPoolFreeList = new LinkedBlockingQueue<>(numConnections);
     }
 
-
-    /*
-     ** This is used for setting up a ConnectionState for the client side to perform reads
+    /**
+     * A non-blocking method of setting up the {@link ConnectionState} for the client to perform reads.
+     *
+     * @param chan
+     *  an {@link AsynchronousSocketChannel} to assign to a {@link ConnectionState} from this {@link ConnectionStatePool}.
+     * @return <T> the {@link ConnectionState} with the channel assigned to it, null if no connections are available.
+     *
      */
     public T allocConnectionState(final AsynchronousSocketChannel chan) {
+        T conn = connPoolFreeList.poll();
+        if (conn != null) {
+            conn.setChannel(chan);
+        }
+        return conn;
+    }
 
-        ConnectionState conn = null;
-
-        synchronized (queueMutex) {
-            if (freeConnCount > 0) {
-                freeConnCount--;
-                try {
-                    conn = (ConnectionState) connPoolFreeList.take();
-                    conn.setChannel(chan);
-
-                } catch (InterruptedException int_ex) {
-                    System.out.println(int_ex.getMessage());
-                    freeConnCount++;
-                }
+    /**
+     * This method frees up a connection by adding it back to the pool. This method will block indefinitely until the
+     * connectionState can be added back to the pool.
+     * <p>
+     * TODO CA: Should the caller be forced to wait indefinitely?
+     *
+     * @param connectionState a {@link ConnectionState} object to return to the free pool. Null is a no-op.
+     */
+    public void freeConnectionState(T connectionState) {
+        if (connectionState != null) {
+            try {
+                connPoolFreeList.put(connectionState);
+            } catch (InterruptedException int_ex) {
+                // FIXME CA: Sort out how we're going to handle this exception
+                System.out.println(int_ex.getMessage());
             }
         }
-
-        return (T) conn;
     }
-
-    public void freeConnectionState(T connectionState) {
-        try {
-            connPoolFreeList.put(connectionState);
-            freeConnCount++;
-        } catch (InterruptedException int_ex) {
-            System.out.println(int_ex.getMessage());
-        }
-    }
-
-
-    public int getConnId() {
-        return connId;
-    }
-
-    static class QueueMutex {
-        int count;
-    }
-
 }

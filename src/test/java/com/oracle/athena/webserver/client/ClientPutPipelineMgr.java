@@ -1,12 +1,16 @@
-package com.oracle.athena.webserver.connectionstate;
+package com.oracle.athena.webserver.client;
 
-public class ClientTestReadPipeline extends ConnectionPipeline {
+import com.oracle.athena.webserver.connectionstate.ConnectionPipelineMgr;
+import com.oracle.athena.webserver.connectionstate.ConnectionStateEnum;
+import com.oracle.athena.webserver.statemachine.StateQueueResult;
+
+public class ClientPutPipelineMgr extends ConnectionPipelineMgr {
 
     private ClientConnState connectionState;
 
     private boolean initialStage;
 
-    ClientTestReadPipeline(ClientConnState connState) {
+    ClientPutPipelineMgr(ClientConnState connState) {
 
         super(connState);
 
@@ -19,15 +23,15 @@ public class ClientTestReadPipeline extends ConnectionPipeline {
         connectionState.resetBuffersWaiting();
         connectionState.resetDataBufferReadsCompleted();
 
-        connectionState.contentAllRead.set(false);
+        connectionState.resetContentAllRead();
 
-        connectionState.clientCallbackCompleted = false;
+        connectionState.resetClientCallbackCompleted();
     }
 
     /*
      ** This determines the pipeline stages used to read in the content data.
      */
-    ConnectionStateEnum nextPipelineStage() {
+    public ConnectionStateEnum nextPipelineStage() {
 
         /*
          ** First setup to perform the content reads. This is required since the buffer used to read in the
@@ -45,7 +49,7 @@ public class ClientTestReadPipeline extends ConnectionPipeline {
          **   allocation right away.
          **
          */
-        if (!connectionState.isOutOfMemory() && connectionState.needsMoreDataBuffers()) {
+        if (!connectionState.outOfMemory() && connectionState.needsMoreDataBuffers()) {
             return ConnectionStateEnum.ALLOC_CLIENT_DATA_BUFFER;
         }
 
@@ -70,7 +74,7 @@ public class ClientTestReadPipeline extends ConnectionPipeline {
          **   the setting of the contentAllRead flag. Currently, it is never sent as the "Content-Length" is
          **   never parsed out of the HTTP response.
          */
-        if (connectionState.clientCallbackCompleted == true) {
+        if (connectionState.hasClientCallbackCompleted()) {
             return ConnectionStateEnum.CONN_FINISHED;
         }
 
@@ -79,8 +83,7 @@ public class ClientTestReadPipeline extends ConnectionPipeline {
          **
          ** TODO: Start adding in the steps to process the content data instead of just sending status
          */
-        boolean doneReadingContent = connectionState.contentAllRead.get();
-        if (doneReadingContent) {
+        if (connectionState.hasAllContentBeenRead()) {
             return ConnectionStateEnum.CLIENT_READ_CB;
         }
 
@@ -88,10 +91,8 @@ public class ClientTestReadPipeline extends ConnectionPipeline {
          ** Check if there was a channel error and cleanup if there are no outstanding
          **    reads.
          */
-        if (connectionState.channelError.get()) {
-            int dataReadsPending = connectionState.outstandingDataReadCount.get();
-
-            if (dataReadsPending == 0) {
+        if (connectionState.hasChannelFailed()) {
+            if (connectionState.dataReadsPending() == 0) {
                 return ConnectionStateEnum.CONN_FINISHED;
             }
         }
@@ -99,4 +100,9 @@ public class ClientTestReadPipeline extends ConnectionPipeline {
         return ConnectionStateEnum.CHECK_SLOW_CHANNEL;
     }
 
+    public StateQueueResult executePipeline() {
+        StateQueueResult result = StateQueueResult.STATE_RESULT_COMPLETE;
+
+        return result;
+    }
 }
