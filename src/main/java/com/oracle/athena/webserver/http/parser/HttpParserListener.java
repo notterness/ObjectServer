@@ -113,11 +113,8 @@ public class HttpParserListener implements HttpParser.RequestHandler {
     }
 
     @Override
-    public void badMessage(BadMessageException failure) {
-        String reason = failure.getReason();
-        _bad = reason == null ? String.valueOf(failure.getCode()) : reason;
-
-        System.out.println("badMessage() reason: " + reason);
+    public void badMessage(final BadMessageException failure) {
+        casperHttpInfo.httpHeaderError(failure);
     }
 
     @Override

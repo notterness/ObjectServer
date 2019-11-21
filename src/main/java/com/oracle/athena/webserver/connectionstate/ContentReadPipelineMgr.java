@@ -64,7 +64,7 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         ** TODO: Start adding in the steps to process the content data instead of just sending status
          */
         if (connectionState.hasAllContentBeenRead() && !connectionState.hasFinalResponseBeenSent()) {
-                return ConnectionStateEnum.SEND_XFR_DATA_RESP;
+                return ConnectionStateEnum.SEND_FINAL_RESPONSE;
         }
 
         /*

@@ -1,6 +1,8 @@
 package com.oracle.athena.webserver.connectionstate;
 
 
+import org.eclipse.jetty.http.HttpStatus;
+
 class HttpParsePipelineMgr extends ConnectionPipelineMgr {
 
     private WebServerConnState connectionState;
@@ -25,6 +27,11 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         **   to read in the HTTP headers.
          */
         connectionState.resetContentAllRead();
+
+        /*
+        ** In error cases, this pipeline will send out error responses.
+         */
+        connectionState.resetResponses();
     }
 
     /*
@@ -83,6 +90,22 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
 
             // TODO: Need to log something to indicate waiting for reads to complete
             return ConnectionStateEnum.CHECK_SLOW_CHANNEL;
+        }
+
+        /*
+         ** The status has been sent so cleanup the connection. This check needs to proceed any checks
+         **   that will cause a response to be sent.
+         */
+        if (connectionState.finalResponseSent()) {
+            return ConnectionStateEnum.CONN_FINISHED;
+        }
+
+        /*
+         ** Check if there has been an HTTP headers parsing error and if so, return the appropriate
+         **    response to the client.
+         */
+        if (connectionState.getHttpParseStatus() != HttpStatus.OK_200) {
+            return ConnectionStateEnum.SEND_FINAL_RESPONSE;
         }
 
         /*

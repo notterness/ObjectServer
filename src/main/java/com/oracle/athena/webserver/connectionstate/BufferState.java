@@ -113,8 +113,8 @@ public class BufferState {
      **
      ** TODO: Need to figure out how data buffers are handled
      */
-    public void setHttpParseDone() {
-        System.out.println("setHttpParseDone(): current " + bufferState.toString() +
+    public void setBufferHttpParseDone() {
+        System.out.println("setBufferHttpParseDone(): current " + bufferState.toString() +
                 " remaining: " + buffer.remaining());
 
         bufferState = BufferStateEnum.PARSE_HTTP_DONE;

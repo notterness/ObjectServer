@@ -8,8 +8,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class ClientTest_EarlyClose extends ClientTest {
 
-    ClientTest_EarlyClose(final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
-        super(client, myServerId, myTargetId, threadCount);
+    ClientTest_EarlyClose(final String testName, final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
+        super(testName, client, myServerId, myTargetId, threadCount);
     }
 
     @Override
@@ -32,6 +32,9 @@ public class ClientTest_EarlyClose extends ClientTest {
         return tmp;
     }
 
+    /*
+    ** This write sends the first part of the message and then closes the channel
+     */
     @Override
     void writeHeader(ByteBuffer msgHdr, int bytesToWrite) {
         // Send the message, but only write the first SMALL_BUFFER_SIZE worth of bytes
@@ -57,20 +60,12 @@ public class ClientTest_EarlyClose extends ClientTest {
     @Override
     void targetResponse(final int result, final ByteBuffer readBuffer) {
         if (result == -1) {
-            System.out.println("ClientTest_EarlyClose passed");
+            System.out.println(super.clientTestName + " passed");
         } else {
-            System.out.println("ClientTest_EarlyClose failed");
+            System.out.println(super.clientTestName + " failed");
+            super.client.setTestFailed(super.clientTestName);
         }
 
         statusReceived(result);
     }
-
-    /*
-    ** This test should not get the httpResponse() callback
-     */
-    @Override
-    void httpResponse(final int status, final boolean headerCompleted, final boolean messageCompleted) {
-
-    }
-
 }

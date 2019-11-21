@@ -8,8 +8,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class ClientTest_SlowHeaderSend extends ClientTest {
 
-    ClientTest_SlowHeaderSend(final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
-        super(client, myServerId, myTargetId, threadCount);
+    ClientTest_SlowHeaderSend(final String testName, final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
+        super(testName, client, myServerId, myTargetId, threadCount);
     }
 
     @Override
@@ -32,6 +32,10 @@ public class ClientTest_SlowHeaderSend extends ClientTest {
         return tmp;
     }
 
+    /*
+    ** This test writes the first part of the HTTP request and then waits before sending the remainder of the
+    **   request. This is to test the slow connection handling in the Web Server connection code.
+     */
     @Override
     void writeHeader(ByteBuffer msgHdr, int bytesToWrite) {
         // Send the message, but only write the first SMALL_BUFFER_SIZE worth of bytes
@@ -52,6 +56,7 @@ public class ClientTest_SlowHeaderSend extends ClientTest {
         /*
          ** Wait 5.5 seconds before sending the remainder of the header. This should trigger
          **   the connection channel timeout handling code for headers.
+         ** TODO: Fix the wait time and wire through the error handling completely
          */
         try {
             Thread.sleep(2500);
@@ -71,14 +76,6 @@ public class ClientTest_SlowHeaderSend extends ClientTest {
         if (!waitForWriteToComp()) {
             System.out.println("Request timed out");
         }
-
-    }
-
-    @Override
-    void clientTestStep_1() {
-        /*
-         ** Do nothing here
-         */
     }
 
     /*
@@ -87,26 +84,17 @@ public class ClientTest_SlowHeaderSend extends ClientTest {
     @Override
     void targetResponse(final int result, final ByteBuffer readBuffer) {
         if (result == -1) {
-            System.out.println("ClientTest_SlowHeaderSend passed");
+            System.out.println(super.clientTestName + " passed");
         } else {
             /*
             ** TODO: This will need to be fixed when the ability to add delayed queuing to the state machine is
             **   added. That is required to allow the ConnectionState to be parked for a period of time or until
             **   an asynchronous event wakes it up to perform more work.
              */
-            System.out.println("ClientTest_SlowHeaderSend passed");
+            System.out.println(super.clientTestName + " passed");
         }
 
         statusReceived(result);
     }
-
-    /*
-     ** This test should not get the httpResponse() callback
-     */
-    @Override
-    void httpResponse(final int status, final boolean headerCompleted, final boolean messageCompleted) {
-
-    }
-
 }
 
