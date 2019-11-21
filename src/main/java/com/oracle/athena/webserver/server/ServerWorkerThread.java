@@ -67,8 +67,9 @@ public class ServerWorkerThread implements Runnable {
 
     public void start() {
 
-        workQueue = new LinkedBlockingQueue<>(maxQueueSize);
-        timedWaitQueue = new LinkedBlockingQueue<>(maxQueueSize);
+        // TODO: Need to fix the queue size to account for reserved connections
+        workQueue = new LinkedBlockingQueue<>(maxQueueSize * 2);
+        timedWaitQueue = new LinkedBlockingQueue<>(maxQueueSize * 2);
 
         bufferStatePool = new BufferStatePool(ConnectionState.MAX_OUTSTANDING_BUFFERS * maxQueueSize,
                 memoryManager);
@@ -153,7 +154,7 @@ public class ServerWorkerThread implements Runnable {
                     return false;
                 }
             } else {
-                System.out.println("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue(delayed) already on queue");
+                //System.out.println("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue(delayed) already on queue");
             }
         } else {
             if (timedWaitQueue.contains(work)) {
@@ -175,6 +176,24 @@ public class ServerWorkerThread implements Runnable {
         return true;
     }
 
+    /*
+    ** TODO: Need to fix the thread queue to only add if thread is no already running
+     */
+    public void remove(final ConnectionState work) {
+        if (workQueue.contains(work)) {
+            System.out.println("ConnectionState[" + work.getConnStateId() + "] remove() on workQueue");
+            work.markRemovedFromQueue(true);
+            workQueue.remove(work);
+        } else if (timedWaitQueue.contains(work)) {
+            /*
+             ** Need to remove this from the delayed queue and then put it on the execution
+             **   queue
+             */
+            System.out.println("ConnectionState[" + work.getConnStateId() + "] remove() on timedWaitQueue");
+            work.markRemovedFromQueue(true);
+            timedWaitQueue.remove(work);
+        }
+    }
 
     public void run() {
 
@@ -201,8 +220,8 @@ public class ServerWorkerThread implements Runnable {
                 **   checked for the elapsed timeout.
                  */
                 while ((work = timedWaitQueue.peek()) != null) {
-                    System.out.println("ServerWorkerThread(" + threadId + ") [" + work.getConnStateId() + "] currTime: " +
-                            System.currentTimeMillis());
+                    //System.out.println("ServerWorkerThread(" + threadId + ") [" + work.getConnStateId() + "] currTime: " +
+                    //        System.currentTimeMillis());
                     if (work.hasWaitTimeElapsed()) {
                         timedWaitQueue.remove(work);
                         work.markRemovedFromQueue(true);

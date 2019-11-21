@@ -151,6 +151,11 @@ abstract public class ConnectionState {
     private LinkedList<BufferState> allocatedDataBufferQueue;
 
     /*
+    **
+     */
+    protected BlockingQueue<BufferState> readErrorQueue;
+
+    /*
      **
      */
     protected BlockingQueue<BufferState> dataReadDoneQueue;
@@ -200,6 +205,13 @@ abstract public class ConnectionState {
         contentBytesAllocated = new AtomicLong(0);
         contentBytesRead = new AtomicLong(0);
         contentAllRead = new AtomicBoolean(false);
+
+        /*
+        ** This queue is used to keep track of all the buffers that have returned a read error. It is used
+        **   to insure that updates to the error state are done on the worker thread and not on the
+        **   callback thread from NIO.2
+         */
+        readErrorQueue = new LinkedBlockingQueue<>(MAX_OUTSTANDING_BUFFERS * 2);
 
         /*
         ** httpParsingError is kept in the base class so that is can also be used for the client child class as
@@ -324,7 +336,7 @@ abstract public class ConnectionState {
             connOnExecutionQueue = false;
         }
 
-        System.out.println("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //System.out.println("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
     }
 
 
@@ -547,9 +559,16 @@ abstract public class ConnectionState {
 
         System.out.println("ConnectionState[" + connStateId + "] reset()");
 
+        synchronized (queueMutex) {
+            workerThread.remove(this);
+        }
+
         releaseBufferState();
 
         closeChannel();
+
+        allocatedDataBuffers = 0;
+        outstandingDataReadCount.set(0);
 
         /*
          ** Clear the items associated with a particular worker thread that was used to execute this
@@ -600,6 +619,14 @@ abstract public class ConnectionState {
 
         addToWorkQueue(false);
     }
+
+    /*
+    **
+     */
+    public boolean readErrorQueueNotEmpty() {
+        return (!readErrorQueue.isEmpty());
+    }
+
 
     /*
     ** This adds the remainder from the buffer used to read in the header to the
@@ -805,7 +832,7 @@ abstract public class ConnectionState {
 
             @Override
             public void failed(final Throwable exc, final BufferState readBufferState) {
-                System.out.println("readFromChannel[" + connStateId + "] bytesRead: " + exc.getMessage() + " thread: " + Thread.currentThread().getName());
+                System.out.println("readFromChannel[" + connStateId + "] failed bytesRead: " + exc.getMessage() + " thread: " + Thread.currentThread().getName());
 
                 closeChannel();
 

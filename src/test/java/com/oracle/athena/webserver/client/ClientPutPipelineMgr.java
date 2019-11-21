@@ -67,6 +67,13 @@ public class ClientPutPipelineMgr extends ConnectionPipelineMgr {
         }
 
         /*
+         ** Check if there are buffers in error that need to be processed.
+         */
+        if (connectionState.readErrorQueueNotEmpty()) {
+            return ConnectionStateEnum.PROCESS_READ_ERROR;
+        }
+
+        /*
          ** The check for clientCallbackCompleted needs to be before the contentAllRead check
          **   otherwise the Connection will get stuck in the CLIENT_READ_CB state.
          **
