@@ -255,7 +255,7 @@ abstract public class ConnectionState {
     /*
      ** This checks if there is a slow client
      */
-    boolean checkSlowClientChannel() {
+    public boolean checkSlowClientChannel() {
         boolean continueExecution = true;
 
         if (timeoutChecker.inactivityThresholdReached()) {
@@ -360,7 +360,7 @@ abstract public class ConnectionState {
     ** This is the function to add BufferState to the available queue. This means the BufferState are
     **   now ready to have data read into them.
      */
-    protected int allocClientReadBufferState() {
+    public int allocClientReadBufferState() {
         System.out.println("ServerWorkerThread[" + connStateId + "] allocClientReadBufferState(1) " + Thread.currentThread().getName());
 
         while (requestedDataBuffers > 0) {
@@ -462,7 +462,7 @@ abstract public class ConnectionState {
      ** This is used to start reads into one or more buffers. It looks for BufferState objects that have
      **   their state set to READ_FROM_CHAN. It then sends those buffers off to perform asynchronous reads.
      */
-    protected void readIntoDataBuffers() {
+    public void readIntoDataBuffers() {
         BufferState bufferState;
 
         /*

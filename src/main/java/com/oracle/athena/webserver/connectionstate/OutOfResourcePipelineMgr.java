@@ -1,11 +1,44 @@
 package com.oracle.athena.webserver.connectionstate;
 
+import com.oracle.athena.webserver.statemachine.StateEntry;
+import com.oracle.athena.webserver.statemachine.StateMachine;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
+
+import java.util.function.Function;
 
 public class OutOfResourcePipelineMgr extends ConnectionPipelineMgr {
     private WebServerConnState connectionState;
 
     private boolean initialStage;
+
+    private StateMachine outOfResourceStateMachine;
+
+    private Function outOfResourceSendResponse = new Function<WebServerConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(WebServerConnState wsConn) {
+            wsConn.setupInitial();
+            return StateQueueResult.STATE_RESULT_CONTINUE;
+        }
+    };
+
+    private Function outOfResourceConnFinished = new Function<WebServerConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(WebServerConnState wsConn) {
+            initialStage = true;
+
+            wsConn.reset();
+
+            return StateQueueResult.STATE_RESULT_FREE;
+        }
+    };
+
+    private Function outOfResourceCheckSlowConnection = new Function<WebServerConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(WebServerConnState wsConn) {
+
+            return StateQueueResult.STATE_RESULT_CONTINUE;
+        }
+    };
 
     OutOfResourcePipelineMgr(WebServerConnState connState) {
 
@@ -19,6 +52,14 @@ public class OutOfResourcePipelineMgr extends ConnectionPipelineMgr {
          ** Reset the state of the pipeline
          */
         connectionState.resetResponses();
+
+        outOfResourceStateMachine = new StateMachine();
+        outOfResourceStateMachine.addStateEntry( ConnectionStateEnum.SEND_OUT_OF_RESOURCE_RESPONSE,
+                new StateEntry(outOfResourceSendResponse));
+        outOfResourceStateMachine.addStateEntry( ConnectionStateEnum.CONN_FINISHED, new StateEntry(outOfResourceConnFinished));
+        outOfResourceStateMachine.addStateEntry( ConnectionStateEnum.CHECK_SLOW_CHANNEL,
+                new StateEntry( outOfResourceCheckSlowConnection));
+
     }
 
     /*
@@ -58,6 +99,15 @@ public class OutOfResourcePipelineMgr extends ConnectionPipelineMgr {
 
     @Override
     public StateQueueResult executePipeline() {
-        return null;
+        StateQueueResult result;
+        ConnectionStateEnum nextVerb;
+
+        do {
+            nextVerb = nextPipelineStage();
+            result = outOfResourceStateMachine.stateMachineExecute(connectionState, nextVerb);
+
+        } while (result == StateQueueResult.STATE_RESULT_CONTINUE);
+
+        return result;
     }
 }

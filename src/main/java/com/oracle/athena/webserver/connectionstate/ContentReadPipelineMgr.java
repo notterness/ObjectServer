@@ -71,10 +71,10 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
             initialStage = true;
-            connectionState.resetRequestedDataBuffers();
-            connectionState.resetBuffersWaiting();
-            connectionState.resetDataBufferReadsCompleted();
-            connectionState.resetResponses();
+            wsConn.resetRequestedDataBuffers();
+            wsConn.resetBuffersWaiting();
+            wsConn.resetDataBufferReadsCompleted();
+            wsConn.resetResponses();
             return StateQueueResult.STATE_RESULT_COMPLETE;
         }
     };
@@ -180,9 +180,5 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         } while (result == StateQueueResult.STATE_RESULT_CONTINUE);
 
         return result;
-    }
-
-    public void reset() {
-        initialStage = true;
     }
 }
