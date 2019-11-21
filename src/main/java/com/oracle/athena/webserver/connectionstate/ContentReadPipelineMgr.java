@@ -24,7 +24,7 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
     private Function contentReadRequestDataBuffers = new Function<WebServerConnState, StateQueueResult>() {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
-            if (wsConn.allocClientReadBufferState() == 0 ) {
+            if (wsConn.allocClientReadBufferState() == 0) {
                 return StateQueueResult.STATE_RESULT_WAIT;
             } else {
                 return StateQueueResult.STATE_RESULT_CONTINUE;
@@ -46,13 +46,13 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
             //if (wsConn.timeoutChecker.inactivityThresholdReached()) {
 
             //} else return
-            return StateQueueResult.STATE_RESULT_REQUEUE;
+            return StateQueueResult.STATE_RESULT_CONTINUE;
         }
     };
 
     private Function contentReadSendXferResponse = new Function<WebServerConnState, StateQueueResult>() {
         public StateQueueResult apply(WebServerConnState wsConn) {
-            wsConn.sendResponse(HttpStatus.OK_200);
+            wsConn.sendResponse(wsConn.getHttpParseStatus());
             return StateQueueResult.STATE_RESULT_WAIT;
         }
     };
@@ -61,10 +61,6 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
             initialStage = true;
-            wsConn.resetRequestedDataBuffers();
-            wsConn.resetBuffersWaiting();
-            wsConn.resetDataBufferReadsCompleted();
-            wsConn.resetResponses();
             wsConn.reset();
             return StateQueueResult.STATE_RESULT_FREE;
         }
@@ -103,7 +99,7 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         contentReadStateMachine.addStateEntry(ConnectionStateEnum.ALLOC_CLIENT_DATA_BUFFER, new StateEntry(contentReadRequestDataBuffers));
         contentReadStateMachine.addStateEntry(ConnectionStateEnum.READ_CLIENT_DATA, new StateEntry(contentReadDataBuffers));
         contentReadStateMachine.addStateEntry(ConnectionStateEnum.CHECK_SLOW_CHANNEL,new StateEntry(contentReadCheckSlowChannel));
-        contentReadStateMachine.addStateEntry(ConnectionStateEnum.SEND_XFR_DATA_RESP, new StateEntry(contentReadSendXferResponse));
+        contentReadStateMachine.addStateEntry(ConnectionStateEnum.SEND_FINAL_RESPONSE, new StateEntry(contentReadSendXferResponse));
         contentReadStateMachine.addStateEntry(ConnectionStateEnum.CONN_FINISHED, new StateEntry(contentReadConnFinished));
         contentReadStateMachine.addStateEntry(ConnectionStateEnum.SETUP_NEXT_PIPELINE, new StateEntry(contentReadSetNextPipeline));
     }
@@ -148,7 +144,7 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         ** TODO: Start adding in the steps to process the content data instead of just sending status
          */
         if (connectionState.hasAllContentBeenRead() && !connectionState.hasFinalResponseBeenSent()) {
-                return ConnectionStateEnum.SEND_XFR_DATA_RESP;
+                return ConnectionStateEnum.SEND_FINAL_RESPONSE;
         }
 
         /*

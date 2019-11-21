@@ -161,6 +161,11 @@ abstract public class ConnectionState {
      */
     protected AtomicBoolean channelError;
 
+    /*
+    ** The following is used to indicate there has been a failure in the HTTP parsing.
+     */
+    protected AtomicBoolean httpParsingError;
+
 
     /*
     ** The following is used to check that progress is being made on a channel and the
@@ -195,6 +200,12 @@ abstract public class ConnectionState {
         contentBytesAllocated = new AtomicLong(0);
         contentBytesRead = new AtomicLong(0);
         contentAllRead = new AtomicBoolean(false);
+
+        /*
+        ** httpParsingError is kept in the base class so that is can also be used for the client child class as
+        **   well. For the client, it is an error in the returned response data.
+         */
+        httpParsingError = new AtomicBoolean(false);
 
         /*
         ** connChan needs to be protected since the closeChannel() method can be accessed from
@@ -236,15 +247,57 @@ abstract public class ConnectionState {
     **   thread it is going to run under.
      */
     public void setupInitial() {
-        System.out.println( "workerThread is " +workerThread);
-        if (workerThread == null) {
-            System.out.println( "workerThread is " +workerThread);
-        }
         bufferStatePool = workerThread.getBufferStatePool();
         writeThread = workerThread.getWriteThread();
         resultBuilder = workerThread.getResultBuilder();
+
+        timeoutChecker.updateTime();
     }
 
+    /*
+     ** This checks if there is a slow client
+     */
+    boolean checkSlowClientChannel() {
+        boolean continueExecution = true;
+
+        if (timeoutChecker.inactivityThresholdReached()) {
+            /*
+             ** TOTDO: Need to close out the channel and this connection
+             */
+            System.out.println("WebServerConnState[" + connStateId + "] connection timeout");
+        } else {
+            //ConnectionStateEnum overallState = pipelineManager.nextPipelineStage();
+            ConnectionStateEnum overallState = ConnectionStateEnum.CHECK_SLOW_CHANNEL;
+
+            /*
+             ** Need to wait for something to kick the state machine to a new state
+             **
+             ** The ConnectionState will get put back on the execution queue when an external
+             **   operation completes.
+             */
+            if (overallState != ConnectionStateEnum.CHECK_SLOW_CHANNEL) {
+                addToWorkQueue(false);
+            } else {
+                addToWorkQueue(true);
+                continueExecution = false;
+            }
+        }
+
+        return continueExecution;
+    }
+
+
+    /*
+    ** Accessor functions related to the HTTP Parser and when an error occurs.
+    **
+    ** getHttpParserError() will return 0 if there is no error, otherwise it will return
+    **   the value set to indicate the parsing error.
+     */
+    public void setHttpParsingError() {
+        httpParsingError.set(true);
+    }
+
+    abstract public int getHttpParseStatus();
 
     /*
     ** This is used to add the ConnectionState to the worker thread's execute queue. The
@@ -252,46 +305,28 @@ abstract public class ConnectionState {
     **   execution queue.
      */
     public void addToWorkQueue(final boolean delayedExecution) {
-
         synchronized (queueMutex) {
-            System.out.println("addToWorkQ(" + connStateId + ") " + delayedExecution + " work " + this);
-            if (delayedExecution) {
-                /*
-                 ** If this ConnectionState is already on a queue, it cannot be added
-                 **   to the delayed execution queue.
-                 */
-                if (!connOnExecutionQueue) {
-                    connOnDelayedQueue = true;
-                    nextExecuteTime = System.currentTimeMillis() + TIME_TILL_NEXT_TIMEOUT_CHECK;
-                    workerThread.addToTimedQueue(this);
-                }
-            } else {
-                if (connOnDelayedQueue) {
-                    /*
-                     ** Need to remove this from the delayed queue and then put it on the execution
-                     **   queue
-                     */
-                    connOnDelayedQueue = false;
-                    workerThread.removeFromTimedWaitQueue(this);
-                }
-
-                connOnExecutionQueue = true;
-                workerThread.put(this);
-            }
+            workerThread.put(this, delayedExecution);
         }
+    }
+
+    public void markAddedToDelayedQueue() {
+        connOnDelayedQueue = true;
+        nextExecuteTime = System.currentTimeMillis() + ConnectionState.TIME_TILL_NEXT_TIMEOUT_CHECK;
     }
 
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
 
-        synchronized (queueMutex) {
-            if (delayedExecutionQueue) {
-                connOnDelayedQueue = false;
-                nextExecuteTime = 0;
-            } else {
-                connOnExecutionQueue = false;
-            }
+        if (delayedExecutionQueue) {
+            connOnDelayedQueue = false;
+            nextExecuteTime = 0;
+        } else {
+            connOnExecutionQueue = false;
         }
+
+        System.out.println("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
     }
+
 
     public boolean hasWaitTimeElapsed() {
         long currTime = System.currentTimeMillis();
@@ -300,7 +335,12 @@ abstract public class ConnectionState {
             return false;
         }
 
+        System.out.println("ServerWorkerThread[" + connStateId + "] waitTimeElapsed " + currTime);
         return true;
+    }
+
+    public long getNextExecuteTime() {
+        return nextExecuteTime;
     }
 
     /*
@@ -322,8 +362,8 @@ abstract public class ConnectionState {
     ** This is the function to add BufferState to the available queue. This means the BufferState are
     **   now ready to have data read into them.
      */
-    public int allocClientReadBufferState() {
-        System.out.println("ServerWorkerThread(" + connStateId + ") allocClientReadBufferState(1) " + Thread.currentThread().getName());
+    protected int allocClientReadBufferState() {
+        System.out.println("ServerWorkerThread[" + connStateId + "] allocClientReadBufferState(1) " + Thread.currentThread().getName());
 
         while (requestedDataBuffers > 0) {
             /*
@@ -333,7 +373,7 @@ abstract public class ConnectionState {
             if (allocatedDataBuffers < MAX_OUTSTANDING_BUFFERS) {
                 BufferState bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_DATA_FROM_CHAN, MemoryManager.MEDIUM_BUFFER_SIZE);
                 if (bufferState != null) {
-                    System.out.println("ServerWorkerThread(" + connStateId + ") allocClientReadBufferState(2)");
+                    System.out.println("ServerWorkerThread[" + connStateId + "] allocClientReadBufferState(2)");
 
                     allocatedDataBuffers++;
                     allocatedDataBufferQueue.add(bufferState);
@@ -424,7 +464,7 @@ abstract public class ConnectionState {
      ** This is used to start reads into one or more buffers. It looks for BufferState objects that have
      **   their state set to READ_FROM_CHAN. It then sends those buffers off to perform asynchronous reads.
      */
-    public void readIntoDataBuffers() {
+    protected void readIntoDataBuffers() {
         BufferState bufferState;
 
         /*
@@ -528,8 +568,9 @@ abstract public class ConnectionState {
         contentBytesToRead.set(0);
         contentBytesAllocated.set(0);
         contentBytesRead.set(0);
-        contentAllRead.set(false) ;
+        contentAllRead.set(false);
 
+        httpParsingError.set(false);
     }
 
 

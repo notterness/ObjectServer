@@ -1,5 +1,6 @@
 package com.oracle.athena.webserver.server;
 
+import com.oracle.athena.webserver.connectionstate.BlockingConnectionStatePool;
 import com.oracle.athena.webserver.connectionstate.ConnectionState;
 import com.oracle.athena.webserver.connectionstate.ConnectionStatePool;
 import com.oracle.athena.webserver.connectionstate.WebServerConnState;
@@ -16,17 +17,17 @@ import java.nio.channels.AsynchronousSocketChannel;
  */
 public class ServerLoadBalancer {
 
-    protected ServerWorkerThread[] threadPool;
+    private final static int RESERVED_CONN_COUNT = 2;
 
-    protected MemoryManager memoryManager;
-
-    protected int workerThreads;
-    protected int maxQueueSize;
+    protected final ServerWorkerThread[] threadPool;
+    protected final MemoryManager memoryManager;
+    protected final int workerThreads;
+    protected final int maxQueueSize;
     protected int lastQueueUsed;
-
-    protected int serverBaseId;
+    protected final int serverBaseId;
 
     private ConnectionStatePool<WebServerConnState> connPool;
+    private ConnectionStatePool<WebServerConnState> reservedBlockingConnPool;
 
 
     /*
@@ -44,17 +45,13 @@ public class ServerLoadBalancer {
         workerThreads = numWorkerThreads;
         maxQueueSize = queueSize;
         serverBaseId = serverClientId;
-
         this.memoryManager = memoryManager;
+        threadPool = new ServerWorkerThread[workerThreads];
 
         System.out.println("ServerLoadBalancer[" + serverClientId + "] workerThreads: " + workerThreads + " maxQueueSize: " + maxQueueSize);
     }
 
     void start() {
-        final int RESERVED_CONN_COUNT = 2;
-
-        threadPool = new ServerWorkerThread[workerThreads];
-
         for (int i = 0; i < workerThreads; i++) {
             ServerWorkerThread worker = new ServerWorkerThread(maxQueueSize, memoryManager,
                     (serverBaseId + i));
@@ -62,19 +59,24 @@ public class ServerLoadBalancer {
             threadPool[i] = worker;
         }
 
-        connPool = new ConnectionStatePool<>(workerThreads * maxQueueSize, RESERVED_CONN_COUNT);
+        connPool = new ConnectionStatePool<>(workerThreads * maxQueueSize);
+        reservedBlockingConnPool = new BlockingConnectionStatePool<>(RESERVED_CONN_COUNT);
 
         /*
         ** The following ugly code is due to the fact that you cannot create a object of generic type <T> within
         **   and generic class that uses <T>
          */
         WebServerConnState conn;
-        for (int i = 0; i < (workerThreads * maxQueueSize) + RESERVED_CONN_COUNT; i++) {
+        for (int i = 0; i < (workerThreads * maxQueueSize); i++) {
             conn = new WebServerConnState(connPool, (serverBaseId + i + 1));
-
             conn.start();
-
             connPool.freeConnectionState(conn);
+        }
+        // also populate the reserved connection pool
+        for (int i = 0; i < RESERVED_CONN_COUNT; i++) {
+            conn = new WebServerConnState(reservedBlockingConnPool, (serverBaseId + i + 1));
+            conn.start();
+            reservedBlockingConnPool.freeConnectionState(conn);
         }
 
         lastQueueUsed = 0;
@@ -100,10 +102,10 @@ public class ServerLoadBalancer {
         WebServerConnState work = connPool.allocConnectionState(chan);
         if (work == null) {
             /*
-            ** This means the primary pool of connections has been depleted and one needs to be allocated from the
-            **    special pool to return an error.
+                This means the primary pool of connections has been depleted and one needs to be allocated from the
+                special pool to return an error.
              */
-            work = connPool.allocConnectionStateBlocking(chan);
+            work = reservedBlockingConnPool.allocConnectionState(chan);
             if (work == null) {
                 /*
                 ** This means there was an exception while waiting to allocate the connection. Simply close the

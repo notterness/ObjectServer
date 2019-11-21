@@ -27,8 +27,6 @@ public class TestClientReadCallback extends ClientDataReadCallback {
              */
             readBuffer.flip();
 
-            System.out.println("buffer " + readBuffer.position() + " " + readBuffer.limit());
-
             // continue parsing
             if (httpParser.isState(HttpParser.State.END))
                 httpParser.reset();

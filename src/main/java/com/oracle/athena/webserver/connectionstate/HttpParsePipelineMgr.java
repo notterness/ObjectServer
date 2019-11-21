@@ -1,10 +1,10 @@
 package com.oracle.athena.webserver.connectionstate;
 
+import org.eclipse.jetty.http.HttpStatus;
 
 import com.oracle.athena.webserver.statemachine.StateEntry;
 import com.oracle.athena.webserver.statemachine.StateMachine;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
-import org.eclipse.jetty.http.HttpStatus;
 
 import java.util.function.Function;
 
@@ -21,7 +21,6 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
             wsConn.setupInitial();
-            wsConn.setRequestedHttpBuffers(1);
             return StateQueueResult.STATE_RESULT_CONTINUE;
         }
     };
@@ -59,9 +58,8 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         public StateQueueResult apply(WebServerConnState wsConn) {
             initialStage = true;
 
-            wsConn.resetHttpReadValues();
-            wsConn.resetContentAllRead();
             wsConn.reset();
+
             return StateQueueResult.STATE_RESULT_FREE;
         }
     };
@@ -69,16 +67,17 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
     private Function httpParseCheckSlowConnection = new Function<WebServerConnState, StateQueueResult>() {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
-            //if (wsConn.checkSlowClientChannel()) {
-
-            //} else return
-            return StateQueueResult.STATE_RESULT_REQUEUE;
+            if (wsConn.checkSlowClientChannel()) {
+                return StateQueueResult.STATE_RESULT_REQUEUE;
+            } else {
+                return StateQueueResult.STATE_RESULT_WAIT;
+            }
         }
     };
 
     private Function httpParseSendXferResponse = new Function<WebServerConnState, StateQueueResult>() {
         public StateQueueResult apply(WebServerConnState wsConn) {
-            wsConn.sendResponse(HttpStatus.OK_200);
+            wsConn.sendResponse(wsConn.getHttpParseStatus());
             return StateQueueResult.STATE_RESULT_WAIT;
         }
     };
@@ -90,7 +89,6 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
             wsConn.resetHttpReadValues();
             wsConn.resetContentAllRead();
             wsConn.setupNextPipeline();
-            wsConn.resetResponses();
             return StateQueueResult.STATE_RESULT_COMPLETE;
         }
     };
@@ -114,6 +112,10 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
          */
         connectionState.resetContentAllRead();
 
+        /*
+        ** In error cases, this pipeline will send out error responses.
+         */
+        connectionState.resetResponses();
         httpParseStateMachine = new StateMachine();
         httpParseStateMachine.addStateEntry(ConnectionStateEnum.INITIAL_SETUP, new StateEntry(httpParseInitialSetup));
         httpParseStateMachine.addStateEntry(ConnectionStateEnum.CHECK_SLOW_CHANNEL, new StateEntry(httpParseCheckSlowConnection));
@@ -122,7 +124,7 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         httpParseStateMachine.addStateEntry(ConnectionStateEnum.PARSE_HTTP_BUFFER, new StateEntry(httpParseHttpBuffer));
         httpParseStateMachine.addStateEntry(ConnectionStateEnum.CONN_FINISHED, new StateEntry(httpParseConnFinished));
         httpParseStateMachine.addStateEntry(ConnectionStateEnum.SETUP_NEXT_PIPELINE, new StateEntry(httpParseSetupNextPipeline));
-        httpParseStateMachine.addStateEntry(ConnectionStateEnum.SEND_XFR_DATA_RESP, new StateEntry(httpParseSendXferResponse));
+        httpParseStateMachine.addStateEntry(ConnectionStateEnum.SEND_FINAL_RESPONSE, new StateEntry(httpParseSendXferResponse));
     }
 
     /*
@@ -181,6 +183,22 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
 
             // TODO: Need to log something to indicate waiting for reads to complete
             return ConnectionStateEnum.CHECK_SLOW_CHANNEL;
+        }
+
+        /*
+         ** The status has been sent so cleanup the connection. This check needs to proceed any checks
+         **   that will cause a response to be sent.
+         */
+        if (connectionState.finalResponseSent()) {
+            return ConnectionStateEnum.CONN_FINISHED;
+        }
+
+        /*
+         ** Check if there has been an HTTP headers parsing error and if so, return the appropriate
+         **    response to the client.
+         */
+        if (connectionState.getHttpParseStatus() != HttpStatus.OK_200) {
+            return ConnectionStateEnum.SEND_FINAL_RESPONSE;
         }
 
         /*
