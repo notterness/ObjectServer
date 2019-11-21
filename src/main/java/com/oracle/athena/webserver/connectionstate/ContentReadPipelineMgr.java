@@ -61,9 +61,7 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
             initialStage = true;
-
             wsConn.reset();
-
             return StateQueueResult.STATE_RESULT_FREE;
         }
     };
