@@ -8,6 +8,7 @@ import io.vertx.core.http.HttpServerRequest;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
 
+import javax.ws.rs.core.HttpHeaders;
 import java.util.Base64;
 import java.util.Optional;
 
@@ -45,6 +46,32 @@ public final class ChecksumHelper {
                 "' was not the correct length after base-64 decoding");
         }
     }
+
+    /**
+     * Reads the MD5 information from {@code Content-Md5} header from a client request.
+     *
+     * @param headers the headers
+     * @return the md5 header in base64 format
+     */
+    public static Optional<String> getContentMD5Header(HttpHeaders headers) {
+        String contentMD5 = headers.getHeaderString(io.vertx.core.http.HttpHeaders.CONTENT_MD5.toString());
+        if (contentMD5 == null || contentMD5.isEmpty()) {
+            return Optional.empty();
+        }
+
+        try {
+            byte[] bytes = BaseEncoding.base64().decode(contentMD5);
+            if (bytes.length != 16) {
+                throw new InvalidMd5Exception("The value of the Content-MD5 header '" + contentMD5 +
+                        "' was not the correct length after base-64 decoding");
+            }
+            return Optional.of(contentMD5);
+        } catch (IllegalArgumentException iaex) {
+            throw new InvalidMd5Exception("The value of the Content-MD5 header '" + contentMD5 +
+                    "' was not the correct length after base-64 decoding");
+        }
+    }
+
 
     public static String computeBase64MD5(byte[] bytes) {
         return BaseEncoding.base64().encode(Hashing.md5().newHasher().putBytes(bytes).hash().asBytes());

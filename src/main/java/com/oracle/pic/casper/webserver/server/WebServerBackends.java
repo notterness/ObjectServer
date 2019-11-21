@@ -116,7 +116,7 @@ public final class WebServerBackends {
 
         getObjBackend = new GetObjectBackend(
             backend,
-            clients.getVolumeStorageClient(),
+            clients.getAthenaVolumeStorageClient(),
             clients.getVolumeMetadataCache(),
             auths.getAuthorizer(),
             bucketBackend,
@@ -125,7 +125,7 @@ public final class WebServerBackends {
         // override authorizer for PARs
         parGetObjBackend = new GetObjectBackend(
             backend,
-            clients.getVolumeStorageClient(),
+            clients.getAthenaVolumeStorageClient(),
             clients.getVolumeMetadataCache(),
             parAuthorizer,
             bucketBackend,

@@ -1,5 +1,6 @@
 package com.oracle.pic.casper.webserver.api.auth;
 
+import com.oracle.pic.casper.common.metrics.MetricScope;
 import com.oracle.pic.casper.webserver.api.model.GetPreAuthenticatedRequestRequest;
 import com.oracle.pic.casper.webserver.api.model.PreAuthenticatedRequestMetadata;
 import com.oracle.pic.casper.webserver.api.model.exceptions.ParNotFoundException;
@@ -12,6 +13,7 @@ import io.vertx.ext.web.RoutingContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.ws.rs.core.HttpHeaders;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -79,6 +81,12 @@ public class ParAuthenticator implements AsyncAuthenticator {
     @Override
     public CompletableFuture<AuthenticationInfo> authenticatePutObject(RoutingContext context) {
         return authenticateViaPars(context);
+    }
+
+    // TODO :implement
+    @Override
+    public AuthenticationInfo authenticatePutObject(HttpHeaders headersOrig, String uriString, String namespace, String method, MetricScope metricScope) {
+        return null;
     }
 
 

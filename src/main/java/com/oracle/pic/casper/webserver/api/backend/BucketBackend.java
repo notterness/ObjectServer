@@ -1554,6 +1554,53 @@ public final class BucketBackend {
     }
 
     /**
+     * This method is only used by Object operations, NOT for bucket update/delete/get
+     */
+    public WSTenantBucketInfo getBucketMetadataWithCache(String namespace,
+                                                         String bucketName,
+                                                         Api api) {
+        final BucketKey bucketKey = new BucketKey(namespace, bucketName, api);
+        try {
+            // getBucketMetadata method only throws runtime exception, we cast the cause of ExecutionException and
+            // UncheckedExecutionException to runtime exception and pop it up to the caller.
+            final Optional<WSTenantBucketInfo> wsTenantBucketInfo = cachedBuckets.get(bucketKey);
+
+            // The reason we want to return an Optional<WSTenantBucketInfo> is that if there was already any entry of
+            // a bucket after a bucket was deleted. Why this can happen? This will happen if there was no Object relate
+            // operation hit this method after the delete bucket operation set the bucket uncacheable, and it will
+            // happen for the first Object related operation that hit this method. To solve this problem we let the
+            // cacheloader load the entry by calling getBucketMetadataWithNullValue which return an Optional.emtpy() for
+            // deleted bucket and we throw the NoSuchBucketException here.
+            if (!wsTenantBucketInfo.isPresent()) {
+                cachedBuckets.invalidate(bucketKey);
+                throw new NoSuchBucketException(BucketBackend.noSuchBucketMsg(bucketName, namespace));
+            }
+            // if the bucket was set to not cacheable we need to invalidate the cache to prevent it having old value so
+            // long.
+            if (!wsTenantBucketInfo.get().isCacheable()) {
+                cachedBuckets.invalidate(bucketKey);
+            }
+
+            return wsTenantBucketInfo.get();
+        } catch (ExecutionException | UncheckedExecutionException ex) {
+            // we configure expireAfterWrite = 10 minutes refreshAfterWrite = 1 seconds
+            // 1. if the value is not in cache, the cache will load from tenantDb, if tenantDb throw exception, we
+            //    propagate it. If not, load successfully and return it.
+            // 2. if value is in cache and not expire and less than 1s, just return, no need to load
+            // 3. if value is in cache and older than 1s, will load if load failed, it will still return the value and
+            //    swallow the exception
+            // 4. expireAfterWrite expires will reload and if reload failed, it will just throw exception.
+
+            // tenantBackend.getBucketInfo currently never throw checked exception, here we re-throw the inner cause
+            // to keep the current behavior.
+            Throwables.throwIfUnchecked(ex.getCause());
+
+            // If for some reason, it is checked exception, we return 500 to user.
+            throw new InternalServerErrorException(ex.getCause());
+        }
+    }
+
+    /**
      * Gets bucket metadata. Throws exception if bucket doesn't exist.
      * Call this only on Vertx worker thread.
      */

@@ -1,13 +1,17 @@
 package com.oracle.pic.casper.webserver.api.auth;
 
+import com.oracle.pic.casper.common.metrics.MetricScope;
 import com.oracle.pic.casper.common.model.BucketPublicAccessType;
+import com.oracle.pic.casper.webserver.api.ratelimit.EmbargoContext;
 import com.oracle.pic.casper.webserver.auth.CasperPermission;
 import com.oracle.pic.casper.objectmeta.NamespaceKey;
 import com.oracle.pic.casper.webserver.util.WSRequestContext;
 import com.oracle.pic.tagging.client.tag.TagSet;
 
 import javax.annotation.Nullable;
+import java.util.Collection;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Interface for all classes that perform authorization of HTTP requests.
@@ -55,12 +59,42 @@ public interface Authorizer {
                                               CasperPermission... permissions);
 
     /**
-     * Authorize a user for one or more permissions on a compartment with the given added or changed tags.
-     * @param newTagSet the new TagSet to update
-     * @param oldTagSet the current TagSet of the bucket
-     * @param kmsKeyUpdateAuth the kmsKeyId and it's KeyDelegationPermission, NOT null.
-     * @param authorizeAll if true all provided permissions will be checked, otherwise authz will pass if any exist
+     * Authorize the given user against the given compartment using the given action (verb).
+     *
+     * @param authInfo         The authentication information for the user making the request.
+     * @param namespaceKey     Used for debugging purposes
+     * @param bucketName       Used for authorization policies that match on bucket name
+     * @param compartmentId    The compartment ID against which the action would be taken.
+     * @param bucketAccessType Used by object operations.
+     * @param operation        The name of the operation, which must match the name in the Swagger specification!
+     * @param kmsKeyId         The kmsKeyId used to do kmsKeyId enforcement check.
+     * @param authorizeAll     if true all provided permissions will be checked, otherwise authz will pass if any exist
+     * @param permissions      The list of permissions that a user must have to do this operation.
+     * @return Optional is not empty if the authorization succeeded, empty otherwise.
      */
+    Optional<AuthorizationResponse> authorize(AuthenticationInfo authInfo,
+                                                     @Nullable NamespaceKey namespaceKey,
+                                                     @Nullable String bucketName,
+                                                     String compartmentId,
+                                                     BucketPublicAccessType bucketAccessType,
+                                                     CasperOperation operation,
+                                                     String kmsKeyId,
+                                                     boolean authorizeAll,
+                                                     boolean tenancyDeleted,
+                                                     MetricScope rootScope,
+                                                     Set<CasperPermission> permissions,
+                                                     EmbargoContext embargoContext,
+                                                     String vcnId,
+                                                     String vcnDebugId,
+                                                     String namespace);
+
+        /**
+         * Authorize a user for one or more permissions on a compartment with the given added or changed tags.
+         * @param newTagSet the new TagSet to update
+         * @param oldTagSet the current TagSet of the bucket
+         * @param kmsKeyUpdateAuth the kmsKeyId and it's KeyDelegationPermission, NOT null.
+         * @param authorizeAll if true all provided permissions will be checked, otherwise authz will pass if any exist
+         */
     Optional<AuthorizationResponse> authorizeWithTags(WSRequestContext context,
                                             AuthenticationInfo authInfo,
                                             @Nullable NamespaceKey namespaceKey,

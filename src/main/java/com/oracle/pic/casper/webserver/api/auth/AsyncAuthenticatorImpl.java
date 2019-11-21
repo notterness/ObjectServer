@@ -1,5 +1,6 @@
 package com.oracle.pic.casper.webserver.api.auth;
 
+import com.oracle.pic.casper.common.metrics.MetricScope;
 import com.oracle.pic.casper.common.util.CommonRequestContext;
 import com.oracle.pic.casper.common.vertx.VertxUtil;
 import com.oracle.pic.casper.webserver.util.WSRequestContext;
@@ -24,6 +25,10 @@ public class AsyncAuthenticatorImpl implements AsyncAuthenticator {
         final CommonRequestContext commonContext = WSRequestContext.getCommonRequestContext(context);
         return VertxUtil.runAsync(commonContext.getMetricScope().child("authenticate"),
                 () -> authenticator.authenticatePutObject(context));
+    }
+
+    public AuthenticationInfo authenticatePutObject(javax.ws.rs.core.HttpHeaders headersOrig, String uriString, String namespace, String method, MetricScope metricScope) {
+        return authenticator.authenticatePutObject(headersOrig, uriString, namespace, method, metricScope);
     }
 
     public CompletableFuture<AuthenticationInfo> authenticate(RoutingContext context, String bodySha256) {
