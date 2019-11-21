@@ -1,6 +1,5 @@
 package com.oracle.athena.webserver.http.parser;
 
-import software.amazon.ion.SystemSymbols;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;

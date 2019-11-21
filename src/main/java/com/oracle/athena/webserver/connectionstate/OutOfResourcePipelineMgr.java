@@ -1,5 +1,7 @@
 package com.oracle.athena.webserver.connectionstate;
 
+import com.oracle.athena.webserver.statemachine.StateQueueResult;
+
 public class OutOfResourcePipelineMgr extends ConnectionPipelineMgr {
     private WebServerConnState connectionState;
 
@@ -52,5 +54,10 @@ public class OutOfResourcePipelineMgr extends ConnectionPipelineMgr {
         }
 
         return ConnectionStateEnum.CHECK_SLOW_CHANNEL;
+    }
+
+    @Override
+    public StateQueueResult executePipeline() {
+        return null;
     }
 }

@@ -129,6 +129,17 @@ public class ClientConnState extends ConnectionState {
         }
     }
 
+    /*
+     **
+     */
+    @Override
+    public void setupInitial() {
+        super.setupInitial();
+
+        System.out.println("WebServerConnState[" + getConnStateId() + "] INITIAL_SETUP server");
+        addRequestedDataBuffer();
+    }
+
 
     /*
      ** This walks through the array of BufferState to find the next one that has completed

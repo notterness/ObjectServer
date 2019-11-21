@@ -66,7 +66,7 @@ class WriteConnectionTests {
      */
     @Test
     void canCallWriteDataOnConstruction() {
-        // note this is how we get around the "only one new() call".
+        // note this is how we mock (in its simplest form) ancillary objects that we don't care about
         final WriteCompletion fakeWriteCompletion = Mockito.mock(WriteCompletion.class);
         final WriteConnection writeConnection = new WriteConnection(System.nanoTime());
         Assertions.assertTrue(writeConnection.writeData(fakeWriteCompletion), "Should be able to write data");

@@ -246,13 +246,46 @@ abstract public class ConnectionState {
     ** This is to perform some initial setup and could be removed if the ConnectionState is tied to the
     **   thread it is going to run under.
      */
-    protected void setupInitial() {
+    public void setupInitial() {
         bufferStatePool = workerThread.getBufferStatePool();
         writeThread = workerThread.getWriteThread();
         resultBuilder = workerThread.getResultBuilder();
 
         timeoutChecker.updateTime();
     }
+
+    /*
+     ** This checks if there is a slow client
+     */
+    boolean checkSlowClientChannel() {
+        boolean continueExecution = true;
+
+        if (timeoutChecker.inactivityThresholdReached()) {
+            /*
+             ** TOTDO: Need to close out the channel and this connection
+             */
+            System.out.println("WebServerConnState[" + connStateId + "] connection timeout");
+        } else {
+            //ConnectionStateEnum overallState = pipelineManager.nextPipelineStage();
+            ConnectionStateEnum overallState = ConnectionStateEnum.CHECK_SLOW_CHANNEL;
+
+            /*
+             ** Need to wait for something to kick the state machine to a new state
+             **
+             ** The ConnectionState will get put back on the execution queue when an external
+             **   operation completes.
+             */
+            if (overallState != ConnectionStateEnum.CHECK_SLOW_CHANNEL) {
+                addToWorkQueue(false);
+            } else {
+                addToWorkQueue(true);
+                continueExecution = false;
+            }
+        }
+
+        return continueExecution;
+    }
+
 
     /*
     ** Accessor functions related to the HTTP Parser and when an error occurs.

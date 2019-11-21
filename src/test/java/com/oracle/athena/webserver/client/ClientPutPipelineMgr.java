@@ -2,6 +2,7 @@ package com.oracle.athena.webserver.client;
 
 import com.oracle.athena.webserver.connectionstate.ConnectionPipelineMgr;
 import com.oracle.athena.webserver.connectionstate.ConnectionStateEnum;
+import com.oracle.athena.webserver.statemachine.StateQueueResult;
 
 public class ClientPutPipelineMgr extends ConnectionPipelineMgr {
 
@@ -99,4 +100,9 @@ public class ClientPutPipelineMgr extends ConnectionPipelineMgr {
         return ConnectionStateEnum.CHECK_SLOW_CHANNEL;
     }
 
+    public StateQueueResult executePipeline() {
+        StateQueueResult result = StateQueueResult.STATE_RESULT_COMPLETE;
+
+        return result;
+    }
 }
