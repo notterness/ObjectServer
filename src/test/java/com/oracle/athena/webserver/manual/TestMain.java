@@ -24,7 +24,7 @@ public class TestMain {
          */
         TestClient client = new TestClient((baseTcpPortOffset + 1));
         client.start();
-/*
+
         ClientTest client_1 = new ClientTest_2("ClientTest_2", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_1.start();
 
@@ -37,14 +37,11 @@ public class TestMain {
         ClientTest oneMbPut = new ClientTest_OneMbPut("OneMbPut", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         oneMbPut.start();
 
-
- */
-        //ClientTest outOfConnections = new ClientTest_OutOfConnections("OutOfConnections", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
-        //outOfConnections.start();
+        ClientTest outOfConnections = new ClientTest_OutOfConnections("OutOfConnections", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        outOfConnections.start();
 
         System.out.println("Starting Tests");
 
-        threadCount.incrementAndGet();
         waitForTestsToComplete(threadCount);
 
         String failedTestName = client.getFailedTestName();
@@ -54,13 +51,11 @@ public class TestMain {
             System.out.println("FAILURE: At Least One Test Failed - first failed test " + failedTestName);
         }
 
-        /*
         client_1.stop();
         earlyClose.stop();
         slowHeaderSend.stop();
         oneMbPut.stop();
-        */
-        //outOfConnections.stop();
+        outOfConnections.stop();
 
         if (failedTestName == null) {
             /*
