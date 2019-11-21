@@ -739,6 +739,10 @@ public class WebServerConnState extends ConnectionState {
         resetHttpReadValues();
         resetContentAllRead();
 
+        /*
+        ** Reset the pipeline back to the Parse HTTP Pipeline for the next iteration of this connection
+         */
+        pipelineManager = httpParsePipelineMgr;
 
         /*
          ** Clear the write connection (it may already be null) since it will not be valid with the next

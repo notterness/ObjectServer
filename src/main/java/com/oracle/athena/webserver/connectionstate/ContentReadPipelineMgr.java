@@ -43,10 +43,11 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
     private Function contentReadCheckSlowChannel = new Function<WebServerConnState, StateQueueResult>() {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
-            //if (wsConn.timeoutChecker.inactivityThresholdReached()) {
-
-            //} else return
-            return StateQueueResult.STATE_RESULT_CONTINUE;
+            if (wsConn.checkSlowClientChannel()) {
+                return StateQueueResult.STATE_RESULT_REQUEUE;
+            } else {
+                return StateQueueResult.STATE_RESULT_WAIT;
+            }
         }
     };
 
