@@ -253,7 +253,7 @@ public class WebServerConnState extends ConnectionState {
      ** This is used to determine which pipeline to execute after the parsing and validation of the HTTP headers
      **   has been completed.
      */
-    void setupNextPipeline() {
+    public void setupNextPipeline() {
         /*
          ** Get rid of the current pipeline
          */
@@ -263,7 +263,7 @@ public class WebServerConnState extends ConnectionState {
         ** First check if this is an out of resources response
          */
         if (outOfResourcesResponse) {
-            pipelineManager = new OutOfResourcePipelineMgr(this);
+            pipelineManager = outOfResourcePipelineMgr;
             return;
         }
 
@@ -719,7 +719,6 @@ public class WebServerConnState extends ConnectionState {
         return parsingStatus;
     }
 
-
     public void reset() {
         dataResponseSent.set(false);
 
@@ -754,7 +753,6 @@ public class WebServerConnState extends ConnectionState {
         pipelineManager = httpParsePipelineMgr;
 
         super.reset();
-    }
 
         // Now release this back to the free pool so it can be reused
         connectionStatePool.freeConnectionState(this);

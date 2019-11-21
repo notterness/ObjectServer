@@ -180,8 +180,4 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
 
         return result;
     }
-
-    public void reset() {
-        initialStage = true;
-    }
 }

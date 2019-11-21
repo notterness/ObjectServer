@@ -17,7 +17,6 @@ public class OutOfResourcePipelineMgr extends ConnectionPipelineMgr {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
             wsConn.setupInitial();
-            wsConn.setRequestedHttpBuffers(1);
             return StateQueueResult.STATE_RESULT_CONTINUE;
         }
     };
@@ -26,7 +25,8 @@ public class OutOfResourcePipelineMgr extends ConnectionPipelineMgr {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
             initialStage = true;
-            wsConn.resetResponses();
+
+            wsConn.reset();
 
             return StateQueueResult.STATE_RESULT_FREE;
         }
@@ -54,7 +54,7 @@ public class OutOfResourcePipelineMgr extends ConnectionPipelineMgr {
         connectionState.resetResponses();
 
         outOfResourceStateMachine = new StateMachine();
-        outOfResourceStateMachine.addStateEntry( ConnectionStateEnum.SEND_OUT_OF_RESOURCE_RESP,
+        outOfResourceStateMachine.addStateEntry( ConnectionStateEnum.SEND_OUT_OF_RESOURCE_RESPONSE,
                 new StateEntry(outOfResourceSendResponse));
         outOfResourceStateMachine.addStateEntry( ConnectionStateEnum.CONN_FINISHED, new StateEntry(outOfResourceConnFinished));
         outOfResourceStateMachine.addStateEntry( ConnectionStateEnum.CHECK_SLOW_CHANNEL,
