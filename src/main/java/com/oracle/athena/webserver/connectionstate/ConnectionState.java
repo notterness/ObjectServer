@@ -95,8 +95,6 @@ abstract public class ConnectionState {
     **    outstandingDataReadCount - This is the number of outstanding content reads are currently in progress.
     **    contentAllRead -
     **
-    ** TODO: outstandingDataReadCount and dataBufferReadsCompleted are marked public so the subclass
-    **   ClientConnState can access them
      */
     protected AtomicInteger outstandingDataReadCount;
     private int requestedDataBuffers;

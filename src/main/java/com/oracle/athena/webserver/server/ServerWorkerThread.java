@@ -137,6 +137,7 @@ public class ServerWorkerThread implements Runnable {
                 delayedExecution);
 
         if (workQueue.contains(work)) {
+            //FIXME: is this really something we want to happen, rather than a programming error?
             System.out.println("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue() already on workQueue");
             return true;
         }
@@ -147,6 +148,7 @@ public class ServerWorkerThread implements Runnable {
             **   to the delayed execution queue
              */
             if (!timedWaitQueue.contains(work)) {
+                //FIXME: creates a case in which work is marked on delay queue but is not on delay queue
                 work.markAddedToDelayedQueue();
                 if (!timedWaitQueue.offer(work)) {
                     System.out.println("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue(delayed) unable to add");
