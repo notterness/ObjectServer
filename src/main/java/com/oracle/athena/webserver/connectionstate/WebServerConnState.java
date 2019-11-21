@@ -31,6 +31,9 @@ public class WebServerConnState extends ConnectionState {
     **   HttpParsePipeline
      */
     private ConnectionPipelineMgr pipelineManager;
+    private ContentReadPipelineMgr readPipelineMgr;
+    private HttpParsePipelineMgr httpParsePipelineMgr;
+
 
 
     /*
@@ -151,7 +154,13 @@ public class WebServerConnState extends ConnectionState {
 
         httpParser = new ByteBufferHttpParser(casperHttpInfo);
 
-        pipelineManager = new HttpParsePipelineMgr(this);
+        httpParsePipelineMgr = new HttpParsePipelineMgr(this);
+        readPipelineMgr = new ContentReadPipelineMgr(this);
+
+        /*
+         ** start with the http manager.
+         */
+        pipelineManager = httpParsePipelineMgr;
     }
 
     @Override
@@ -264,11 +273,11 @@ public class WebServerConnState extends ConnectionState {
         HttpMethodEnum method = casperHttpInfo.getMethod();
         switch (method) {
             case PUT_METHOD:
-                pipelineManager = new ContentReadPipelineMgr(this);
+                pipelineManager = readPipelineMgr;
                 break;
 
             case POST_METHOD:
-                pipelineManager = new ContentReadPipelineMgr(this);
+                pipelineManager = readPipelineMgr;
                 break;
 
             case INVALID_METHOD:
