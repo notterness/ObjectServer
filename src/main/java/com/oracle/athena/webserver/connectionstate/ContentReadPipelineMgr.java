@@ -43,10 +43,11 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
     private Function contentReadCheckSlowChannel = new Function<WebServerConnState, StateQueueResult>() {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
-            //if (wsConn.timeoutChecker.inactivityThresholdReached()) {
-
-            //} else return
-            return StateQueueResult.STATE_RESULT_CONTINUE;
+            if (wsConn.checkSlowClientChannel()) {
+                return StateQueueResult.STATE_RESULT_REQUEUE;
+            } else {
+                return StateQueueResult.STATE_RESULT_WAIT;
+            }
         }
     };
 
@@ -70,13 +71,32 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
             initialStage = true;
-            connectionState.resetRequestedDataBuffers();
-            connectionState.resetBuffersWaiting();
-            connectionState.resetDataBufferReadsCompleted();
-            connectionState.resetResponses();
+            wsConn.resetRequestedDataBuffers();
+            wsConn.resetBuffersWaiting();
+            wsConn.resetDataBufferReadsCompleted();
+            wsConn.resetResponses();
             return StateQueueResult.STATE_RESULT_COMPLETE;
         }
     };
+
+    private Function contentReadProcessReadError = new Function<WebServerConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(WebServerConnState wsConn){
+            if (wsConn.processReadErrorQueue()) {
+                return StateQueueResult.STATE_RESULT_CONTINUE;
+            }
+            return StateQueueResult.STATE_RESULT_REQUEUE;
+        }
+    };
+
+    private Function contentReadProcessFinalResponseSend = new Function<WebServerConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(WebServerConnState wsConn){
+            wsConn.processResponseWriteDone();
+            return StateQueueResult.STATE_RESULT_REQUEUE;
+        }
+    };
+
 
     ContentReadPipelineMgr(WebServerConnState connState) {
 
@@ -102,6 +122,8 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         contentReadStateMachine.addStateEntry(ConnectionStateEnum.SEND_FINAL_RESPONSE, new StateEntry(contentReadSendXferResponse));
         contentReadStateMachine.addStateEntry(ConnectionStateEnum.CONN_FINISHED, new StateEntry(contentReadConnFinished));
         contentReadStateMachine.addStateEntry(ConnectionStateEnum.SETUP_NEXT_PIPELINE, new StateEntry(contentReadSetNextPipeline));
+        contentReadStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_READ_ERROR, new StateEntry(contentReadProcessReadError));
+        contentReadStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND, new StateEntry(contentReadProcessFinalResponseSend));
     }
 
     /*
@@ -138,6 +160,10 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
             return ConnectionStateEnum.READ_CLIENT_DATA;
         }
 
+        if (connectionState.getDataResponseWriteDone()) {
+            return ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND;
+        }
+
         /*
         ** Check if the content has all been read in and then proceed to finishing the processing
         **
@@ -145,6 +171,13 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
          */
         if (connectionState.hasAllContentBeenRead() && !connectionState.hasFinalResponseBeenSent()) {
                 return ConnectionStateEnum.SEND_FINAL_RESPONSE;
+        }
+
+        /*
+         ** Check if there are buffers in error that need to be processed.
+         */
+        if (connectionState.readErrorQueueNotEmpty()) {
+            return ConnectionStateEnum.PROCESS_READ_ERROR;
         }
 
         /*
@@ -179,9 +212,5 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         } while (result == StateQueueResult.STATE_RESULT_CONTINUE);
 
         return result;
-    }
-
-    public void reset() {
-        initialStage = true;
     }
 }

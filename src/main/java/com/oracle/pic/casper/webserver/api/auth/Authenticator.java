@@ -1,5 +1,6 @@
 package com.oracle.pic.casper.webserver.api.auth;
 
+import com.oracle.pic.casper.common.metrics.MetricScope;
 import io.vertx.ext.web.RoutingContext;
 
 import javax.annotation.Nullable;
@@ -39,6 +40,20 @@ public interface Authenticator {
      * @return an AuthenticationInfo or a {@link NotAuthenticatedException}.
      */
     AuthenticationInfo authenticatePutObject(RoutingContext context);
+
+    /**
+     * Authenticate a PUT object request (with a body, but no SHA-256).
+     *
+     * The PUT object request requires only the date header and the request target. The client can optionally specify
+     * a Content-Type, Content-Length and X-Content-SHA256 header in the string to sign, and we will verify those
+     * header values. However, we do not currently verify that the X-Content-SHA256 header value matches the computed
+     * SHA-256 of the bytes of the request body (we intend to do this in the future). This differs from the
+     * authenticate method, which requires values for those headers, and validates all of them.
+     *
+     * @param headersOrig the headers
+     * @return an AuthenticationInfo or a {@link NotAuthenticatedException}.
+     */
+    AuthenticationInfo authenticatePutObject(javax.ws.rs.core.HttpHeaders headersOrig, String uriString, String namespace, String method, MetricScope metricScope);
 
     /**
      * Authenticate a request made to the Swift API.

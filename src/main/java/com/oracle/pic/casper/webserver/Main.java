@@ -35,7 +35,7 @@ public final class Main {
 
         try {
             final CasperConfig config = CasperConfig.create(region, ad);
-            final WebServer webServer = new WebServer(WebServerFlavor.STANDARD, config);
+            final WebServer webServer = new WebServer(WebServerFlavor.INTEGRATION_TESTS, config);
             webServer.start();
         } catch (Exception ex) {
             LOG.error("The web server encountered an exception during initialization, shutting down", ex);

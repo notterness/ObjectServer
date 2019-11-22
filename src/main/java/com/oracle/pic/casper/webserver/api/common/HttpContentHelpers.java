@@ -275,6 +275,46 @@ public final class HttpContentHelpers {
     }
 
     /**
+     * Perform simple HTTP content negotiation for storage object content in an HTTP request.
+     *
+     * See {@link #negotiateApplicationJsonContent(HttpServerRequest, long)} for links to content negotiation docs.
+     *
+     * This method does the following:
+     *
+     *  1. The Content-Type is ignored (see {@link com.oracle.pic.casper.webserver.api.v2.PutObjectHandler} for the
+     *     default value if none is provided by the client).
+     *  2. If the Content-Length is not provided a 411 (Length Required) error is thrown.
+     *  3. If the Content-Length is too large a 413 (Payload Too Large) error is thrown.
+     *  4. If the Content-Length is set to something that is less than the minimum byte size,
+     *     a 400 (Bad Request) error is thrown.
+     *
+     * Errors are {@link ContentLengthRequiredException}, {@link ObjectTooLargeException}
+     * or {@link InvalidContentLengthException}.
+     */
+    public static void negotiateStorageObjectContent(javax.ws.rs.core.HttpHeaders headers, long minSizeByte, long maxSizeBytes) {
+        String contentLenStr = headers.getHeaderString(HttpHeaders.CONTENT_LENGTH.toString());
+        if (contentLenStr == null) {
+            throw new ContentLengthRequiredException("The Content-Length header is required");
+        }
+
+        try {
+            long contentLen = Long.parseLong(contentLenStr);
+            if (contentLen > maxSizeBytes) {
+                throw new ObjectTooLargeException("The Content-Length must be less than " + maxSizeBytes +
+                        " bytes (it was '" + contentLenStr + "')");
+            }
+
+            if (contentLen < minSizeByte) {
+                throw new InvalidContentLengthException("The Content-Length must be greater than or equal to " +
+                        minSizeByte + " (it was '" + contentLenStr + "')");
+            }
+        } catch (NumberFormatException nfex) {
+            throw new InvalidContentLengthException("The Content-Length must be a valid integer (it was '" +
+                    contentLenStr + "')");
+        }
+    }
+
+    /**
      * If the request includes "Expect: 100-continue", send a 100 continue to the client, otherwise do nothing.
      *
      * @param request  the HTTP request from which to get the header.
@@ -974,6 +1014,28 @@ public final class HttpContentHelpers {
             String objectName,
             Map<String, String> metadata) {
         final long contentLen = Long.parseLong(request.getHeader(HttpHeaders.CONTENT_LENGTH));
+        return new ObjectMetadata(
+                namespace,
+                bucketName,
+                objectName,
+                contentLen,
+                null,
+                metadata,
+                new Date(),
+                new Date(),
+                null,
+                null,
+                null,
+                ArchivalState.Available);
+    }
+
+    public static ObjectMetadata readObjectMetadata(
+            javax.ws.rs.core.HttpHeaders headers,
+            String namespace,
+            String bucketName,
+            String objectName,
+            Map<String, String> metadata) {
+        final long contentLen = Long.parseLong(headers.getHeaderString(HttpHeaders.CONTENT_LENGTH.toString()));
         return new ObjectMetadata(
                 namespace,
                 bucketName,

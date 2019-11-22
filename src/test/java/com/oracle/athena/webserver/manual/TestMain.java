@@ -37,8 +37,8 @@ public class TestMain {
         ClientTest oneMbPut = new ClientTest_OneMbPut("OneMbPut", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         oneMbPut.start();
 
-        ClientTest outOfConnections = new ClientTest_OutOfConnections("OutOfConnections", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
-        outOfConnections.start();
+        //ClientTest outOfConnections = new ClientTest_OutOfConnections("OutOfConnections", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        //outOfConnections.start();
 
         System.out.println("Starting Tests");
 
@@ -55,7 +55,7 @@ public class TestMain {
         earlyClose.stop();
         slowHeaderSend.stop();
         oneMbPut.stop();
-        outOfConnections.stop();
+        //outOfConnections.stop();
 
         if (failedTestName == null) {
             /*

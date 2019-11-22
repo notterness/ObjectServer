@@ -63,7 +63,7 @@ public class BufferState {
      */
     public void setReadState(final BufferStateEnum newState) {
 
-        System.out.println("setReadState() current: " + bufferState.toString() + " new: " + newState.toString() +
+        System.out.println("[" + connState.getConnStateId() + "] setReadState() current: " + bufferState.toString() + " new: " + newState.toString() +
                 " remaining: " + buffer.remaining());
 
         if (newState == BufferStateEnum.READ_ERROR) {
@@ -81,7 +81,7 @@ public class BufferState {
                 // Read of all the data is completed
                 bufferState = BufferStateEnum.READ_DATA_DONE;
             } else {
-                System.out.println("ERROR: setReadState() invalid current state: " + bufferState.toString());
+                System.out.println("ERROR: [" + connState.getConnStateId() + "] setReadState() invalid current state: " + bufferState.toString());
             }
         }
     }

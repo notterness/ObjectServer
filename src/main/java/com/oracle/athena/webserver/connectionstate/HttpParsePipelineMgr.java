@@ -8,14 +8,6 @@ import com.oracle.athena.webserver.statemachine.StateQueueResult;
 
 import java.util.function.Function;
 
-import com.oracle.athena.webserver.statemachine.StateEntry;
-import com.oracle.athena.webserver.statemachine.StateEntryResult;
-import com.oracle.athena.webserver.statemachine.StateMachine;
-import com.oracle.athena.webserver.statemachine.StateQueueResult;
-import org.eclipse.jetty.http.HttpStatus;
-
-import java.util.function.Function;
-
 class HttpParsePipelineMgr extends ConnectionPipelineMgr {
 
     private WebServerConnState connectionState;
@@ -94,10 +86,28 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn){
             initialStage = true;
-            connectionState.resetHttpReadValues();
-            connectionState.resetContentAllRead();
+            wsConn.resetHttpReadValues();
+            wsConn.resetContentAllRead();
             wsConn.setupNextPipeline();
             return StateQueueResult.STATE_RESULT_COMPLETE;
+        }
+    };
+
+    private Function httpParseProcessReadError = new Function<WebServerConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(WebServerConnState wsConn){
+            if (wsConn.processReadErrorQueue()) {
+                return StateQueueResult.STATE_RESULT_CONTINUE;
+            }
+            return StateQueueResult.STATE_RESULT_REQUEUE;
+        }
+    };
+
+    private Function httpParseProcessFinalResponseSend = new Function<WebServerConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(WebServerConnState wsConn){
+            wsConn.processResponseWriteDone();
+            return StateQueueResult.STATE_RESULT_REQUEUE;
         }
     };
 
@@ -133,6 +143,8 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         httpParseStateMachine.addStateEntry(ConnectionStateEnum.CONN_FINISHED, new StateEntry(httpParseConnFinished));
         httpParseStateMachine.addStateEntry(ConnectionStateEnum.SETUP_NEXT_PIPELINE, new StateEntry(httpParseSetupNextPipeline));
         httpParseStateMachine.addStateEntry(ConnectionStateEnum.SEND_FINAL_RESPONSE, new StateEntry(httpParseSendXferResponse));
+        httpParseStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_READ_ERROR, new StateEntry(httpParseProcessReadError));
+        httpParseStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND, new StateEntry(httpParseProcessFinalResponseSend));
     }
 
     /*
@@ -181,6 +193,13 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         }
 
         /*
+        ** Check if there are buffers in error that need to be processed.
+         */
+        if (connectionState.readErrorQueueNotEmpty()) {
+            return ConnectionStateEnum.PROCESS_READ_ERROR;
+        }
+
+        /*
          ** Check if there was a channel error and cleanup if there are no outstanding
          **    reads.
          */
@@ -191,6 +210,10 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
 
             // TODO: Need to log something to indicate waiting for reads to complete
             return ConnectionStateEnum.CHECK_SLOW_CHANNEL;
+        }
+
+        if (connectionState.getDataResponseWriteDone()) {
+            return ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND;
         }
 
         /*

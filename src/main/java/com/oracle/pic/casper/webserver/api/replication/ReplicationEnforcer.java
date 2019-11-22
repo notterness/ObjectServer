@@ -7,6 +7,8 @@ import com.oracle.pic.casper.webserver.api.model.exceptions.BucketReplicationEna
 import com.oracle.pic.casper.webserver.api.model.exceptions.ReplicationPolicyConflictException;
 import io.vertx.ext.web.RoutingContext;
 
+import javax.ws.rs.core.HttpHeaders;
+
 public interface ReplicationEnforcer {
 
     void enforce();
@@ -24,6 +26,39 @@ public interface ReplicationEnforcer {
     static void throwIfReadOnly(RoutingContext context,
                                 WSTenantBucketInfo tenantBucketInfo, boolean checkReplicationHeaders) {
         String requestPolicyId = context.request().getHeader(ReplicationOptions.XRR_POLICY_ID);
+        if (tenantBucketInfo.isReadOnly()) {
+            if (!checkReplicationHeaders || requestPolicyId == null) {
+                throw new BucketReadOnlyException(String.format("Bucket '%s' in namespace '%s' is in read-only state",
+                        tenantBucketInfo.getBucketName(), tenantBucketInfo.getNamespaceKey().getName()));
+            }
+
+            Object setPolicyId = tenantBucketInfo.getOptions().get(ReplicationOptions.XRR_POLICY_ID);
+            if (!setPolicyId.equals(requestPolicyId)) {
+                throw new ReplicationPolicyConflictException(
+                        String.format("Bucket '%s' in namespace '%s' is not configured with the policy id '%s' ",
+                                tenantBucketInfo.getBucketName(), tenantBucketInfo.getNamespaceKey().getName(),
+                                requestPolicyId));
+            }
+        } else if (requestPolicyId != null) {
+            throw new ReplicationPolicyConflictException(
+                    String.format("Bucket '%s' in namespace '%s' is not configured with any replication policy",
+                            tenantBucketInfo.getBucketName(), tenantBucketInfo.getNamespaceKey().getName()));
+        }
+    }
+
+    static void throwIfReadOnlyButNotReplicationScope(HttpHeaders headers,
+                                                      WSTenantBucketInfo tenantBucketInfo) {
+        throwIfReadOnly(headers, tenantBucketInfo, true);
+    }
+
+    static void throwIfReadOnly(HttpHeaders headers,
+                                WSTenantBucketInfo tenantBucketInfo) {
+        throwIfReadOnly(headers, tenantBucketInfo, false);
+    }
+
+    static void throwIfReadOnly(HttpHeaders headers,
+                                WSTenantBucketInfo tenantBucketInfo, boolean checkReplicationHeaders) {
+        String requestPolicyId = headers.getHeaderString(ReplicationOptions.XRR_POLICY_ID);
         if (tenantBucketInfo.isReadOnly()) {
             if (!checkReplicationHeaders || requestPolicyId == null) {
                 throw new BucketReadOnlyException(String.format("Bucket '%s' in namespace '%s' is in read-only state",

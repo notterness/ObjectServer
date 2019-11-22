@@ -20,6 +20,7 @@ import com.oracle.pic.casper.common.vertx.stream.AbortableBlobReadStream;
 import com.oracle.pic.casper.common.vertx.stream.AbortableReadStream;
 import com.oracle.pic.casper.common.vertx.stream.MeasuringReadStream;
 import com.oracle.pic.casper.common.vertx.stream.RangeReadStream;
+import com.oracle.pic.casper.storageclient.AthenaVolumeStorageClient;
 import com.oracle.pic.casper.webserver.auth.CasperPermission;
 import com.oracle.pic.casper.objectmeta.Api;
 import com.oracle.pic.casper.objectmeta.ChecksumType;
@@ -74,7 +75,7 @@ import java.util.stream.Stream;
 public final class GetObjectBackend {
 
     private final Backend backend;
-    private final VolumeStorageClient volumeStorageClient;
+    private final AthenaVolumeStorageClient volumeStorageClient;
     private final VolumeMetadataClientCache volMetaCache;
     private final Authorizer authorizer;
 
@@ -82,7 +83,7 @@ public final class GetObjectBackend {
     private final DecidingKeyManagementService kms;
 
     public GetObjectBackend(Backend backend,
-                            VolumeStorageClient volumeStorageClient,
+                            AthenaVolumeStorageClient volumeStorageClient,
                             VolumeMetadataClientCache volMetaCache,
                             Authorizer authorizer,
                             BucketBackend bucketBackend,
