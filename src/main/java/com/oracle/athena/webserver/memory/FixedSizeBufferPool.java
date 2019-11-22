@@ -4,11 +4,16 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Basic class to encapsulate memory management.
  * <p>
  */
 public class FixedSizeBufferPool {
+
+    private static final Logger LOG = LoggerFactory.getLogger(FixedSizeBufferPool.class);
 
     final private int bufferSize;
     final private int bufferCount;
@@ -40,9 +45,9 @@ public class FixedSizeBufferPool {
             inuseQueue.add(ret);
         }
         // } catch (InterruptedException int_ex ) {
-        //    System.out.println( int_ex.getMessage());
+        //    LOG.info( int_ex.getMessage());
         // }
-        // System.out.println( "Size of inuseQueue is " + inuseQueue.size() );
+        // LOG.info( "Size of inuseQueue is " + inuseQueue.size() );
         return ret;
     }
 
@@ -51,7 +56,7 @@ public class FixedSizeBufferPool {
             buffer.clear();
             freeQueue.add( buffer );
         }
-        // System.out.println( "Size of inuseQueue is " + inuseQueue.size() );
+        // LOG.info( "Size of inuseQueue is " + inuseQueue.size() );
     }
 }
 

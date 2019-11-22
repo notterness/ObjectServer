@@ -5,12 +5,17 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * StateMachine class: An array of StateEntry objects.
  *
  * @param <K> - any object that flows through a state machine.
  */
 public class StateMachine<T,K> {
+
+    private static final Logger LOG = LoggerFactory.getLogger(StateMachine.class);
 
     private Map<K,StateEntry<T,StateQueueResult> > stateTable = new HashMap<>();
 
@@ -35,7 +40,7 @@ public class StateMachine<T,K> {
             StateEntry entry = stateTable.get(k);
             result = (StateQueueResult)entry.getVerbExecute().apply(t);
         } catch ( NullPointerException e) {
-            System.out.println("no state entry for key " + k);
+            LOG.info("no state entry for key " + k);
             e.printStackTrace();
         }
 

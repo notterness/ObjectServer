@@ -7,14 +7,19 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+
 /**
  * Basic class to encapsulate memory management.
  * <p>
  * For now, it simply wraps calls to ByteBuffer.allocate().
  */
 public class MemoryManager {
-    // TODO:  Make MemoryManager own an array of pools of various sizes.
-    //        Add a high-water mark for each pool.
+    // TODO:  Add a high-water mark for each pool.
+
+    private static Logger LOG = LoggerFactory.getLogger(MemoryManager.class);
 
     private BlockingQueue<MemoryAvailableCallback> waitingForBuffersQueue;
 
@@ -63,7 +68,7 @@ public class MemoryManager {
         for (int i = 0; i < numPools;  ++i) {
             if (requestedSize <= thePool[i].getBufferSize()) {
 
-                System.out.println("poolMemAlloc [" + i + "] requestedSize: " + requestedSize);
+                LOG.debug("poolMemAlloc [" + i + "] requestedSize: " + requestedSize);
                 ByteBuffer buffer = thePool[i].poolMemAlloc( requestedSize );
                 if (buffer != null) {
                     return buffer;

@@ -10,10 +10,15 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /*
  ** This is the implementation for the worker thread that manages the state transitions for the ConnectionState
  */
 public class ServerWorkerThread implements Runnable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ServerWorkerThread.class);
 
     /*
     ** This is how many items to pull off the execution thread before going and checking the
@@ -77,7 +82,7 @@ public class ServerWorkerThread implements Runnable {
         try {
             countDownLatch.await(1000, TimeUnit.MILLISECONDS);
         } catch (InterruptedException int_ex) {
-            System.out.println("Server worker thread[" + threadId + "] failed: " + int_ex.getMessage());
+            LOG.info("Server worker thread[" + threadId + "] failed: " + int_ex.getMessage());
         }
     }
 
@@ -120,7 +125,7 @@ public class ServerWorkerThread implements Runnable {
     public boolean put(final ConnectionState work, final boolean delayedExecution) {
 
         if (workQueue.contains(work)) {
-            System.out.println("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue() already on workQueue");
+            LOG.info("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue() already on workQueue");
             return true;
         }
 
@@ -133,11 +138,11 @@ public class ServerWorkerThread implements Runnable {
                 //FIXME: creates a case in which work is marked on delay queue but is not on delay queue
                 work.markAddedToDelayedQueue();
                 if (!timedWaitQueue.offer(work)) {
-                    System.out.println("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue(delayed) unable to add");
+                    LOG.info("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue(delayed) unable to add");
                     return false;
                 }
             } else {
-                //System.out.println("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue(delayed) already on queue");
+                //LOG.info("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue(delayed) already on queue");
             }
         } else {
             if (timedWaitQueue.contains(work)) {
@@ -145,13 +150,13 @@ public class ServerWorkerThread implements Runnable {
                 ** Need to remove this from the delayed queue and then put it on the execution
                 **   queue
                  */
-                System.out.println("ConnectionState[" + work.getConnStateId() + "] remove from delayed queue");
+                LOG.info("ConnectionState[" + work.getConnStateId() + "] remove from delayed queue");
                 work.markRemovedFromQueue(true);
                 timedWaitQueue.remove(work);
             }
 
             if (!workQueue.offer(work)) {
-                System.out.println("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue() unable to add");
+                LOG.info("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue() unable to add");
                 return false;
             }
         }
@@ -164,7 +169,7 @@ public class ServerWorkerThread implements Runnable {
      */
     public void remove(final ConnectionState work) {
         if (workQueue.contains(work)) {
-            System.out.println("ConnectionState[" + work.getConnStateId() + "] remove() on workQueue");
+            LOG.info("ConnectionState[" + work.getConnStateId() + "] remove() on workQueue");
             work.markRemovedFromQueue(true);
             workQueue.remove(work);
         } else if (timedWaitQueue.contains(work)) {
@@ -172,7 +177,7 @@ public class ServerWorkerThread implements Runnable {
              ** Need to remove this from the delayed queue and then put it on the execution
              **   queue
              */
-            System.out.println("ConnectionState[" + work.getConnStateId() + "] remove() on timedWaitQueue");
+            LOG.info("ConnectionState[" + work.getConnStateId() + "] remove() on timedWaitQueue");
             work.markRemovedFromQueue(true);
             timedWaitQueue.remove(work);
         }
@@ -180,7 +185,7 @@ public class ServerWorkerThread implements Runnable {
 
     public void run() {
 
-        System.out.println("ServerWorkerThread(" + threadId + ") start " + Thread.currentThread().getName());
+        LOG.info("ServerWorkerThread(" + threadId + ") start " + Thread.currentThread().getName());
         //FIXME: pool this?
         // every time this thread is created, create a second thread to handle the WriteConnection
         final Thread writeConnThread = new Thread(writeThread);
@@ -219,7 +224,7 @@ public class ServerWorkerThread implements Runnable {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-        System.out.println("ServerWorkerThread(" + threadId + ") exit " + Thread.currentThread().getName());
+        LOG.info("ServerWorkerThread(" + threadId + ") exit " + Thread.currentThread().getName());
         countDownLatch.countDown();
     }
 

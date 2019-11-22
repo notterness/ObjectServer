@@ -3,6 +3,9 @@ package com.oracle.athena.webserver.connectionstate;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * This class manages a pool of {@link ConnectionState} objects, allowing them to be allocated and deallocated without
  * being garbage collected.
@@ -10,6 +13,8 @@ import java.util.concurrent.LinkedBlockingQueue;
  * @param <T> the type of {@link ConnectionState} object that this pool is managing.
  */
 public class ConnectionStatePool<T extends ConnectionState> {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ConnectionStatePool.class);
 
     // FIXME CA: This variable will need to be used for something at some point
     private final int allocatedConnectionStates;
@@ -56,7 +61,7 @@ public class ConnectionStatePool<T extends ConnectionState> {
                 connPoolFreeList.put(connectionState);
             } catch (InterruptedException int_ex) {
                 // FIXME CA: Sort out how we're going to handle this exception
-                System.out.println(int_ex.getMessage());
+                LOG.info(int_ex.getMessage());
             }
         }
     }

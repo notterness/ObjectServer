@@ -22,6 +22,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /*
  ** This is used to keep track of the state of the connection for its lifetime.
  **
@@ -30,6 +33,8 @@ import java.util.concurrent.atomic.AtomicLong;
  **   managed via a pool.
  */
 abstract public class ConnectionState {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ConnectionState.class);
 
     /*
      ** MAX_OUTSTANDING_BUFFERS is how many operations can be done in parallel on this
@@ -289,7 +294,7 @@ abstract public class ConnectionState {
             /*
              ** TOTDO: Need to close out the channel and this connection
              */
-            System.out.println("WebServerConnState[" + connStateId + "] connection timeout");
+            LOG.info("WebServerConnState[" + connStateId + "] connection timeout");
         } else {
             //ConnectionStateEnum overallState = pipelineManager.nextPipelineStage();
             ConnectionStateEnum overallState = ConnectionStateEnum.CHECK_SLOW_CHANNEL;
@@ -349,7 +354,7 @@ abstract public class ConnectionState {
             connOnExecutionQueue = false;
         }
 
-        //System.out.println("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
     }
 
 
@@ -387,7 +392,7 @@ abstract public class ConnectionState {
     **   now ready to have data read into them.
      */
     public int allocClientReadBufferState() {
-        System.out.println("ServerWorkerThread[" + connStateId + "] allocClientReadBufferState(1) " + Thread.currentThread().getName());
+        LOG.info("ServerWorkerThread[" + connStateId + "] allocClientReadBufferState(1) " + Thread.currentThread().getName());
 
         while (requestedDataBuffers > 0) {
             /*
@@ -397,7 +402,7 @@ abstract public class ConnectionState {
             if (allocatedDataBuffers < MAX_OUTSTANDING_BUFFERS) {
                 BufferState bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_DATA_FROM_CHAN, MemoryManager.MEDIUM_BUFFER_SIZE);
                 if (bufferState != null) {
-                    System.out.println("ServerWorkerThread[" + connStateId + "] allocClientReadBufferState(2)");
+                    LOG.info("ServerWorkerThread[" + connStateId + "] allocClientReadBufferState(2)");
 
                     allocatedDataBuffers++;
                     allocatedDataBufferQueue.add(bufferState);
@@ -547,7 +552,7 @@ abstract public class ConnectionState {
                     connChan.close();
                 }
             } catch (IOException io_ex) {
-                System.out.println("ConnectionState[" + connStateId + "] closeChannel() " + io_ex.getMessage());
+                LOG.info("ConnectionState[" + connStateId + "] closeChannel() " + io_ex.getMessage());
             }
 
             connChan = null;
@@ -569,7 +574,7 @@ abstract public class ConnectionState {
      */
     public void reset() {
 
-        System.out.println("ConnectionState[" + connStateId + "] reset()");
+        LOG.info("ConnectionState[" + connStateId + "] reset()");
 
         synchronized (queueMutex) {
             workerThread.remove(this);
@@ -630,7 +635,7 @@ abstract public class ConnectionState {
          */
         timeoutChecker.updateTime();
 
-        System.out.println("ConnectionState[" + connStateId + "].dataReadCompleted() outstandingReadCount: " + readCount);
+        LOG.info("ConnectionState[" + connStateId + "].dataReadCompleted() outstandingReadCount: " + readCount);
 
         addToWorkQueue(false);
     }
@@ -664,11 +669,11 @@ abstract public class ConnectionState {
             /*
              ** TODO: This is an error case and the connection needs to be closed
              */
-            System.out.println("dataReadCompleted(" + connStateId + ") " + int_ex.getMessage());
+            LOG.info("dataReadCompleted(" + connStateId + ") " + int_ex.getMessage());
             readCompletedCount = dataBufferReadsCompleted.get();
         }
 
-        System.out.println("ConnectionState[" + connStateId + "] addDataBuffer() readCompletedCount: " + readCompletedCount);
+        LOG.info("ConnectionState[" + connStateId + "] addDataBuffer() readCompletedCount: " + readCompletedCount);
 
         determineNextContentRead();
     }
@@ -708,7 +713,7 @@ abstract public class ConnectionState {
             buffersNeeded = 0;
         }
 
-        System.out.println("ConnectionState[" + connStateId + "] determineNextContentRead() buffersNeeded: " + buffersNeeded +
+        LOG.info("ConnectionState[" + connStateId + "] determineNextContentRead() buffersNeeded: " + buffersNeeded +
                 " allocatedDataBuffers: " + allocatedDataBuffers + " requestedDataBuffers: " + requestedDataBuffers);
 
         if (buffersNeeded > 0) {
@@ -741,7 +746,7 @@ abstract public class ConnectionState {
                     /*
                     ** No more content data to read, so move onto the next processing step
                      */
-                    System.out.println("ConnectionState[" + connStateId + "] determineNextContentRead() contentAllRead true");
+                    LOG.info("ConnectionState[" + connStateId + "] determineNextContentRead() contentAllRead true");
 
                     contentAllRead.set(true);
                 } else {
@@ -804,7 +809,7 @@ abstract public class ConnectionState {
              **   any operations on it.
              */
             if (connChan == null) {
-                System.out.println("ConnectionState[" + connStateId + "] socket closed: connChan null");
+                LOG.info("ConnectionState[" + connStateId + "] socket closed: connChan null");
 
                 /*
                  ** Mark the BufferState as READ_ERROR to indicate that the buffer is not valid and this
@@ -817,9 +822,9 @@ abstract public class ConnectionState {
 
             try {
                 SocketAddress addr = connChan.getLocalAddress();
-                System.out.println("readFromChannel[" + connStateId + "] socket: " + addr);
+                LOG.info("readFromChannel[" + connStateId + "] socket: " + addr);
             } catch (IOException ex) {
-                System.out.println("socket closed " + ex.getMessage());
+                LOG.info("socket closed " + ex.getMessage());
 
                 closeChannel();
 
@@ -845,7 +850,7 @@ abstract public class ConnectionState {
 
             @Override
             public void completed(final Integer bytesRead, final BufferState readBufferState) {
-                System.out.println("readFromChannel[" + connStateId + "] bytesRead: " + bytesRead + " thread: " + Thread.currentThread().getName());
+                LOG.info("readFromChannel[" + connStateId + "] bytesRead: " + bytesRead + " thread: " + Thread.currentThread().getName());
 
                 if (bytesRead == -1) {
                     closeChannel();
@@ -860,7 +865,7 @@ abstract public class ConnectionState {
 
             @Override
             public void failed(final Throwable exc, final BufferState readBufferState) {
-                System.out.println("readFromChannel[" + connStateId + "] failed bytesRead: " + exc.getMessage() + " thread: " + Thread.currentThread().getName());
+                LOG.info("readFromChannel[" + connStateId + "] failed bytesRead: " + exc.getMessage() + " thread: " + Thread.currentThread().getName());
 
                 closeChannel();
 
@@ -885,7 +890,7 @@ abstract public class ConnectionState {
         int limit = buffer.limit();
 
         String tmp = bb_to_str(buffer);
-        System.out.println("ConnectionState buffer: " + tmp);
+        LOG.info("ConnectionState buffer: " + tmp);
 
         /*
         ** Need to reset the values otherwise anything that tries to operate on this

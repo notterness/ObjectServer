@@ -4,7 +4,13 @@ package com.oracle.athena.webserver.http.parser;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class StringChunk {
+    
+    private static final Logger LOG = LoggerFactory.getLogger(StringChunk.class);
+
     private ByteBuffer initialBuffer;
 
     private int currentPosition;
@@ -39,7 +45,7 @@ public class StringChunk {
                 ch = initialBuffer.get(i);
                 charCount++;
             } catch (IndexOutOfBoundsException ex) {
-                System.out.println("StringChunk i: " + i);
+                LOG.info("StringChunk i: " + i);
                 break;
             }
 
@@ -67,7 +73,7 @@ public class StringChunk {
         bb.limit(charCount);
 
         //String str = bb_to_str(bb);
-        //System.out.println("StringChunk: " + str);
+        //LOG.info("StringChunk: " + str);
 
         currentPosition = i;
         initialBuffer.position(i);
@@ -80,13 +86,13 @@ public class StringChunk {
          ** End of buffer checking
          */
         if (currentPosition == remaining) {
-            System.out.println("StringChunk getRemainingBuffer() null");
+            LOG.info("StringChunk getRemainingBuffer() null");
             return null;
         }
 
         ByteBuffer bb = initialBuffer.slice();
 
-        System.out.println("StringChunk position: " + bb.position() + " limit: " + bb.limit() +
+        LOG.info("StringChunk position: " + bb.position() + " limit: " + bb.limit() +
                 " remaining: " + bb.remaining());
 
         return bb;
@@ -120,7 +126,7 @@ public class StringChunk {
                 break;
         }
 
-        System.out.println(tmp);
+        LOG.info(tmp);
     }
 
 }

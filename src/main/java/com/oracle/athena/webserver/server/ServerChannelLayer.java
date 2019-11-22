@@ -14,7 +14,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 abstract public class ServerChannelLayer implements Runnable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ServerChannelLayer.class);
 
     public static final int BASE_TCP_PORT = 5000;
     public static final int DEFAULT_CLIENT_ID = 31415;
@@ -81,7 +86,7 @@ abstract public class ServerChannelLayer implements Runnable {
             serverChannel.close();
         } catch (IOException io_ex) {
             //FIXME: handle this
-            System.out.println("Unable to close server socket: " + serverConnTransactionId + " " + io_ex.getMessage());
+            LOG.info("Unable to close server socket: " + serverConnTransactionId + " " + io_ex.getMessage());
         }
 
         /*
@@ -92,22 +97,22 @@ abstract public class ServerChannelLayer implements Runnable {
         try {
             boolean shutdown = serverCbThreadpool.awaitTermination(CHAN_TIMEOUT, TimeUnit.MILLISECONDS);
             if (!shutdown) {
-                System.out.println("Wait for threadpool shutdown timed out: " + serverConnTransactionId);
+                LOG.info("Wait for threadpool shutdown timed out: " + serverConnTransactionId);
             }
         } catch (InterruptedException int_ex) {
-            System.out.println("Wait for threadpool shutdown failed: " + serverConnTransactionId + " " + int_ex.getMessage());
+            LOG.info("Wait for threadpool shutdown failed: " + serverConnTransactionId + " " + int_ex.getMessage());
         }
     }
 
     public void run() {
 
-        System.out.println("ServerChannelLayer(" + serverClientId + ") start " + Thread.currentThread().getName());
+        LOG.info("ServerChannelLayer(" + serverClientId + ") start " + Thread.currentThread().getName());
 
         try {
             serverCbThreadpool = AsynchronousChannelGroup.withFixedThreadPool(WORK_QUEUE_SIZE, Executors.defaultThreadFactory());
         } catch (IOException io_ex) {
             //FIXME: handle this
-            System.out.println("Unable to create server threadpool " + io_ex.getMessage());
+            LOG.info("Unable to create server threadpool " + io_ex.getMessage());
             return;
         }
 
@@ -116,7 +121,7 @@ abstract public class ServerChannelLayer implements Runnable {
 
             InetSocketAddress serverAddr = new InetSocketAddress(InetAddress.getLoopbackAddress(), portNum);
 
-            System.out.println("Server run(" + serverClientId + "): server: " + serverAddr);
+            LOG.info("Server run(" + serverClientId + "): server: " + serverAddr);
 
             serverChannel.bind(serverAddr);
 
@@ -137,12 +142,12 @@ abstract public class ServerChannelLayer implements Runnable {
             ** trying multiple accepts.
             */
             Future<AsynchronousSocketChannel> clientAcceptChan = serverChannel.accept();
-            System.out.println("Server run(" + serverClientId + "): waiting on accept");
+            LOG.info("Server run(" + serverClientId + "): waiting on accept");
 
             try {
                 AsynchronousSocketChannel clientChan = clientAcceptChan.get();
 
-                System.out.println("Server run(" + serverClientId + "): accepted");
+                LOG.info("Server run(" + serverClientId + "): accepted");
 
                 if (!serverWorkHandler.startNewConnection(clientChan)) {
                     /*
@@ -153,11 +158,11 @@ abstract public class ServerChannelLayer implements Runnable {
                      */
                 }
             } catch (ExecutionException | InterruptedException ex) {
-                System.out.println("Server run(): accept error: " + ex.getMessage());
+                LOG.info("Server run(): accept error: " + ex.getMessage());
                 exitThreads = true;
             }
         }
 
-        System.out.println("ServerChannelLayer(" + serverClientId + ") exit " + Thread.currentThread().getName());
+        LOG.info("ServerChannelLayer(" + serverClientId + ") exit " + Thread.currentThread().getName());
     }
 }

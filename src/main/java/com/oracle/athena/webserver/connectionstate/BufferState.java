@@ -2,10 +2,15 @@ package com.oracle.athena.webserver.connectionstate;
 
 import java.nio.ByteBuffer;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /*
  ** This is used to manage the individual states a ByteBuffer goes through
  */
 public class BufferState {
+
+    private static final Logger LOG = LoggerFactory.getLogger(BufferState.class);
 
     private ConnectionState connState;
 
@@ -63,7 +68,7 @@ public class BufferState {
      */
     public void setReadState(final BufferStateEnum newState) {
 
-        System.out.println("[" + connState.getConnStateId() + "] setReadState() current: " + bufferState.toString() + " new: " + newState.toString() +
+        LOG.info("[" + connState.getConnStateId() + "] setReadState() current: " + bufferState.toString() + " new: " + newState.toString() +
                 " remaining: " + buffer.remaining());
 
         if (newState == BufferStateEnum.READ_ERROR) {
@@ -81,7 +86,7 @@ public class BufferState {
                 // Read of all the data is completed
                 bufferState = BufferStateEnum.READ_DATA_DONE;
             } else {
-                System.out.println("ERROR: [" + connState.getConnStateId() + "] setReadState() invalid current state: " + bufferState.toString());
+                LOG.info("ERROR: [" + connState.getConnStateId() + "] setReadState() invalid current state: " + bufferState.toString());
             }
         }
     }
@@ -114,7 +119,7 @@ public class BufferState {
      ** TODO: Need to figure out how data buffers are handled
      */
     public void setBufferHttpParseDone() {
-        System.out.println("setBufferHttpParseDone(): current " + bufferState.toString() +
+        LOG.info("setBufferHttpParseDone(): current " + bufferState.toString() +
                 " remaining: " + buffer.remaining());
 
         bufferState = BufferStateEnum.PARSE_HTTP_DONE;

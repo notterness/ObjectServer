@@ -17,7 +17,12 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class WebServerConnState extends ConnectionState {
+
+    private static final Logger LOG = LoggerFactory.getLogger(WebServerConnState.class);
 
     /*
      ** The following is needed to allow the ConnectionState to allocate buffers to send responses.
@@ -205,7 +210,7 @@ public class WebServerConnState extends ConnectionState {
     public void setupInitial() {
         super.setupInitial();
 
-        System.out.println("WebServerConnState[" + connStateId + "] INITIAL_SETUP server");
+        LOG.info("WebServerConnState[" + connStateId + "] INITIAL_SETUP server");
         requestedHttpBuffers = 1;
     }
 
@@ -271,7 +276,7 @@ public class WebServerConnState extends ConnectionState {
         ** First check if this is an out of resources response
          */
         if (outOfResourcesResponse) {
-            System.out.println("WebServerConnState[" + connStateId + "] setupNextPipeline() outOfResourcePipelineMgr");
+            LOG.info("WebServerConnState[" + connStateId + "] setupNextPipeline() outOfResourcePipelineMgr");
 
             pipelineManager = outOfResourcePipelineMgr;
             return;
@@ -281,7 +286,7 @@ public class WebServerConnState extends ConnectionState {
          ** Now, based on the HTTP method, figure out the next pipeline
          */
         HttpMethodEnum method = casperHttpInfo.getMethod();
-        System.out.println("WebServerConnState[" + connStateId + "] setupNextPipeline() " + method.toString());
+        LOG.info("WebServerConnState[" + connStateId + "] setupNextPipeline() " + method.toString());
 
         switch (method) {
             case PUT_METHOD:
@@ -369,7 +374,7 @@ public class WebServerConnState extends ConnectionState {
             httpReadDoneQueue.put(bufferState);
             readCompletedCount = httpBufferReadsCompleted.incrementAndGet();
         } catch (InterruptedException int_ex) {
-            System.out.println("httpReadCompleted(" + connStateId + ") " + int_ex.getMessage());
+            LOG.info("httpReadCompleted(" + connStateId + ") " + int_ex.getMessage());
             readCompletedCount = httpBufferReadsCompleted.get();
         }
 
@@ -378,7 +383,7 @@ public class WebServerConnState extends ConnectionState {
          */
         timeoutChecker.updateTime();
 
-        System.out.println("WebServerConnState[" + connStateId + "] httpReadCompleted() HTTP readCount: " + readCount +
+        LOG.info("WebServerConnState[" + connStateId + "] httpReadCompleted() HTTP readCount: " + readCount +
                 " readCompletedCount: " + readCompletedCount);
 
         addToWorkQueue(false);
@@ -397,7 +402,7 @@ public class WebServerConnState extends ConnectionState {
     @Override
     public void readCompletedError(final BufferState bufferState) {
         if (!readErrorQueue.offer(bufferState)) {
-            System.out.println("ERROR WebServerConnState[" + connStateId + "] readCompletedError() offer failed");
+            LOG.info("ERROR WebServerConnState[" + connStateId + "] readCompletedError() offer failed");
         }
 
         addToWorkQueue(false);
@@ -438,7 +443,7 @@ public class WebServerConnState extends ConnectionState {
             }
         }
 
-        System.out.println("WebServerConnState[" + connStateId + "] processReadError() httpReadCount: " + httpReadCount +
+        LOG.info("WebServerConnState[" + connStateId + "] processReadError() httpReadCount: " + httpReadCount +
                 " dataReadCount: " + dataReadCount);
 
         /*
@@ -488,7 +493,7 @@ public class WebServerConnState extends ConnectionState {
                 // Read of all the data is completed
                 dataReadCompleted(bufferState);
             } else {
-                System.out.println("ERROR: setReadState() invalid current state: " + bufferState.toString());
+                LOG.info("ERROR: setReadState() invalid current state: " + bufferState.toString());
             }
 
             /*
@@ -558,10 +563,10 @@ public class WebServerConnState extends ConnectionState {
                 if (!httpParsingError.get()) {
                     requestedHttpBuffers++;
                 } else {
-                    System.out.println("WebServerConnState[" + connStateId + "] parsing error, no allocation");
+                    LOG.info("WebServerConnState[" + connStateId + "] parsing error, no allocation");
                 }
             } else {
-                System.out.println("WebServerConnState[" + connStateId + "] header was parsed");
+                LOG.info("WebServerConnState[" + connStateId + "] header was parsed");
             }
         }
     }
@@ -571,7 +576,7 @@ public class WebServerConnState extends ConnectionState {
      **   and the validation and authorization can take place.
      */
     void httpHeaderParseComplete(long contentLength) {
-        System.out.println("WebServerConnState[" + connStateId + "] httpHeaderParseComplete() contentLength: " + contentLength);
+        LOG.info("WebServerConnState[" + connStateId + "] httpHeaderParseComplete() contentLength: " + contentLength);
 
         httpHeaderParsed.set(true);
 
@@ -633,15 +638,15 @@ public class WebServerConnState extends ConnectionState {
 
             HttpStatus.Code result = HttpStatus.getCode(resultCode);
             if (result != null) {
-                System.out.println("WebServerConnState[" + connStateId + "] sendResponse() resultCode: " + result.getCode() + " " + result.getMessage());
+                LOG.info("WebServerConnState[" + connStateId + "] sendResponse() resultCode: " + result.getCode() + " " + result.getMessage());
             } else {
-                System.out.println("WebServerConnState[" + connStateId + "] sendResponse() resultCode: " + result.getCode());
+                LOG.info("WebServerConnState[" + connStateId + "] sendResponse() resultCode: " + result.getCode());
             }
         } else {
             /*
             ** If we are out of memory to allocate a response, might as well close out the connection and give up.
              */
-            System.out.println("WebServerConnState[" + connStateId + "] sendResponse() unable to allocate response buffer");
+            LOG.info("WebServerConnState[" + connStateId + "] sendResponse() unable to allocate response buffer");
 
             /*
             ** Set the finalResponseSendDone flag to allow the state machine to complete.
@@ -685,12 +690,12 @@ public class WebServerConnState extends ConnectionState {
             BufferStateEnum currState;
 
             if (responseBuffer == null) {
-                System.out.println("WebServerConnState[" + connStateId + "] processResponseWriteDone: null responseBuffer");
+                LOG.info("WebServerConnState[" + connStateId + "] processResponseWriteDone: null responseBuffer");
                 return;
             }
 
             currState = responseBuffer.getBufferState();
-            System.out.println("WebServerConnState[" + connStateId + "] processResponseWriteDone() " + currState.toString());
+            LOG.info("WebServerConnState[" + connStateId + "] processResponseWriteDone() " + currState.toString());
 
             switch (currState) {
                 case SEND_GET_DATA_RESPONSE:
@@ -780,7 +785,7 @@ public class WebServerConnState extends ConnectionState {
     **   error to the client indicating that there are insufficient resources currently.
      */
     public void setOutOfResourceResponse() {
-        System.out.println("WebServerConnState[" + connStateId + "] setOutOfResourceResponse()");
+        LOG.info("WebServerConnState[" + connStateId + "] setOutOfResourceResponse()");
 
         outOfResourcesResponse = true;
     }

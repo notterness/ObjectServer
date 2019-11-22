@@ -10,7 +10,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class CasperHttpInfo {
+
+    private static final Logger LOG = LoggerFactory.getLogger(CasperHttpInfo.class);
 
     /*
      ** The connection this HTTP information is associated with
@@ -144,7 +149,6 @@ public class CasperHttpInfo {
     private boolean objectEventsEnabled;
 
     private boolean replicationEnabled;
-
     private boolean isReadOnly;
 
     private String replicationSources;
@@ -315,7 +319,7 @@ public class CasperHttpInfo {
         _hdr[++_headers] = field.getName();
         _val[_headers] = field.getValue();
 
-        System.out.println("addHeaderValue() _headers: " + _headers + " _hdr: " + field.getName() +
+        LOG.info("addHeaderValue() _headers: " + _headers + " _hdr: " + field.getName() +
                 " _val: " + field.getValue());
 
         if (field instanceof HostPortHttpField) {
@@ -323,7 +327,7 @@ public class CasperHttpInfo {
             httpHost = hpfield.getHost();
             httpPort = hpfield.getPort();
 
-            System.out.println("addHeaderValue() _host: " + httpHost + " _port: " + httpPort);
+            LOG.info("addHeaderValue() _host: " + httpHost + " _port: " + httpPort);
         }
 
         int result = _hdr[_headers].indexOf("Content-Length");
@@ -340,13 +344,13 @@ public class CasperHttpInfo {
                     parseFailureCode = HttpStatus.RANGE_NOT_SATISFIABLE_416;
                     parseFailureReason = HttpStatus.getMessage(parseFailureCode);
 
-                    System.out.println("Invalid Content-Length [" + connectionState.getConnStateId() +  "] code: " +
+                    LOG.info("Invalid Content-Length [" + connectionState.getConnStateId() +  "] code: " +
                             parseFailureCode + " reason: " + parseFailureReason);
 
                     connectionState.setHttpParsingError();
                 }
             } catch (NumberFormatException num_ex) {
-                System.out.println("addHeaderValue() " + _val[_headers] + " " + num_ex.getMessage());
+                LOG.info("addHeaderValue() " + _val[_headers] + " " + num_ex.getMessage());
             }
         }
     }
@@ -363,7 +367,7 @@ public class CasperHttpInfo {
             parseFailureCode = HttpStatus.NO_CONTENT_204;
             parseFailureReason = HttpStatus.getMessage(parseFailureCode);
 
-            System.out.println("No Content-Length [" + connectionState.getConnStateId() +  "] code: " +
+            LOG.info("No Content-Length [" + connectionState.getConnStateId() +  "] code: " +
                     parseFailureCode + " reason: " + parseFailureReason);
 
             connectionState.setHttpParsingError();
@@ -394,7 +398,7 @@ public class CasperHttpInfo {
 
         parseFailureCode = failure.getCode();
         parseFailureReason = (reason == null) ? String.valueOf(failure.getCode()) : reason;
-        System.out.println("badMessage() [" + connectionState.getConnStateId() + "] code: " +
+        LOG.info("badMessage() [" + connectionState.getConnStateId() + "] code: " +
                 parseFailureCode + " reason: " + parseFailureReason);
 
         connectionState.setHttpParsingError();
