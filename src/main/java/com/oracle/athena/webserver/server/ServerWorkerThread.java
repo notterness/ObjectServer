@@ -6,6 +6,7 @@ import com.oracle.athena.webserver.http.BuildHttpResult;
 import com.oracle.athena.webserver.memory.MemoryManager;
 
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -49,48 +50,32 @@ public class ServerWorkerThread implements Runnable {
     private final Object queueMutex;
 
 
-    private boolean threadExit;
-    private Thread connThread;
+    private volatile boolean stopReceived;
+    private final CountDownLatch countDownLatch;
 
-    public ServerWorkerThread(final int queueSize, MemoryManager memoryManager, final int identifier) {
+    public ServerWorkerThread(final int queueSize, final MemoryManager memoryManager, final int threadId) {
 
         maxQueueSize = queueSize;
 
         this.memoryManager = memoryManager;
-
-        threadId = identifier;
-
-        threadExit = false;
-
+        this.threadId = threadId;
         queueMutex = new Object();
-    }
-
-    public void start() {
-
         // TODO: Need to fix the queue size to account for reserved connections
         workQueue = new LinkedBlockingQueue<>(maxQueueSize * 2);
         timedWaitQueue = new LinkedBlockingQueue<>(maxQueueSize * 2);
-
         bufferStatePool = new BufferStatePool(ConnectionState.MAX_OUTSTANDING_BUFFERS * maxQueueSize,
                 memoryManager);
-
         resultBuilder = new BuildHttpResult();
-
         writeThread = new WriteConnThread(threadId);
-        writeThread.start();
-
-        connThread = new Thread(this);
-        connThread.start();
+        countDownLatch = new CountDownLatch(1);
     }
 
+    // FIXME CTSA: expose timeout and units if applicable
     public void stop() {
-
-        threadExit = true;
-
-        writeThread.stop();
-
+        stopReceived = true;
+        writeThread.stop(1000, TimeUnit.MILLISECONDS);
         try {
-            connThread.join(1000);
+            countDownLatch.await(1000, TimeUnit.MILLISECONDS);
         } catch (InterruptedException int_ex) {
             System.out.println("Server worker thread[" + threadId + "] failed: " + int_ex.getMessage());
         }
@@ -138,7 +123,6 @@ public class ServerWorkerThread implements Runnable {
                 delayedExecution);
 
         if (workQueue.contains(work)) {
-            //FIXME: is this really something we want to happen, rather than a programming error?
             System.out.println("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue() already on workQueue");
             return true;
         }
@@ -200,11 +184,14 @@ public class ServerWorkerThread implements Runnable {
     public void run() {
 
         System.out.println("ServerWorkerThread(" + threadId + ") start " + Thread.currentThread().getName());
+        // every time this thread is created, create a second thread to handle the WriteConnection
+        final Thread writeConnThread = new Thread(writeThread);
         try {
             ConnectionState work;
             int workLoopCount;
-
-            while (!threadExit) {
+            // kick off the writeThread
+            writeConnThread.start();
+            while (!stopReceived) {
                 workLoopCount = 0;
                 while (((work = workQueue.poll(100, TimeUnit.MILLISECONDS)) != null) &&
                         (workLoopCount < MAX_EXEC_WORK_LOOP_COUNT)) {
@@ -233,11 +220,13 @@ public class ServerWorkerThread implements Runnable {
                     }
                 }
             }
+            // FIXME CA: key  off of the value passed into stop
+            writeConnThread.join(1000);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-
         System.out.println("ServerWorkerThread(" + threadId + ") exit " + Thread.currentThread().getName());
+        countDownLatch.countDown();
     }
 
 }

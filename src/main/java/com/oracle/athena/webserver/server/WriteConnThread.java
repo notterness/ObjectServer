@@ -1,6 +1,7 @@
 package com.oracle.athena.webserver.server;
 
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -10,32 +11,24 @@ public class WriteConnThread implements Runnable {
 
     private BlockingQueue<WriteConnection> workQueue;
 
-    private Thread connWriteThread;
-    private boolean threadExit;
-
+    private volatile boolean stopReceived;
+    private final CountDownLatch countDownLatch;
     private int writeThreadId;
 
     public WriteConnThread(int threadId) {
-
         writeThreadId = threadId;
-        threadExit = false;
-    }
-
-    public void start() {
+        countDownLatch = new CountDownLatch(1);
         workQueue = new LinkedBlockingQueue<>(WORK_QUEUE_SIZE);
-
-        connWriteThread = new Thread(this);
-        connWriteThread.start();
     }
 
-    public void stop() {
-        threadExit = true;
-
+    public boolean stop(long timeout, TimeUnit unit) {
+        stopReceived = true;
         try {
-            connWriteThread.join(1000);
-        } catch (InterruptedException int_ex) {
-            System.out.println("Unable to join client write thread: " + int_ex.getMessage());
+            return countDownLatch.await(timeout, unit);
+        } catch (InterruptedException e) {
+            System.out.println("Unable to join client write thread: " + e.getMessage());
         }
+        return false;
     }
 
     public boolean writeData(WriteConnection writeConnection, WriteCompletion completion) {
@@ -58,7 +51,7 @@ public class WriteConnThread implements Runnable {
         try {
             WriteConnection writeConnection;
 
-            while (!threadExit) {
+            while (!stopReceived) {
                 if ((writeConnection = workQueue.poll(1000, TimeUnit.MILLISECONDS)) != null) {
                     // Perform write to this socket
                     if (writeConnection != null) {
@@ -75,6 +68,7 @@ public class WriteConnThread implements Runnable {
         }
 
         System.out.println("writeConnThread(" + writeThreadId + ") exit");
+        countDownLatch.countDown();
     }
 
 }

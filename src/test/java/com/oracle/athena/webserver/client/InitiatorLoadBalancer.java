@@ -21,7 +21,7 @@ class InitiatorLoadBalancer extends ServerLoadBalancer {
         for (int i = 0; i < workerThreads; i++) {
             ServerWorkerThread worker = new ServerWorkerThread(maxQueueSize, memoryManager,
                     (serverBaseId + i));
-            worker.start();
+            executorService.execute(worker);
             threadPool[i] = worker;
         }
 
