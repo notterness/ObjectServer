@@ -90,9 +90,13 @@ abstract public class ConnectionState {
     **
     ** The variables are as follows:
     **    requestedDataBuffers - This is the number of content ByteBuffers that should be allocated. This may be less
-    **      than the actual number of buffers that are required to read all of the content data in.
+    **      than the actual number of buffers that are required to read all of the content data in. This must be
+    **      an AtomicInteger since it is decremented in the read callback (call from an NIO.2 thread) and looked
+    **      at in the normal state machine processing.
+    **
     **    allocatedDataBuffers - This is the number of buffers that have been allocated to read in content data and are
     **      waiting to have reads performed on the.
+    **
     **    outstandingDataReadCount - This is the number of outstanding content reads are currently in progress.
     **    contentAllRead -
     **
@@ -129,7 +133,7 @@ abstract public class ConnectionState {
      **   state machine.
      */
     private ServerWorkerThread workerThread;
-    BufferStatePool bufferStatePool;
+    protected BufferStatePool bufferStatePool;
     WriteConnThread writeThread;
     BuildHttpResult resultBuilder;
 
@@ -150,20 +154,26 @@ abstract public class ConnectionState {
     private LinkedList<BufferState> allocatedDataBufferQueue;
 
     /*
-    **
+    ** The following queue is used to keep track of the BufferState that had a failed read. Items are placed
+    **   on this queue from the NIO.2 callback thread, so it must be a thread safe queue.
      */
     protected BlockingQueue<BufferState> readErrorQueue;
 
     /*
-     **
+     ** The following is used to keep track of BufferState that have completed their reads. Items are placed
+     **   on this queue from the NIO.2 callback thread, so it must be thread safe.
      */
     protected BlockingQueue<BufferState> dataReadDoneQueue;
 
     /*
     ** The following is used to indicate that there was a channel error and the connection should be
     **   closed out.
+    ** NOTE: This does not need to be an AtomicBoolean as the setter and getters all run within the
+    **   same state machine on the same thread. If the code is changed to allow ConnectionState to
+    **   run different channel read or write operations on different threads, then this will need to
+    **   be made and AtomicBoolean.
      */
-    protected AtomicBoolean channelError;
+    protected boolean channelError;
 
     /*
     ** The following is used to indicate there has been a failure in the HTTP parsing.
@@ -177,6 +187,7 @@ abstract public class ConnectionState {
      */
     protected TimeoutChecker timeoutChecker;
 
+
     public ConnectionState(final int uniqueId) {
         outstandingDataReadCount = new AtomicInteger(0);
 
@@ -185,7 +196,10 @@ abstract public class ConnectionState {
         bufferStatePool = null;
         resultBuilder = null;
 
-        channelError = new AtomicBoolean(false);
+        /*
+        ** When the connection begins, there cannot be a channelError.
+         */
+        channelError = false;
 
         connOnDelayedQueue = false;
         connOnExecutionQueue = false;
@@ -346,7 +360,6 @@ abstract public class ConnectionState {
             return false;
         }
 
-        System.out.println("ServerWorkerThread[" + connStateId + "] waitTimeElapsed " + currTime);
         return true;
     }
 
@@ -578,7 +591,10 @@ abstract public class ConnectionState {
         bufferStatePool = null;
         resultBuilder = null;
 
-        channelError.set(false);
+        /*
+        ** Clear out the channelError prior to this ConnectionState being reused.
+         */
+        channelError = false;
 
         /*
         ** Clear out the information about the content.
@@ -620,7 +636,9 @@ abstract public class ConnectionState {
     }
 
     /*
-    **
+    ** This is used by the HttpParsePipelineMgr and the ContentReadPipelineMgr to determine if there have been any
+    **   ByteBuffer channel read errors that need to be processed. Upon receiving the first read error, the
+    **   channelError flag is set to indicate that the connection has failed and needs to be cleaned up.
      */
     public boolean readErrorQueueNotEmpty() {
         return (!readErrorQueue.isEmpty());
@@ -650,7 +668,7 @@ abstract public class ConnectionState {
             readCompletedCount = dataBufferReadsCompleted.get();
         }
 
-        System.out.println("ConnectionState[" + connStateId + "].addDataBuffer() readCompletedCount: " + readCompletedCount);
+        System.out.println("ConnectionState[" + connStateId + "] addDataBuffer() readCompletedCount: " + readCompletedCount);
 
         determineNextContentRead();
     }
@@ -667,8 +685,14 @@ abstract public class ConnectionState {
     }
 
     /*
-    ** This function determines what to do next with content buffers.
+    ** This method determines what to do next with content buffers. It determines how much of the
+    **   data being sent has aleady been read in and determines how many buffers (if any) are needed
+    **   to read in the remaining data.
+    ** It will limit the number of buffers allocated to perform the reads to insure that one
+    **   connection cannot deplete the available buffer pool and starve out other connections.
     **
+    ** TODO: This should be moved to a state machine step that also processes the read completed
+    **   buffers to remove the need for the Atomic variables.
      */
     void determineNextContentRead() {
         /*
@@ -753,13 +777,18 @@ abstract public class ConnectionState {
     }
 
     /*
-     ** Returns if there has been an error on this AsynchronousConnectionChannel
+     ** Returns if there has been an error on this AsynchronousConnectionChannel. This is set following a
+     **   channel read error.
      */
     public boolean hasChannelFailed() {
-        return channelError.get();
+        return channelError;
     }
 
 
+    /*
+    ** connStateId is used to uniquely identify this ConnectionState. It is used for tracing operations that
+    **   occur with this connection.
+     */
     public int getConnStateId() {
         return connStateId;
     }

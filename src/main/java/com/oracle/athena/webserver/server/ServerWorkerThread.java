@@ -119,9 +119,6 @@ public class ServerWorkerThread implements Runnable {
      */
     public boolean put(final ConnectionState work, final boolean delayedExecution) {
 
-        System.out.println("ServerWorkerThread(" + this.threadId + ") put connStateId [" + work.getConnStateId() + "] delayed: " +
-                delayedExecution);
-
         if (workQueue.contains(work)) {
             System.out.println("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue() already on workQueue");
             return true;
@@ -195,8 +192,6 @@ public class ServerWorkerThread implements Runnable {
                 workLoopCount = 0;
                 while (((work = workQueue.poll(100, TimeUnit.MILLISECONDS)) != null) &&
                         (workLoopCount < MAX_EXEC_WORK_LOOP_COUNT)) {
-                    System.out.println("ServerWorkerThread(" + threadId + ") [" + work.getConnStateId() + "]");
-
                     work.markRemovedFromQueue(false);
                     work.stateMachine();
                     workLoopCount++;
@@ -209,9 +204,7 @@ public class ServerWorkerThread implements Runnable {
                 **   checked for the elapsed timeout.
                  */
                 while ((work = timedWaitQueue.peek()) != null) {
-                    //System.out.println("ServerWorkerThread(" + threadId + ") [" + work.getConnStateId() + "] currTime: " +
-                    //        System.currentTimeMillis());
-                    if (work.hasWaitTimeElapsed()) {
+                     if (work.hasWaitTimeElapsed()) {
                         timedWaitQueue.remove(work);
                         work.markRemovedFromQueue(true);
                         work.stateMachine();

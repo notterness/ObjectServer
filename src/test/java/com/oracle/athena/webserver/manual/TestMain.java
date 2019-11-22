@@ -25,6 +25,14 @@ public class TestMain {
         TestClient client = new TestClient((baseTcpPortOffset + 1));
         client.start();
 
+        /*
+        ** Uncomment out the following two lines to let TestMain just act as a server. It can then be used to
+        **   handle requests from an external tool or command line. It will remain stuck in the
+        **   waitForTestsToComplete().
+         */
+        //threadCount.incrementAndGet();
+        //waitForTestsToComplete(threadCount);
+
         ClientTest client_1 = new ClientTest_2("ClientTest_2", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_1.start();
 
@@ -37,8 +45,8 @@ public class TestMain {
         ClientTest oneMbPut = new ClientTest_OneMbPut("OneMbPut", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         oneMbPut.start();
 
-        //ClientTest outOfConnections = new ClientTest_OutOfConnections("OutOfConnections", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
-        //outOfConnections.start();
+        ClientTest outOfConnections = new ClientTest_OutOfConnections("OutOfConnections", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        outOfConnections.start();
 
         System.out.println("Starting Tests");
 

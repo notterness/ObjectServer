@@ -212,7 +212,7 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
             return ConnectionStateEnum.CHECK_SLOW_CHANNEL;
         }
 
-        if (connectionState.getDataResponseWriteDone()) {
+        if (connectionState.getResponseChannelWriteDone()) {
             return ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND;
         }
 

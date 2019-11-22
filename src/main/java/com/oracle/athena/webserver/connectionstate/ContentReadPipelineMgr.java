@@ -160,7 +160,7 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
             return ConnectionStateEnum.READ_CLIENT_DATA;
         }
 
-        if (connectionState.getDataResponseWriteDone()) {
+        if (connectionState.getResponseChannelWriteDone()) {
             return ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND;
         }
 

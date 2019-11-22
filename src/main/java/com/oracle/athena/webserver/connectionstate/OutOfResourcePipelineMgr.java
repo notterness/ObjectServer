@@ -3,6 +3,7 @@ package com.oracle.athena.webserver.connectionstate;
 import com.oracle.athena.webserver.statemachine.StateEntry;
 import com.oracle.athena.webserver.statemachine.StateMachine;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
+import org.eclipse.jetty.http.HttpStatus;
 
 import java.util.function.Function;
 
@@ -16,8 +17,8 @@ public class OutOfResourcePipelineMgr extends ConnectionPipelineMgr {
     private Function outOfResourceSendResponse = new Function<WebServerConnState, StateQueueResult>() {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
-            wsConn.setupInitial();
-            return StateQueueResult.STATE_RESULT_CONTINUE;
+            wsConn.sendResponse(HttpStatus.TOO_MANY_REQUESTS_429);
+            return StateQueueResult.STATE_RESULT_WAIT;
         }
     };
 
@@ -40,6 +41,15 @@ public class OutOfResourcePipelineMgr extends ConnectionPipelineMgr {
         }
     };
 
+
+    private Function OutOfResourceProcessFinalResponseSend = new Function<WebServerConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(WebServerConnState wsConn){
+            wsConn.processResponseWriteDone();
+            return StateQueueResult.STATE_RESULT_REQUEUE;
+        }
+    };
+
     OutOfResourcePipelineMgr(WebServerConnState connState) {
 
         super(connState);
@@ -59,6 +69,8 @@ public class OutOfResourcePipelineMgr extends ConnectionPipelineMgr {
         outOfResourceStateMachine.addStateEntry( ConnectionStateEnum.CONN_FINISHED, new StateEntry(outOfResourceConnFinished));
         outOfResourceStateMachine.addStateEntry( ConnectionStateEnum.CHECK_SLOW_CHANNEL,
                 new StateEntry( outOfResourceCheckSlowConnection));
+        outOfResourceStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND,
+                new StateEntry(OutOfResourceProcessFinalResponseSend));
 
     }
 
@@ -66,8 +78,6 @@ public class OutOfResourcePipelineMgr extends ConnectionPipelineMgr {
      ** This determines the pipeline stages used to read in the content data.
      */
     public ConnectionStateEnum nextPipelineStage() {
-
-        System.out.println("OutOfResourcePipelineMgr[" + connectionState.getConnStateId() + "] initialState: " + initialStage);
 
         /*
          ** First setup to perform the content reads. This is required since the buffer used to read in the
@@ -85,6 +95,10 @@ public class OutOfResourcePipelineMgr extends ConnectionPipelineMgr {
          */
         if (connectionState.hasChannelFailed()) {
             return ConnectionStateEnum.CONN_FINISHED;
+        }
+
+        if (connectionState.getResponseChannelWriteDone()) {
+            return ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND;
         }
 
         /*

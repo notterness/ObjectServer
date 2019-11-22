@@ -39,15 +39,22 @@ public class WebServerConnState extends ConnectionState {
     ** The following variables are used in the ContentReadPipeline class. This is used to determine the
     **   stages in the pipeline that is used to read in content data.
     **
-    **   dataResponseSent - This is set to true when the HTTP response header has been sent.
-    **   finalResponseSent -
-    **   finalResponseSendDone - This is set to true when the callback from the socket write has taken place. This
-    **     means that the ConnectionState can now be released back to the free pool.
+    **   finalResponseSent - This is set in the sendResponse() method when the BufferState has been allocated
+    **     to write the response to the write channel. It is set prior to the write taking place.
+    **
+    **   dataRequestResponseSendDone - This is set to true when the HTTP response header has been sent. This is used when the
+    **     intermediate response telling the client to send the content data has been sent,
+    **
+    **   finalResponseSendDone - This is set to true when the callback from the socket write has taken place and the
+    **     processResponseWriteDone() method has been called from the state machine. This means that the
+    **     ConnectionState can now be released back to the free pool.
+    *
+    **   responseChannelWriteDone - This is set when the callback from the channel write completes
      */
-    private AtomicBoolean dataResponseSent;
+    private boolean dataRequestResponseSendDone;
     private boolean finalResponseSent;
-    private AtomicBoolean dataResponseWriteDone;
-    private AtomicBoolean finalResponseSendDone;
+    private AtomicBoolean responseChannelWriteDone;
+    private boolean finalResponseSendDone;
 
 
     /*
@@ -121,11 +128,11 @@ public class WebServerConnState extends ConnectionState {
         connectionStatePool = pool;
 
         responseBuffer = null;
-        dataResponseSent = new AtomicBoolean(false);
         finalResponseSent = false;
-        finalResponseSendDone = new AtomicBoolean( false);
+        dataRequestResponseSendDone = false;
+        finalResponseSendDone = false;
 
-        dataResponseWriteDone = new AtomicBoolean(false);
+        responseChannelWriteDone = new AtomicBoolean(false);
 
         outstandingHttpReadCount = new AtomicInteger(0);
         requestedHttpBuffers = 0;
@@ -259,18 +266,13 @@ public class WebServerConnState extends ConnectionState {
      ** This is used to determine which pipeline to execute after the parsing and validation of the HTTP headers
      **   has been completed.
      */
-    public void setupNextPipeline() {
-        /*
-         ** Get rid of the current pipeline
-         */
-        pipelineManager = null;
-
-        System.out.println("WebServerConnState[" + connStateId + "] setupNextPipeline() outOfResourcesResponse: " + outOfResourcesResponse);
-
+    void setupNextPipeline() {
         /*
         ** First check if this is an out of resources response
          */
         if (outOfResourcesResponse) {
+            System.out.println("WebServerConnState[" + connStateId + "] setupNextPipeline() outOfResourcePipelineMgr");
+
             pipelineManager = outOfResourcePipelineMgr;
             return;
         }
@@ -279,6 +281,8 @@ public class WebServerConnState extends ConnectionState {
          ** Now, based on the HTTP method, figure out the next pipeline
          */
         HttpMethodEnum method = casperHttpInfo.getMethod();
+        System.out.println("WebServerConnState[" + connStateId + "] setupNextPipeline() " + method.toString());
+
         switch (method) {
             case PUT_METHOD:
                 pipelineManager = readPipelineMgr;
@@ -392,7 +396,7 @@ public class WebServerConnState extends ConnectionState {
      */
     @Override
     public void readCompletedError(final BufferState bufferState) {
-        if (readErrorQueue.offer(bufferState) == false) {
+        if (!readErrorQueue.offer(bufferState)) {
             System.out.println("ERROR WebServerConnState[" + connStateId + "] readCompletedError() offer failed");
         }
 
@@ -425,30 +429,23 @@ public class WebServerConnState extends ConnectionState {
                     httpReadCount = outstandingHttpReadCount.decrementAndGet();
                 } else {
                     dataReadCount = outstandingDataReadCount.decrementAndGet();
-
-                    /*
-                     ** Need to increment the number of data buffer reads completed so that the clients will
-                     **   receive their callback with an error for the buffer.
-                     */
-                    try {
-                        dataReadDoneQueue.put(bufferState);
-                        dataBufferReadsCompleted.incrementAndGet();
-                    } catch (InterruptedException int_ex) {
-                        System.out.println("ERROR WebServerConnState[" + connStateId + "] processReadError() " + int_ex.getMessage());
-                    }
                 }
 
                 /*
-                ** Set the buffer state
+                ** Release the buffer back to the free pool
                  */
-                bufferState.setReadState(BufferStateEnum.READ_ERROR);
+                bufferStatePool.freeBufferState(bufferState);
             }
         }
 
         System.out.println("WebServerConnState[" + connStateId + "] processReadError() httpReadCount: " + httpReadCount +
                 " dataReadCount: " + dataReadCount);
 
-        channelError.set(true);
+        /*
+        ** Mark that there was a channel read error so that the pipeline manager can clean up the
+        **   connection and close it out.
+         */
+        channelError = true;
 
         /*
          ** If there are outstanding reads in progress, need to wait for those to
@@ -613,7 +610,7 @@ public class WebServerConnState extends ConnectionState {
 
 
     /*
-     ** This will send out a particular response type on the server channel
+     ** This will send out a specified response type on the server channel back to the client
      */
     void sendResponse(final int resultCode) {
 
@@ -636,10 +633,24 @@ public class WebServerConnState extends ConnectionState {
 
             HttpStatus.Code result = HttpStatus.getCode(resultCode);
             if (result != null) {
-                System.out.println("sendResponse[" + connStateId + "] resultCode: " + result.getCode() + " " + result.getMessage());
+                System.out.println("WebServerConnState[" + connStateId + "] sendResponse() resultCode: " + result.getCode() + " " + result.getMessage());
+            } else {
+                System.out.println("WebServerConnState[" + connStateId + "] sendResponse() resultCode: " + result.getCode());
             }
         } else {
-            System.out.println("sendResponse[" + connStateId + "] unable to allocate response buffer");
+            /*
+            ** If we are out of memory to allocate a response, might as well close out the connection and give up.
+             */
+            System.out.println("WebServerConnState[" + connStateId + "] sendResponse() unable to allocate response buffer");
+
+            /*
+            ** Set the finalResponseSendDone flag to allow the state machine to complete.
+            **
+            ** TODO: Most likely if the final response cannot be sent, we may need to mark an error for this connection
+            **   and cleanup any items related to this connection. These may include writes to the Storage Server and
+            **   other things like that.
+             */
+            finalResponseSendDone = true;
         }
     }
 
@@ -662,7 +673,7 @@ public class WebServerConnState extends ConnectionState {
      */
     public void statusWriteCompleted(final int bytesXfr, final ByteBuffer buffer) {
 
-        dataResponseWriteDone.set(true);
+        responseChannelWriteDone.set(true);
         addToWorkQueue(false);
     }
 
@@ -670,7 +681,7 @@ public class WebServerConnState extends ConnectionState {
     ** This is triggered after the write callback has taken place
      */
     void processResponseWriteDone() {
-        if (dataResponseWriteDone.get()) {
+        if (responseChannelWriteDone.get()) {
             BufferStateEnum currState;
 
             if (responseBuffer == null) {
@@ -683,11 +694,11 @@ public class WebServerConnState extends ConnectionState {
 
             switch (currState) {
                 case SEND_GET_DATA_RESPONSE:
-                    dataResponseSent.set(true);
+                    dataRequestResponseSendDone = true;
                     break;
 
                 case SEND_FINAL_RESPONSE:
-                    finalResponseSendDone.set(true);
+                    finalResponseSendDone = true;
                     break;
             }
 
@@ -698,15 +709,15 @@ public class WebServerConnState extends ConnectionState {
             ** Need to clear the flag so that the state machine doesn't sit running though this state time after
             **   time.
              */
-            dataResponseWriteDone.set(false);
+            responseChannelWriteDone.set(false);
         }
     }
 
     /*
     **
      */
-    boolean getDataResponseWriteDone() {
-        return dataResponseWriteDone.get();
+    boolean getResponseChannelWriteDone() {
+        return responseChannelWriteDone.get();
     }
 
 
@@ -715,7 +726,7 @@ public class WebServerConnState extends ConnectionState {
     **   asking the client to send the content data
      */
     boolean hasDataResponseBeenSent() {
-        return dataResponseSent.get();
+        return dataRequestResponseSendDone;
     }
 
     /*
@@ -732,13 +743,13 @@ public class WebServerConnState extends ConnectionState {
     **   successfully written on the wire.
      */
     boolean finalResponseSent() {
-        return finalResponseSendDone.get();
+        return finalResponseSendDone;
     }
 
     void resetResponses() {
-        dataResponseSent.set(false);
+        dataRequestResponseSendDone = false;
         finalResponseSent = false;
-        finalResponseSendDone.set(false);
+        finalResponseSendDone = false;
     }
 
     public void releaseBufferState() {
@@ -790,8 +801,13 @@ public class WebServerConnState extends ConnectionState {
         return parsingStatus;
     }
 
+    /*
+     ** This is the final cleanup of the connection before it is put back in the free pool. It is expected
+     **   that when the connection is pulled from the free pool it is in a pristine state and can be used
+     **   to handle a new connection.
+     */
     public void reset() {
-        dataResponseSent.set(false);
+        dataRequestResponseSendDone = false;
 
         /*
         ** Setup the HTTP parser for a new ByteBuffer stream
@@ -810,7 +826,7 @@ public class WebServerConnState extends ConnectionState {
         resetContentAllRead();
         resetResponses();
 
-        dataResponseWriteDone.set(false);
+        responseChannelWriteDone.set(false);
 
         /*
         ** Reset the pipeline back to the Parse HTTP Pipeline for the next iteration of this connection
@@ -832,7 +848,9 @@ public class WebServerConnState extends ConnectionState {
 
         super.reset();
 
-        // Now release this back to the free pool so it can be reused
+        /*
+        ** Now release this back to the free pool so it can be reused
+         */
         connectionStatePool.freeConnectionState(this);
     }
 
