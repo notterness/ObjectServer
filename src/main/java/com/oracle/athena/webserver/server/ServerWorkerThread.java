@@ -181,6 +181,7 @@ public class ServerWorkerThread implements Runnable {
     public void run() {
 
         System.out.println("ServerWorkerThread(" + threadId + ") start " + Thread.currentThread().getName());
+        //FIXME: pool this?
         // every time this thread is created, create a second thread to handle the WriteConnection
         final Thread writeConnThread = new Thread(writeThread);
         try {
