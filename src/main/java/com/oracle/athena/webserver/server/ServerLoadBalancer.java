@@ -8,6 +8,8 @@ import com.oracle.athena.webserver.memory.MemoryManager;
 
 import java.io.IOException;
 import java.nio.channels.AsynchronousSocketChannel;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /*
  ** This distributes the accepted channels amongst the available worker threads. The goal is to
@@ -29,6 +31,7 @@ public class ServerLoadBalancer {
     private ConnectionStatePool<WebServerConnState> connPool;
     private ConnectionStatePool<WebServerConnState> reservedBlockingConnPool;
 
+    protected final ExecutorService executorService;
 
     /*
      ** The queueSize is the maximum number of outstanding connections a thread can manage
@@ -47,7 +50,7 @@ public class ServerLoadBalancer {
         serverBaseId = serverClientId;
         this.memoryManager = memoryManager;
         threadPool = new ServerWorkerThread[workerThreads];
-
+        executorService = Executors.newFixedThreadPool(workerThreads);
         System.out.println("ServerLoadBalancer[" + serverClientId + "] workerThreads: " + workerThreads + " maxQueueSize: " + maxQueueSize);
     }
 
@@ -55,7 +58,7 @@ public class ServerLoadBalancer {
         for (int i = 0; i < workerThreads; i++) {
             ServerWorkerThread worker = new ServerWorkerThread(maxQueueSize, memoryManager,
                     (serverBaseId + i));
-            worker.start();
+            executorService.execute(worker);
             threadPool[i] = worker;
         }
 
@@ -88,8 +91,8 @@ public class ServerLoadBalancer {
             threadPool[i] = null;
             worker.stop();
         }
-
-        // TODO: Wait for all the threads to stop and exit
+        // with the way ServerWorkerThread is configured, stop should return only once the thread has actually stopped
+        executorService.shutdown();
     }
 
     /*
