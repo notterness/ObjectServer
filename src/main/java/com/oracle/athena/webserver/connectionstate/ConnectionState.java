@@ -66,6 +66,9 @@ abstract public class ConnectionState {
      */
     private static final long TIME_TILL_NEXT_TIMEOUT_CHECK = 500;
 
+    public static final int NUM_SSL_APP_BUFFERS = 2;
+    public static final int NUM_SSL_NET_BUFFERS = 2;
+
     /*
     ** connStateId is used as a way to track a ConnectionState in logging statements. Each
     **   ConnectionState has a unique ID to identify it for the life of the program.
@@ -598,6 +601,10 @@ abstract public class ConnectionState {
         }
     }
 
+    protected boolean isSSL() {
+        return (sslContext != null);
+    }
+
     /*
     ** This is used to put the ConnectionState back into a pristine state so that it can be used
     **   to handle the next HTTP connection.
@@ -874,7 +881,7 @@ abstract public class ConnectionState {
         readBufferState.setReadInProgress();
 
         // Read the data from the channel
-        ByteBuffer readBuffer = readBufferState.getBuffer();
+        ByteBuffer readBuffer = readBufferState.getChannelBuffer();
         connChan.read(readBuffer, readBufferState, new CompletionHandler<Integer, BufferState>() {
 
             @Override
@@ -905,6 +912,7 @@ abstract public class ConnectionState {
             }
         });  // end of chan.read()
     }
+
 
     /*
      ** Same as above, returns a future.

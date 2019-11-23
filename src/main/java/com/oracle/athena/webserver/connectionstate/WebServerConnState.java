@@ -8,6 +8,7 @@ import com.oracle.athena.webserver.statemachine.StateQueueResult;
 import org.eclipse.jetty.http.HttpStatus;
 
 import javax.net.ssl.*;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.util.Iterator;
@@ -42,6 +43,8 @@ public class WebServerConnState extends ConnectionState {
     private ContentReadPipelineMgr readPipelineMgr;
     private HttpParsePipelineMgr httpParsePipelineMgr;
     private OutOfResourcePipelineMgr outOfResourcePipelineMgr;
+    private SSLHandshakePipelineMgr sslHandshakePipelineMgr;
+    private HttpsParsePipelineMgr httpsParsePipelineMgr;
 
     /*
     ** The following variables are used in the ContentReadPipeline class. This is used to determine the
@@ -83,6 +86,7 @@ public class WebServerConnState extends ConnectionState {
     private int allocatedHttpBufferCount;
 
     private AtomicInteger outstandingHttpReadCount;
+    private AtomicInteger httpBufferReadsUnwrapNeeded;
     private AtomicInteger httpBufferReadsCompleted;
     private AtomicBoolean httpHeaderParsed;
 
@@ -100,6 +104,8 @@ public class WebServerConnState extends ConnectionState {
     private LinkedList<BufferState> allocatedHttpBufferQueue;
     private BlockingQueue<BufferState> httpReadDoneQueue;
 
+    private LinkedList<BufferState> allocatedSSLAppBufferQueue;
+    private LinkedList<BufferState> allocatedSSLNetBufferQueue;
 
     /*
      ** The following is the complete information for the HTTP connection
@@ -129,6 +135,10 @@ public class WebServerConnState extends ConnectionState {
     private ConnectionStatePool<WebServerConnState> connectionStatePool;
 
     private SSLEngineResult sslEngineResult;
+    private boolean sslHandshakeRequired;
+    private boolean sslHandshakeSuccess;
+    private boolean sslBuffersNeeded;
+    private SSLEngineResult.HandshakeStatus handshakeStatus;
 
     public WebServerConnState(final ConnectionStatePool<WebServerConnState> pool, final int uniqueId) {
 
@@ -144,10 +154,13 @@ public class WebServerConnState extends ConnectionState {
         responseChannelWriteDone = new AtomicBoolean(false);
 
         outstandingHttpReadCount = new AtomicInteger(0);
+        httpBufferReadsUnwrapNeeded = new AtomicInteger(0);
         requestedHttpBuffers = 0;
         allocatedHttpBufferCount = 0;
 
         allocatedHttpBufferQueue = new LinkedList<>();
+        allocatedSSLAppBufferQueue = new LinkedList<>();
+        allocatedSSLNetBufferQueue = new LinkedList<>();
 
         httpBufferReadsCompleted = new AtomicInteger(0);
         initialHttpBuffer = true;
@@ -159,8 +172,41 @@ public class WebServerConnState extends ConnectionState {
 
         writeConn = null;
         sslEngineResult = null;
+        sslHandshakeRequired = false;
+        sslHandshakeSuccess = false;
+        sslBuffersNeeded = false;
+        handshakeStatus = SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING;
     }
 
+    public boolean isSSLHandshakeRequired() {
+        return sslHandshakeRequired;
+    }
+
+    public void setSSLHandshakeRequired(boolean sslHandshakeRequired) {
+        this.sslHandshakeRequired = sslHandshakeRequired;
+    }
+
+    public boolean isSSLHandshakeSuccess() {
+        return sslHandshakeSuccess;
+    }
+
+    public void setSSLHandshakeSuccess(boolean sslHandshakeSuccess) {
+        this.sslHandshakeSuccess = sslHandshakeSuccess;
+    }
+
+    public boolean isSSLBuffersNeeded() {
+        return sslBuffersNeeded;
+    }
+
+    public void setSSLBuffersNeeded( boolean sslBuffersNeeded ){
+        this.sslBuffersNeeded = sslBuffersNeeded;
+    }
+
+    public void setupSSL() {
+        setupInitial();
+        setSSLHandshakeRequired(false);
+        setSSLBuffersNeeded(true);
+    }
 
     public void start() {
         super.start();
@@ -174,13 +220,14 @@ public class WebServerConnState extends ConnectionState {
         httpParser = new ByteBufferHttpParser(casperHttpInfo);
 
         httpParsePipelineMgr = new HttpParsePipelineMgr(this);
+        sslHandshakePipelineMgr = new SSLHandshakePipelineMgr(this);
+        httpsParsePipelineMgr = new HttpsParsePipelineMgr(this);
         readPipelineMgr = new ContentReadPipelineMgr(this);
         outOfResourcePipelineMgr = new OutOfResourcePipelineMgr(this);
+    }
 
-        /*
-        ** start with the http manager.
-        */
-        pipelineManager = httpParsePipelineMgr;
+    public void selectPipelineManagers() {
+        pipelineManager = (sslContext == null) ? httpParsePipelineMgr : sslHandshakePipelineMgr;
     }
 
     /*
@@ -287,228 +334,162 @@ public class WebServerConnState extends ConnectionState {
      * the other's CLOSE message to close the transport link. The other peer from his perspective would read a CLOSE message
      * from his peer and then enter the handshake procedure to send his own CLOSE message as well.
      *
-     * @return True if the connection handshake was successful or false if an error occurred.
      */
-    private boolean doSslHandshake() {
+    public boolean doSSLHandshake() {
 
-        SSLEngineResult.HandshakeStatus handshakeStatus;
         SSLEngine engine = getEngine();
 
-        // NioSslPeer's fields appData and peerAppData are supposed to be large enough to hold all message data the peer
-        // will send and expects to receive from the other peer respectively. Since the messages to be exchanged will usually be less
-        // than 16KB long the capacity of these fields should also be smaller. Here we initialize these two local buffers
-        // to be used for the handshake, while keeping client's buffers at the same size.
-
-        ListIterator<BufferState> iter = allocatedHttpBufferQueue.listIterator(0);
-        BufferState clientAppDataState = iter.next();
-        ByteBuffer clientAppData = clientAppDataState.getBuffer();
-        BufferState clientNetDataState = iter.next();
-        ByteBuffer clientNetData = clientNetDataState.getBuffer();
-        BufferState appDataState = iter.next();
-        ByteBuffer appData = appDataState.getBuffer();
-        BufferState netDataState = iter.next();
-        ByteBuffer netData = netDataState.getBuffer();
-
-        if (sslEngineResult != null) {
-            handshakeStatus = sslEngineResult.getHandshakeStatus();
-            sslEngineResult = null;
-        } else {
-            handshakeStatus = engine.getHandshakeStatus();
+        if ((allocatedSSLAppBufferQueue.size() < ConnectionState.NUM_SSL_APP_BUFFERS) ||
+                (allocatedSSLNetBufferQueue.size() < ConnectionState.NUM_SSL_NET_BUFFERS)) {
+            setSSLBuffersNeeded(true);
+            setSSLHandshakeRequired(false);
+            return false;
         }
-            switch (handshakeStatus) {
-                case NEED_UNWRAP:
-                    Future<Integer> rd = readFromChannelFuture(clientNetData);
-                    Integer res = -1;
-                    Boolean ex = false;
+
+        ListIterator<BufferState> iterApp = allocatedSSLAppBufferQueue.listIterator(0);
+        ListIterator<BufferState> iterNet = allocatedSSLNetBufferQueue.listIterator(0);
+        ByteBuffer clientAppData = iterApp.next().getBuffer();
+        ByteBuffer clientNetData = iterNet.next().getBuffer();
+        ByteBuffer serverAppData = iterApp.next().getBuffer();
+        ByteBuffer serverNetData = iterNet.next().getBuffer();
+
+        switch (handshakeStatus) {
+            case NEED_UNWRAP:
+                Future<Integer> rd = readFromChannelFuture(clientNetData);
+                Integer res = -1;
+                try {
+                    res = rd.get();
+                } catch (InterruptedException e) {
+                    // TODO: logging
+                } catch (ExecutionException e) {
+                    // TODO: logging
+                }
+                if (res < 0) {
+                    if (engine.isInboundDone() && engine.isOutboundDone()) {
+                        return false;
+                    }
                     try {
-                        res = rd.get();
-                    } catch (InterruptedException e) {
-                        ex = true;
-                    } catch (ExecutionException e) {
-                        ex = true;
+                        engine.closeInbound();
+                    } catch (SSLException e) {
                     }
-                    if (res < 0 || ex) {
-                        if (engine.isInboundDone() && engine.isOutboundDone()) {
-                            return false;
-                        }
-                        try {
-                            engine.closeInbound();
-                        } catch (SSLException e) {
-                        }
-                        engine.closeOutbound();
-                        // After closeOutbound the engine will be set to WRAP state, in order to try to send a close message to the client.
-                        //handshakeStatus = engine.getHandshakeStatus();
-                        break;
-                    }
-                    clientNetData.flip();
-                    try {
-                        sslEngineResult = engine.unwrap(clientNetData, clientAppData);
-                        clientNetData.compact();
-                      //  handshakeStatus = result.getHandshakeStatus();
-                    } catch (SSLException sslException) {
-                        engine.closeOutbound();
-                       // handshakeStatus = engine.getHandshakeStatus();
-                        break;
-                    }
-                    switch (sslEngineResult.getStatus()) {
-                        case OK:
-                            break;
-                        case BUFFER_OVERFLOW:
-                            // Will occur when peerAppData's capacity is smaller than the data derived from peerNetData's unwrap.
-//                            peerAppData = enlargeApplicationBuffer(engine, peerAppData);
-                            break;
-                        case BUFFER_UNDERFLOW:
-                            // Will occur either when no data was read from the peer or when the peerNetData buffer was too small to hold all peer's data.
-//                            peerNetData = handleBufferUnderflow(engine, peerNetData);
-                            break;
-                        case CLOSED:
-                            if (engine.isOutboundDone()) {
-                                return false;
-                            } else {
-                                engine.closeOutbound();
-                              //  handshakeStatus = engine.getHandshakeStatus();
-                                break;
-                            }
-                        default:
-                            throw new IllegalStateException("Invalid SSL status: " + sslEngineResult.getStatus());
-                    }
+                    engine.closeOutbound();
+                    // After closeOutbound the engine will be set to WRAP state, in order to try to send a close message to the client.
+                    handshakeStatus = engine.getHandshakeStatus();
                     break;
-                case NEED_WRAP:
-                    netData.clear();
-                    try {
-                        sslEngineResult = engine.wrap(appData, netData);
-                       // handshakeStatus = result.getHandshakeStatus();
-                    } catch (SSLException sslException) {
-                        engine.closeOutbound();
-                       // handshakeStatus = engine.getHandshakeStatus();
+                }
+                clientNetData.flip();
+                try {
+                    sslEngineResult = engine.unwrap(clientNetData, clientAppData);
+                    clientNetData.compact();
+                    handshakeStatus = sslEngineResult.getHandshakeStatus();
+                } catch (SSLException sslException) {
+                    engine.closeOutbound();
+                    handshakeStatus = engine.getHandshakeStatus();
+                    break;
+                }
+                switch (sslEngineResult.getStatus()) {
+                    case OK:
                         break;
-                    }
-                    switch (sslEngineResult.getStatus()) {
-                        case OK :
-                            netData.flip();
-                            while (netData.hasRemaining()) {
-                                Future <Integer> wr = writeToChannelFuture(netData);
+                    case BUFFER_OVERFLOW:
+                        // Will occur when clientAppData's capacity is smaller than the data derived from clientNetData's unwrap.
+                        //FIXME: handle this condition
+                        break;
+                    case BUFFER_UNDERFLOW:
+                        // Will occur either when no data was read from the client or when the clientNetData buffer was too small to hold all client's data.
+                        //FIXME: handle this condition
+                        break;
+                    case CLOSED:
+                        if (engine.isOutboundDone()) {
+                            return false;
+                        } else {
+                            engine.closeOutbound();
+                            handshakeStatus = engine.getHandshakeStatus();
+                            break;
+                        }
+                    default:
+                        throw new IllegalStateException("Invalid SSL status: " + sslEngineResult.getStatus());
+                }
+                break;
+            case NEED_WRAP:
+                serverNetData.clear();
+                try {
+                    sslEngineResult = engine.wrap(serverAppData, serverNetData);
+                    handshakeStatus = sslEngineResult.getHandshakeStatus();
+                } catch (SSLException sslException) {
+                    engine.closeOutbound();
+                    handshakeStatus = engine.getHandshakeStatus();
+                    break;
+                }
+                switch (sslEngineResult.getStatus()) {
+                    case OK :
+                        serverNetData.flip();
+                        while (serverNetData.hasRemaining()) {
+                            Future <Integer> wr = writeToChannelFuture(serverNetData);
+                            try {
+                                wr.get();
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            } catch (ExecutionException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                        break;
+                    case BUFFER_OVERFLOW:
+                        // Will occur if there is not enough space in serverNetData buffer to write all the data that would be generated by the method wrap.
+                        // Since serverNetData is set to session's packet size we should not get to this point because SSLEngine is supposed
+                        // to produce messages smaller or equal to that, but a general handling would be the following:
+                        //FIXME: handle this condition
+                        break;
+                    case BUFFER_UNDERFLOW:
+                        //Buffer underflow occurred after a wrap. I don't think we should ever get here
+                        //FIXME: handle this condition
+                    case CLOSED:
+                        try {
+                            serverNetData.flip();
+                            while (serverNetData.hasRemaining()) {
+                                Future <Integer> wr = writeToChannelFuture(serverNetData);
                                 try {
                                     wr.get();
                                 } catch (InterruptedException e) {
                                     e.printStackTrace();
+                                    //FIXME: handle this condition
                                 } catch (ExecutionException e) {
                                     e.printStackTrace();
+                                    //FIXME: handle this condition
                                 }
                             }
-                            break;
-                        case BUFFER_OVERFLOW:
-                            // Will occur if there is not enough space in netData buffer to write all the data that would be generated by the method wrap.
-                            // Since netData is set to session's packet size we should not get to this point because SSLEngine is supposed
-                            // to produce messages smaller or equal to that, but a general handling would be the following:
-//                            netData = enlargePacketBuffer(engine, netData);
-                            break;
-                        case BUFFER_UNDERFLOW:
-                            //Buffer underflow occurred after a wrap. I don't think we should ever get here
-                        case CLOSED:
-                            try {
-                                netData.flip();
-                                while (netData.hasRemaining()) {
-                                    Future <Integer> wr = writeToChannelFuture(netData);
-                                    try {
-                                        wr.get();
-                                    } catch (InterruptedException e) {
-                                        e.printStackTrace();
-                                    } catch (ExecutionException e) {
-                                        e.printStackTrace();
-                                    }
-                                }
-                                // At this point the handshake status will probably be NEED_UNWRAP so we make sure that peerNetData is clear to read.
-                                //peerNetData.clear();
-                            } catch (Exception e) {
-//                                handshakeStatus = engine.getHandshakeStatus();
-                            }
-                            break;
-                        default:
-                            throw new IllegalStateException("Invalid SSL status: " + sslEngineResult.getStatus());
-                    }
-                    break;
-                case NEED_TASK:
-                    Runnable task;
-                    while ((task = engine.getDelegatedTask()) != null) {
-                        System.out.println("run task " + task);
-                        task.run();
-                    }
- //                   handshakeStatus = engine.getHandshakeStatus();
-                    break;
-                case FINISHED:
-                    return false;
-                case NOT_HANDSHAKING:
-                    return false;
-                default:
-                    throw new IllegalStateException("Invalid SSL status: " + handshakeStatus);
-            }
+                            // At this point the handshake status will probably be NEED_UNWRAP so we make sure that peerNetData is clear to read.
+                            clientNetData.clear();
+                        } catch (Exception e) {
+                            handshakeStatus = engine.getHandshakeStatus();
+                        }
+                        break;
+                    default:
+                        throw new IllegalStateException("Invalid SSL status: " + sslEngineResult.getStatus());
+                }
+                break;
+            case NEED_TASK:
+                Runnable task;
+                while ((task = engine.getDelegatedTask()) != null) {
+                    System.out.println("run task " + task);
+                    task.run();
+                }
+                handshakeStatus = engine.getHandshakeStatus();
+                break;
+            case FINISHED:
+                setSSLHandshakeRequired(false);
+                setSSLHandshakeSuccess(true);
+                return false;
+            case NOT_HANDSHAKING:
+                // FIXME: handle this condition
+                setSSLHandshakeRequired(false);
+                return false;
+            default:
+                throw new IllegalStateException("Invalid SSL status: " + handshakeStatus);
+        }
 
         return true;
 
-    }
-
-
-
-    private void read() {
-
-        //log.debug("About to read from a client...");
-        SSLEngine engine = getEngine();
-
-        ListIterator<BufferState> iter = allocatedHttpBufferQueue.listIterator(0);
-        BufferState peerAppData = iter.next();
-        BufferState peerNetData = iter.next();
-
-        peerNetData.getBuffer().clear();
-        int bytesRead = 0;
-        Future<Integer> rd = readFromChannelFuture(peerNetData.getBuffer());
-        try {
-            bytesRead = rd.get();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (ExecutionException e) {
-            e.printStackTrace();
-        }
-        if (bytesRead > 0) {
-            peerNetData.getBuffer().flip();
-            while (peerNetData.getBuffer().hasRemaining()) {
-                peerAppData.getBuffer().clear();
-                SSLEngineResult result;
-                try {
-                    result = engine.unwrap(peerNetData.getBuffer(), peerAppData.getBuffer());
-                } catch (SSLException e) {
-                    e.printStackTrace();
-                    return;
-                }
-                switch (result.getStatus()) {
-                    case OK:
-                        peerAppData.getBuffer().flip();
-                        System.out.println(peerAppData.getBuffer().toString());
-                        //("Incoming message: " + new String(peerAppData.array()));
-                        break;
-                    case BUFFER_OVERFLOW:
-                    //    peerAppData = enlargeApplicationBuffer(engine, peerAppData);
-                        break;
-                    case BUFFER_UNDERFLOW:
-                    //    peerNetData = handleBufferUnderflow(engine, peerNetData);
-                        break;
-                    case CLOSED:
-                        //("Client wants to close connection...");
-                        //closeConnection(socketChannel, engine);
-                        //("Goodbye client!");
-                        return;
-                    default:
-                        throw new IllegalStateException("Invalid SSL status: " + result.getStatus());
-                }
-            }
-
-            //write(socketChannel, engine, "Hello! I am your server!");
-
-        } else if (bytesRead < 0) {
-            //log.error("Received end of stream. Will try to close connection with client...");
-            //handleEndOfStream(socketChannel, engine);
-            //log.debug("Goodbye client!");
-        }
     }
 
     /*
@@ -556,6 +537,9 @@ public class WebServerConnState extends ConnectionState {
         return (httpBufferReadsCompleted.get() > 0);
     }
 
+    boolean httpBuffersReadyToUnwrap() {
+        return (httpBufferReadsUnwrapNeeded.get() > 0);
+    }
     /*
     ** Returns the number of outstanding HTTP buffer reads there currently are.
      */
@@ -598,6 +582,10 @@ public class WebServerConnState extends ConnectionState {
         }
     }
 
+    public void setupNextSSLPipeline() {
+        pipelineManager = httpsParsePipelineMgr;
+    }
+
     /*
      ** Allocate a buffer to read HTTP header information into and associate it with this ConnectionState
      **
@@ -634,9 +622,13 @@ public class WebServerConnState extends ConnectionState {
      **   sufficient buffers available to allocate all that are requested, so there will be a wakeup call
      **   when buffers are available and then the connection will go back and try the allocation again.
      */
-    private int allocLargeBufferState() {
+    public int allocHttpsBufferState() {
+        int appBufferSize = engine.getSession().getApplicationBufferSize();
+        int netBufferSize = engine.getSession().getPacketBufferSize();
+
         while (requestedHttpBuffers > 0) {
-            BufferState bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_HTTP_FROM_CHAN, MemoryManager.LARGE_BUFFER_SIZE);
+            BufferState bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_HTTPS_FROM_CHAN,
+                    appBufferSize, netBufferSize);
             if (bufferState != null) {
                 allocatedHttpBufferQueue.add(bufferState);
 
@@ -652,6 +644,76 @@ public class WebServerConnState extends ConnectionState {
         }
 
         return allocatedHttpBufferCount;
+    }
+
+    /*
+     ** Allocate a buffers for SSL handshaking.
+     ** Server and client buffers are supposed to be large enough to hold all message data the server
+     ** will send and expects to receive from the client. Since the messages to be exchanged will usually be less
+     ** than 16KB long the capacity of these fields should also be smaller.  Expected buffer sizes are retrieved
+     ** from the session object.
+     */
+    public int allocSSLHandshakeBuffers() {
+        int appBufferSize = engine.getSession().getApplicationBufferSize();
+        int netBufferSize = engine.getSession().getPacketBufferSize();
+
+        while (allocatedSSLAppBufferQueue.size() < ConnectionState.NUM_SSL_APP_BUFFERS) {
+            BufferState bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.SSL_HANDSHAKE_APP_BUFFER, appBufferSize);
+            if (bufferState != null) {
+                allocatedSSLAppBufferQueue.add(bufferState);
+
+            } else {
+                /*
+                 ** Unable to allocate memory, come back later
+                 */
+                bufferAllocationFailed.set(true);
+                return allocatedSSLAppBufferQueue.size();
+            }
+        }
+
+        while (allocatedSSLNetBufferQueue.size() < ConnectionState.NUM_SSL_NET_BUFFERS) {
+            BufferState bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.SSL_HANDSHAKE_NET_BUFFER, netBufferSize);
+            if (bufferState != null) {
+                allocatedSSLNetBufferQueue.add(bufferState);
+
+            } else {
+                /*
+                 ** Unable to allocate memory, come back later
+                 */
+                bufferAllocationFailed.set(true);
+                return allocatedSSLAppBufferQueue.size() + allocatedSSLAppBufferQueue.size();
+            }
+        }
+
+        setSSLBuffersNeeded(false);
+        return allocatedSSLAppBufferQueue.size() + allocatedSSLAppBufferQueue.size();
+    }
+
+    public void freeSSLHandshakeBuffers() {
+        ListIterator<BufferState> iterApp = allocatedSSLAppBufferQueue.listIterator(0);
+        ListIterator<BufferState> iterNet = allocatedSSLNetBufferQueue.listIterator(0);
+
+        while (iterApp.hasNext()) {
+            BufferState bufferState = iterApp.next();
+            iterApp.remove();
+
+            bufferStatePool.freeBufferState(bufferState);
+        }
+
+        while (iterNet.hasNext()) {
+            BufferState bufferState = iterNet.next();
+            iterNet.remove();
+
+            bufferStatePool.freeBufferState(bufferState);
+        }
+
+    }
+
+    public void beginHandshake() throws SSLException{
+        engine.beginHandshake();
+        setSSLHandshakeRequired(true);
+        setSSLHandshakeSuccess(false);
+        handshakeStatus = engine.getHandshakeStatus();
     }
 
     /*
@@ -695,10 +757,12 @@ public class WebServerConnState extends ConnectionState {
         int readCount = outstandingHttpReadCount.decrementAndGet();
         try {
             httpReadDoneQueue.put(bufferState);
-            readCompletedCount = httpBufferReadsCompleted.incrementAndGet();
+
+            readCompletedCount = isSSL() ? httpBufferReadsUnwrapNeeded.incrementAndGet() :
+                                           httpBufferReadsCompleted.incrementAndGet();
         } catch (InterruptedException int_ex) {
             LOG.info("httpReadCompleted(" + connStateId + ") " + int_ex.getMessage());
-            readCompletedCount = httpBufferReadsCompleted.get();
+            readCompletedCount = isSSL() ? httpBufferReadsUnwrapNeeded.get() : httpBufferReadsCompleted.get();
         }
 
         /*
@@ -814,16 +878,73 @@ public class WebServerConnState extends ConnectionState {
              */
             bufferState.setReadState(newState);
 
-            if (currBufferState == BufferStateEnum.READ_WAIT_FOR_HTTP) {
-                // Read of all the data is completed
-                httpReadCompleted(bufferState);
-            } else if (currBufferState == BufferStateEnum.READ_WAIT_FOR_DATA) {
-                // Read of all the data is completed
-                dataReadCompleted(bufferState);
-            } else {
-                LOG.info("ERROR: setReadState() invalid current state: " + bufferState.toString());
+             switch (currBufferState) {
+                case READ_WAIT_FOR_HTTP:
+                case READ_WAIT_FOR_HTTPS:
+                    httpReadCompleted(bufferState);
+                    break;
+
+                case READ_WAIT_FOR_DATA:
+                    dataReadCompleted(bufferState);
+                    break;
+
+                case READ_WAIT_FOR_SSL_DATA:
+                    break;
+
+                default:
+                    LOG.info("ERROR: setReadState() invalid current state: " + bufferState.toString());
+                    break;
             }
         }
+    }
+
+    public void sslReadUnwrap() {
+        ByteBuffer clientAppData;
+        ByteBuffer clientNetData;
+
+        int bufferReadsDone = httpBufferReadsUnwrapNeeded.get();
+        if (bufferReadsDone > 0) {
+            for (BufferState bufferState : httpReadDoneQueue) {
+
+                clientAppData = bufferState.getBuffer();
+                clientNetData = bufferState.getNetBuffer();
+                clientNetData.flip();
+                while (clientNetData.hasRemaining()) {
+                    clientAppData.clear();
+                    SSLEngineResult result;
+                    try {
+                        result = engine.unwrap(clientNetData, clientAppData);
+                    } catch (SSLException e) {
+                        System.out.println("Unable to unwrap data.  Will be evident in parse.");
+                        e.printStackTrace();
+                        return;
+                    }
+                    switch (result.getStatus()) {
+                        case OK:
+                            System.out.println("Unwrapped data!");
+                            httpBufferReadsUnwrapNeeded.decrementAndGet();
+                            httpBufferReadsCompleted.incrementAndGet();
+                            break;
+                        case BUFFER_OVERFLOW:
+                            //    clientAppData = enlargeApplicationBuffer(engine, peerAppData);
+                            break;
+                        case BUFFER_UNDERFLOW:
+                            // no data was read.  That should not happen here, other than
+                            // the connection closed
+                            break;
+                        case CLOSED:
+                            //("Client wants to close connection...");
+                            //closeConnection(socketChannel, engine);
+                            return;
+                        default:
+                            //Log this state that can't happen
+                            System.out.println("Illegal state: " + result.getStatus().toString());
+                            break;
+                    }
+                }
+            }
+        }
+
     }
 
 
@@ -850,9 +971,7 @@ public class WebServerConnState extends ConnectionState {
                 httpBufferReadsCompleted.decrementAndGet();
 
                 buffer = bufferState.getBuffer();
-                int bufferTextCapacity = buffer.position();
-                buffer.rewind();
-                buffer.limit(bufferTextCapacity);
+                buffer.flip();
 
                 //displayBuffer(bufferState);
                 ByteBuffer remainingBuffer;

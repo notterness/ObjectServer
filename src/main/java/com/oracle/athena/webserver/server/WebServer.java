@@ -15,21 +15,20 @@ public class WebServer {
 
     public WebServer(int workerThreads, int serverClientId) {
         memoryManager = new MemoryManager();
-        serverWorkHandler = new ServerLoadBalancer(2, workerThreads, memoryManager,
-                (serverClientId * 100));
+        serverWorkHandler = new ServerLoadBalancer(2, workerThreads, memoryManager, (serverClientId * 100));
 
         http_server = new ServerChannelLayer(serverWorkHandler, ServerChannelLayer.HTTP_TCP_PORT, serverClientId);
-        https_server = new ServerChannelLayer(serverWorkHandler, ServerChannelLayer.HTTPS_TCP_PORT, serverClientId + 1, true);
+        https_server = new ServerChannelLayer(serverWorkHandler, ServerChannelLayer.HTTPS_TCP_PORT,
+                serverClientId + 1, true);
     }
 
     public WebServer(int workerThreads, int listenPort, int serverClientId) {
         memoryManager = new MemoryManager();
-
-        serverWorkHandler = new ServerLoadBalancer(2, workerThreads, memoryManager,
-                (serverClientId * 100));
+        serverWorkHandler = new ServerLoadBalancer(2, workerThreads, memoryManager, (serverClientId * 100));
 
         http_server = new ServerChannelLayer(serverWorkHandler, listenPort, serverClientId);
-        https_server = new ServerChannelLayer(serverWorkHandler, listenPort + 80, serverClientId + 1);
+        https_server = new ServerChannelLayer(serverWorkHandler, listenPort + 443,
+                serverClientId + 1, true);
     }
 
     public void start() {

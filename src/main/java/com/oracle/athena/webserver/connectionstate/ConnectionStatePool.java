@@ -50,6 +50,18 @@ public class ConnectionStatePool<T extends ConnectionState> {
     }
 
     /**
+     * A non-blocking method of setting up the {@link ConnectionState} for the client to perform reads.
+     *
+     * @param chan
+     *  an {@link AsynchronousSocketChannel} to assign to a {@link ConnectionState} from this {@link ConnectionStatePool}.
+     * @return <T> the {@link ConnectionState} with the channel assigned to it, null if no connections are available.
+     *
+     */
+    public T allocConnectionState(final AsynchronousSocketChannel chan) {
+        return allocConnectionState(chan, null);
+    }
+
+    /**
      * This method frees up a connection by adding it back to the pool. This method will block indefinitely until the
      * connectionState can be added back to the pool.
      * <p>

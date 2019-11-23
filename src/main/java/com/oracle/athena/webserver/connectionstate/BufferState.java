@@ -16,17 +16,27 @@ public class BufferState {
 
     private ByteBuffer buffer;
 
+    private ByteBuffer netBuffer;
+
     private BufferStateEnum bufferState;
 
     BufferState(final ConnectionState work) {
         bufferState = BufferStateEnum.INVALID_STATE;
         buffer = null;
+        netBuffer = null;
 
         connState = work;
     }
 
     public void assignBuffer(final ByteBuffer userBuffer, final BufferStateEnum state) {
         buffer = userBuffer;
+        netBuffer = null;
+        bufferState = state;
+    }
+
+    public void assignBuffer(final ByteBuffer userBuffer, ByteBuffer netBuffer, final BufferStateEnum state) {
+        buffer = userBuffer;
+        this.netBuffer = netBuffer;
         bufferState = state;
     }
 
@@ -42,6 +52,15 @@ public class BufferState {
 
     public ConnectionStateEnum getConnectionNextState() { return connState.getNextState(); }
 
+    public ByteBuffer getNetBuffer() {
+        return netBuffer;
+    }
+
+    public ByteBuffer getChannelBuffer() {
+        return connState.isSSL() ? netBuffer : buffer;
+    }
+
+
     /*
     ** This is used to set the BufferState to a waiting for a read to complete state. This is called
     **   just prior to a read from channel operation starting in ConnectionState.
@@ -52,7 +71,9 @@ public class BufferState {
          if (bufferState == BufferStateEnum.READ_HTTP_FROM_CHAN) {
             bufferState = BufferStateEnum.READ_WAIT_FOR_HTTP;
         } else if (bufferState == BufferStateEnum.READ_DATA_FROM_CHAN) {
-            bufferState = BufferStateEnum.READ_WAIT_FOR_DATA;
+             bufferState = BufferStateEnum.READ_WAIT_FOR_DATA;
+        } else if (bufferState == BufferStateEnum.READ_HTTPS_FROM_CHAN) {
+             bufferState = BufferStateEnum.READ_WAIT_FOR_HTTPS;
         } else {
              // TODO: Add Assert((bufferState == READ_HTTP_FROM_CHAN) || (bufferState == READ_DATA_FROM_CHAN))
 

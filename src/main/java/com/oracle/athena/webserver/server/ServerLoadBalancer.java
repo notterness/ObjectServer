@@ -137,6 +137,8 @@ public class ServerLoadBalancer {
             work.setOutOfResourceResponse();
         }
 
+        work.selectPipelineManagers();
+
         return addWorkToThread(work);
     }
 

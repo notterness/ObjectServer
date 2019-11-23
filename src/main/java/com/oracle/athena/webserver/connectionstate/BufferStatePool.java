@@ -56,6 +56,36 @@ public class BufferStatePool {
         return null;
     }
 
+    public BufferState allocBufferState(final ConnectionState connState, final BufferStateEnum initialState,
+                                        final int appBufferSize, final int netBufferSize) {
+        BufferState bufferState = new BufferState(connState);
+
+        if (bufferState != null) {
+            MemoryAvailableCallback memAvailCb;
+            ByteBuffer appBuffer;
+            ByteBuffer netBuffer;
+
+            memAvailCb = new MemoryAvailableCallback(connState, 2);
+            appBuffer = memoryAllocator.poolMemAlloc(appBufferSize, memAvailCb);
+            if (appBuffer != null) {
+                netBuffer = memoryAllocator.poolMemAlloc(netBufferSize, memAvailCb);
+                if (netBuffer != null) {
+                    bufferState.assignBuffer(appBuffer, netBuffer, initialState);
+                    return bufferState;
+                }else {
+                    // all or nothing
+                    memoryAllocator.poolMemFree(appBuffer);
+                }
+            }
+
+            // Need to release the bufferState
+        }
+
+        // Unable to allocate the memory
+        return null;
+    }
+
+
     public void freeBufferState(BufferState bufferState) {
 
         ByteBuffer buffer = bufferState.getBuffer();
