@@ -34,11 +34,11 @@ abstract public class ServerChannelLayer implements Runnable {
     int serverClientId;
 
     //FIXME: abstract class should not have a member variable it neither initializes nor uses. Probably delete this.
-    public Thread serverAcceptThread;
+    protected Thread serverAcceptThread;
     //TODO: naming, either class ServerLoadBalancer or variable workHandler needs a new name (without server in it)
     ServerLoadBalancer serverWorkHandler;
 
-    public MemoryManager memoryManager;
+    protected MemoryManager memoryManager;
 
 
     //FIXME: should become a local variable of the run method
@@ -49,8 +49,6 @@ abstract public class ServerChannelLayer implements Runnable {
     private AsynchronousChannelGroup serverCbThreadpool;
 
     //TODO: naming, should not be called server, name does not indicate purpose
-    //FIXME: this variable and its usage are not production ready.  We should not rely on trace statements in log files
-    //for anything in production.
     private int serverConnTransactionId;
 
     //FIXME - remove or use instance variable
@@ -63,7 +61,7 @@ abstract public class ServerChannelLayer implements Runnable {
         workerThreads = numWorkerThreads;
         serverClientId = clientId;
 
-        memoryManager = new MemoryManager();
+        this.memoryManager = new MemoryManager();
 
         serverConnTransactionId = 0x5555;
 
@@ -76,6 +74,8 @@ abstract public class ServerChannelLayer implements Runnable {
      ** Perform an orderly shutdown of the server channel and all of its associated resources.
      */
     public void stop() {
+
+        System.out.println("ServerChannelLayer[" + (serverClientId * 100) + "] stop()");
 
         //FIXME: does not work with InitiatorServer
         serverWorkHandler.stop();
@@ -102,6 +102,15 @@ abstract public class ServerChannelLayer implements Runnable {
         } catch (InterruptedException int_ex) {
             LOG.info("Wait for threadpool shutdown failed: " + serverConnTransactionId + " " + int_ex.getMessage());
         }
+
+        /*
+         ** Verify that the MemoryManger has all of its memory back in the free pools
+         */
+        if (this.memoryManager.verifyMemoryPools("ServerChannelLayer")) {
+            System.out.println("ServerChannelLayer[" + (serverClientId * 100) + "] Memory Verification All Passed");
+        }
+
+        System.out.println("ServerChannelLayer[" + (serverClientId * 100) + "] stop() finished");
     }
 
     public void run() {

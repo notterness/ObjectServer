@@ -785,7 +785,7 @@ public class WebServerConnState extends ConnectionState {
     **   error to the client indicating that there are insufficient resources currently.
      */
     public void setOutOfResourceResponse() {
-        LOG.info("WebServerConnState[" + connStateId + "] setOutOfResourceResponse()");
+        System.out.println("WebServerConnState[" + connStateId + "] setOutOfResourceResponse()");
 
         outOfResourcesResponse = true;
     }

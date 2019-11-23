@@ -59,6 +59,11 @@ public class TestClient implements Runnable {
     }
 
     public void stop() {
+        /*
+        ** Shutdown the InitiatorServer
+         */
+        targetServer.stop();
+
         threadExit.set(true);
     }
 

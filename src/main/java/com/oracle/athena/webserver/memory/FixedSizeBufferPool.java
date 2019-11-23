@@ -35,6 +35,8 @@ public class FixedSizeBufferPool {
 
     public int getBufferCount() { return bufferCount; }
 
+    public int getUnusedBufferCount() { return freeQueue.size(); }
+
     public int getNumBuffersInUse() { return inuseQueue.size(); }
 
     public ByteBuffer poolMemAlloc(int bufferSize) {

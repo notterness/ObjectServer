@@ -84,7 +84,7 @@ public class ServerWorkerThread implements Runnable {
         } catch (InterruptedException int_ex) {
             LOG.info("Server worker thread[" + threadId + "] failed: " + int_ex.getMessage());
         }
-    }
+     }
 
     /*
      ** This function is used to return what the thread thinks its current workload is. This is used to determine

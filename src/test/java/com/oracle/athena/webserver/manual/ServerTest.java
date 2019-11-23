@@ -28,18 +28,22 @@ public class ServerTest implements Runnable {
     }
 
     void stop() {
+        System.out.println("ServerTest[" + serverConnId + "] stop() begin");
+
         exitThread = true;
         try {
             serverThread.join(1000);
         } catch (InterruptedException int_ex) {
             System.out.println("serverThread.join() failed: " + int_ex.getMessage());
         }
+
+        System.out.println("ServerTest[" + serverConnId + "] stop() done");
     }
 
     public void run() {
         int tcpPort = ServerChannelLayer.BASE_TCP_PORT + serverConnId;
 
-        System.out.println("ServerTest serverConnId: " + serverConnId);
+        System.out.println("ServerTest[" + serverConnId + "] thread start");
 
         WebServer server = new WebServer(1, tcpPort, serverConnId);
         server.start();
@@ -52,7 +56,12 @@ public class ServerTest implements Runnable {
             }
         }
 
-        System.out.println("ServerTest serverConnId: " + serverConnId + " exit");
+        /*
+        ** Stop the WebServer so it can cleaup and verify the resources
+         */
+        server.stop();
+
+        System.out.println("ServerTest[" + serverConnId + "] thread exit");
 
         serverCount.decrementAndGet();
     }

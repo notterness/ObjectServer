@@ -41,6 +41,9 @@ class InitiatorLoadBalancer extends ServerLoadBalancer {
 
             connPool.freeConnectionState(conn);
         }
+    }
+
+    void stop() {
 
     }
 
