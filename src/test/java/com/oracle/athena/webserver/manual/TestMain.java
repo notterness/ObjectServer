@@ -45,8 +45,10 @@ public class TestMain {
         ClientTest oneMbPut = new ClientTest_OneMbPut("OneMbPut", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         oneMbPut.start();
 
+        /*
         ClientTest outOfConnections = new ClientTest_OutOfConnections("OutOfConnections", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         outOfConnections.start();
+        */
 
         System.out.println("Starting Tests");
 
@@ -124,6 +126,12 @@ public class TestMain {
             } else {
                 break;
             }
+        }
+
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException int_ex) {
+            System.out.println("Wait after test run was interrupted");
         }
     }
 

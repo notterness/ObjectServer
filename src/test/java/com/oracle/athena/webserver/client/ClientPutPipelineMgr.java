@@ -66,7 +66,7 @@ public class ClientPutPipelineMgr extends ConnectionPipelineMgr {
         @Override
         public StateQueueResult apply(ClientConnState conn) {
             if (conn.checkSlowClientChannel()) {
-                return StateQueueResult.STATE_RESULT_REQUEUE;
+                return StateQueueResult.STATE_RESULT_CONTINUE;
             } else {
                 return StateQueueResult.STATE_RESULT_WAIT;
             }

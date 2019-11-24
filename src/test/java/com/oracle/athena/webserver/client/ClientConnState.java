@@ -89,6 +89,34 @@ public class ClientConnState extends ConnectionState {
         addRequestedDataBuffer();
     }
 
+    /*
+     ** This checks if there is a slow client
+     */
+    public boolean checkSlowClientChannel() {
+        boolean continueExecution = true;
+
+        if (timeoutChecker.inactivityThresholdReached()) {
+            /*
+             ** TOTDO: Need to close out the channel and this connection
+             */
+            System.out.printf("WebServerConnState[" + getConnStateId() + "] connection timeout");
+        } else {
+            ConnectionStateEnum overallState = pipelineManager.nextPipelineStage();
+
+            /*
+             ** Need to wait for something to kick the state machine to a new state
+             **
+             ** The ConnectionState will get put back on the execution queue when an external
+             **   operation completes.
+             */
+            if (overallState == ConnectionStateEnum.CHECK_SLOW_CHANNEL) {
+                continueExecution = false;
+            }
+        }
+
+        return continueExecution;
+    }
+
 
     /*
      ** This walks through the array of BufferState to find the next one that has completed

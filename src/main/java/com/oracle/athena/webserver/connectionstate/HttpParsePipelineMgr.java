@@ -68,7 +68,7 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
             if (wsConn.checkSlowClientChannel()) {
-                return StateQueueResult.STATE_RESULT_REQUEUE;
+                return StateQueueResult.STATE_RESULT_CONTINUE;
             } else {
                 return StateQueueResult.STATE_RESULT_WAIT;
             }
@@ -107,7 +107,7 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn){
             wsConn.processResponseWriteDone();
-            return StateQueueResult.STATE_RESULT_REQUEUE;
+            return StateQueueResult.STATE_RESULT_CONTINUE;
         }
     };
 

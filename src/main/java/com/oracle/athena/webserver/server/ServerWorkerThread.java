@@ -33,7 +33,6 @@ public class ServerWorkerThread implements Runnable {
     private MemoryManager memoryManager;
 
     private BlockingQueue<ConnectionState> workQueue;
-
     private BlockingQueue<ConnectionState> timedWaitQueue;
 
     private BufferStatePool bufferStatePool;
@@ -119,46 +118,21 @@ public class ServerWorkerThread implements Runnable {
     /*
      ** This checks to see if there is space in the queue and then adds the
      ** ConnectionState object if there is. It returns false if there is no
-     ** space or while waiting for space to add the element, the threads shuts
-     ** down.
+     ** space currently in the queue.
      */
-    public boolean put(final ConnectionState work, final boolean delayedExecution) {
-
-        if (workQueue.contains(work)) {
-            LOG.info("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue() already on workQueue");
-            return true;
+    public boolean addToWorkQueue(final ConnectionState work) {
+        if (!workQueue.offer(work)) {
+            LOG.info("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue() unable to add");
+            return false;
         }
 
-        if (delayedExecution) {
-            /*
-            ** If this ConnectionState is already on a queue, it cannot be added
-            **   to the delayed execution queue
-             */
-            if (!timedWaitQueue.contains(work)) {
-                //FIXME: creates a case in which work is marked on delay queue but is not on delay queue
-                work.markAddedToDelayedQueue();
-                if (!timedWaitQueue.offer(work)) {
-                    LOG.info("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue(delayed) unable to add");
-                    return false;
-                }
-            } else {
-                //LOG.info("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue(delayed) already on queue");
-            }
-        } else {
-            if (timedWaitQueue.contains(work)) {
-                /*
-                ** Need to remove this from the delayed queue and then put it on the execution
-                **   queue
-                 */
-                LOG.info("ConnectionState[" + work.getConnStateId() + "] remove from delayed queue");
-                work.markRemovedFromQueue(true);
-                timedWaitQueue.remove(work);
-            }
+        return true;
+    }
 
-            if (!workQueue.offer(work)) {
-                LOG.info("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue() unable to add");
-                return false;
-            }
+    public boolean addToDelayedQueue(final ConnectionState work) {
+        if (!timedWaitQueue.offer(work)) {
+            LOG.info("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue() unable to add");
+            return false;
         }
 
         return true;
@@ -167,19 +141,23 @@ public class ServerWorkerThread implements Runnable {
     /*
     ** TODO: Need to fix the thread queue to only add if thread is no already running
      */
-    public void remove(final ConnectionState work) {
+    public void removeFromQueue(final ConnectionState work, final boolean delayedQueue) {
         if (workQueue.contains(work)) {
-            LOG.info("ConnectionState[" + work.getConnStateId() + "] remove() on workQueue");
-            work.markRemovedFromQueue(true);
+            if (delayedQueue) {
+                LOG.warn("ConnectionState[" + work.getConnStateId() + "] remove() expected on timedWaitQueue, not workQueue");
+            }
             workQueue.remove(work);
         } else if (timedWaitQueue.contains(work)) {
             /*
              ** Need to remove this from the delayed queue and then put it on the execution
              **   queue
              */
-            LOG.info("ConnectionState[" + work.getConnStateId() + "] remove() on timedWaitQueue");
-            work.markRemovedFromQueue(true);
+            if (!delayedQueue) {
+                LOG.warn("ConnectionState[" + work.getConnStateId() + "] remove() expected on workQueue, not timeWaitQueue");
+            }
             timedWaitQueue.remove(work);
+        } else {
+            LOG.error("ConnectionState[" + work.getConnStateId() + "] remove() not on any queue. delayedQueue: " + delayedQueue);
         }
     }
 

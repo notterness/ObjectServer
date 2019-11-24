@@ -204,6 +204,35 @@ public class WebServerConnState extends ConnectionState {
     }
 
     /*
+     ** This checks if there is a slow client
+     */
+    boolean checkSlowClientChannel() {
+        boolean continueExecution = true;
+
+        if (timeoutChecker.inactivityThresholdReached()) {
+            /*
+             ** TOTDO: Need to close out the channel and this connection
+             */
+            LOG.info("WebServerConnState[" + connStateId + "] connection timeout");
+        } else {
+            ConnectionStateEnum overallState = pipelineManager.nextPipelineStage();
+
+            /*
+             ** Need to wait for something to kick the state machine to a new state
+             **
+             ** The ConnectionState will get put back on the execution queue when an external
+             **   operation completes.
+             */
+            if (overallState == ConnectionStateEnum.CHECK_SLOW_CHANNEL) {
+                continueExecution = false;
+            }
+        }
+
+        return continueExecution;
+    }
+
+
+    /*
     **
     */
     @Override
@@ -486,6 +515,11 @@ public class WebServerConnState extends ConnectionState {
         } else {
             BufferStateEnum currBufferState = bufferState.getBufferState();
 
+            /*
+             ** Only do this for good reads at this point.
+             */
+            bufferState.setReadState(newState);
+
             if (currBufferState == BufferStateEnum.READ_WAIT_FOR_HTTP) {
                 // Read of all the data is completed
                 httpReadCompleted(bufferState);
@@ -495,11 +529,6 @@ public class WebServerConnState extends ConnectionState {
             } else {
                 LOG.info("ERROR: setReadState() invalid current state: " + bufferState.toString());
             }
-
-            /*
-            ** Only do this for good reads at this point.
-             */
-            bufferState.setReadState(newState);
         }
     }
 
@@ -536,17 +565,26 @@ public class WebServerConnState extends ConnectionState {
 
                 remainingBuffer = httpParser.parseHttpData(buffer, initialHttpBuffer);
                 if (remainingBuffer != null) {
-                    bufferState.swapByteBuffers(remainingBuffer);
+                    /*
+                    ** Allocate a new BufferState to hold the remaining data
+                     */
+                    BufferState newBufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_DONE, MemoryManager.SMALL_BUFFER_SIZE);
+                    bufferState.copyByteBuffer(remainingBuffer);
 
                     int bytesRead = remainingBuffer.limit();
-                    addDataBuffer(bufferState, bytesRead);
-                } else {
-                    /*
-                     ** Set the BufferState to PARSE_DONE
-                     ** TODO: When can the buffers used for the header be released?
-                     */
-                    bufferState.setBufferHttpParseDone();
+                    addDataBuffer(newBufferState, bytesRead);
                 }
+
+                /*
+                ** Set the BufferState to PARSE_DONE. Setting the BufferState is sort of redundant as
+                **   the buffer is going to be released to the free pool immediately after. It might be
+                **   useful at some point for validation code.
+                **
+                ** NOTE: The assumption is that once the HTTP request data buffer has been parsed, there
+                **   is no reason to keep it around.
+                 */
+                bufferState.setBufferHttpParseDone();
+                bufferStatePool.freeBufferState(bufferState);
 
                 initialHttpBuffer = false;
             }
@@ -676,8 +714,7 @@ public class WebServerConnState extends ConnectionState {
      **
      ** TODO: Pass the buffer back instead of relying on the responseBuffer
      */
-    public void statusWriteCompleted(final int bytesXfr, final ByteBuffer buffer) {
-
+    public void statusWriteCompleted(final ByteBuffer buffer) {
         responseChannelWriteDone.set(true);
         addToWorkQueue(false);
     }
@@ -686,43 +723,46 @@ public class WebServerConnState extends ConnectionState {
     ** This is triggered after the write callback has taken place
      */
     void processResponseWriteDone() {
-        if (responseChannelWriteDone.get()) {
-            BufferStateEnum currState;
-
-            if (responseBuffer == null) {
-                LOG.info("WebServerConnState[" + connStateId + "] processResponseWriteDone: null responseBuffer");
-                return;
-            }
-
-            currState = responseBuffer.getBufferState();
-            LOG.info("WebServerConnState[" + connStateId + "] processResponseWriteDone() " + currState.toString());
-
-            switch (currState) {
-                case SEND_GET_DATA_RESPONSE:
-                    dataRequestResponseSendDone = true;
-                    break;
-
-                case SEND_FINAL_RESPONSE:
-                    finalResponseSendDone = true;
-                    break;
-            }
-
-            bufferStatePool.freeBufferState(responseBuffer);
-            responseBuffer = null;
-
-            /*
-            ** Need to clear the flag so that the state machine doesn't sit running though this state time after
-            **   time.
-             */
-            responseChannelWriteDone.set(false);
+        if (!responseChannelWriteDone.get()) {
+            LOG.warn("WebServerConnState[" + connStateId + "] processResponseWriteDone() should not be here");
         }
-    }
+
+        if (responseBuffer == null) {
+            LOG.warn("WebServerConnState[" + connStateId + "] processResponseWriteDone: null responseBuffer");
+            return;
+        }
+
+        BufferStateEnum currState = responseBuffer.getBufferState();
+        LOG.info("WebServerConnState[" + connStateId + "] processResponseWriteDone() currState: " + currState.toString());
+
+        switch (currState) {
+            case SEND_GET_DATA_RESPONSE:
+                dataRequestResponseSendDone = true;
+                break;
+            case SEND_FINAL_RESPONSE:
+                finalResponseSendDone = true;
+                break;
+        }
+
+        bufferStatePool.freeBufferState(responseBuffer);
+        responseBuffer = null;
+
+        /*
+        ** Need to clear the flag so that the state machine doesn't sit running though this state time after
+        **   time.
+         */
+        responseChannelWriteDone.set(false);
+     }
 
     /*
     **
      */
     boolean getResponseChannelWriteDone() {
-        return responseChannelWriteDone.get();
+        boolean responseWriteCompleted = responseChannelWriteDone.get();
+        //LOG.info("WebServerConnState[" + connStateId + "] getResponseChannelWriteDone() " +
+        //        responseWriteCompleted);
+
+        return responseWriteCompleted;
     }
 
 
@@ -770,6 +810,8 @@ public class WebServerConnState extends ConnectionState {
             bufferStatePool.freeBufferState(bufferState);
 
             allocatedHttpBufferCount--;
+
+            LOG.info("WebServerConnState[" + connStateId + "] releaseBufferState() " + allocatedHttpBufferCount);
         }
 
     }
@@ -785,7 +827,7 @@ public class WebServerConnState extends ConnectionState {
     **   error to the client indicating that there are insufficient resources currently.
      */
     public void setOutOfResourceResponse() {
-        System.out.println("WebServerConnState[" + connStateId + "] setOutOfResourceResponse()");
+        LOG.info("WebServerConnState[" + connStateId + "] setOutOfResourceResponse()");
 
         outOfResourcesResponse = true;
     }
@@ -804,6 +846,23 @@ public class WebServerConnState extends ConnectionState {
         }
 
         return parsingStatus;
+    }
+
+    /*
+    ** This is a placeholder for the encryption step. Currently it is used to release the content buffers
+     */
+    void releaseContentBuffers() {
+        BufferState bufferState;
+        Iterator<BufferState> iter = dataReadDoneQueue.iterator();
+        while (iter.hasNext()) {
+            bufferState = iter.next();
+            iter.remove();
+
+            bufferStatePool.freeBufferState(bufferState);
+
+            int readsCompleted = dataBufferReadsCompleted.decrementAndGet();
+            LOG.info("WebServerConnState[" + connStateId + "] releaseContentBuffers() " + readsCompleted);
+        }
     }
 
     /*

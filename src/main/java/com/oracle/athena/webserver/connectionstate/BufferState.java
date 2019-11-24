@@ -92,24 +92,26 @@ public class BufferState {
     }
 
     /*
-    ** This will replace the current ByteBuffer with the newBuffer in the BufferState. The previous
-    **   ByteBuffer will be released back to the memory free pool.
+    ** This will copy the contents of the newBuffer into the ByteBuffer associated with the BufferState.
      */
-    public void swapByteBuffers(ByteBuffer newBuffer) {
-        ByteBuffer oldBuffer;
+    public void copyByteBuffer(ByteBuffer srcBuffer) {
+        LOG.info("copyByteBuffer() newBuffer remaining: " + srcBuffer.remaining() + " limit: " +
+                srcBuffer.limit() + " position: " + srcBuffer.position());
 
-        oldBuffer = buffer;
-        buffer = newBuffer;
+        int nBytesToCopy = Math.min(buffer.remaining(), srcBuffer.remaining());
+        if (!buffer.isDirect()) {
+            buffer.put(srcBuffer.array(), srcBuffer.arrayOffset() + srcBuffer.position(), nBytesToCopy);
+        } else {
+            /*
+            ** Need to perform manual copy (Need to handle the allocate direct issue better)
+             */
+            for (int i = 0; i < nBytesToCopy; i++) {
+                buffer.put(srcBuffer.get(srcBuffer.position() + i));
+            }
 
-        /*
-        ** TODO: The oldBuffer needs to be released back to the memory pool. But, there is currently
-        **   an ownership problem with the memory that backs the ByteBuffers as they share the same
-        **   backing memory and it cannot be given back to the pool until the new reference is done
-        **   with it.
-        **   One solution (since this should not be for a very big piece of memory) is to perform a
-        **     new allocation and a copy in the StringChunk class.
-        **   Also, need to have access to the MemoryAllocator that is in charge of this buffer.
-         */
+            buffer.limit(nBytesToCopy);
+            buffer.position(0);
+        }
     }
 
     /*

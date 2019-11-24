@@ -240,8 +240,7 @@ public class WriteConnection implements Closeable {
 
             @Override
             public void completed(final Integer result, final WriteCompletion completion) {
-                LOG.info("WriteConnection[" + connTransactionId + "] writeUserBuffer() bytesXfr: " + result +
-                        " " + Thread.currentThread().getName());
+                LOG.info("WriteConnection[" + connTransactionId + "] writeUserBuffer() bytesXfr: " + result);
 
                 if (result == -1) {
                     closeChannel();
