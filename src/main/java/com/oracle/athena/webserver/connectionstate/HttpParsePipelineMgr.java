@@ -29,7 +29,8 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
     private Function httpParseAllocHttpBuffer = new Function<WebServerConnState, StateQueueResult>() {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
-            if (wsConn.allocHttpBufferState() == 0){
+            int numBuffersAllocated = wsConn.allocHttpBufferState();
+            if (numBuffersAllocated == 0){
                 return StateQueueResult.STATE_RESULT_WAIT;
             }
             else {
@@ -45,6 +46,14 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
 
 
             return StateQueueResult.STATE_RESULT_REQUEUE;
+        }
+    };
+
+    private Function httpParseUnwrapHttpsBuffer = new Function<WebServerConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(WebServerConnState wsConn) {
+            wsConn.sslReadUnwrap();
+            return StateQueueResult.STATE_RESULT_CONTINUE;
         }
     };
 
@@ -142,6 +151,7 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         httpParseStateMachine.addStateEntry(ConnectionStateEnum.CHECK_SLOW_CHANNEL, new StateEntry(httpParseCheckSlowConnection));
         httpParseStateMachine.addStateEntry(ConnectionStateEnum.ALLOC_HTTP_BUFFER, new StateEntry(httpParseAllocHttpBuffer));
         httpParseStateMachine.addStateEntry(ConnectionStateEnum.READ_HTTP_BUFFER, new StateEntry(httpParseReadHttpBuffer));
+        httpParseStateMachine.addStateEntry(ConnectionStateEnum.UNWRAP_HTTP_BUFFER, new StateEntry(httpParseUnwrapHttpsBuffer));
         httpParseStateMachine.addStateEntry(ConnectionStateEnum.PARSE_HTTP_BUFFER, new StateEntry(httpParseHttpBuffer));
         httpParseStateMachine.addStateEntry(ConnectionStateEnum.CONN_FINISHED, new StateEntry(httpParseConnFinished));
         httpParseStateMachine.addStateEntry(ConnectionStateEnum.SETUP_NEXT_PIPELINE, new StateEntry(httpParseSetupNextPipeline));
@@ -233,6 +243,13 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
          */
         if (connectionState.getHttpParseStatus() != HttpStatus.OK_200) {
             return ConnectionStateEnum.SEND_FINAL_RESPONSE;
+        }
+
+        /*
+         ** Are there completed reads, ready to unwrap
+         */
+        if (connectionState.httpBuffersReadyToUnwrap()) {
+            return ConnectionStateEnum.UNWRAP_HTTP_BUFFER;
         }
 
         /*

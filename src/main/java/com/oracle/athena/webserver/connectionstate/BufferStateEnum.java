@@ -22,7 +22,8 @@ public enum BufferStateEnum {
     SSL_HANDSHAKE_NET_BUFFER(71),
     READ_HTTPS_FROM_CHAN(72),
     READ_WAIT_FOR_HTTPS(73),
-    READ_WAIT_FOR_SSL_DATA(74);
+    READ_SSL_DATA_FROM_CHAN(74),
+    READ_WAIT_FOR_SSL_DATA(75);
 
     private int value;
 

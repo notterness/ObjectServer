@@ -41,8 +41,8 @@ public enum ConnectionStateEnum {
     SSL_HANDSHAKE(60),
     SSL_READ_HTTP_BUFFER(61),
     SSL_ALLOC_BUFFERS(60),
-    SSL_HANDSHAKE(61),
     UNWRAP_HTTP_BUFFER(62),
+    UNWRAP_DATA_BUFFER(63),
     RELEASE_CONTENT_BUFFERS(100);
 
     private int value;

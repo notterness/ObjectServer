@@ -14,30 +14,33 @@ public class BufferState {
 
     private ConnectionState connState;
 
-    private ByteBuffer buffer;
+    private ByteBuffer appBuffer;
 
     private ByteBuffer netBuffer;
 
     private BufferStateEnum bufferState;
 
+    private int count;
+
     BufferState(final ConnectionState work) {
         bufferState = BufferStateEnum.INVALID_STATE;
-        buffer = null;
+        appBuffer = null;
         netBuffer = null;
-
+        count = 0;
         connState = work;
     }
 
-    public void assignBuffer(final ByteBuffer userBuffer, final BufferStateEnum state) {
-        buffer = userBuffer;
-        netBuffer = null;
+    public void assignBuffer(final ByteBuffer buffer, final BufferStateEnum state) {
+        this.appBuffer = buffer;
         bufferState = state;
+        updateCount();
     }
 
     public void assignBuffer(final ByteBuffer userBuffer, ByteBuffer netBuffer, final BufferStateEnum state) {
-        buffer = userBuffer;
+        appBuffer = userBuffer;
         this.netBuffer = netBuffer;
         bufferState = state;
+        updateCount();
     }
 
     public BufferStateEnum getBufferState() {
@@ -45,7 +48,7 @@ public class BufferState {
     }
 
     public ByteBuffer getBuffer() {
-        return buffer;
+        return appBuffer;
     }
 
     public int getOwnerId() { return connState.getConnStateId(); }
@@ -57,7 +60,7 @@ public class BufferState {
     }
 
     public ByteBuffer getChannelBuffer() {
-        return connState.isSSL() ? netBuffer : buffer;
+        return connState.isSSL() ? netBuffer : appBuffer;
     }
 
 
@@ -74,6 +77,8 @@ public class BufferState {
              bufferState = BufferStateEnum.READ_WAIT_FOR_DATA;
         } else if (bufferState == BufferStateEnum.READ_HTTPS_FROM_CHAN) {
              bufferState = BufferStateEnum.READ_WAIT_FOR_HTTPS;
+        } else if (bufferState == BufferStateEnum.READ_SSL_DATA_FROM_CHAN) {
+             bufferState = BufferStateEnum.READ_WAIT_FOR_SSL_DATA;
         } else {
              // TODO: Add Assert((bufferState == READ_HTTP_FROM_CHAN) || (bufferState == READ_DATA_FROM_CHAN))
 
@@ -94,7 +99,7 @@ public class BufferState {
     public void setReadState(final BufferStateEnum newState) {
 
         LOG.info("[" + connState.getConnStateId() + "] setReadState() current: " + bufferState.toString() + " new: " + newState.toString() +
-                " remaining: " + buffer.remaining());
+                " remaining: " + appBuffer.remaining());
 
         if (newState == BufferStateEnum.READ_ERROR) {
             /*
@@ -147,9 +152,22 @@ public class BufferState {
      */
     public void setBufferHttpParseDone() {
         LOG.info("setBufferHttpParseDone(): current " + bufferState.toString() +
-                " remaining: " + buffer.remaining());
+                " remaining: " + appBuffer.remaining());
 
         bufferState = BufferStateEnum.PARSE_HTTP_DONE;
     }
 
+    private void updateCount() {
+        count = 0;
+        if (this.appBuffer != null) {
+            count++;
+        }
+        if (this.netBuffer != null) {
+            count++;
+        }
+    }
+
+    public int count() {
+        return count;
+    }
 }

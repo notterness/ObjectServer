@@ -3,6 +3,7 @@ package com.oracle.athena.webserver.connectionstate;
 import com.oracle.athena.webserver.statemachine.StateEntry;
 import com.oracle.athena.webserver.statemachine.StateMachine;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
+import org.checkerframework.checker.units.qual.C;
 import org.eclipse.jetty.http.HttpStatus;
 
 import java.util.function.Function;
@@ -36,6 +37,14 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
             wsConn.readIntoDataBuffers();
+            return StateQueueResult.STATE_RESULT_CONTINUE;
+        }
+    };
+
+    private Function contentReadUnwrap = new Function<WebServerConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(WebServerConnState wsConn) {
+            wsConn.sslUnwrapData();
             return StateQueueResult.STATE_RESULT_CONTINUE;
         }
     };
@@ -133,6 +142,7 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         contentReadStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_READ_ERROR, new StateEntry(contentReadProcessReadError));
         contentReadStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND, new StateEntry(contentReadProcessFinalResponseSend));
         contentReadStateMachine.addStateEntry(ConnectionStateEnum.RELEASE_CONTENT_BUFFERS, new StateEntry(contentReadReleaseBuffers));
+        contentReadStateMachine.addStateEntry(ConnectionStateEnum.UNWRAP_DATA_BUFFER, new StateEntry(contentReadUnwrap));
     }
 
     /*
@@ -157,6 +167,10 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
          */
         if (connectionState.dataBuffersWaitingForRead()){
             return ConnectionStateEnum.READ_CLIENT_DATA;
+        }
+
+        if (connectionState.getDataBuffersUnwrapRequired() > 0) {
+            return ConnectionStateEnum.UNWRAP_DATA_BUFFER;
         }
 
         if (connectionState.getResponseChannelWriteDone()) {

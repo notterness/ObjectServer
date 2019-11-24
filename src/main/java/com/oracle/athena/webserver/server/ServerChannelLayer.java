@@ -1,7 +1,6 @@
 package com.oracle.athena.webserver.server;
 
 import com.oracle.athena.webserver.http.parser.ByteBufferHttpParser;
-import com.oracle.athena.webserver.memory.MemoryManager;
 
 import javax.net.ssl.*;
 import java.io.FileInputStream;
@@ -24,7 +23,7 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-abstract public class ServerChannelLayer implements Runnable {
+public class ServerChannelLayer implements Runnable {
 
     private static final Logger LOG = LoggerFactory.getLogger(ServerChannelLayer.class);
 
@@ -50,9 +49,6 @@ abstract public class ServerChannelLayer implements Runnable {
     //TODO: naming, either class ServerLoadBalancer or variable workHandler needs a new name (without server in it)
     ServerLoadBalancer serverWorkHandler;
 
-    protected MemoryManager memoryManager;
-
-
     //FIXME: should become a local variable of the run method
     private boolean exitThreads;
 
@@ -77,7 +73,7 @@ abstract public class ServerChannelLayer implements Runnable {
                 sslContext = SSLContext.getInstance("TLSv1.2");
 
                 // TODO: figure out how to initialize with casper certs
-                sslContext.init(createKeyManagers("./src/main/resources/server.jks", "storepass", "keypass"), createTrustManagers("./src/main/resources/trustedCerts.jks", "storepass"), new SecureRandom());
+                sslContext.init(createKeyManagers("./src/main/resources/server.jks", "athena", "athena"), createTrustManagers("./src/main/resources/trustedCerts.jks", "athena"), new SecureRandom());
 
             } catch (NoSuchAlgorithmException e) {
                 e.printStackTrace();
