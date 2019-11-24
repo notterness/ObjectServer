@@ -120,8 +120,8 @@ abstract public class ConnectionState {
     **   if there is a choice between being on the timed wait queue (connOnDelayedQueue) or the normal
     **   execution queue (connOnExecutionQueue) is will always go on the execution queue.
      */
-    private boolean connOnDelayedQueue;
-    private boolean connOnExecutionQueue;
+    protected boolean connOnDelayedQueue;
+    protected boolean connOnExecutionQueue;
 
     private final Object queueMutex;
 
@@ -137,7 +137,7 @@ abstract public class ConnectionState {
      ** The next four items are associated with the thread that is running the ConnectionState
      **   state machine.
      */
-    private ServerWorkerThread workerThread;
+    protected ServerWorkerThread workerThread;
     protected BufferStatePool bufferStatePool;
     WriteConnThread writeThread;
     BuildHttpResult resultBuilder;
@@ -257,6 +257,8 @@ abstract public class ConnectionState {
      */
     abstract public void stateMachine();
 
+    abstract public ConnectionStateEnum getNextState();
+
     /*
      ** The following is used to handle the case when a read error occurred and the ConnectionState needs
      **   to cleanup and release resources.
@@ -277,6 +279,9 @@ abstract public class ConnectionState {
     **   thread it is going to run under.
      */
     public void setupInitial() {
+        if (workerThread == null){
+            LOG.error("ConnectionState[" + connStateId + "] setupInitial() (workerThread == null)");
+        }
         bufferStatePool = workerThread.getBufferStatePool();
         writeThread = workerThread.getWriteThread();
         resultBuilder = workerThread.getResultBuilder();
@@ -302,75 +307,48 @@ abstract public class ConnectionState {
     **   execution queue.
      */
     public void addToWorkQueue(final boolean delayedExecution) {
-        synchronized (queueMutex) {
-            //LOG.info("ConnectionState[" + connStateId + "] addToWorkQueue(" + delayedExecution +
-            //        ") connOnExecutionQueue: " + connOnExecutionQueue);
-
-            /*
-            ** First check if this is already on the execution queue. If that is the case,
-            **   nothing to do.
-             */
-            if (!connOnExecutionQueue) {
-                /*
-                ** Then determine which queue this needs to go on
-                 */
-                if (delayedExecution) {
-                    /*
-                     ** First check if this is on the delayed execution queue or one the regular
-                     **   execution queue. In either case, there is nothing to do
-                     */
-                    if (!connOnDelayedQueue) {
-                        nextExecuteTime = System.currentTimeMillis() + TIME_TILL_NEXT_TIMEOUT_CHECK;
-                        if (workerThread.addToDelayedQueue(this)) {
-                            connOnDelayedQueue = true;
-                        } else {
-                            /*
-                             ** TODO: This is a real problem. Need to figure out how to handle it
-                             */
-                            LOG.error("ConnectionState[" + connStateId + "] Unable to add to delayed queue");
-                        }
-                    }
-                } else {
-                    if (connOnDelayedQueue) {
-                        workerThread.removeFromQueue(this, true);
-                        connOnDelayedQueue = false;
-                    }
-
-                    if (workerThread.addToWorkQueue(this)) {
-                        connOnExecutionQueue = true;
-                    } else {
-                        /*
-                         ** TODO: This is a real problem. Need to figure out how to handle it
-                         */
-                        LOG.error("ConnectionState[" + connStateId + "] Unable to add to work queue");
-                    }
-                }
-            } else {
-                LOG.info("ConnectionState[" + connStateId + "] addToWorkQueue(" + delayedExecution + ") already on workQueue");
-            }
+        if (delayedExecution) {
+            workerThread.addToDelayedQueue(this);
+        } else {
+            workerThread.addToWorkQueue(this);
         }
     }
 
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
-        synchronized (queueMutex) {
-            if (connOnDelayedQueue) {
-                if (!delayedExecutionQueue) {
-                    LOG.warn("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
-                }
-
-                connOnDelayedQueue = false;
-                nextExecuteTime = 0;
-            } else if (connOnExecutionQueue){
-                if (delayedExecutionQueue) {
-                    LOG.warn("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
-                }
-
-                connOnExecutionQueue = false;
-            } else {
-               LOG.warn("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
+        LOG.info("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        if (connOnDelayedQueue) {
+            if (!delayedExecutionQueue) {
+                LOG.warn("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
             }
+
+            connOnDelayedQueue = false;
+            nextExecuteTime = 0;
+        } else if (connOnExecutionQueue){
+            if (delayedExecutionQueue) {
+                LOG.warn("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
+            }
+
+            connOnExecutionQueue = false;
+        } else {
+            LOG.warn("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
         }
+    }
+
+    public void markAddedToQueue(final boolean delayedExecutionQueue) {
+        if (delayedExecutionQueue) {
+            nextExecuteTime = System.currentTimeMillis() + TIME_TILL_NEXT_TIMEOUT_CHECK;
+            connOnDelayedQueue = true;
+        } else {
+            connOnExecutionQueue = true;
+        }
+    }
+
+    public boolean isOnWorkQueue() {
+        return connOnExecutionQueue;
+    }
+
+    public boolean isOnTimedWaitQueue() {
+        return connOnDelayedQueue;
     }
 
 
@@ -559,7 +537,7 @@ abstract public class ConnectionState {
     **   it threads safe in the event that different threads attempt to close the channel
     **   at the same time.
      */
-    private void closeChannel() {
+    protected void closeChannel() {
         synchronized (connChanMutex) {
             try {
                 /*
@@ -592,6 +570,8 @@ abstract public class ConnectionState {
     public void reset() {
 
         LOG.info("ConnectionState[" + connStateId + "] reset()");
+
+        workerThread.removeFromQueue(this);
 
         releaseBufferState();
 

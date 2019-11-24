@@ -77,6 +77,10 @@ public class ClientConnState extends ConnectionState {
         }
     }
 
+    @Override
+    public ConnectionStateEnum getNextState(){
+        return pipelineManager.nextPipelineStage();
+    }
 
     /*
      **
@@ -99,7 +103,9 @@ public class ClientConnState extends ConnectionState {
             /*
              ** TOTDO: Need to close out the channel and this connection
              */
-            System.out.printf("WebServerConnState[" + getConnStateId() + "] connection timeout");
+            System.out.printf("ClientConnState[" + getConnStateId() + "] connection timeout");
+
+            closeChannel();
         } else {
             ConnectionStateEnum overallState = pipelineManager.nextPipelineStage();
 

@@ -203,6 +203,21 @@ public class WebServerConnState extends ConnectionState {
         }
     }
 
+
+    /*
+    ** This is used to help debug stuck connection problems.
+     */
+    @Override
+    public ConnectionStateEnum getNextState(){
+        LOG.error("WebServerConnState[" + connStateId + "] connOnDelayedQueue: " + connOnDelayedQueue +
+                " connOnExecutionQueue: " + connOnExecutionQueue);
+        LOG.error("WebServerConnState[" + connStateId + "] responseChannelWriteDone: " + responseChannelWriteDone.get() +
+                " finalResponseSendDone: " + finalResponseSendDone);
+
+        workerThread.dumpWorkerThreadQueues();
+        return pipelineManager.nextPipelineStage();
+    }
+
     /*
      ** This checks if there is a slow client
      */
@@ -211,9 +226,11 @@ public class WebServerConnState extends ConnectionState {
 
         if (timeoutChecker.inactivityThresholdReached()) {
             /*
-             ** TOTDO: Need to close out the channel and this connection
+             ** TODO: Channel is closed and now the test needs to be updated to validate the
+             **   behavior.
              */
             LOG.info("WebServerConnState[" + connStateId + "] connection timeout");
+            closeChannel();
         } else {
             ConnectionStateEnum overallState = pipelineManager.nextPipelineStage();
 
@@ -230,7 +247,6 @@ public class WebServerConnState extends ConnectionState {
 
         return continueExecution;
     }
-
 
     /*
     **

@@ -38,6 +38,10 @@ public class BufferState {
         return buffer;
     }
 
+    public int getOwnerId() { return connState.getConnStateId(); }
+
+    public ConnectionStateEnum getConnectionNextState() { return connState.getNextState(); }
+
     /*
     ** This is used to set the BufferState to a waiting for a read to complete state. This is called
     **   just prior to a read from channel operation starting in ConnectionState.
