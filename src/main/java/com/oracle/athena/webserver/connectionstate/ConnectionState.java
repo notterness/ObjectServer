@@ -102,6 +102,7 @@ abstract public class ConnectionState {
     private int allocatedDataBuffers;
     protected AtomicInteger dataBufferReadsCompleted;
     private AtomicBoolean contentAllRead;
+    protected AtomicInteger dataBufferDigestCompleted;
 
     AtomicBoolean bufferAllocationFailed;
 
@@ -204,6 +205,8 @@ abstract public class ConnectionState {
         contentBytesAllocated = new AtomicLong(0);
         contentBytesRead = new AtomicLong(0);
         contentAllRead = new AtomicBoolean(false);
+
+        dataBufferDigestCompleted = new AtomicInteger(0);
 
         /*
         ** This queue is used to keep track of all the buffers that have returned a read error. It is used

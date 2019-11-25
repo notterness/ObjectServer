@@ -164,6 +164,10 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
             return ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND;
         }
 
+        if (connectionState.getDataBufferReadsCompleted() > 0) {
+            return ConnectionStateEnum.MD5_CALCULATE;
+        }
+
         /*
         ** Check if the content has all been read in and then proceed to finishing the processing
         **

@@ -113,6 +113,7 @@ public class WebServerConnState extends ConnectionState {
      */
     private ConnectionStatePool<WebServerConnState> connectionStatePool;
 
+    private Md5Digest md5Digest;
 
     public WebServerConnState(final ConnectionStatePool<WebServerConnState> pool, final int uniqueId) {
 

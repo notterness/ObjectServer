@@ -16,6 +16,8 @@ public enum BufferStateEnum {
     READ_DONE(30),
     READ_ERROR(31),
     PARSE_HTTP_DONE(40),
+    DIGEST_WAIT(41),
+    DIGEST_DONE(42),
     SEND_GET_DATA_RESPONSE(50),
     SEND_FINAL_RESPONSE(60);
 

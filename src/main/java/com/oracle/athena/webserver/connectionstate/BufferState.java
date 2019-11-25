@@ -120,4 +120,9 @@ public class BufferState {
         bufferState = BufferStateEnum.PARSE_HTTP_DONE;
     }
 
+
+    public void setBufferStateDigestDone() {
+        bufferState = BufferStateEnum.DIGEST_DONE;
+    }
+
 }
