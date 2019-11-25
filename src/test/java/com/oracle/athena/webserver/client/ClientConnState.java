@@ -77,6 +77,10 @@ public class ClientConnState extends ConnectionState {
         }
     }
 
+    @Override
+    public ConnectionStateEnum getNextState(){
+        return pipelineManager.nextPipelineStage();
+    }
 
     /*
      **
@@ -87,6 +91,36 @@ public class ClientConnState extends ConnectionState {
 
         System.out.println("WebServerConnState[" + getConnStateId() + "] INITIAL_SETUP server");
         addRequestedDataBuffer();
+    }
+
+    /*
+     ** This checks if there is a slow client
+     */
+    public boolean checkSlowClientChannel() {
+        boolean continueExecution = true;
+
+        if (timeoutChecker.inactivityThresholdReached()) {
+            /*
+             ** TOTDO: Need to close out the channel and this connection
+             */
+            System.out.printf("ClientConnState[" + getConnStateId() + "] connection timeout");
+
+            closeChannel();
+        } else {
+            ConnectionStateEnum overallState = pipelineManager.nextPipelineStage();
+
+            /*
+             ** Need to wait for something to kick the state machine to a new state
+             **
+             ** The ConnectionState will get put back on the execution queue when an external
+             **   operation completes.
+             */
+            if (overallState == ConnectionStateEnum.CHECK_SLOW_CHANNEL) {
+                continueExecution = false;
+            }
+        }
+
+        return continueExecution;
     }
 
 
@@ -114,13 +148,21 @@ public class ClientConnState extends ConnectionState {
                 dataBufferReadsCompleted.decrementAndGet();
 
                 /*
-                 ** Callback the client
+                 ** Callback the client. When the client callback completes, the ownership of the buffers
+                 **   remains within this function. The expectation is that the client callback will
+                 **   copy whatever data it needs from the buffer, but will not expect the buffer
+                 **   to remain intact.
                  */
                 if (readDataBuffer.getBufferState() == BufferStateEnum.READ_DATA_DONE) {
                     callClientReadCallback(0, readDataBuffer.getBuffer());
                 } else {
                     callClientReadCallback(-1, null);
                 }
+
+                /*
+                ** Release the BufferState back to the free pool as it is no longer needed.
+                 */
+                bufferStatePool.freeBufferState(readDataBuffer);
             }
         }
 
@@ -144,7 +186,7 @@ public class ClientConnState extends ConnectionState {
      ** getHttpParserError() will return HttpStatus.OK_200 if there is no error, otherwise it will return
      **   the value set to indicate the parsing error.
      **
-     ** TODO: Need to wire the response parsing error in
+     ** TODO: Need to wire the response parsing error in from the HttpResponseListener
      */
     public int getHttpParseStatus() {
         int parsingStatus = HttpStatus.OK_200;
@@ -167,7 +209,7 @@ public class ClientConnState extends ConnectionState {
      */
     @Override
     public void readCompletedError(final BufferState bufferState) {
-        if (readErrorQueue.offer(bufferState) == false) {
+        if (!readErrorQueue.offer(bufferState)) {
             System.out.println("ERROR ClientConnState[" + getConnStateId() + "] readCompletedError() offer failed");
         }
 
@@ -214,7 +256,11 @@ public class ClientConnState extends ConnectionState {
 
         System.out.println("ClientConnState[" + getConnStateId() + "] processReadError() dataReadCount: " + dataReadCount);
 
-        channelError.set(true);
+        /*
+         ** Mark that there was a channel read error so that the pipeline manager can clean up the
+         **   connection and close it out.
+         */
+        channelError = true;
 
         /*
          ** If there are outstanding reads in progress, need to wait for those to
@@ -254,7 +300,7 @@ public class ClientConnState extends ConnectionState {
             bufferState.setReadState(newState);
             dataReadCompleted(bufferState);
         } else {
-                System.out.println("ERROR: setReadState() invalid current state: " + bufferState.toString());
+            System.out.println("ERROR: setReadState() invalid current state: " + bufferState.toString());
         }
     }
 
@@ -298,4 +344,24 @@ public class ClientConnState extends ConnectionState {
         super.clearChannel();
     }
 
+    /*
+    ** This is the final cleanup of the connection before it is put back in the free pool. It is expected
+    **   that when the connection is pulled from the free pool it is in a pristine state and can be used
+    **   to handle a new connection.
+     */
+    public void reset() {
+        super.reset();
+
+        /*
+        ** Since this will be a new client connection, the callback function will need to be
+        **   reassigned and the callback will not have completed.
+         */
+        clientDataReadCallback = null;
+        clientCallbackCompleted = false;
+
+        /*
+         ** Now release this back to the free pool so it can be reused
+         */
+        connectionStatePool.freeConnectionState(this);
+    }
 }

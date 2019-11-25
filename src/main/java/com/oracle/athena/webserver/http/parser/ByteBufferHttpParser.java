@@ -5,7 +5,12 @@ import org.eclipse.jetty.http.HttpParser;
 
 import java.nio.ByteBuffer;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class ByteBufferHttpParser {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ByteBufferHttpParser.class);
 
     private HttpParser httpParser;
     private CasperHttpInfo casperHeaderInfo;
@@ -54,7 +59,7 @@ public class ByteBufferHttpParser {
             **   the passed in buffer and return it.
              */
             if (casperHeaderInfo.getHeaderComplete() == true) {
-                System.out.println("parseHttpData() headerComplete");
+                LOG.info("parseHttpData() headerComplete");
                 remainingBuffer = chunk.getRemainingBuffer();
                 break;
             }

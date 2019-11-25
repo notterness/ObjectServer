@@ -11,6 +11,9 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /*
  ** This distributes the accepted channels amongst the available worker threads. The goal is to
  ** evenly (or at least make a best effort) spread the connections to the worker threads. The
@@ -18,6 +21,8 @@ import java.util.concurrent.Executors;
  ** parsed and then there additional detail about what needs to be done.
  */
 public class ServerLoadBalancer {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ServerLoadBalancer.class);
 
     private final static int RESERVED_CONN_COUNT = 2;
 
@@ -51,7 +56,7 @@ public class ServerLoadBalancer {
         this.memoryManager = memoryManager;
         threadPool = new ServerWorkerThread[workerThreads];
         executorService = Executors.newFixedThreadPool(workerThreads);
-        System.out.println("ServerLoadBalancer[" + serverClientId + "] workerThreads: " + workerThreads + " maxQueueSize: " + maxQueueSize);
+        LOG.info("ServerLoadBalancer[" + serverClientId + "] workerThreads: " + workerThreads + " maxQueueSize: " + maxQueueSize);
     }
 
     void start() {
@@ -120,13 +125,13 @@ public class ServerLoadBalancer {
                 try {
                     chan.close();
                 } catch (IOException io_ex) {
-                    System.out.println("Unable to close");
+                    LOG.info("Unable to close");
                 }
 
                 return false;
             }
 
-            System.out.println("Standard connection pool exhausted [" + work.getConnStateId() + "]");
+            LOG.info("Standard connection pool exhausted [" + work.getConnStateId() + "]");
 
             work.setOutOfResourceResponse();
         }
@@ -146,7 +151,7 @@ public class ServerLoadBalancer {
             try {
                 int queueCap = threadPool[currQueue].getCurrentWorkload();
                 if ((maxQueueSize - queueCap) < maxQueueSize) { //FIXME: simplify condition
-                    System.out.println("addReadWork(" + (serverBaseId + currQueue) + "): currQueue: " +
+                    LOG.info("addReadWork(" + (serverBaseId + currQueue) + "): currQueue: " +
                             currQueue + " queueCap: " + queueCap);
 
                     /*
@@ -162,7 +167,7 @@ public class ServerLoadBalancer {
                     }
                     break;
                 } else {
-                    System.out.println("addReadWork(): no capacity: " + queueCap + " maxQueueSize: " + maxQueueSize);
+                    LOG.info("addReadWork(): no capacity: " + queueCap + " maxQueueSize: " + maxQueueSize);
 
                     currQueue++;
                     if (currQueue == workerThreads) {

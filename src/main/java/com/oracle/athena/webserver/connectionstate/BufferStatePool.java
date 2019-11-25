@@ -1,8 +1,14 @@
 package com.oracle.athena.webserver.connectionstate;
 
 import com.oracle.athena.webserver.memory.MemoryManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.util.Iterator;
+import java.util.ListIterator;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /*
  ** This allow the BufferState objects to be managed through a pool to prevent object
@@ -10,14 +16,20 @@ import java.nio.ByteBuffer;
  */
 public class BufferStatePool {
 
+    private static final Logger LOG = LoggerFactory.getLogger(BufferStatePool.class);
+
     private int allocatedObjects;
 
     private MemoryManager memoryAllocator;
+
+    private BlockingQueue<BufferState> inUseList;
 
     public BufferStatePool(final int reqBufferStates, MemoryManager allocator) {
 
         allocatedObjects = reqBufferStates;
         memoryAllocator = allocator;
+
+        inUseList = new LinkedBlockingQueue<>(allocatedObjects * 2);
     }
 
     public BufferState allocBufferState(final ConnectionState connState, final BufferStateEnum initialState, final int bufferSize) {
@@ -30,6 +42,10 @@ public class BufferStatePool {
             ByteBuffer buffer = memoryAllocator.poolMemAlloc(bufferSize, memAvailCb);
             if (buffer != null) {
                 bufferState.assignBuffer(buffer, initialState);
+
+                if (!inUseList.offer(bufferState)) {
+                    LOG.error("ConnectionState[" + connState.getConnStateId() + "] Unable to add to inUseList");
+                }
                 return bufferState;
             }
 
@@ -46,6 +62,27 @@ public class BufferStatePool {
         memoryAllocator.poolMemFree(buffer);
 
         bufferState.assignBuffer(null, BufferStateEnum.INVALID_STATE);
+
+        inUseList.remove(bufferState);
+    }
+
+    public boolean showInUseBufferState(final int threadId) {
+        boolean inUseBufferState = false;
+        BufferState bufferState;
+
+        LOG.info("ServerWorkerThread(" + threadId + ") showInUseBufferState()");
+
+        Iterator<BufferState> iter = inUseList.iterator();
+        while (iter.hasNext()) {
+            bufferState = iter.next();
+            iter.remove();
+            LOG.error("BufferState owned by [" + bufferState.getOwnerId() + "] currState: " + bufferState.getBufferState() +
+                    " next connection state: " + bufferState.getConnectionNextState().toString());
+
+            inUseBufferState = true;
+        }
+
+        return inUseBufferState;
     }
 
 }

@@ -5,7 +5,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class WriteConnThread implements Runnable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(WriteConnThread.class);
 
     private final int WORK_QUEUE_SIZE = 10;
 
@@ -26,7 +31,7 @@ public class WriteConnThread implements Runnable {
         try {
             return countDownLatch.await(timeout, unit);
         } catch (InterruptedException e) {
-            System.out.println("Unable to join client write thread: " + e.getMessage());
+            LOG.info("Unable to join client write thread: " + e.getMessage());
         }
         return false;
     }
@@ -47,7 +52,7 @@ public class WriteConnThread implements Runnable {
      **   work pending and then calling the writeAvailableData() might be a better solution.
      */
     public void run() {
-        System.out.println("writeConnThread(" + writeThreadId + ") start");
+        LOG.info("writeConnThread(" + writeThreadId + ") start");
         try {
             WriteConnection writeConnection;
 
@@ -57,7 +62,7 @@ public class WriteConnThread implements Runnable {
                     if (writeConnection != null) {
                         writeConnection.writeAvailableData();
                     } else {
-                        System.out.println("writeConnThread() no write data ");
+                        LOG.info("writeConnThread() no write data ");
                     }
                 } else {
                     // Check when last heartbeat was sent
@@ -67,7 +72,7 @@ public class WriteConnThread implements Runnable {
             e.printStackTrace();
         }
 
-        System.out.println("writeConnThread(" + writeThreadId + ") exit");
+        LOG.info("writeConnThread(" + writeThreadId + ") exit");
         countDownLatch.countDown();
     }
 

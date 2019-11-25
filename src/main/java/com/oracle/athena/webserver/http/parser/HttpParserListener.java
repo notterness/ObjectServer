@@ -9,8 +9,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 
 public class HttpParserListener implements HttpParser.RequestHandler {
+
+    private static final Logger LOG = LoggerFactory.getLogger(HttpParserListener.class);
 
     /*
      ** TODO: These local variables will be removed from this class once the code is further along.
@@ -45,7 +50,7 @@ public class HttpParserListener implements HttpParser.RequestHandler {
         _content = _content + c;
         ref.position(ref.limit());
 
-        System.out.println("content() _content: " + _content);
+        LOG.info("content() _content: " + _content);
 
         return false;
     }
@@ -60,12 +65,12 @@ public class HttpParserListener implements HttpParser.RequestHandler {
         _early = false;
 
         if (_versionOrReason != null) {
-            System.out.println("StartRequest() method: " + method + " uri: " + uri +
+            LOG.info("StartRequest() method: " + method + " uri: " + uri +
                     " version: " + _versionOrReason);
 
             casperHttpInfo.setHttpMethodAndVersion(method, _versionOrReason);
         } else {
-            System.out.println("StartRequest() method: " + method + " uri: " + uri +
+            LOG.info("StartRequest() method: " + method + " uri: " + uri +
                     " version: null");
         }
 
@@ -79,7 +84,7 @@ public class HttpParserListener implements HttpParser.RequestHandler {
 
     @Override
     public boolean headerComplete() {
-        System.out.println("headerComplete()");
+        LOG.info("headerComplete()");
         _content = null;
         _headerCompleted = true;
 
@@ -89,14 +94,14 @@ public class HttpParserListener implements HttpParser.RequestHandler {
 
     @Override
     public void parsedTrailer(HttpField field) {
-        System.out.println("parsedTrailer() " + field.toString());
+        LOG.info("parsedTrailer() " + field.toString());
 
         _trailers.add(field);
     }
 
     @Override
     public boolean contentComplete() {
-        System.out.println("contentComplete()");
+        LOG.info("contentComplete()");
 
         casperHttpInfo.setContentComplete();
         return false;
@@ -104,7 +109,7 @@ public class HttpParserListener implements HttpParser.RequestHandler {
 
     @Override
     public boolean messageComplete() {
-        System.out.println("messageComplete()");
+        LOG.info("messageComplete()");
 
         _messageCompleted = true;
 
@@ -132,7 +137,7 @@ public class HttpParserListener implements HttpParser.RequestHandler {
     @Override
     public void onComplianceViolation(HttpCompliance compliance, HttpComplianceSection violation, String reason)
     {
-        System.out.println("onComplianceViolation()" + reason);
+        LOG.info("onComplianceViolation()" + reason);
         _complianceViolation.add(violation);
     }
      */

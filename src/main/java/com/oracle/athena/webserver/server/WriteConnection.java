@@ -23,7 +23,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class WriteConnection implements Closeable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(WriteConnection.class);
 
     /*
      ** This is the number of worker threads that are created to handle callbacks for
@@ -70,7 +75,7 @@ public class WriteConnection implements Closeable {
         try {
             writeCbThreadpool = AsynchronousChannelGroup.withFixedThreadPool(NUM_WRITE_CB_THREADS, Executors.defaultThreadFactory());
         } catch (IOException io_ex) {
-            System.out.println("Unable to create write threadpool " + io_ex.getMessage());
+            LOG.info("Unable to create write threadpool " + io_ex.getMessage());
             return;
         }
 
@@ -103,27 +108,27 @@ public class WriteConnection implements Closeable {
         try {
             clientChan = AsynchronousSocketChannel.open(writeCbThreadpool);
         } catch (IOException cex) {
-            System.out.println("IOException: " + cex.getMessage());
+            LOG.info("IOException: " + cex.getMessage());
             return null;
         }
 
         InetSocketAddress addr = new InetSocketAddress(InetAddress.getLoopbackAddress(), tgtWritePort);
 
-        System.out.println("WriteConnection[" + connTransactionId + "] openWriteConnection() client: " + addr);
+        LOG.info("WriteConnection[" + connTransactionId + "] openWriteConnection() client: " + addr);
 
         try {
             Future<Void> connectResult = clientChan.connect(addr);
-            System.out.println("openWriteConnection connect(1)");
+            LOG.info("openWriteConnection connect(1)");
 
             connectResult.get();
 
-            System.out.println("WriteConnection[" + connTransactionId + "] openWriteConnection() complete: ");
+            LOG.info("WriteConnection[" + connTransactionId + "] openWriteConnection() complete: ");
         } catch (Exception ex) {
-            System.out.println("WriteConnection[" + connTransactionId + "] openWriteConnection(2) " + ex.getMessage());
+            LOG.info("WriteConnection[" + connTransactionId + "] openWriteConnection(2) " + ex.getMessage());
             try {
                 clientChan.close();
             } catch (IOException io_ex) {
-                System.out.println("WriteConnection[" + connTransactionId + "] openWriteConnection(3) " + io_ex.getMessage());
+                LOG.info("WriteConnection[" + connTransactionId + "] openWriteConnection(3) " + io_ex.getMessage());
             }
 
             clientChan = null;
@@ -152,7 +157,7 @@ public class WriteConnection implements Closeable {
      */
     @Override
     public void close() {
-        System.out.println("WriteConnection[" + connTransactionId + "] closeWriteConnection()");
+        LOG.info("WriteConnection[" + connTransactionId + "] closeWriteConnection()");
 
         /*
          ** Only close the connection if this is an initiator WriteConnection (meaning the tgtWritePort is valid)
@@ -175,10 +180,10 @@ public class WriteConnection implements Closeable {
         try {
             boolean shutdown = writeCbThreadpool.awaitTermination(100, TimeUnit.MILLISECONDS);
             if (!shutdown) {
-                System.out.println("Wait for threadpool shutdown timed out: " + connTransactionId);
+                LOG.info("Wait for threadpool shutdown timed out: " + connTransactionId);
             }
         } catch (InterruptedException int_ex) {
-            System.out.println("Wait for threadpool shutdown failed: " + connTransactionId + " " + int_ex.getMessage());
+            LOG.info("Wait for threadpool shutdown failed: " + connTransactionId + " " + int_ex.getMessage());
         }
     }
 
@@ -211,14 +216,14 @@ public class WriteConnection implements Closeable {
             completion = pendingWrites.remove();
         } catch (NoSuchElementException ex) {
             // Queue is empty so might as well return success
-            System.out.println("WriteConnection writeAvailableData() empty queue");
+            LOG.info("WriteConnection writeAvailableData() empty queue");
             return;
         }
 
         int userBufferSize = completion.getRemainingBytesToWrite();
         ByteBuffer buffer = completion.getBuffer();
 
-        System.out.println("WriteConnection[" + connTransactionId + "] writeAvailableData() " + userBufferSize);
+        LOG.info("WriteConnection[" + connTransactionId + "] writeAvailableData() " + userBufferSize);
 
         writeUserBuffer(buffer, completion);
     }
@@ -235,13 +240,12 @@ public class WriteConnection implements Closeable {
 
             @Override
             public void completed(final Integer result, final WriteCompletion completion) {
-                System.out.println("WriteConnection[" + connTransactionId + "] writeUserBuffer() bytesXfr: " + result +
-                        " " + Thread.currentThread().getName());
+                LOG.info("WriteConnection[" + connTransactionId + "] writeUserBuffer() bytesXfr: " + result);
 
                 if (result == -1) {
                     closeChannel();
 
-                    System.out.println("WriteConnection writeUserBuffer(2) bytesWritten -1");
+                    LOG.info("WriteConnection writeUserBuffer(2) bytesWritten -1");
                     completion.writeCompleted(-1, connTransactionId);
                 } else if (result > 0) {
                     // Check if all the data was written or if the write needs to be sent through the
@@ -253,7 +257,7 @@ public class WriteConnection implements Closeable {
 
             @Override
             public void failed(final Throwable exc, final WriteCompletion completion) {
-                System.out.println("WriteConnection[" + connTransactionId + "] readFromChannel() bytesXfr: " + exc.getMessage());
+                LOG.info("WriteConnection[" + connTransactionId + "] readFromChannel() bytesXfr: " + exc.getMessage());
                 closeChannel();
 
                 completion.writeCompleted(-1, connTransactionId);

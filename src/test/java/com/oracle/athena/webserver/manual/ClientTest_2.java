@@ -13,7 +13,7 @@ public class ClientTest_2 extends ClientTest {
 
     @Override
     String buildRequestString() {
-        String tmp = new String("PUT / HTTP/1.1\n" +
+        return new String("PUT / HTTP/1.1\n" +
                 "Host: iaas.us-phoenix-1.oraclecloud.com\n" +
                 "Content-Type: application/json\n" +
                 "Connection: keep-alive\n" +
@@ -27,8 +27,6 @@ public class ClientTest_2 extends ClientTest {
                 "  \"compartmentId\": \"ocid1.compartment.oc1..aaaaaaaauwjnv47knr7uuuvqar5bshnspi6xoxsfebh3vy72fi4swgrkvuvq\",\n" +
                 "  \"displayName\": \"Apex Virtual Cloud Network\"\n" +
                 "}\n\r\n");
-
-        return tmp;
     }
 
     /*

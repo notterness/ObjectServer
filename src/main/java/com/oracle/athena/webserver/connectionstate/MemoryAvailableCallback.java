@@ -1,6 +1,11 @@
 package com.oracle.athena.webserver.connectionstate;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class MemoryAvailableCallback {
+
+    private static final Logger LOG = LoggerFactory.getLogger(MemoryAvailableCallback.class);
 
     private ConnectionState connectionState;
     private int requestedBuffers;
@@ -12,7 +17,7 @@ public class MemoryAvailableCallback {
     }
 
     public void memoryAvailable() {
-        System.out.println("ConnectionState[" + connectionState.getConnStateId() + "] memoryAvailable");
+        LOG.info("ConnectionState[" + connectionState.getConnStateId() + "] memoryAvailable");
 
         connectionState.memoryBuffersAreAvailable();
     }

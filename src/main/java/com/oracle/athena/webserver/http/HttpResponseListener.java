@@ -8,8 +8,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 
 public class HttpResponseListener implements HttpParser.ResponseHandler {
+
+    private static final Logger LOG = LoggerFactory.getLogger(HttpResponseListener.class);
 
     /*
     ** TODO: These local variables will be removed from this class once the code is further along.
@@ -48,7 +53,7 @@ public class HttpResponseListener implements HttpParser.ResponseHandler {
         _content = _content + c;
         ref.position(ref.limit());
 
-        System.out.println("content(resp) _content: " + _content);
+        LOG.info("content(resp) _content: " + _content);
 
         return false;
     }
@@ -59,7 +64,7 @@ public class HttpResponseListener implements HttpParser.ResponseHandler {
         _hdr[++_headers] = field.getName();
         _val[_headers] = field.getValue();
 
-        System.out.println("parseHeader(resp) _headers: " + _headers + " _hdr: " + field.getName() +
+        LOG.info("parseHeader(resp) _headers: " + _headers + " _hdr: " + field.getName() +
                 " _val: " + field.getValue());
 
         if (field instanceof HostPortHttpField) {
@@ -67,13 +72,13 @@ public class HttpResponseListener implements HttpParser.ResponseHandler {
             _host = hpfield.getHost();
             _port = hpfield.getPort();
 
-            System.out.println("parseHeader(resp) _host: " + _host + " _port: " + _port);
+            LOG.info("parseHeader(resp) _host: " + _host + " _port: " + _port);
         }
     }
 
     @Override
     public boolean headerComplete() {
-        System.out.println("headerComplete(resp)");
+        LOG.info("headerComplete(resp)");
         _content = null;
         _headerCompleted = true;
         return false;
@@ -81,20 +86,20 @@ public class HttpResponseListener implements HttpParser.ResponseHandler {
 
     @Override
     public void parsedTrailer(HttpField field) {
-        System.out.println("parsedTrailer(resp) " + field.getValue());
+        LOG.info("parsedTrailer(resp) " + field.getValue());
         _trailers.add(field);
     }
 
     @Override
     public boolean contentComplete() {
-        System.out.println("contentComplete(resp)");
+        LOG.info("contentComplete(resp)");
 
         return false;
     }
 
     @Override
     public boolean messageComplete() {
-        System.out.println("messageComplete(resp)");
+        LOG.info("messageComplete(resp)");
 
         _messageCompleted = true;
 
@@ -107,12 +112,12 @@ public class HttpResponseListener implements HttpParser.ResponseHandler {
         String reason = failure.getReason();
         _bad = reason == null ? String.valueOf(failure.getCode()) : reason;
 
-        System.out.println("badMessage(resp) reason: " + reason);
+        LOG.info("badMessage(resp) reason: " + reason);
     }
 
     @Override
     public boolean startResponse(HttpVersion version, int status, String reason) {
-        System.out.println("StartResponse(resp) version: " + version + " status: " + status +
+        LOG.info("StartResponse(resp) version: " + version + " status: " + status +
                 " reason: " + reason);
         _fields.clear();
         _trailers.clear();
@@ -130,7 +135,7 @@ public class HttpResponseListener implements HttpParser.ResponseHandler {
 
     @Override
     public void earlyEOF() {
-        System.out.println("earlyEOF(resp)");
+        LOG.info("earlyEOF(resp)");
         _early = true;
     }
 
@@ -143,7 +148,7 @@ public class HttpResponseListener implements HttpParser.ResponseHandler {
     @Override
     public void onComplianceViolation(HttpCompliance compliance, HttpComplianceSection violation, String reason)
     {
-        System.out.println("onComplianceViolation()" + reason);
+        LOG.info("onComplianceViolation()" + reason);
         _complianceViolation.add(violation);
     }
      */

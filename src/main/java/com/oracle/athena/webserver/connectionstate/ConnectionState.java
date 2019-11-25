@@ -22,6 +22,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /*
  ** This is used to keep track of the state of the connection for its lifetime.
  **
@@ -30,6 +33,8 @@ import java.util.concurrent.atomic.AtomicLong;
  **   managed via a pool.
  */
 abstract public class ConnectionState {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ConnectionState.class);
 
     /*
      ** MAX_OUTSTANDING_BUFFERS is how many operations can be done in parallel on this
@@ -90,9 +95,13 @@ abstract public class ConnectionState {
     **
     ** The variables are as follows:
     **    requestedDataBuffers - This is the number of content ByteBuffers that should be allocated. This may be less
-    **      than the actual number of buffers that are required to read all of the content data in.
+    **      than the actual number of buffers that are required to read all of the content data in. This must be
+    **      an AtomicInteger since it is decremented in the read callback (call from an NIO.2 thread) and looked
+    **      at in the normal state machine processing.
+    **
     **    allocatedDataBuffers - This is the number of buffers that have been allocated to read in content data and are
     **      waiting to have reads performed on the.
+    **
     **    outstandingDataReadCount - This is the number of outstanding content reads are currently in progress.
     **    contentAllRead -
     **
@@ -112,8 +121,8 @@ abstract public class ConnectionState {
     **   if there is a choice between being on the timed wait queue (connOnDelayedQueue) or the normal
     **   execution queue (connOnExecutionQueue) is will always go on the execution queue.
      */
-    private boolean connOnDelayedQueue;
-    private boolean connOnExecutionQueue;
+    protected boolean connOnDelayedQueue;
+    protected boolean connOnExecutionQueue;
 
     private final Object queueMutex;
 
@@ -129,8 +138,8 @@ abstract public class ConnectionState {
      ** The next four items are associated with the thread that is running the ConnectionState
      **   state machine.
      */
-    private ServerWorkerThread workerThread;
-    BufferStatePool bufferStatePool;
+    protected ServerWorkerThread workerThread;
+    protected BufferStatePool bufferStatePool;
     WriteConnThread writeThread;
     BuildHttpResult resultBuilder;
 
@@ -151,20 +160,26 @@ abstract public class ConnectionState {
     private LinkedList<BufferState> allocatedDataBufferQueue;
 
     /*
-    **
+    ** The following queue is used to keep track of the BufferState that had a failed read. Items are placed
+    **   on this queue from the NIO.2 callback thread, so it must be a thread safe queue.
      */
     protected BlockingQueue<BufferState> readErrorQueue;
 
     /*
-     **
+     ** The following is used to keep track of BufferState that have completed their reads. Items are placed
+     **   on this queue from the NIO.2 callback thread, so it must be thread safe.
      */
     protected BlockingQueue<BufferState> dataReadDoneQueue;
 
     /*
     ** The following is used to indicate that there was a channel error and the connection should be
     **   closed out.
+    ** NOTE: This does not need to be an AtomicBoolean as the setter and getters all run within the
+    **   same state machine on the same thread. If the code is changed to allow ConnectionState to
+    **   run different channel read or write operations on different threads, then this will need to
+    **   be made and AtomicBoolean.
      */
-    protected AtomicBoolean channelError;
+    protected boolean channelError;
 
     /*
     ** The following is used to indicate there has been a failure in the HTTP parsing.
@@ -178,6 +193,7 @@ abstract public class ConnectionState {
      */
     protected TimeoutChecker timeoutChecker;
 
+
     public ConnectionState(final int uniqueId) {
         outstandingDataReadCount = new AtomicInteger(0);
 
@@ -186,7 +202,10 @@ abstract public class ConnectionState {
         bufferStatePool = null;
         resultBuilder = null;
 
-        channelError = new AtomicBoolean(false);
+        /*
+        ** When the connection begins, there cannot be a channelError.
+         */
+        channelError = false;
 
         connOnDelayedQueue = false;
         connOnExecutionQueue = false;
@@ -241,6 +260,8 @@ abstract public class ConnectionState {
      */
     abstract public void stateMachine();
 
+    abstract public ConnectionStateEnum getNextState();
+
     /*
      ** The following is used to handle the case when a read error occurred and the ConnectionState needs
      **   to cleanup and release resources.
@@ -261,45 +282,15 @@ abstract public class ConnectionState {
     **   thread it is going to run under.
      */
     public void setupInitial() {
+        if (workerThread == null){
+            LOG.error("ConnectionState[" + connStateId + "] setupInitial() (workerThread == null)");
+        }
         bufferStatePool = workerThread.getBufferStatePool();
         writeThread = workerThread.getWriteThread();
         resultBuilder = workerThread.getResultBuilder();
 
         timeoutChecker.updateTime();
     }
-
-    /*
-     ** This checks if there is a slow client
-     */
-    public boolean checkSlowClientChannel() {
-        boolean continueExecution = true;
-
-        if (timeoutChecker.inactivityThresholdReached()) {
-            /*
-             ** TOTDO: Need to close out the channel and this connection
-             */
-            System.out.println("WebServerConnState[" + connStateId + "] connection timeout");
-        } else {
-            //ConnectionStateEnum overallState = pipelineManager.nextPipelineStage();
-            ConnectionStateEnum overallState = ConnectionStateEnum.CHECK_SLOW_CHANNEL;
-
-            /*
-             ** Need to wait for something to kick the state machine to a new state
-             **
-             ** The ConnectionState will get put back on the execution queue when an external
-             **   operation completes.
-             */
-            if (overallState != ConnectionStateEnum.CHECK_SLOW_CHANNEL) {
-                addToWorkQueue(false);
-            } else {
-                addToWorkQueue(true);
-                continueExecution = false;
-            }
-        }
-
-        return continueExecution;
-    }
-
 
     /*
     ** Accessor functions related to the HTTP Parser and when an error occurs.
@@ -317,28 +308,61 @@ abstract public class ConnectionState {
     ** This is used to add the ConnectionState to the worker thread's execute queue. The
     **   ConnectionState can be added to the immediate execution queue or the delayed
     **   execution queue.
+    **
+    ** The following methods are called by the ServerWorkerThread object under a queue mutex.
+    **   markRemoveFromQueue - This method is used by the ServerWorkerThread to update the queue
+    **     the connection is on when the connection is removed from the queue.
+    **   markAddedToQueue - This method is used when a connection is added to a queue to mark
+    **     which queue it is on.
+    **   isOnWorkQueue - Accessor method
+    **   isOnTimedWaitQueue - Accessor method
+    **
+    ** TODO: Might want to switch to using an enum instead of two different booleans to keep track
+    **   of which queue the connection is on. It will probably clean up the code some.
      */
     public void addToWorkQueue(final boolean delayedExecution) {
-        synchronized (queueMutex) {
-            workerThread.put(this, delayedExecution);
+        if (delayedExecution) {
+            workerThread.addToDelayedQueue(this);
+        } else {
+            workerThread.addToWorkQueue(this);
         }
-    }
-
-    public void markAddedToDelayedQueue() {
-        connOnDelayedQueue = true;
-        nextExecuteTime = System.currentTimeMillis() + ConnectionState.TIME_TILL_NEXT_TIMEOUT_CHECK;
     }
 
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
+        LOG.info("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        if (connOnDelayedQueue) {
+            if (!delayedExecutionQueue) {
+                LOG.warn("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
+            }
 
-        if (delayedExecutionQueue) {
             connOnDelayedQueue = false;
             nextExecuteTime = 0;
-        } else {
-            connOnExecutionQueue = false;
-        }
+        } else if (connOnExecutionQueue){
+            if (delayedExecutionQueue) {
+                LOG.warn("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
+            }
 
-        //System.out.println("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+            connOnExecutionQueue = false;
+        } else {
+            LOG.warn("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
+        }
+    }
+
+    public void markAddedToQueue(final boolean delayedExecutionQueue) {
+        if (delayedExecutionQueue) {
+            nextExecuteTime = System.currentTimeMillis() + TIME_TILL_NEXT_TIMEOUT_CHECK;
+            connOnDelayedQueue = true;
+        } else {
+            connOnExecutionQueue = true;
+        }
+    }
+
+    public boolean isOnWorkQueue() {
+        return connOnExecutionQueue;
+    }
+
+    public boolean isOnTimedWaitQueue() {
+        return connOnDelayedQueue;
     }
 
 
@@ -349,7 +373,7 @@ abstract public class ConnectionState {
             return false;
         }
 
-        System.out.println("ServerWorkerThread[" + connStateId + "] waitTimeElapsed " + currTime);
+        //System.out.println("ServerWorkerThread[" + connStateId + "] waitTimeElapsed " + currTime);
         return true;
     }
 
@@ -377,7 +401,7 @@ abstract public class ConnectionState {
     **   now ready to have data read into them.
      */
     public int allocClientReadBufferState() {
-        System.out.println("ServerWorkerThread[" + connStateId + "] allocClientReadBufferState(1) " + Thread.currentThread().getName());
+        LOG.info("ServerWorkerThread[" + connStateId + "] allocClientReadBufferState(1) ");
 
         while (requestedDataBuffers > 0) {
             /*
@@ -387,10 +411,10 @@ abstract public class ConnectionState {
             if (allocatedDataBuffers < MAX_OUTSTANDING_BUFFERS) {
                 BufferState bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_DATA_FROM_CHAN, MemoryManager.MEDIUM_BUFFER_SIZE);
                 if (bufferState != null) {
-                    System.out.println("ServerWorkerThread[" + connStateId + "] allocClientReadBufferState(2)");
-
                     allocatedDataBuffers++;
                     allocatedDataBufferQueue.add(bufferState);
+
+                    LOG.info("ServerWorkerThread[" + connStateId + "] allocClientReadBufferState(2) allocatedDataBuffers: " + allocatedDataBuffers);
 
                     /*
                     ** Update the Content information if this is a server connection. This is keeping track of how many
@@ -527,7 +551,7 @@ abstract public class ConnectionState {
     **   it threads safe in the event that different threads attempt to close the channel
     **   at the same time.
      */
-    private void closeChannel() {
+    protected void closeChannel() {
         synchronized (connChanMutex) {
             try {
                 /*
@@ -537,7 +561,7 @@ abstract public class ConnectionState {
                     connChan.close();
                 }
             } catch (IOException io_ex) {
-                System.out.println("ConnectionState[" + connStateId + "] closeChannel() " + io_ex.getMessage());
+                LOG.info("ConnectionState[" + connStateId + "] closeChannel() " + io_ex.getMessage());
             }
 
             connChan = null;
@@ -559,11 +583,9 @@ abstract public class ConnectionState {
      */
     public void reset() {
 
-        System.out.println("ConnectionState[" + connStateId + "] reset()");
+        LOG.info("ConnectionState[" + connStateId + "] reset()");
 
-        synchronized (queueMutex) {
-            workerThread.remove(this);
-        }
+        workerThread.removeFromQueue(this);
 
         releaseBufferState();
 
@@ -581,7 +603,10 @@ abstract public class ConnectionState {
         bufferStatePool = null;
         resultBuilder = null;
 
-        channelError.set(false);
+        /*
+        ** Clear out the channelError prior to this ConnectionState being reused.
+         */
+        channelError = false;
 
         /*
         ** Clear out the information about the content.
@@ -617,13 +642,15 @@ abstract public class ConnectionState {
          */
         timeoutChecker.updateTime();
 
-        System.out.println("ConnectionState[" + connStateId + "].dataReadCompleted() outstandingReadCount: " + readCount);
+        LOG.info("ConnectionState[" + connStateId + "] dataReadCompleted() outstandingReadCount: " + readCount);
 
         addToWorkQueue(false);
     }
 
     /*
-    **
+    ** This is used by the HttpParsePipelineMgr and the ContentReadPipelineMgr to determine if there have been any
+    **   ByteBuffer channel read errors that need to be processed. Upon receiving the first read error, the
+    **   channelError flag is set to indicate that the connection has failed and needs to be cleaned up.
      */
     public boolean readErrorQueueNotEmpty() {
         return (!readErrorQueue.isEmpty());
@@ -640,7 +667,7 @@ abstract public class ConnectionState {
         /*
          ** Update the number of bytes actually read for a server connection.
          */
-        contentBytesRead.addAndGet(bytesRead);
+        long totalBytesRead = contentBytesRead.addAndGet(bytesRead);
 
         try {
             dataReadDoneQueue.put(bufferState);
@@ -649,11 +676,12 @@ abstract public class ConnectionState {
             /*
              ** TODO: This is an error case and the connection needs to be closed
              */
-            System.out.println("dataReadCompleted(" + connStateId + ") " + int_ex.getMessage());
+            LOG.info("dataReadCompleted(" + connStateId + ") " + int_ex.getMessage());
             readCompletedCount = dataBufferReadsCompleted.get();
         }
 
-        System.out.println("ConnectionState[" + connStateId + "].addDataBuffer() readCompletedCount: " + readCompletedCount);
+        LOG.info("ConnectionState[" + connStateId + "] addDataBuffer() readCompletedCount: " + readCompletedCount +
+                " contentBytesRead: " + totalBytesRead);
 
         determineNextContentRead();
     }
@@ -670,8 +698,14 @@ abstract public class ConnectionState {
     }
 
     /*
-    ** This function determines what to do next with content buffers.
+    ** This method determines what to do next with content buffers. It determines how much of the
+    **   data being sent has aleady been read in and determines how many buffers (if any) are needed
+    **   to read in the remaining data.
+    ** It will limit the number of buffers allocated to perform the reads to insure that one
+    **   connection cannot deplete the available buffer pool and starve out other connections.
     **
+    ** TODO: This should be moved to a state machine step that also processes the read completed
+    **   buffers to remove the need for the Atomic variables.
      */
     void determineNextContentRead() {
         /*
@@ -687,7 +721,7 @@ abstract public class ConnectionState {
             buffersNeeded = 0;
         }
 
-        System.out.println("ConnectionState[" + connStateId + "] determineNextContentRead() buffersNeeded: " + buffersNeeded +
+        LOG.info("ConnectionState[" + connStateId + "] determineNextContentRead() buffersNeeded: " + buffersNeeded +
                 " allocatedDataBuffers: " + allocatedDataBuffers + " requestedDataBuffers: " + requestedDataBuffers);
 
         if (buffersNeeded > 0) {
@@ -720,7 +754,7 @@ abstract public class ConnectionState {
                     /*
                     ** No more content data to read, so move onto the next processing step
                      */
-                    System.out.println("ConnectionState[" + connStateId + "] determineNextContentRead() contentAllRead true");
+                    LOG.info("ConnectionState[" + connStateId + "] determineNextContentRead() contentAllRead true");
 
                     contentAllRead.set(true);
                 } else {
@@ -756,13 +790,18 @@ abstract public class ConnectionState {
     }
 
     /*
-     ** Returns if there has been an error on this AsynchronousConnectionChannel
+     ** Returns if there has been an error on this AsynchronousConnectionChannel. This is set following a
+     **   channel read error.
      */
     public boolean hasChannelFailed() {
-        return channelError.get();
+        return channelError;
     }
 
 
+    /*
+    ** connStateId is used to uniquely identify this ConnectionState. It is used for tracing operations that
+    **   occur with this connection.
+     */
     public int getConnStateId() {
         return connStateId;
     }
@@ -778,7 +817,7 @@ abstract public class ConnectionState {
              **   any operations on it.
              */
             if (connChan == null) {
-                System.out.println("ConnectionState[" + connStateId + "] socket closed: connChan null");
+                LOG.info("ConnectionState[" + connStateId + "] socket closed: connChan null");
 
                 /*
                  ** Mark the BufferState as READ_ERROR to indicate that the buffer is not valid and this
@@ -791,9 +830,9 @@ abstract public class ConnectionState {
 
             try {
                 SocketAddress addr = connChan.getLocalAddress();
-                System.out.println("readFromChannel[" + connStateId + "] socket: " + addr);
+                LOG.info("readFromChannel[" + connStateId + "] socket: " + addr);
             } catch (IOException ex) {
-                System.out.println("socket closed " + ex.getMessage());
+                LOG.info("socket closed " + ex.getMessage());
 
                 closeChannel();
 
@@ -819,7 +858,7 @@ abstract public class ConnectionState {
 
             @Override
             public void completed(final Integer bytesRead, final BufferState readBufferState) {
-                System.out.println("readFromChannel[" + connStateId + "] bytesRead: " + bytesRead + " thread: " + Thread.currentThread().getName());
+                LOG.info("readFromChannel[" + connStateId + "] bytesRead: " + bytesRead);
 
                 if (bytesRead == -1) {
                     closeChannel();
@@ -834,7 +873,7 @@ abstract public class ConnectionState {
 
             @Override
             public void failed(final Throwable exc, final BufferState readBufferState) {
-                System.out.println("readFromChannel[" + connStateId + "] failed bytesRead: " + exc.getMessage() + " thread: " + Thread.currentThread().getName());
+                LOG.info("readFromChannel[" + connStateId + "] failed bytesRead: " + exc.getMessage());
 
                 closeChannel();
 
@@ -859,7 +898,7 @@ abstract public class ConnectionState {
         int limit = buffer.limit();
 
         String tmp = bb_to_str(buffer);
-        System.out.println("ConnectionState buffer: " + tmp);
+        LOG.info("ConnectionState buffer: " + tmp);
 
         /*
         ** Need to reset the values otherwise anything that tries to operate on this

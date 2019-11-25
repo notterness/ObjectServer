@@ -8,7 +8,12 @@ package com.oracle.athena.webserver.connectionstate;
 
 import java.sql.Timestamp;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class TimeoutChecker {
+
+    private static final Logger LOG = LoggerFactory.getLogger(TimeoutChecker.class);
 
     /*
     ** Currently set the inactivity time to 5 seconds
@@ -66,7 +71,7 @@ public class TimeoutChecker {
             Timestamp lastUpdate = new Timestamp(lastUpdateTimeMs);
             Timestamp curr = new Timestamp(currTime);
 
-            System.out.println("TimeoutChecker - exceeded timeout: lastUpdate - " + lastUpdate.toString() +
+            LOG.info("TimeoutChecker - exceeded timeout: lastUpdate - " + lastUpdate.toString() +
                     " current - " + curr.toString());
             exceededTime = true;
         }

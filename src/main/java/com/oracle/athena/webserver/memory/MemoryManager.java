@@ -7,14 +7,19 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+
 /**
  * Basic class to encapsulate memory management.
  * <p>
  * For now, it simply wraps calls to ByteBuffer.allocate().
  */
 public class MemoryManager {
-    // TODO:  Make MemoryManager own an array of pools of various sizes.
-    //        Add a high-water mark for each pool.
+    // TODO:  Add a high-water mark for each pool.
+
+    private static Logger LOG = LoggerFactory.getLogger(MemoryManager.class);
 
     private BlockingQueue<MemoryAvailableCallback> waitingForBuffersQueue;
 
@@ -63,7 +68,7 @@ public class MemoryManager {
         for (int i = 0; i < numPools;  ++i) {
             if (requestedSize <= thePool[i].getBufferSize()) {
 
-                System.out.println("poolMemAlloc [" + i + "] requestedSize: " + requestedSize);
+                LOG.debug("poolMemAlloc [" + i + "] requestedSize: " + requestedSize);
                 ByteBuffer buffer = thePool[i].poolMemAlloc( requestedSize );
                 if (buffer != null) {
                     return buffer;
@@ -107,6 +112,24 @@ public class MemoryManager {
 
     public void cancelCallback( MemoryAvailableCallback memFreeCb ) {
         waitingForBuffersQueue.remove(memFreeCb);
+    }
+
+    /*
+    ** This is to check that the memory pools are completely populated. It is used to validate that tests and such
+    **   are not leaking resources.
+     */
+    public boolean verifyMemoryPools(final String caller) {
+        boolean memoryPoolsOkay = true;
+
+        for (int i = 0; i < numPools; ++i) {
+            if (thePool[i].getBufferCount() != thePool[i].getUnusedBufferCount()) {
+                System.out.println(caller + " BufferPool error pool[" + i + "] COUNT: " + thePool[i].getBufferCount() +
+                        " unused: " + thePool[i].getUnusedBufferCount());
+                memoryPoolsOkay = false;
+            }
+        }
+
+        return memoryPoolsOkay;
     }
 }
 

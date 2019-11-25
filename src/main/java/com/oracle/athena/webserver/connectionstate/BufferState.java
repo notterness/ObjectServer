@@ -2,10 +2,15 @@ package com.oracle.athena.webserver.connectionstate;
 
 import java.nio.ByteBuffer;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /*
  ** This is used to manage the individual states a ByteBuffer goes through
  */
 public class BufferState {
+
+    private static final Logger LOG = LoggerFactory.getLogger(BufferState.class);
 
     private ConnectionState connState;
 
@@ -32,6 +37,10 @@ public class BufferState {
     public ByteBuffer getBuffer() {
         return buffer;
     }
+
+    public int getOwnerId() { return connState.getConnStateId(); }
+
+    public ConnectionStateEnum getConnectionNextState() { return connState.getNextState(); }
 
     /*
     ** This is used to set the BufferState to a waiting for a read to complete state. This is called
@@ -63,7 +72,7 @@ public class BufferState {
      */
     public void setReadState(final BufferStateEnum newState) {
 
-        System.out.println("[" + connState.getConnStateId() + "] setReadState() current: " + bufferState.toString() + " new: " + newState.toString() +
+        LOG.info("[" + connState.getConnStateId() + "] setReadState() current: " + bufferState.toString() + " new: " + newState.toString() +
                 " remaining: " + buffer.remaining());
 
         if (newState == BufferStateEnum.READ_ERROR) {
@@ -81,30 +90,32 @@ public class BufferState {
                 // Read of all the data is completed
                 bufferState = BufferStateEnum.READ_DATA_DONE;
             } else {
-                System.out.println("ERROR: [" + connState.getConnStateId() + "] setReadState() invalid current state: " + bufferState.toString());
+                LOG.info("ERROR: [" + connState.getConnStateId() + "] setReadState() invalid current state: " + bufferState.toString());
             }
         }
     }
 
     /*
-    ** This will replace the current ByteBuffer with the newBuffer in the BufferState. The previous
-    **   ByteBuffer will be released back to the memory free pool.
+    ** This will copy the contents of the newBuffer into the ByteBuffer associated with the BufferState.
      */
-    public void swapByteBuffers(ByteBuffer newBuffer) {
-        ByteBuffer oldBuffer;
+    public void copyByteBuffer(ByteBuffer srcBuffer) {
+        LOG.info("copyByteBuffer() newBuffer remaining: " + srcBuffer.remaining() + " limit: " +
+                srcBuffer.limit() + " position: " + srcBuffer.position());
 
-        oldBuffer = buffer;
-        buffer = newBuffer;
+        int nBytesToCopy = Math.min(buffer.remaining(), srcBuffer.remaining());
+        if (!buffer.isDirect()) {
+            buffer.put(srcBuffer.array(), srcBuffer.arrayOffset() + srcBuffer.position(), nBytesToCopy);
+        } else {
+            /*
+            ** Need to perform manual copy (Need to handle the allocate direct issue better)
+             */
+            for (int i = 0; i < nBytesToCopy; i++) {
+                buffer.put(srcBuffer.get(srcBuffer.position() + i));
+            }
 
-        /*
-        ** TODO: The oldBuffer needs to be released back to the memory pool. But, there is currently
-        **   an ownership problem with the memory that backs the ByteBuffers as they share the same
-        **   backing memory and it cannot be given back to the pool until the new reference is done
-        **   with it.
-        **   One solution (since this should not be for a very big piece of memory) is to perform a
-        **     new allocation and a copy in the StringChunk class.
-        **   Also, need to have access to the MemoryAllocator that is in charge of this buffer.
-         */
+            buffer.limit(nBytesToCopy);
+            buffer.position(0);
+        }
     }
 
     /*
@@ -114,7 +125,7 @@ public class BufferState {
      ** TODO: Need to figure out how data buffers are handled
      */
     public void setBufferHttpParseDone() {
-        System.out.println("setBufferHttpParseDone(): current " + bufferState.toString() +
+        LOG.info("setBufferHttpParseDone(): current " + bufferState.toString() +
                 " remaining: " + buffer.remaining());
 
         bufferState = BufferStateEnum.PARSE_HTTP_DONE;
