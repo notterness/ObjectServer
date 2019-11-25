@@ -4,6 +4,7 @@ import com.oracle.athena.webserver.connectionstate.*;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
 import org.eclipse.jetty.http.HttpStatus;
 
+import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
@@ -324,6 +325,11 @@ public class ClientConnState extends ConnectionState {
         }
 
         super.setAsyncChannel(chan);
+    }
+
+    @Override
+    public void setSslContext(SSLContext sslContext) {
+        super.initSslEngine(sslContext);
     }
 
     void setClientReadCallback(ClientDataReadCallback clientReadCb) {

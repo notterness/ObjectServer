@@ -5,6 +5,10 @@ import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.server.*;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLEngineResult;
+import javax.net.ssl.SSLException;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
@@ -14,10 +18,10 @@ import java.nio.channels.CompletionHandler;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.ListIterator;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -62,6 +66,9 @@ abstract public class ConnectionState {
      */
     private static final long TIME_TILL_NEXT_TIMEOUT_CHECK = 500;
 
+    public static final int NUM_SSL_APP_BUFFERS = 2;
+    public static final int NUM_SSL_NET_BUFFERS = 2;
+
     /*
     ** connStateId is used as a way to track a ConnectionState in logging statements. Each
     **   ConnectionState has a unique ID to identify it for the life of the program.
@@ -79,6 +86,17 @@ abstract public class ConnectionState {
      **    perform writes on.
      */
     AsynchronousSocketChannel connChan;
+
+    SSLContext sslContext;
+    SSLEngine engine;
+
+    private LinkedList<BufferState> allocatedSSLAppBufferQueue;
+    private LinkedList<BufferState> allocatedSSLNetBufferQueue;
+    private SSLEngineResult sslEngineResult;
+    private boolean sslHandshakeRequired;
+    private boolean sslHandshakeSuccess;
+    private boolean sslBuffersNeeded;
+    private SSLEngineResult.HandshakeStatus handshakeStatus;
 
     private final Object connChanMutex;
 
@@ -132,6 +150,7 @@ abstract public class ConnectionState {
     private AtomicLong contentBytesAllocated;
     private AtomicLong contentBytesRead;
 
+    private SSLContext context;
 
     /*
      ** The next four items are associated with the thread that is running the ConnectionState
@@ -243,6 +262,17 @@ abstract public class ConnectionState {
          */
         connChan = null;
         connChanMutex = new Object();
+
+        sslContext = null;
+        engine = null;
+        allocatedSSLAppBufferQueue = new LinkedList<>();
+        allocatedSSLNetBufferQueue = new LinkedList<>();
+        sslEngineResult = null;
+        sslHandshakeRequired = false;
+        sslHandshakeSuccess = false;
+        sslBuffersNeeded = false;
+        handshakeStatus = SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING;
+
     }
 
     /*
@@ -271,6 +301,8 @@ abstract public class ConnectionState {
     abstract public void readCompletedError(final BufferState bufferState);
 
     abstract public void setChannel(final AsynchronousSocketChannel chan);
+
+    abstract public void setSslContext(final SSLContext sslContext);
 
     abstract public void setReadState(final BufferState bufferState, final BufferStateEnum newState);
 
@@ -393,6 +425,19 @@ abstract public class ConnectionState {
         requestedDataBuffers++;
     }
 
+    private BufferState allocateContentDataBuffers() {
+        if (isSSL()) {
+            int appBufferSize = engine.getSession().getApplicationBufferSize();
+            int netBufferSize = engine.getSession().getPacketBufferSize();
+
+            return bufferStatePool.allocBufferState(this, BufferStateEnum.READ_DATA_FROM_CHAN,
+                                                     appBufferSize, netBufferSize);
+
+        } else {
+            return bufferStatePool.allocBufferState(this, BufferStateEnum.READ_DATA_FROM_CHAN, MemoryManager.MEDIUM_BUFFER_SIZE);
+        }
+    }
+
     /*
     ** This is the function to add BufferState to the available queue. This means the BufferState are
     **   now ready to have data read into them.
@@ -406,9 +451,9 @@ abstract public class ConnectionState {
              **   resource starvation for other connections.
              */
             if (allocatedDataBuffers < MAX_OUTSTANDING_BUFFERS) {
-                BufferState bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_DATA_FROM_CHAN, MemoryManager.MEDIUM_BUFFER_SIZE);
+                BufferState bufferState = allocateContentDataBuffers();
                 if (bufferState != null) {
-                    allocatedDataBuffers++;
+                    allocatedDataBuffers += bufferState.count();
                     allocatedDataBufferQueue.add(bufferState);
 
                     LOG.info("ServerWorkerThread[" + connStateId + "] allocClientReadBufferState(2) allocatedDataBuffers: " + allocatedDataBuffers);
@@ -574,6 +619,20 @@ abstract public class ConnectionState {
         connChan = chan;
     }
 
+    protected void initSslEngine(SSLContext sslContext) {
+        this.sslContext = sslContext;
+
+        if (sslContext != null) {
+            engine = sslContext.createSSLEngine();
+            engine.setUseClientMode(false);
+            engine.setNeedClientAuth(false);
+        }
+    }
+
+    protected boolean isSSL() {
+        return (sslContext != null);
+    }
+
     /*
     ** This is used to put the ConnectionState back into a pristine state so that it can be used
     **   to handle the next HTTP connection.
@@ -631,7 +690,17 @@ abstract public class ConnectionState {
     protected void dataReadCompleted(final BufferState bufferState) {
         int readCount = outstandingDataReadCount.decrementAndGet();
 
-        int bytesRead = bufferState.getBuffer().position();
+        int bytesRead = bufferState.getChannelBuffer().position();
+
+        if (isSSL()) {
+            /* TODO: This will require its own state in the pipeline
+                to handle underflow.  In that case need to wait for another
+                read buffer, combine the buffers and resubmit for unwrap.  Properly
+                unwrapped buffers then proceed to dataReadComplete.
+             */
+            sslUnwrapData(bufferState);
+        }
+
         addDataBuffer(bufferState, bytesRead);
 
         /*
@@ -682,6 +751,72 @@ abstract public class ConnectionState {
 
         determineNextContentRead();
     }
+
+
+    public void sslUnwrapData(BufferState bufferState) {
+        ByteBuffer clientAppData = bufferState.getBuffer();
+        ByteBuffer clientNetData = bufferState.getNetBuffer();
+
+        int bytesRead = clientNetData.position();
+        clientNetData.flip();
+        while (clientNetData.hasRemaining()) {
+            clientAppData.clear();
+            SSLEngineResult result;
+            try {
+                result = engine.unwrap(clientNetData, clientAppData);
+            } catch (SSLException e) {
+                //TODO: Return error to client, log it
+                System.out.println("Unable to unwrap data.");
+                e.printStackTrace();
+                return;
+            }
+            switch (result.getStatus()) {
+                case OK:
+                    //Successfully unwrapped received data
+                    break;
+                case BUFFER_OVERFLOW:
+                    //TODO: destination buffer not large enough;
+                    break;
+                case BUFFER_UNDERFLOW:
+                    //TODO: no data was read or the TLS packet was incomplete.
+                    break;
+                case CLOSED:
+                    //TODO: Client wants to close connection
+                    return;
+                default:
+                    //Log this unknown state, return error to client
+                    LOG.error("ConnectionState[" + connStateId + "] sslUnwrapData() state: " + result.getStatus() +
+                              " bytesRead: " + bytesRead);
+                    break;
+            }
+        }
+    }
+
+    public void sslWrapData(BufferState bufferState) throws IOException{
+        ByteBuffer clientAppData = bufferState.getBuffer();
+        ByteBuffer clientNetData = bufferState.getNetBuffer();
+
+        while (clientAppData.hasRemaining()) {
+            clientNetData.clear();
+            SSLEngineResult result  = engine.wrap(clientAppData, clientNetData);
+            switch (result.getStatus()) {
+                case OK:
+                    System.out.println("Wrapped data.");
+                    return;
+                case BUFFER_OVERFLOW:
+                    // FIXME: need to get a bigger buffer
+                    break;
+                case CLOSED:
+                    //FIXME: ("Client wants to close connection...");
+                    return;
+                default:
+                    //Log this state
+                    System.out.println("Illegal state: " + result.getStatus().toString());
+                    break;
+            }
+        }
+    }
+
 
     /*
     ** This returns the number of data buffer reads that have completed (these are the reads to bring in the content)
@@ -850,7 +985,7 @@ abstract public class ConnectionState {
         readBufferState.setReadInProgress();
 
         // Read the data from the channel
-        ByteBuffer readBuffer = readBufferState.getBuffer();
+        ByteBuffer readBuffer = readBufferState.getChannelBuffer();
         connChan.read(readBuffer, readBufferState, new CompletionHandler<Integer, BufferState>() {
 
             @Override
@@ -880,6 +1015,36 @@ abstract public class ConnectionState {
                 setReadState(readBufferState, BufferStateEnum.READ_ERROR);
             }
         });  // end of chan.read()
+    }
+
+
+    /*
+     ** If buffer is clear, read from channel and return future.  Otherwise
+	 ** return completed future.
+     */
+    public Future<Integer> readFromChannelFuture(final ByteBuffer buffer) {
+        AsynchronousSocketChannel readChan;
+
+        synchronized (connChanMutex) {
+            readChan = connChan;
+        }
+
+        if (buffer.position() != 0) {
+            return (Future<Integer>) CompletableFuture.completedFuture(buffer.position());
+        } else {
+            return readChan.read(buffer);
+        }
+    }
+
+    public Future<Integer> writeToChannelFuture(final ByteBuffer buffer) {
+        AsynchronousSocketChannel writeChan;
+
+        synchronized (connChanMutex) {
+            writeChan = connChan;
+        }
+
+        // Read the data from the channel
+        return writeChan.write(buffer);
     }
 
     /*
@@ -920,6 +1085,275 @@ abstract public class ConnectionState {
 
     private String bb_to_str(ByteBuffer buffer) {
         return StandardCharsets.UTF_8.decode(buffer).toString();
+    }
+
+    public boolean isSSLHandshakeRequired() {
+        return sslHandshakeRequired;
+    }
+
+    public void setSSLHandshakeRequired(boolean sslHandshakeRequired) {
+        this.sslHandshakeRequired = sslHandshakeRequired;
+    }
+
+    public boolean isSSLHandshakeSuccess() {
+        return sslHandshakeSuccess;
+    }
+
+    public void setSSLHandshakeSuccess(boolean sslHandshakeSuccess) {
+        this.sslHandshakeSuccess = sslHandshakeSuccess;
+    }
+
+    public boolean isSSLBuffersNeeded() {
+        return sslBuffersNeeded;
+    }
+
+    public void setSSLBuffersNeeded( boolean sslBuffersNeeded ){
+        this.sslBuffersNeeded = sslBuffersNeeded;
+    }
+
+    /*
+     ** Allocate a buffers for SSL handshaking.
+     ** Server and client buffers are supposed to be large enough to hold all message data the server
+     ** will send and expects to receive from the client. Since the messages to be exchanged will usually be less
+     ** than 16KB long the capacity of these fields should also be smaller.  Expected buffer sizes are retrieved
+     ** from the session object.
+     */
+    public int allocSSLHandshakeBuffers() {
+        int appBufferSize = engine.getSession().getApplicationBufferSize();
+        int netBufferSize = engine.getSession().getPacketBufferSize();
+
+        while (allocatedSSLAppBufferQueue.size() < ConnectionState.NUM_SSL_APP_BUFFERS) {
+            BufferState bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.SSL_HANDSHAKE_APP_BUFFER, appBufferSize);
+            if (bufferState != null) {
+                allocatedSSLAppBufferQueue.add(bufferState);
+
+            } else {
+                /*
+                 ** Unable to allocate memory, come back later
+                 */
+                bufferAllocationFailed.set(true);
+                return allocatedSSLAppBufferQueue.size();
+            }
+        }
+
+        while (allocatedSSLNetBufferQueue.size() < ConnectionState.NUM_SSL_NET_BUFFERS) {
+            BufferState bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.SSL_HANDSHAKE_NET_BUFFER, netBufferSize);
+            if (bufferState != null) {
+                allocatedSSLNetBufferQueue.add(bufferState);
+
+            } else {
+                /*
+                 ** Unable to allocate memory, come back later
+                 */
+                bufferAllocationFailed.set(true);
+                return allocatedSSLAppBufferQueue.size() + allocatedSSLAppBufferQueue.size();
+            }
+        }
+
+        setSSLBuffersNeeded(false);
+        return allocatedSSLAppBufferQueue.size() + allocatedSSLAppBufferQueue.size();
+    }
+
+    public void freeSSLHandshakeBuffers() {
+        ListIterator<BufferState> iterApp = allocatedSSLAppBufferQueue.listIterator(0);
+        ListIterator<BufferState> iterNet = allocatedSSLNetBufferQueue.listIterator(0);
+
+        while (iterApp.hasNext()) {
+            BufferState bufferState = iterApp.next();
+            iterApp.remove();
+
+            bufferStatePool.freeBufferState(bufferState);
+        }
+
+        while (iterNet.hasNext()) {
+            BufferState bufferState = iterNet.next();
+            iterNet.remove();
+
+            bufferStatePool.freeBufferState(bufferState);
+        }
+
+    }
+
+    public void beginHandshake() throws SSLException{
+        engine.beginHandshake();
+        setSSLHandshakeRequired(true);
+        setSSLHandshakeSuccess(false);
+        handshakeStatus = engine.getHandshakeStatus();
+    }
+
+    /*
+     * Implements the handshake protocol between two peers, required for the establishment of the SSL/TLS connection.
+     * During the handshake, encryption configuration information - such as the list of available cipher suites - will be exchanged
+     * and if the handshake is successful will lead to an established SSL/TLS session.
+     *
+     * A typical handshake will usually contain the following steps:
+     *
+     *   1. wrap:     ClientHello
+     *   2. unwrap:   ServerHello/Cert/ServerHelloDone
+     *   3. wrap:     ClientKeyExchange
+     *   4. wrap:     ChangeCipherSpec
+     *   5. wrap:     Finished
+     *   6. unwrap:   ChangeCipherSpec
+     *   7. unwrap:   Finished
+     *
+     * Handshake is also used during the end of the session, in order to properly close the connection between the two peers.
+     * A proper connection close will typically include the one peer sending a CLOSE message to another, and then wait for
+     * the other's CLOSE message to close the transport link. The other peer from his perspective would read a CLOSE message
+     * from his peer and then enter the handshake procedure to send his own CLOSE message as well.
+     *
+     */
+    public boolean doSSLHandshake() {
+
+        if ((allocatedSSLAppBufferQueue.size() < ConnectionState.NUM_SSL_APP_BUFFERS) ||
+                (allocatedSSLNetBufferQueue.size() < ConnectionState.NUM_SSL_NET_BUFFERS)) {
+            setSSLBuffersNeeded(true);
+            setSSLHandshakeRequired(false);
+            return false;
+        }
+
+        ListIterator<BufferState> iterApp = allocatedSSLAppBufferQueue.listIterator(0);
+        ListIterator<BufferState> iterNet = allocatedSSLNetBufferQueue.listIterator(0);
+        ByteBuffer clientAppData = iterApp.next().getBuffer();
+        ByteBuffer clientNetData = iterNet.next().getBuffer();
+        ByteBuffer serverAppData = iterApp.next().getBuffer();
+        ByteBuffer serverNetData = iterNet.next().getBuffer();
+
+        switch (handshakeStatus) {
+            case NEED_UNWRAP:
+                Future<Integer> rd = readFromChannelFuture(clientNetData);
+                Integer res = -1;
+                try {
+                    res = rd.get();
+                } catch (InterruptedException e) {
+                    // TODO: logging
+                } catch (ExecutionException e) {
+                    // TODO: logging
+                }
+                if (res < 0) {
+                    if (engine.isInboundDone() && engine.isOutboundDone()) {
+                        return false;
+                    }
+                    try {
+                        engine.closeInbound();
+                    } catch (SSLException e) {
+                    }
+                    engine.closeOutbound();
+                    // After closeOutbound the engine will be set to WRAP state, in order to try to send a close message to the client.
+                    handshakeStatus = engine.getHandshakeStatus();
+                    break;
+                }
+                clientNetData.flip();
+                try {
+                    sslEngineResult = engine.unwrap(clientNetData, clientAppData);
+                    clientNetData.compact();
+                    handshakeStatus = sslEngineResult.getHandshakeStatus();
+                } catch (SSLException sslException) {
+                    engine.closeOutbound();
+                    handshakeStatus = engine.getHandshakeStatus();
+                    break;
+                }
+                switch (sslEngineResult.getStatus()) {
+                    case OK:
+                        break;
+                    case BUFFER_OVERFLOW:
+                        // Will occur when clientAppData's capacity is smaller than the data derived from clientNetData's unwrap.
+                        //FIXME: handle this condition
+                        break;
+                    case BUFFER_UNDERFLOW:
+                        // Will occur either when no data was read from the client or when the clientNetData buffer was too small to hold all client's data.
+                        //FIXME: handle this condition
+                        break;
+                    case CLOSED:
+                        if (engine.isOutboundDone()) {
+                            return false;
+                        } else {
+                            engine.closeOutbound();
+                            handshakeStatus = engine.getHandshakeStatus();
+                            break;
+                        }
+                    default:
+                        throw new IllegalStateException("Invalid SSL status: " + sslEngineResult.getStatus());
+                }
+                break;
+            case NEED_WRAP:
+                serverNetData.clear();
+                try {
+                    sslEngineResult = engine.wrap(serverAppData, serverNetData);
+                    handshakeStatus = sslEngineResult.getHandshakeStatus();
+                } catch (SSLException sslException) {
+                    engine.closeOutbound();
+                    handshakeStatus = engine.getHandshakeStatus();
+                    break;
+                }
+                switch (sslEngineResult.getStatus()) {
+                    case OK :
+                        serverNetData.flip();
+                        while (serverNetData.hasRemaining()) {
+                            Future <Integer> wr = writeToChannelFuture(serverNetData);
+                            try {
+                                wr.get();
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            } catch (ExecutionException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                        break;
+                    case BUFFER_OVERFLOW:
+                        // Will occur if there is not enough space in serverNetData buffer to write all the data that would be generated by the method wrap.
+                        // Since serverNetData is set to session's packet size we should not get to this point because SSLEngine is supposed
+                        // to produce messages smaller or equal to that, but a general handling would be the following:
+                        //FIXME: handle this condition
+                        break;
+                    case BUFFER_UNDERFLOW:
+                        //Buffer underflow occurred after a wrap. I don't think we should ever get here
+                        //FIXME: handle this condition
+                    case CLOSED:
+                        try {
+                            serverNetData.flip();
+                            while (serverNetData.hasRemaining()) {
+                                Future <Integer> wr = writeToChannelFuture(serverNetData);
+                                try {
+                                    wr.get();
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                    //FIXME: handle this condition
+                                } catch (ExecutionException e) {
+                                    e.printStackTrace();
+                                    //FIXME: handle this condition
+                                }
+                            }
+                            // At this point the handshake status will probably be NEED_UNWRAP so we make sure that peerNetData is clear to read.
+                            clientNetData.clear();
+                        } catch (Exception e) {
+                            handshakeStatus = engine.getHandshakeStatus();
+                        }
+                        break;
+                    default:
+                        throw new IllegalStateException("Invalid SSL status: " + sslEngineResult.getStatus());
+                }
+                break;
+            case NEED_TASK:
+                Runnable task;
+                while ((task = engine.getDelegatedTask()) != null) {
+                    System.out.println("run task " + task);
+                    task.run();
+                }
+                handshakeStatus = engine.getHandshakeStatus();
+                break;
+            case FINISHED:
+                setSSLHandshakeRequired(false);
+                setSSLHandshakeSuccess(true);
+                return false;
+            case NOT_HANDSHAKING:
+                // FIXME: handle this condition
+                setSSLHandshakeRequired(false);
+                return false;
+            default:
+                throw new IllegalStateException("Invalid SSL status: " + handshakeStatus);
+        }
+
+        return true;
     }
 
 }
