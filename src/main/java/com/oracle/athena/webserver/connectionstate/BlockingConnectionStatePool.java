@@ -1,6 +1,5 @@
 package com.oracle.athena.webserver.connectionstate;
 
-import javax.net.ssl.SSLContext;
 import java.nio.channels.AsynchronousSocketChannel;
 
 /**
@@ -21,7 +20,7 @@ public class BlockingConnectionStatePool<T extends ConnectionState> extends Conn
      **   if connections are not available. It will still return null if there is an exception.
      */
     @Override
-    public T allocConnectionState(final AsynchronousSocketChannel chan, SSLContext sslcontext) {
+    public T allocConnectionState(final AsynchronousSocketChannel chan) {
         T conn = null;
         try {
             conn = connPoolFreeList.take();
@@ -32,10 +31,4 @@ public class BlockingConnectionStatePool<T extends ConnectionState> extends Conn
         }
         return conn;
     }
-
-    @Override
-    public T allocConnectionState(final AsynchronousSocketChannel chan) {
-        return allocConnectionState(chan, null);
-    }
-
 }
