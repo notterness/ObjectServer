@@ -1,14 +1,13 @@
 package com.oracle.athena.webserver.connectionstate;
 
+import com.google.common.io.BaseEncoding;
+import com.oracle.pic.casper.common.exceptions.InvalidMd5Exception;
 import org.eclipse.jetty.http.BadMessageException;
 import org.eclipse.jetty.http.HostPortHttpField;
 import org.eclipse.jetty.http.HttpField;
 import org.eclipse.jetty.http.HttpStatus;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -102,7 +101,7 @@ public class CasperHttpInfo {
      */
     private String opcRequestId;
 
-    private String opcContentMd5;
+    private String md5_Digest;
 
     /*
      ** Where the object will be placed within Casper:
@@ -259,7 +258,7 @@ public class CasperHttpInfo {
         id = null;
 
         opcRequestId = null;
-        opcContentMd5 = null;
+        md5_Digest = null;
 
         storageTier = "Standard";
 
@@ -328,6 +327,7 @@ public class CasperHttpInfo {
             httpPort = hpfield.getPort();
 
             LOG.info("addHeaderValue() _host: " + httpHost + " _port: " + httpPort);
+            return;
         }
 
         int result = _hdr[_headers].indexOf("Content-Length");
@@ -351,6 +351,26 @@ public class CasperHttpInfo {
                 }
             } catch (NumberFormatException num_ex) {
                 LOG.info("addHeaderValue() " + _val[_headers] + " " + num_ex.getMessage());
+            }
+            return;
+        }
+
+        result = _hdr[_headers].indexOf("Content-MD5");
+        if (result != -1) {
+            LOG.info("md5_Digest(start): " + _val[_headers]);
+
+            try {
+                byte[] bytes = BaseEncoding.base64().decode(_val[_headers]);
+                if (bytes.length != 16) {
+                    throw new InvalidMd5Exception("The value of the Content-MD5 header '" + _val[_headers] +
+                            "' was not the correct length after base-64 decoding");
+                } else {
+                    LOG.info("md5_Digest: " + _val[_headers]);
+                }
+                md5_Digest = _val[_headers];
+            } catch (IllegalArgumentException iaex) {
+                throw new InvalidMd5Exception("The value of the Content-MD5 header '" + _val[_headers] +
+                        "' was not the correct length after base-64 decoding");
             }
         }
     }

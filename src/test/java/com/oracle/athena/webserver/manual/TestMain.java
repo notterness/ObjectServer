@@ -33,6 +33,11 @@ public class TestMain {
         //threadCount.incrementAndGet();
         //waitForTestsToComplete(threadCount);
 
+        ClientTest client_checkMd5 = new ClientTest_CheckMd5("ClientTest_CheckMd5", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        client_checkMd5.start();
+
+        waitForTestsToComplete(threadCount);
+
         ClientTest client_1 = new ClientTest_2("ClientTest_2", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_1.start();
 
@@ -82,8 +87,8 @@ public class TestMain {
 
             waitForTestsToComplete(threadCount);
 
-            //malformedRequest_1.stop();
-            //invalidContentLength.stop();
+            malformedRequest_1.stop();
+            invalidContentLength.stop();
             noContentLength.stop();
 
             failedTestName = client.getFailedTestName();
