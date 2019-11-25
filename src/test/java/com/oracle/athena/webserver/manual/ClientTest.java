@@ -120,7 +120,13 @@ public abstract class ClientTest implements Runnable {
              */
             ByteBuffer msgHdr = memoryAllocator.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE, null);
 
-            String tmp = buildRequestString();
+            String tmp;
+            String Md5_Digest = buildBufferAndComputeMd5();
+            if (Md5_Digest != null) {
+                tmp = buildRequestString(Md5_Digest);
+            } else {
+                tmp = buildRequestString();
+            }
 
             str_to_bb(msgHdr, tmp);
             System.out.println("ClientTest[" + writeConn.getTransactionId() + "] msgHdr " + msgHdr.position() + " " + msgHdr.remaining());
@@ -236,7 +242,16 @@ public abstract class ClientTest implements Runnable {
     /*
      ** These are classes the various tests need to provide to change the test case behavior.
      */
+    String buildBufferAndComputeMd5() {
+        return null;
+    }
+
     abstract String buildRequestString();
+
+    String buildRequestString(final String Md5_Digest) {
+        return null;
+    }
+
 
     void clientTestStep_1() {
         /*

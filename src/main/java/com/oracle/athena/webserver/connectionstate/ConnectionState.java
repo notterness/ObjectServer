@@ -305,6 +305,17 @@ abstract public class ConnectionState {
     ** This is used to add the ConnectionState to the worker thread's execute queue. The
     **   ConnectionState can be added to the immediate execution queue or the delayed
     **   execution queue.
+    **
+    ** The following methods are called by the ServerWorkerThread object under a queue mutex.
+    **   markRemoveFromQueue - This method is used by the ServerWorkerThread to update the queue
+    **     the connection is on when the connection is removed from the queue.
+    **   markAddedToQueue - This method is used when a connection is added to a queue to mark
+    **     which queue it is on.
+    **   isOnWorkQueue - Accessor method
+    **   isOnTimedWaitQueue - Accessor method
+    **
+    ** TODO: Might want to switch to using an enum instead of two different booleans to keep track
+    **   of which queue the connection is on. It will probably clean up the code some.
      */
     public void addToWorkQueue(final boolean delayedExecution) {
         if (delayedExecution) {

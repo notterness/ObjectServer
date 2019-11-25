@@ -175,9 +175,6 @@ public class ServerWorkerThread implements Runnable {
                     LOG.error("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue() unable to add");
                 } else {
                     work.markAddedToQueue(true);
-                    queueSignal.signal();
-
-                    workQueued = true;
                 }
             }
         } finally {
@@ -258,6 +255,11 @@ public class ServerWorkerThread implements Runnable {
                             workQueue.remove(connState);
                             connState.markRemovedFromQueue(false);
                         }
+
+                        /*
+                        ** Make sure this is only modified with the queueMutex lock
+                         */
+                        workQueued = false;
                     }
                 } finally {
                     queueMutex.unlock();
