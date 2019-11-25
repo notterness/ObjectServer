@@ -120,9 +120,6 @@ public class ServerChannelLayer implements Runnable {
 
         System.out.println("ServerChannelLayer[" + (serverClientId * 100) + "] stop()");
 
-        //FIXME: does not work with InitiatorServer
-        serverWorkHandler.stop();
-
         /*
          */
         try {
@@ -144,13 +141,6 @@ public class ServerChannelLayer implements Runnable {
             }
         } catch (InterruptedException int_ex) {
             LOG.info("Wait for threadpool shutdown failed: " + serverConnTransactionId + " " + int_ex.getMessage());
-        }
-
-        /*
-         ** Verify that the MemoryManger has all of its memory back in the free pools
-         */
-        if (this.memoryManager.verifyMemoryPools("ServerChannelLayer")) {
-            System.out.println("ServerChannelLayer[" + (serverClientId * 100) + "] Memory Verification All Passed");
         }
 
         System.out.println("ServerChannelLayer[" + (serverClientId * 100) + "] stop() finished");

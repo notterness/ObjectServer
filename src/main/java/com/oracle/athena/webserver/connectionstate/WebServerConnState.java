@@ -42,7 +42,6 @@ public class WebServerConnState extends ConnectionState {
     private HttpParsePipelineMgr httpParsePipelineMgr;
     private OutOfResourcePipelineMgr outOfResourcePipelineMgr;
     private SSLHandshakePipelineMgr sslHandshakePipelineMgr;
-    private HttpsParsePipelineMgr httpsParsePipelineMgr;
 
     /*
     ** The following variables are used in the ContentReadPipeline class. This is used to determine the
@@ -182,7 +181,6 @@ public class WebServerConnState extends ConnectionState {
 
         httpParsePipelineMgr = new HttpParsePipelineMgr(this);
         sslHandshakePipelineMgr = new SSLHandshakePipelineMgr(this);
-        httpsParsePipelineMgr = new HttpsParsePipelineMgr(this);
         readPipelineMgr = new ContentReadPipelineMgr(this);
         outOfResourcePipelineMgr = new OutOfResourcePipelineMgr(this);
     }
@@ -382,7 +380,7 @@ public class WebServerConnState extends ConnectionState {
             if (isSSL()) {
                 int appBufferSize = engine.getSession().getApplicationBufferSize();
                 int netBufferSize = engine.getSession().getPacketBufferSize();
-                bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_HTTPS_FROM_CHAN,
+                bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_HTTP_FROM_CHAN,
                                                                 appBufferSize, netBufferSize);
             } else {
                 bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_HTTP_FROM_CHAN, MemoryManager.SMALL_BUFFER_SIZE);
@@ -568,23 +566,14 @@ public class WebServerConnState extends ConnectionState {
              */
             bufferState.setReadState(newState);
 
-             switch (currBufferState) {
-                case READ_WAIT_FOR_HTTP:
-                case READ_WAIT_FOR_HTTPS:
-                    httpReadCompleted(bufferState);
-                    break;
-
-                case READ_WAIT_FOR_DATA:
-                    dataReadCompleted(bufferState);
-                    break;
-
-                case READ_WAIT_FOR_SSL_DATA:
-                    sslDataReadCompleted(bufferState);
-                    break;
-
-                default:
-                    LOG.info("ERROR: setReadState() invalid current state: " + bufferState.toString());
-                    break;
+            if (currBufferState == BufferStateEnum.READ_WAIT_FOR_HTTP) {
+                // Read of all the data is completed
+                httpReadCompleted(bufferState);
+            } else if (currBufferState == BufferStateEnum.READ_WAIT_FOR_DATA) {
+                // Read of all the data is completed
+                dataReadCompleted(bufferState);
+            } else {
+                LOG.info("ERROR: setReadState() invalid current state: " + bufferState.toString());
             }
         }
     }

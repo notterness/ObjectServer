@@ -30,16 +30,16 @@ public class BufferState {
         connState = work;
     }
 
-    public void assignBuffer(final ByteBuffer buffer, final BufferStateEnum state) {
-        this.appBuffer = buffer;
-        bufferState = state;
+    public void assignBuffer(final ByteBuffer appBuffer, final BufferStateEnum bufferState) {
+        this.appBuffer = appBuffer;
+        this.bufferState = bufferState;
         updateCount();
     }
 
-    public void assignBuffer(final ByteBuffer userBuffer, ByteBuffer netBuffer, final BufferStateEnum state) {
-        appBuffer = userBuffer;
+    public void assignBuffer(final ByteBuffer appBuffer, ByteBuffer netBuffer, final BufferStateEnum bufferState) {
+        this.appBuffer = appBuffer;
         this.netBuffer = netBuffer;
-        bufferState = state;
+        this.bufferState = bufferState;
         updateCount();
     }
 
@@ -75,10 +75,6 @@ public class BufferState {
             bufferState = BufferStateEnum.READ_WAIT_FOR_HTTP;
         } else if (bufferState == BufferStateEnum.READ_DATA_FROM_CHAN) {
              bufferState = BufferStateEnum.READ_WAIT_FOR_DATA;
-        } else if (bufferState == BufferStateEnum.READ_HTTPS_FROM_CHAN) {
-             bufferState = BufferStateEnum.READ_WAIT_FOR_HTTPS;
-        } else if (bufferState == BufferStateEnum.READ_SSL_DATA_FROM_CHAN) {
-             bufferState = BufferStateEnum.READ_WAIT_FOR_SSL_DATA;
         } else {
              // TODO: Add Assert((bufferState == READ_HTTP_FROM_CHAN) || (bufferState == READ_DATA_FROM_CHAN))
 
@@ -122,25 +118,25 @@ public class BufferState {
     }
 
     /*
-    ** This will copy the contents of the newBuffer into the ByteBuffer associated with the BufferState.
+    ** This will copy the contents of the newBuffer into the appBuffer associated with the BufferState.
      */
     public void copyByteBuffer(ByteBuffer srcBuffer) {
         LOG.info("copyByteBuffer() newBuffer remaining: " + srcBuffer.remaining() + " limit: " +
                 srcBuffer.limit() + " position: " + srcBuffer.position());
 
-        int nBytesToCopy = Math.min(buffer.remaining(), srcBuffer.remaining());
-        if (!buffer.isDirect()) {
-            buffer.put(srcBuffer.array(), srcBuffer.arrayOffset() + srcBuffer.position(), nBytesToCopy);
+        int nBytesToCopy = Math.min(appBuffer.remaining(), srcBuffer.remaining());
+        if (!appBuffer.isDirect()) {
+            appBuffer.put(srcBuffer.array(), srcBuffer.arrayOffset() + srcBuffer.position(), nBytesToCopy);
         } else {
             /*
             ** Need to perform manual copy (Need to handle the allocate direct issue better)
              */
             for (int i = 0; i < nBytesToCopy; i++) {
-                buffer.put(srcBuffer.get(srcBuffer.position() + i));
+                appBuffer.put(srcBuffer.get(srcBuffer.position() + i));
             }
 
-            buffer.limit(nBytesToCopy);
-            buffer.position(0);
+            appBuffer.limit(nBytesToCopy);
+            appBuffer.position(0);
         }
     }
 

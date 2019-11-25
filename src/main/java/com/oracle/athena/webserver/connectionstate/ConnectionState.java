@@ -189,8 +189,6 @@ abstract public class ConnectionState {
      */
     protected BlockingQueue<BufferState> dataReadDoneQueue;
 
-    protected BlockingQueue<BufferState> dataReadDoneUnwrap;
-
     /*
     ** The following is used to indicate that there was a channel error and the connection should be
     **   closed out.
@@ -239,7 +237,6 @@ abstract public class ConnectionState {
 
         dataBufferReadsCompleted = new AtomicInteger(0);
         dataReadDoneQueue = new LinkedBlockingQueue<>(MAX_OUTSTANDING_BUFFERS * 2);
-        dataReadDoneUnwrap = new LinkedBlockingQueue<>(MAX_OUTSTANDING_BUFFERS * 2);
 
         contentBytesToRead = new AtomicLong(0);
         contentBytesAllocated = new AtomicLong(0);
@@ -430,8 +427,11 @@ abstract public class ConnectionState {
 
     private BufferState allocateContentDataBuffers() {
         if (isSSL()) {
-            return bufferStatePool.allocBufferState(this, BufferStateEnum.READ_SSL_DATA_FROM_CHAN,
-                    MemoryManager.MEDIUM_BUFFER_SIZE, MemoryManager.MEDIUM_BUFFER_SIZE);
+            int appBufferSize = engine.getSession().getApplicationBufferSize();
+            int netBufferSize = engine.getSession().getPacketBufferSize();
+
+            return bufferStatePool.allocBufferState(this, BufferStateEnum.READ_DATA_FROM_CHAN,
+                                                     appBufferSize, netBufferSize);
 
         } else {
             return bufferStatePool.allocBufferState(this, BufferStateEnum.READ_DATA_FROM_CHAN, MemoryManager.MEDIUM_BUFFER_SIZE);
@@ -453,13 +453,7 @@ abstract public class ConnectionState {
             if (allocatedDataBuffers < MAX_OUTSTANDING_BUFFERS) {
                 BufferState bufferState = allocateContentDataBuffers();
                 if (bufferState != null) {
-<<<<<<< HEAD
-                    allocatedDataBuffers++;
-=======
-                    LOG.info("ServerWorkerThread[" + connStateId + "] allocClientReadBufferState(2)");
-
                     allocatedDataBuffers += bufferState.count();
->>>>>>> Encrypt response.
                     allocatedDataBufferQueue.add(bufferState);
 
                     LOG.info("ServerWorkerThread[" + connStateId + "] allocClientReadBufferState(2) allocatedDataBuffers: " + allocatedDataBuffers);
@@ -697,6 +691,16 @@ abstract public class ConnectionState {
         int readCount = outstandingDataReadCount.decrementAndGet();
 
         int bytesRead = bufferState.getChannelBuffer().position();
+
+        if (isSSL()) {
+            /* TODO: This will require its own state in the pipeline
+                to handle underflow.  In that case need to wait for another
+                read buffer, combine the buffers and resubmit for unwrap.  Properly
+                unwrapped buffers then proceed to dataReadComplete.
+             */
+            sslUnwrapData(bufferState);
+        }
+
         addDataBuffer(bufferState, bytesRead);
 
         /*
@@ -707,10 +711,6 @@ abstract public class ConnectionState {
         LOG.info("ConnectionState[" + connStateId + "] dataReadCompleted() outstandingReadCount: " + readCount);
 
         addToWorkQueue(false);
-    }
-
-    protected void sslDataReadCompleted(final BufferState bufferState) {
-
     }
 
     /*
@@ -752,60 +752,42 @@ abstract public class ConnectionState {
         determineNextContentRead();
     }
 
-    void addSSLDataBuffer(final BufferState bufferState, final int bytesRead) {
-        try {
-            dataReadDoneUnwrap.put(bufferState);
-        } catch (InterruptedException int_ex) {
-            /*
-             ** TODO: This is an error case and the connection needs to be closed
-             */
-            LOG.info("dataReadCompleted(" + connStateId + ") " + int_ex.getMessage());
-        }
-    }
 
-    public void sslUnwrapData() {
-        ByteBuffer clientAppData;
-        ByteBuffer clientNetData;
-        Iterator<BufferState> iter = dataReadDoneUnwrap.iterator();
+    public void sslUnwrapData(BufferState bufferState) {
+        ByteBuffer clientAppData = bufferState.getBuffer();
+        ByteBuffer clientNetData = bufferState.getNetBuffer();
 
-        while(iter.hasNext()){
-            BufferState bufferState = iter.next();
-            clientAppData = bufferState.getBuffer();
-            clientNetData = bufferState.getNetBuffer();
-            int bytesRead = clientNetData.position();
-            clientNetData.flip();
-            while (clientNetData.hasRemaining()) {
-                clientAppData.clear();
-                SSLEngineResult result;
-                try {
-                    result = engine.unwrap(clientNetData, clientAppData);
-                } catch (SSLException e) {
-                    System.out.println("Unable to unwrap data.");
-                    e.printStackTrace();
+        int bytesRead = clientNetData.position();
+        clientNetData.flip();
+        while (clientNetData.hasRemaining()) {
+            clientAppData.clear();
+            SSLEngineResult result;
+            try {
+                result = engine.unwrap(clientNetData, clientAppData);
+            } catch (SSLException e) {
+                //TODO: Return error to client, log it
+                System.out.println("Unable to unwrap data.");
+                e.printStackTrace();
+                return;
+            }
+            switch (result.getStatus()) {
+                case OK:
+                    //Successfully unwrapped received data
+                    break;
+                case BUFFER_OVERFLOW:
+                    //TODO: destination buffer not large enough;
+                    break;
+                case BUFFER_UNDERFLOW:
+                    //TODO: no data was read or the TLS packet was incomplete.
+                    break;
+                case CLOSED:
+                    //TODO: Client wants to close connection
                     return;
-                }
-                switch (result.getStatus()) {
-                    case OK:
-                        System.out.println("Unwrapped received data!");
-                        iter.remove();
-                        // Add this data buffer
-                        addDataBuffer(bufferState, bytesRead);
-                        break;
-                    case BUFFER_OVERFLOW:
-                        //    clientAppData = enlargeApplicationBuffer(engine, peerAppData);
-                        break;
-                    case BUFFER_UNDERFLOW:
-                        // no data was read or the TLS packet was incomplete.
-                        break;
-                    case CLOSED:
-                        //("Client wants to close connection...");
-                        //closeConnection(socketChannel, engine);
-                        return;
-                    default:
-                        //Log this state that can't happen
-                        System.out.println("Illegal state: " + result.getStatus().toString());
-                        break;
-                }
+                default:
+                    //Log this unknown state, return error to client
+                    LOG.error("ConnectionState[" + connStateId + "] sslUnwrapData() state: " + result.getStatus() +
+                              " bytesRead: " + bytesRead);
+                    break;
             }
         }
     }
@@ -845,10 +827,6 @@ abstract public class ConnectionState {
 
     public void resetDataBufferReadsCompleted() {
         dataBufferReadsCompleted.set(0);
-    }
-
-    public int getDataBuffersUnwrapRequired() {
-        return dataReadDoneUnwrap.size();
     }
 
     /*
@@ -1041,7 +1019,8 @@ abstract public class ConnectionState {
 
 
     /*
-     ** Same as above, returns a future.
+     ** If buffer is clear, read from channel and return future.  Otherwise
+	 ** return completed future.
      */
     public Future<Integer> readFromChannelFuture(final ByteBuffer buffer) {
         AsynchronousSocketChannel readChan;

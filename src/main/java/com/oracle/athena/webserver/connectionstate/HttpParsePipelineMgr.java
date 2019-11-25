@@ -2,7 +2,6 @@ package com.oracle.athena.webserver.connectionstate;
 
 import org.eclipse.jetty.http.HttpStatus;
 
-import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.statemachine.StateEntry;
 import com.oracle.athena.webserver.statemachine.StateMachine;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
@@ -29,8 +28,7 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
     private Function httpParseAllocHttpBuffer = new Function<WebServerConnState, StateQueueResult>() {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
-            int numBuffersAllocated = wsConn.allocHttpBufferState();
-            if (numBuffersAllocated == 0){
+            if (wsConn.allocHttpBufferState() == 0){
                 return StateQueueResult.STATE_RESULT_WAIT;
             }
             else {
@@ -246,7 +244,7 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         }
 
         /*
-         ** Are there completed reads, ready to unwrap
+         ** Are there completed reads ready to unwrap
          */
         if (connectionState.httpBuffersReadyToUnwrap()) {
             return ConnectionStateEnum.UNWRAP_HTTP_BUFFER;

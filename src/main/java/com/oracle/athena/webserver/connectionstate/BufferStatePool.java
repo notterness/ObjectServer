@@ -71,9 +71,16 @@ public class BufferStatePool {
                 netBuffer = memoryAllocator.poolMemAlloc(netBufferSize, memAvailCb);
                 if (netBuffer != null) {
                     bufferState.assignBuffer(appBuffer, netBuffer, initialState);
+
+                    if (!inUseList.offer(bufferState)) {
+                        LOG.error("ConnectionState[" + connState.getConnStateId() + "] Unable to add to inUseList");
+                    }
+
                     return bufferState;
                 }else {
-                    // all or nothing
+                    /* TODO: May need composition strategy (hold this buffer,
+					   wait for the second buffer).
+					 */
                     memoryAllocator.poolMemFree(appBuffer);
                 }
             }
@@ -90,8 +97,11 @@ public class BufferStatePool {
 
         ByteBuffer buffer = bufferState.getBuffer();
         memoryAllocator.poolMemFree(buffer);
-
-        bufferState.assignBuffer(null, BufferStateEnum.INVALID_STATE);
+        buffer = bufferState.getNetBuffer();
+        if (buffer != null) {
+            memoryAllocator.poolMemFree(buffer);
+        }
+        bufferState.assignBuffer(null, null, BufferStateEnum.INVALID_STATE);
 
         inUseList.remove(bufferState);
     }
