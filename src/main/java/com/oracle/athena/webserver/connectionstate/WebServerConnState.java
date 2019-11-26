@@ -5,6 +5,9 @@ import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.server.StatusWriteCompletion;
 import com.oracle.athena.webserver.server.WriteConnection;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
+import com.oracle.pic.casper.webserver.api.auth.CasperOperation;
+import com.oracle.pic.casper.webserver.api.ratelimit.EmbargoV3Operation;
+import com.oracle.pic.casper.webserver.server.WebServerAuths;
 import org.eclipse.jetty.http.HttpStatus;
 
 import javax.net.ssl.*;
@@ -711,6 +714,24 @@ public class WebServerConnState extends ConnectionState {
         httpHeaderParsed.set(true);
 
         contentBytesToRead.set(contentLength);
+    }
+
+    /*
+    ** This is used to perform the Embargo checking for this request
+     */
+    void checkEmbargo(WebServerAuths auths) {
+        final String namespace = casperHttpInfo.getNamespace();
+        final String bucket = casperHttpInfo.getBucket();
+        final String object = casperHttpInfo.getObject();
+
+        final EmbargoV3Operation embargoV3Operation = EmbargoV3Operation.builder()
+                .setApi(EmbargoV3Operation.Api.V2)
+                .setOperation(CasperOperation.PUT_OBJECT)
+                .setNamespace(namespace)
+                .setBucket(bucket)
+                .setObject(object)
+                .build();
+        auths.getEmbargoV3().enter(embargoV3Operation);
     }
 
     /*
