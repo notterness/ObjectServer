@@ -192,7 +192,7 @@ public class ExtractsRequestMetadata {
      * NB: This has a potential side effect: it removes X-Vcn-Id header from Eagle requests to ensure
      * they cannot affect other code.*
      *
-     * @param request The client's request
+     * @param headers The client's request headers
      * @return The VCN ID or null if none was provided.
      */
     @Nullable

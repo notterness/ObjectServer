@@ -52,20 +52,18 @@ public class Utils {
         PRESERVED_CONTENT_HEADERS = builder.build();
     }
 
-    public static MetricScope getMetricScope(ContainerRequest request, TracingConfiguration tracingConfiguration, String opcRequestId) {
+    public static MetricScope getMetricScope(String method, String realIp, String requestURI, TracingConfiguration tracingConfiguration, String opcRequestId) {
         final StaticHostInfoProvider staticHostInfoProvider = new DefaultStaticHostInfoProvider("web-server", "docker");
-        String method = request.getMethod();
 
-        final String realIp = request.getHeaderString(CommonHeaders.X_REAL_IP.toString());
         Tracer tracer = new TracingModule().tracer(tracingConfiguration,
                 staticHostInfoProvider);
-        Span span = tracer.buildSpan(request.getMethod())
+        Span span = tracer.buildSpan(method)
                 .ignoreActiveSpan() //this is super important since we are not thread-per-request
                 .startManual();
 
         return MetricScope.create(method, span, tracer)
                 .annotate("method", method)
-                .annotate("path", casperSanitize(getPathAndQuery(request.getRequestUri().toString())))
+                .annotate("path", casperSanitize(getPathAndQuery(requestURI)))
                 // TODO : get client host and port
                 .annotate("client", "unknown" + ":" + 7000)
                 .annotate("clientIp", "unknown")
