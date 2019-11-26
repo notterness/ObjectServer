@@ -4,10 +4,14 @@ import com.oracle.athena.webserver.statemachine.StateEntry;
 import com.oracle.athena.webserver.statemachine.StateMachine;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
 import org.eclipse.jetty.http.HttpStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.function.Function;
 
 public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
+
+    private static final Logger LOG = LoggerFactory.getLogger(BufferState.class);
 
     private WebServerConnState connectionState;
 
@@ -61,6 +65,7 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
     private Function contentReadConnFinished = new Function<WebServerConnState, StateQueueResult>() {
         @Override
         public StateQueueResult apply(WebServerConnState wsConn) {
+            wsConn.releaseContentBuffers();
             initialStage = true;
             wsConn.reset();
             return StateQueueResult.STATE_RESULT_FREE;
@@ -105,6 +110,27 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         }
     };
 
+    private Function contentCalculateMd5 = new Function<WebServerConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(WebServerConnState wsConn) {
+            /*
+            **  the MD5 threads are busy - requeue
+            if (wsConn.sendBuffersToMd5Worker() == 0) {
+                return StateQueueResult.STATE_RESULT_REQUEUE;
+            }
+            */
+            wsConn.sendBuffersToMd5Worker();
+            return StateQueueResult.STATE_RESULT_WAIT;
+        }
+    };
+
+    private Function contentMd5Complete = new Function<WebServerConnState, StateQueueResult>() {
+        @Override
+        public StateQueueResult apply(WebServerConnState wsConn) {
+            wsConn.md5CalculateComplete();
+            return StateQueueResult.STATE_RESULT_CONTINUE;
+        }
+    };
 
     ContentReadPipelineMgr(WebServerConnState connState) {
 
@@ -133,12 +159,25 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         contentReadStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_READ_ERROR, new StateEntry(contentReadProcessReadError));
         contentReadStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND, new StateEntry(contentReadProcessFinalResponseSend));
         contentReadStateMachine.addStateEntry(ConnectionStateEnum.RELEASE_CONTENT_BUFFERS, new StateEntry(contentReadReleaseBuffers));
+        contentReadStateMachine.addStateEntry(ConnectionStateEnum.MD5_CALCULATE, new StateEntry(contentCalculateMd5));
+        contentReadStateMachine.addStateEntry(ConnectionStateEnum.MD5_CALCULATE_COMPLETE, new StateEntry(contentMd5Complete));
     }
 
     /*
      ** This determines the pipeline stages used to read in the content data.
      */
     public ConnectionStateEnum nextPipelineStage() {
+
+        /*
+         ** First setup to perform the content reads. This is required since the buffer used to read in the
+         **   HTTP headers may have also had data for the content at the end of it.
+         ** The is the last thing to check prior to having the channel wait as it should only happen once.
+         */
+        if (initialStage) {
+            initialStage = false;
+
+            return ConnectionStateEnum.SETUP_CONTENT_READ;
+        }
 
         /*
          ** Are there outstanding buffers to be allocated. If the code had attempted to allocate
@@ -163,10 +202,35 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
             return ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND;
         }
 
-        if (connectionState.getDataBufferReadsCompleted() > 0) {
+        /*
+         ** Check if there are buffers in error that need to be processed.
+         */
+        if (connectionState.readErrorQueueNotEmpty()) {
+            return ConnectionStateEnum.PROCESS_READ_ERROR;
+        }
+
+        /*
+         ** Check if there was a channel error and cleanup if there are no outstanding
+         **   reads. The channel failure will be set in the PROCESS_READ_ERROR state.
+         */
+        if (connectionState.hasChannelFailed() && connectionState.getDataBufferDigestSent() == 0) {
+            return ConnectionStateEnum.CONN_FINISHED;
+        }
+
+        LOG.info("getDataBufferReads" + connectionState.getDataBufferReadsCompleted());
+        LOG.info("getDataBufferDigestDONE" + connectionState.getDataBufferDigestCompleted());
+        if (connectionState.getDataBufferReadsCompleted() > 0 ) {
             return ConnectionStateEnum.MD5_CALCULATE;
         }
 
+        LOG.info("hasAllContent " + connectionState.hasAllContentBeenRead());
+        LOG.info("getDigestComplete +" + connectionState.getDigestComplete());
+        LOG.info("getDigestBuffersComplete +" + connectionState.getDataBufferDigestCompleted());
+        if (connectionState.hasAllContentBeenRead() && connectionState.getDigestComplete() == false &&
+            connectionState.getDataBufferReadsCompleted() == 0 &&
+            connectionState.getDataBufferDigestSent() == 0 ) {
+            return ConnectionStateEnum.MD5_CALCULATE_COMPLETE;
+        }
         /*
          ** This is where the processing of the content data buffers will start. For now, this just
          **   goes directly to the release content buffers stage, which only releases the buffers back to the free
@@ -194,23 +258,6 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         }
 
         /*
-         ** Check if there are buffers in error that need to be processed.
-         */
-        if (connectionState.readErrorQueueNotEmpty()) {
-            return ConnectionStateEnum.PROCESS_READ_ERROR;
-        }
-
-        /*
-         ** Check if there was a channel error and cleanup if there are no outstanding
-         **   reads. The channel failure will be set in the PROCESS_READ_ERROR state.
-         */
-        if (connectionState.hasChannelFailed()) {
-            if (connectionState.getDataBufferReadsCompleted() == 0) {
-                return ConnectionStateEnum.CONN_FINISHED;
-            }
-        }
-
-        /*
          ** First setup to perform the content reads. This is required since the buffer used to read in the
          **   HTTP headers may have also had data for the content at the end of it.
          ** The is the last thing to check prior to having the channel wait as it should only happen once.
@@ -230,6 +277,10 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
 
         do {
             nextVerb = nextPipelineStage();
+            if (nextVerb == ConnectionStateEnum.MD5_CALCULATE && initialStage) {
+                LOG.info("didn't get to initialStage");
+            }
+            LOG.info("nextVert " + nextVerb);
             result = contentReadStateMachine.stateMachineExecute(connectionState, nextVerb);
 
         } while (result == StateQueueResult.STATE_RESULT_CONTINUE);

@@ -40,6 +40,7 @@ abstract public class ServerChannelLayer implements Runnable {
 
     protected MemoryManager memoryManager;
 
+    protected ServerDigestThreadPool digestThreadPool;
 
     //FIXME: should become a local variable of the run method
     private boolean exitThreads;
@@ -63,6 +64,8 @@ abstract public class ServerChannelLayer implements Runnable {
 
         this.memoryManager = new MemoryManager();
 
+        this.digestThreadPool = new ServerDigestThreadPool(2,10);
+
         serverConnTransactionId = 0x5555;
 
         exitThreads = false;
@@ -79,6 +82,7 @@ abstract public class ServerChannelLayer implements Runnable {
 
         //FIXME: does not work with InitiatorServer
         serverWorkHandler.stop();
+        digestThreadPool.stop();
 
         /*
          */

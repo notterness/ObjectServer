@@ -5,11 +5,19 @@ import com.oracle.athena.webserver.connectionstate.BufferState;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ServerDigestThread implements Runnable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ServerWorkerThread.class);
+
     private final static int SERVER_DIGEST_COUNT = 2;
+
     private BlockingQueue<BufferState> digestWorkQ;
+
     private boolean running;
+
     private int threadId;
 
     public ServerDigestThread() {
@@ -26,8 +34,13 @@ public class ServerDigestThread implements Runnable {
                 BufferState bufferWork = digestWorkQ.poll(100, TimeUnit.MILLISECONDS);
 
                 if (bufferWork != null) {
-                    calculateDigest(bufferWork);
-                    bufferWork.setBufferStateDigestDone();
+                    bufferWork.bufferUpdateDigest();
+                    LOG.info("buffer " + bufferWork + " update digest");
+                    /*
+                     ** FIXME PS - account for queue full.
+                     */
+                    digestWorkQ.remove(bufferWork);
+                    bufferWork.bufferCompleteDigestCb();
                 }
             }
         } catch (InterruptedException e) {
@@ -37,17 +50,13 @@ public class ServerDigestThread implements Runnable {
 
     void stopServerDigestThread() {
         running = false;
-
     }
 
     public boolean addDigestWork(BufferState bufferState) {
         boolean isQueued;
         isQueued = digestWorkQ.offer(bufferState);
+        LOG.info("isQueued " + isQueued);
 
         return isQueued;
     }
-
-    public void calculateDigest(BufferState bufferState) {
-    }
-
 }

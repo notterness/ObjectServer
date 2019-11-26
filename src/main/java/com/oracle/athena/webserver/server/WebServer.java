@@ -20,11 +20,13 @@ public class WebServer extends ServerChannelLayer {
         **   the out of connections handling.
          */
         serverWorkHandler = new ServerLoadBalancer(2, workerThreads, memoryManager,
-                (serverClientId * 100));
+                (serverClientId * 100), digestThreadPool);
         serverWorkHandler.start();
 
         serverAcceptThread = new Thread(this);
         serverAcceptThread.start();
+
+        digestThreadPool.start();
     }
 }
 

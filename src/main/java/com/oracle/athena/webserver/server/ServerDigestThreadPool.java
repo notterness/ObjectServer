@@ -38,7 +38,7 @@ public class ServerDigestThreadPool {
         digestThreadPool.shutdown();
     }
 
-    protected boolean addDigestWorkToThread(BufferState bufState) {
+    public boolean addDigestWorkToThread(BufferState bufState) {
         int currentThread = lastCurrentThread;
         boolean isQueuedToDigestQ = false;
 

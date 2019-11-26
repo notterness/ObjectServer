@@ -125,7 +125,6 @@ public class WebServerConnState extends ConnectionState {
      */
     private ConnectionStatePool<WebServerConnState> connectionStatePool;
 
-    private Md5Digest md5Digest;
 
     public WebServerConnState(final ConnectionStatePool<WebServerConnState> pool, final int uniqueId) {
 
@@ -589,6 +588,7 @@ public class WebServerConnState extends ConnectionState {
                     bufferState.copyByteBuffer(remainingBuffer);
 
                     int bytesRead = remainingBuffer.limit();
+                    LOG.info("HTTP buffer has read data");
                     addDataBuffer(newBufferState, bytesRead);
                 }
 
@@ -870,10 +870,21 @@ public class WebServerConnState extends ConnectionState {
      */
     void releaseContentBuffers() {
         BufferState bufferState;
-        Iterator<BufferState> iter = dataReadDoneQueue.iterator();
+        Iterator<BufferState> iter = dataMd5DoneQueue.iterator();
         while (iter.hasNext()) {
             bufferState = iter.next();
             iter.remove();
+
+            bufferStatePool.freeBufferState(bufferState);
+
+            int digestCompleted = dataBufferDigestCompleted.decrementAndGet();
+            LOG.info("WebServerConnState[" + connStateId + "] releaseContentBuffers() " + digestCompleted);
+        }
+
+        Iterator<BufferState> iterRead = dataReadDoneQueue.iterator();
+        while (iterRead.hasNext()) {
+            bufferState = iterRead.next();
+            iterRead.remove();
 
             bufferStatePool.freeBufferState(bufferState);
 
@@ -934,5 +945,4 @@ public class WebServerConnState extends ConnectionState {
          */
         connectionStatePool.freeConnectionState(this);
     }
-
 }

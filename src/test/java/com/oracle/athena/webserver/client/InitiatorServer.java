@@ -2,6 +2,7 @@ package com.oracle.athena.webserver.client;
 
 import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.server.ServerChannelLayer;
+import com.oracle.athena.webserver.server.ServerDigestThreadPool;
 
 public class InitiatorServer extends ServerChannelLayer {
 
@@ -11,19 +12,21 @@ public class InitiatorServer extends ServerChannelLayer {
     private int numberWorkerThreads;
 
     private MemoryManager memoryManager;
+    private ServerDigestThreadPool digestThreadPool;
 
-    InitiatorServer(int workerThreads, int listenPort, int uniqueId) {
+    InitiatorServer(int workerThreads, int listenPort, int uniqueId){
         super(workerThreads, listenPort, uniqueId);
 
         this.numberWorkerThreads = workerThreads;
         this.clientId = uniqueId;
 
         this.memoryManager = new MemoryManager();
+        this.digestThreadPool = new ServerDigestThreadPool(2, 10);
     }
 
     public void start() {
         serverWorkHandler = new InitiatorLoadBalancer(ServerChannelLayer.WORK_QUEUE_SIZE, this.numberWorkerThreads, this.memoryManager,
-                (clientId * 100));
+                (clientId * 100), digestThreadPool);
         serverWorkHandler.start();
 
         serverAcceptThread = new Thread(this);

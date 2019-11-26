@@ -14,6 +14,7 @@ import java.nio.channels.CompletionHandler;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.ListIterator;
 import java.util.concurrent.BlockingQueue;
@@ -112,8 +113,9 @@ abstract public class ConnectionState {
     protected AtomicInteger dataBufferReadsCompleted;
     private AtomicBoolean contentAllRead;
     protected AtomicInteger dataBufferDigestCompleted;
-
+    protected AtomicInteger dataBufferDigestSent;
     AtomicBoolean bufferAllocationFailed;
+    AtomicBoolean digestComplete;
 
 
     /*
@@ -172,6 +174,12 @@ abstract public class ConnectionState {
     protected BlockingQueue<BufferState> dataReadDoneQueue;
 
     /*
+     ** The following is used to keep track of BufferState that have completed their reads. Items are placed
+     **   on this queue from the NIO.2 callback thread, so it must be thread safe.
+     */
+    protected BlockingQueue<BufferState> dataMd5DoneQueue;
+
+    /*
     ** The following is used to indicate that there was a channel error and the connection should be
     **   closed out.
     ** NOTE: This does not need to be an AtomicBoolean as the setter and getters all run within the
@@ -193,6 +201,8 @@ abstract public class ConnectionState {
      */
     protected TimeoutChecker timeoutChecker;
 
+    protected Md5Digest md5Digest;
+
 
     public ConnectionState(final int uniqueId) {
         outstandingDataReadCount = new AtomicInteger(0);
@@ -204,7 +214,7 @@ abstract public class ConnectionState {
 
         /*
         ** When the connection begins, there cannot be a channelError.
-         */
+         */;
         channelError = false;
 
         connOnDelayedQueue = false;
@@ -220,12 +230,16 @@ abstract public class ConnectionState {
         dataBufferReadsCompleted = new AtomicInteger(0);
         dataReadDoneQueue = new LinkedBlockingQueue<>(MAX_OUTSTANDING_BUFFERS * 2);
 
+        dataMd5DoneQueue = new LinkedBlockingQueue<>(MAX_OUTSTANDING_BUFFERS * 2);
+
         contentBytesToRead = new AtomicLong(0);
         contentBytesAllocated = new AtomicLong(0);
         contentBytesRead = new AtomicLong(0);
         contentAllRead = new AtomicBoolean(false);
 
         dataBufferDigestCompleted = new AtomicInteger(0);
+        digestComplete  = new AtomicBoolean(false);
+        dataBufferDigestSent = new AtomicInteger(0);
 
         /*
         ** This queue is used to keep track of all the buffers that have returned a read error. It is used
@@ -246,6 +260,8 @@ abstract public class ConnectionState {
          */
         connChan = null;
         connChanMutex = new Object();
+
+        md5Digest = null;
     }
 
     /*
@@ -288,6 +304,7 @@ abstract public class ConnectionState {
         bufferStatePool = workerThread.getBufferStatePool();
         writeThread = workerThread.getWriteThread();
         resultBuilder = workerThread.getResultBuilder();
+        md5Digest = new Md5Digest();
 
         timeoutChecker.updateTime();
     }
@@ -615,8 +632,13 @@ abstract public class ConnectionState {
         contentBytesAllocated.set(0);
         contentBytesRead.set(0);
         contentAllRead.set(false);
+        digestComplete.set(false);
+        dataBufferDigestCompleted.set(0);
+        dataBufferDigestSent.set(0);
 
         httpParsingError.set(false);
+        md5Digest = null;
+        LOG.info("md5 done " + dataMd5DoneQueue.size());
     }
 
 
@@ -671,13 +693,16 @@ abstract public class ConnectionState {
 
         try {
             dataReadDoneQueue.put(bufferState);
+            bufferState.setReadState(BufferStateEnum.READ_DONE);
             readCompletedCount = dataBufferReadsCompleted.incrementAndGet();
+            LOG.info("addDataBuffer got here  dataBufferReadsComleted" + dataBufferReadsCompleted.get());
         } catch (InterruptedException int_ex) {
             /*
              ** TODO: This is an error case and the connection needs to be closed
              */
             LOG.info("dataReadCompleted(" + connStateId + ") " + int_ex.getMessage());
             readCompletedCount = dataBufferReadsCompleted.get();
+            LOG.info("addDataBuffer got here  dataBufferReadsComleted" + dataBufferReadsCompleted.get());
         }
 
         LOG.info("ConnectionState[" + connStateId + "] addDataBuffer() readCompletedCount: " + readCompletedCount +
@@ -690,6 +715,7 @@ abstract public class ConnectionState {
     ** This returns the number of data buffer reads that have completed (these are the reads to bring in the content)
      */
     public int getDataBufferReadsCompleted() {
+        LOG.info("get got here  dataBufferReadsComleted" + dataBufferReadsCompleted.get());
         return dataBufferReadsCompleted.get();
     }
 
@@ -697,6 +723,13 @@ abstract public class ConnectionState {
         dataBufferReadsCompleted.set(0);
     }
 
+    public int getDataBufferDigestCompleted() {
+        return dataBufferDigestCompleted.get();
+    }
+
+    public int getDataBufferDigestSent() {
+        return dataBufferDigestSent.get();
+    }
     /*
     ** This method determines what to do next with content buffers. It determines how much of the
     **   data being sent has aleady been read in and determines how many buffers (if any) are needed
@@ -885,6 +918,68 @@ abstract public class ConnectionState {
         });  // end of chan.read()
     }
 
+    public void updateDigest(ByteBuffer byteBuffer) {
+        md5Digest.digestByteBuffer(byteBuffer);
+        dataBufferDigestCompleted.incrementAndGet();
+    }
+
+    public int sendBuffersToMd5Worker() {
+        int numSent = 0;
+        Iterator<BufferState> iter = dataReadDoneQueue.iterator();
+        BufferState bufferState;
+
+        while (iter.hasNext()) {
+            bufferState = iter.next();
+            LOG.info("iterating on read done " + bufferState.getBufferState());
+            if (bufferState.getBufferState() == BufferStateEnum.READ_DONE ||
+                bufferState.getBufferState() == BufferStateEnum.READ_DATA_DONE ) {
+                iter.remove();
+                dataBufferReadsCompleted.decrementAndGet();
+                LOG.info("send got here  dataBufferReadsComleted" + dataBufferReadsCompleted.get());
+                if (workerThread.getServerDigestThreadPool().addDigestWorkToThread(bufferState)) {
+                    bufferState.setBufferStateDigestWait();
+                    dataBufferDigestSent.incrementAndGet();
+                    numSent++;
+                }
+            }
+        }
+        return numSent;
+    }
+
+    public void md5CalculateComplete() {
+        String dataDigestString = md5Digest.getFinalDigest();
+        LOG.info("md5Digest " + dataDigestString );
+        digestComplete.set(true);
+    }
+
+    public void md5WorkerCallback(BufferState bufferState) {
+        LOG.info("add buffer comlete work");
+        workerThread.addBufferCompleteWork(bufferState);
+    }
+
+    void md5BufferWorkComplete(BufferState bufferState) {
+        dataMd5DoneQueue.add(bufferState);
+        dataBufferDigestSent.decrementAndGet();
+        addToWorkQueue(false);
+    }
+
+    boolean getDigestComplete() {
+        return digestComplete.get();
+    }
+
+    private void str_to_bb(ByteBuffer out, String in) {
+        Charset charset = StandardCharsets.UTF_8;
+        CharsetEncoder encoder = charset.newEncoder();
+
+        try {
+            boolean endOfInput = true;
+
+            encoder.encode(CharBuffer.wrap(in), out, endOfInput);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
     /*
      ** DEBUG FUNCTIONS BELOW
      */
@@ -908,21 +1003,8 @@ abstract public class ConnectionState {
         buffer.limit(limit);
     }
 
-    private void str_to_bb(ByteBuffer out, String in) {
-        Charset charset = StandardCharsets.UTF_8;
-        CharsetEncoder encoder = charset.newEncoder();
-
-        try {
-            boolean endOfInput = true;
-
-            encoder.encode(CharBuffer.wrap(in), out, endOfInput);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-    }
 
     private String bb_to_str(ByteBuffer buffer) {
         return StandardCharsets.UTF_8.decode(buffer).toString();
     }
-
 }
