@@ -38,6 +38,9 @@ public class ServerDigestThreadPool {
         digestThreadPool.shutdown();
     }
 
+    /*
+     ** simple round robin add to the digest thread for now.
+     */
     public boolean addDigestWorkToThread(BufferState bufState) {
         int currentThread = lastCurrentThread;
         boolean isQueuedToDigestQ = false;

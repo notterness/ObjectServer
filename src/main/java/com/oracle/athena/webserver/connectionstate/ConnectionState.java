@@ -292,9 +292,6 @@ abstract public class ConnectionState {
         sslHandshakeSuccess = false;
         sslBuffersNeeded = false;
         handshakeStatus = SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING;
-
-
-        md5Digest = null;
     }
 
     /*
@@ -700,7 +697,6 @@ abstract public class ConnectionState {
 
         httpParsingError.set(false);
         md5Digest = null;
-        LOG.info("md5 done " + dataMd5DoneQueue.size());
     }
 
 
@@ -767,14 +763,12 @@ abstract public class ConnectionState {
             dataReadDoneQueue.put(bufferState);
             bufferState.setReadState(BufferStateEnum.READ_DONE);
             readCompletedCount = dataBufferReadsCompleted.incrementAndGet();
-            LOG.info("addDataBuffer got here  dataBufferReadsComleted" + dataBufferReadsCompleted.get());
         } catch (InterruptedException int_ex) {
             /*
              ** TODO: This is an error case and the connection needs to be closed
              */
             LOG.info("dataReadCompleted(" + connStateId + ") " + int_ex.getMessage());
             readCompletedCount = dataBufferReadsCompleted.get();
-            LOG.info("addDataBuffer got here  dataBufferReadsComleted" + dataBufferReadsCompleted.get());
         }
 
         LOG.info("ConnectionState[" + connStateId + "] addDataBuffer() readCompletedCount: " + readCompletedCount +
@@ -853,7 +847,6 @@ abstract public class ConnectionState {
     ** This returns the number of data buffer reads that have completed (these are the reads to bring in the content)
      */
     public int getDataBufferReadsCompleted() {
-        LOG.info("get got here  dataBufferReadsComleted" + dataBufferReadsCompleted.get());
         return dataBufferReadsCompleted.get();
     }
 
@@ -1098,12 +1091,10 @@ abstract public class ConnectionState {
 
         while (iter.hasNext()) {
             bufferState = iter.next();
-            LOG.info("iterating on read done " + bufferState.getBufferState());
             if (bufferState.getBufferState() == BufferStateEnum.READ_DONE ||
                 bufferState.getBufferState() == BufferStateEnum.READ_DATA_DONE ) {
                 iter.remove();
                 dataBufferReadsCompleted.decrementAndGet();
-                LOG.info("send got here  dataBufferReadsComleted" + dataBufferReadsCompleted.get());
                 if (workerThread.getServerDigestThreadPool().addDigestWorkToThread(bufferState)) {
                     bufferState.setBufferStateDigestWait();
                     dataBufferDigestSent.incrementAndGet();

@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory;
 
 public class ServerDigestThread implements Runnable {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ServerWorkerThread.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ServerDigestThread.class);
 
     private final static int SERVER_DIGEST_COUNT = 2;
 
@@ -34,12 +34,18 @@ public class ServerDigestThread implements Runnable {
                 BufferState bufferWork = digestWorkQ.poll(100, TimeUnit.MILLISECONDS);
 
                 if (bufferWork != null) {
+                    /*
+                     ** compute the digest for the buffer.
+                     */
                     bufferWork.bufferUpdateDigest();
-                    LOG.info("buffer " + bufferWork + " update digest");
                     /*
                      ** FIXME PS - account for queue full.
                      */
                     digestWorkQ.remove(bufferWork);
+
+                    /*
+                     **  this call queues the buffer back to the server worker. Changes to the state are made on that thread.
+                     */
                     bufferWork.bufferCompleteDigestCb();
                 }
             }
@@ -52,10 +58,12 @@ public class ServerDigestThread implements Runnable {
         running = false;
     }
 
+    /*
+     ** if there is no room here, we need to push this back to the server worker thread.
+     */
     public boolean addDigestWork(BufferState bufferState) {
         boolean isQueued;
         isQueued = digestWorkQ.offer(bufferState);
-        LOG.info("isQueued " + isQueued);
 
         return isQueued;
     }

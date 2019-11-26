@@ -11,7 +11,7 @@ import java.util.function.Function;
 
 public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
 
-    private static final Logger LOG = LoggerFactory.getLogger(BufferState.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ContentReadPipelineMgr.class);
 
     private WebServerConnState connectionState;
 
@@ -217,15 +217,10 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
             return ConnectionStateEnum.CONN_FINISHED;
         }
 
-        LOG.info("getDataBufferReads" + connectionState.getDataBufferReadsCompleted());
-        LOG.info("getDataBufferDigestDONE" + connectionState.getDataBufferDigestCompleted());
         if (connectionState.getDataBufferReadsCompleted() > 0 ) {
             return ConnectionStateEnum.MD5_CALCULATE;
         }
 
-        LOG.info("hasAllContent " + connectionState.hasAllContentBeenRead());
-        LOG.info("getDigestComplete +" + connectionState.getDigestComplete());
-        LOG.info("getDigestBuffersComplete +" + connectionState.getDataBufferDigestCompleted());
         if (connectionState.hasAllContentBeenRead() && connectionState.getDigestComplete() == false &&
             connectionState.getDataBufferReadsCompleted() == 0 &&
             connectionState.getDataBufferDigestSent() == 0 ) {
@@ -277,10 +272,6 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
 
         do {
             nextVerb = nextPipelineStage();
-            if (nextVerb == ConnectionStateEnum.MD5_CALCULATE && initialStage) {
-                LOG.info("didn't get to initialStage");
-            }
-            LOG.info("nextVert " + nextVerb);
             result = contentReadStateMachine.stateMachineExecute(connectionState, nextVerb);
 
         } while (result == StateQueueResult.STATE_RESULT_CONTINUE);

@@ -89,7 +89,6 @@ public class ServerWorkerThread implements Runnable {
         resultBuilder = new BuildHttpResult();
         writeThread = new WriteConnThread(threadId);
         countDownLatch = new CountDownLatch(1);
-
     }
 
     // FIXME CTSA: expose timeout and units if applicable
@@ -237,7 +236,6 @@ public class ServerWorkerThread implements Runnable {
         }
     }
 
-
     /*
     ** This is the method that does the actual work for this thread. It handles multiple
     **   connections at once.
@@ -255,7 +253,6 @@ public class ServerWorkerThread implements Runnable {
             writeConnThread.start();
             while (!stopReceived) {
                 ConnectionState connections[] = new ConnectionState[0];
-
 
                 queueMutex.lock();
                 try {
@@ -329,7 +326,6 @@ public class ServerWorkerThread implements Runnable {
     public void addBufferCompleteWork(BufferState bufferState) {
         // FIXME PS: need to look at handling being full.
         boolean isQueuedtoComplete = bufferCompleteQ.offer(bufferState);
-        LOG.info("isQueuedToComplete " + isQueuedtoComplete);
     }
 
     private void processBufferCompleteQ() {
@@ -338,7 +334,6 @@ public class ServerWorkerThread implements Runnable {
         completedBuffers = bufferCompleteQ.toArray(completedBuffers);
         for (BufferState bufferState : completedBuffers) {
             bufferCompleteQ.remove();
-            LOG.info("ServerWorkerThread(" +threadId + ") buffer complete");
             bufferState.bufferDigestComplete();
         }
     }

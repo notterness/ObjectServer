@@ -30,6 +30,7 @@ public class WebServer {
     public WebServer(int workerThreads, int listenPort, int serverClientId) {
         this.serverClientId = serverClientId;
         memoryManager = new MemoryManager();
+        digestThreadPool = new ServerDigestThreadPool(2,10);
 
         /*
          ** The queueSize is set to 2 to insure that the system runs out of connections and can be tested for

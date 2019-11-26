@@ -664,7 +664,6 @@ public class WebServerConnState extends ConnectionState {
                     bufferState.copyByteBuffer(remainingBuffer);
 
                     int bytesRead = remainingBuffer.limit();
-                    LOG.info("HTTP buffer has read data");
                     addDataBuffer(newBufferState, bytesRead);
                 }
 

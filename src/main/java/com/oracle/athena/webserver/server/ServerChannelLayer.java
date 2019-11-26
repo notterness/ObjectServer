@@ -124,10 +124,6 @@ public class ServerChannelLayer implements Runnable {
 
         System.out.println("ServerChannelLayer[" + (serverClientId * 100) + "] stop()");
 
-        //FIXME: does not work with InitiatorServer
-        serverWorkHandler.stop();
-        digestThreadPool.stop();
-
         /*
          */
         try {
