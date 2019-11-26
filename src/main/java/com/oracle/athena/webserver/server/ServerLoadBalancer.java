@@ -33,6 +33,7 @@ public class ServerLoadBalancer {
     protected final int maxQueueSize;
     protected int lastQueueUsed;
     protected final int serverBaseId;
+    protected final ServerDigestThreadPool digestThreadPool;
 
     private ConnectionStatePool<WebServerConnState> connPool;
     private ConnectionStatePool<WebServerConnState> reservedBlockingConnPool;
@@ -49,12 +50,14 @@ public class ServerLoadBalancer {
      ** queueSize * numWorkerThreads is the maximum number of concurrent client connections that can
      **   be handled by the server.
      */
-    public ServerLoadBalancer(final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId) {
+    public ServerLoadBalancer(final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId,
+                              ServerDigestThreadPool digestThreadPool) {
 
         workerThreads = numWorkerThreads;
         maxQueueSize = queueSize;
         serverBaseId = serverClientId;
         this.memoryManager = memoryManager;
+        this.digestThreadPool = digestThreadPool;
         threadPool = new ServerWorkerThread[workerThreads];
         executorService = Executors.newFixedThreadPool(workerThreads);
         LOG.info("ServerLoadBalancer[" + serverClientId + "] workerThreads: " + workerThreads + " maxQueueSize: " + maxQueueSize);
@@ -63,7 +66,7 @@ public class ServerLoadBalancer {
     void start() {
         for (int i = 0; i < workerThreads; i++) {
             ServerWorkerThread worker = new ServerWorkerThread(maxQueueSize, memoryManager,
-                    (serverBaseId + i));
+                    (serverBaseId + i), digestThreadPool);
             executorService.execute(worker);
             threadPool[i] = worker;
         }

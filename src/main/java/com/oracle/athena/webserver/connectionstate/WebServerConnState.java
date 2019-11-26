@@ -970,10 +970,21 @@ public class WebServerConnState extends ConnectionState {
      */
     void releaseContentBuffers() {
         BufferState bufferState;
-        Iterator<BufferState> iter = dataReadDoneQueue.iterator();
+        Iterator<BufferState> iter = dataMd5DoneQueue.iterator();
         while (iter.hasNext()) {
             bufferState = iter.next();
             iter.remove();
+
+            bufferStatePool.freeBufferState(bufferState);
+
+            int digestCompleted = dataBufferDigestCompleted.decrementAndGet();
+            LOG.info("WebServerConnState[" + connStateId + "] releaseContentBuffers() " + digestCompleted);
+        }
+
+        Iterator<BufferState> iterRead = dataReadDoneQueue.iterator();
+        while (iterRead.hasNext()) {
+            bufferState = iterRead.next();
+            iterRead.remove();
 
             bufferStatePool.freeBufferState(bufferState);
 
@@ -1034,5 +1045,4 @@ public class WebServerConnState extends ConnectionState {
          */
         connectionStatePool.freeConnectionState(this);
     }
-
 }

@@ -49,6 +49,8 @@ public class ServerChannelLayer implements Runnable {
     //TODO: naming, either class ServerLoadBalancer or variable workHandler needs a new name (without server in it)
     ServerLoadBalancer serverWorkHandler;
 
+    protected ServerDigestThreadPool digestThreadPool;
+
     //FIXME: should become a local variable of the run method
     private boolean exitThreads;
 
@@ -102,6 +104,8 @@ public class ServerChannelLayer implements Runnable {
         serverClientId = clientId;
         ssl = false;
         sslContext = null;
+
+        this.digestThreadPool = new ServerDigestThreadPool(2,10);
 
         serverConnTransactionId = 0x5555;
 
