@@ -1,7 +1,17 @@
 package com.oracle.athena.webserver.connectionstate;
 
+import com.google.common.hash.Hashing;
 import com.google.common.io.BaseEncoding;
+import com.oracle.pic.casper.common.exceptions.BadRequestException;
+import com.oracle.pic.casper.common.exceptions.ContentMD5UnmatchedException;
 import com.oracle.pic.casper.common.exceptions.InvalidMd5Exception;
+import com.oracle.pic.casper.webserver.api.common.ChecksumHelper;
+import com.oracle.pic.casper.webserver.api.common.HttpContentHelpers;
+import com.oracle.pic.casper.webserver.api.common.HttpHeaderHelpers;
+import com.oracle.pic.casper.webserver.api.common.HttpMatchHelpers;
+import com.oracle.pic.casper.webserver.api.v2.CasperApiV2;
+import io.vertx.core.http.HttpServerRequest;
+import org.apache.commons.codec.binary.Hex;
 import org.eclipse.jetty.http.BadMessageException;
 import org.eclipse.jetty.http.HostPortHttpField;
 import org.eclipse.jetty.http.HttpField;
@@ -9,12 +19,35 @@ import org.eclipse.jetty.http.HttpStatus;
 
 import java.util.*;
 
+import org.glassfish.jersey.internal.util.collection.StringKeyIgnoreCaseMultivaluedMap;
+import org.glassfish.jersey.server.ContainerRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.ws.rs.core.MultivaluedMap;
+
+import static javax.measure.unit.NonSI.BYTE;
 
 public class CasperHttpInfo {
 
     private static final Logger LOG = LoggerFactory.getLogger(CasperHttpInfo.class);
+
+    /**
+     * The following 3 headers are secret headers that should only be used internally by cross-region replication
+     * workers.
+     */
+    private static final String ETAG_OVERRIDE_HEADER = "etag-override";
+    private static final String MD5_OVERRIDE_HEADER = "md5-override";
+    private static final String PART_COUNT_OVERRIDE_HEADER = "partcount-override";
+    private static final String POLICY_ROUND_HEADER = "policy-round";
+
+    private static final String CONTENT_LENGTH = "Content-Length";
+    private static final String CONTENT_MD5 = "Content-MD5";
+
+    private static final String X_VCN_ID = "x-vcn-id";
+    private static final String VCN_ID_CASPER_DEBUG_HEADER = "x-vcn-id-casper";
+
+
 
     /*
      ** The connection this HTTP information is associated with
@@ -101,8 +134,6 @@ public class CasperHttpInfo {
      */
     private String opcRequestId;
 
-    private String md5_Digest;
-
     /*
      ** Where the object will be placed within Casper:
      *
@@ -162,12 +193,47 @@ public class CasperHttpInfo {
     private String lastModified;
 
     /*
+    ** md5override comes from the "md5-override" header (MD5_OVERRIDE_HEADER)
+     */
+    private String md5Override;
+
+    /*
+    ** etagOverride comes from the "etag-override" header (ETAG_OVERRIDE_HEADER)
+     */
+    private String etagOverride;
+
+    /*
+    ** partCountOverrideHeader comes from the "partcount-override" header (PART_COUNT_OVERRIDE_HEADER)
+    ** partCountOverride is the parsed out Integer value fro the partCountOverrideHeader String.
+     */
+    private String partCountOverrideHeader;
+    private Integer partCountOverride;
+
+    /*
+    ** etagRound comes from the "" header (POLICY_ROUND_HEADER)
+     */
+    private String etagRound;
+
+    /*
+     ** This comes from the "Content-MD5" header (CONTENT_MD5)
+     */
+    private String expectedMD5;
+
+    /*
+    ** This comes from the "x-vcn-id" header (X_VCN_ID)
+     */
+    private String vcnId;
+
+    /*
+    ** This comes from the "x-vcn-id-casper" header (VCN_ID_CASPER_DEBUG_HEADER)
+     */
+    private String vcnDebugId;
+
+    /*
      ** Used to keep track of the Header fields in a generic manner
      */
-    private List<HttpField> _fields = new ArrayList<>();
-    private String[] _hdr;
-    private String[] _val;
-    private int _headers;
+    private final MultivaluedMap<String, String> headers;
+
 
     /*
     ** This is used to determine the method as an enum from the method string
@@ -180,10 +246,7 @@ public class CasperHttpInfo {
         messageComplete = false;
         earlyEof = false;
 
-        _fields.clear();
-        _headers = -1;
-        _hdr = new String[10];
-        _val = new String[10];
+        headers = new StringKeyIgnoreCaseMultivaluedMap();
 
         parseFailureCode = 0;
         parseFailureReason = null;
@@ -196,6 +259,7 @@ public class CasperHttpInfo {
         connectionState = connState;
 
         httpMethod = HttpMethodEnum.INVALID_METHOD;
+        expectedMD5 = null;
 
         /*
         ** Create a map of the HTTP methods to make the parsing easier
@@ -218,14 +282,6 @@ public class CasperHttpInfo {
         contentComplete = false;
         messageComplete = false;
         earlyEof = false;
-
-        /*
-         **
-         */
-        _fields.clear();
-        _headers = -1;
-        _hdr = new String[10];
-        _val = new String[10];
 
         /*
         ** Clear the failure reasons
@@ -258,7 +314,7 @@ public class CasperHttpInfo {
         id = null;
 
         opcRequestId = null;
-        md5_Digest = null;
+        expectedMD5 = null;
 
         storageTier = "Standard";
 
@@ -314,27 +370,29 @@ public class CasperHttpInfo {
      **   _fields + _hdr + _val fields?
      */
     public void addHeaderValue(HttpField field) {
-        _fields.add(field);
-        _hdr[++_headers] = field.getName();
-        _val[_headers] = field.getValue();
+        headers.add(field.getName(), field.getValue());
 
-        LOG.info("addHeaderValue() _headers: " + _headers + " _hdr: " + field.getName() +
-                " _val: " + field.getValue());
+        LOG.info("addHeaderValue() header.name" +  field.getName() +
+                " value: " + field.getValue());
 
         if (field instanceof HostPortHttpField) {
             HostPortHttpField hpfield = (HostPortHttpField) field;
             httpHost = hpfield.getHost();
             httpPort = hpfield.getPort();
 
-            LOG.info("addHeaderValue() _host: " + httpHost + " _port: " + httpPort);
+            LOG.info("addHeaderValue() httpHost: " + httpHost + " httpPort: " + httpPort);
             return;
         }
 
-        int result = _hdr[_headers].indexOf("Content-Length");
+        /*
+        ** The CONTENT_LENGTH is parsed out early as it is used in the headers parsed callback to
+        **   setup the next stage of the connection pipeline.
+         */
+        int result = field.getName().indexOf(CONTENT_LENGTH);
         if (result != -1) {
             try {
                 contentLengthReceived = true;
-                contentLength = Long.parseLong(_val[_headers]);
+                contentLength = Long.parseLong(field.getValue());
 
                 /*
                  ** TODO: Are there specific limits for the Content-Length that need to be validated
@@ -350,27 +408,7 @@ public class CasperHttpInfo {
                     connectionState.setHttpParsingError();
                 }
             } catch (NumberFormatException num_ex) {
-                LOG.info("addHeaderValue() " + _val[_headers] + " " + num_ex.getMessage());
-            }
-            return;
-        }
-
-        result = _hdr[_headers].indexOf("Content-MD5");
-        if (result != -1) {
-            LOG.info("md5_Digest(start): " + _val[_headers]);
-
-            try {
-                byte[] bytes = BaseEncoding.base64().decode(_val[_headers]);
-                if (bytes.length != 16) {
-                    throw new InvalidMd5Exception("The value of the Content-MD5 header '" + _val[_headers] +
-                            "' was not the correct length after base-64 decoding");
-                } else {
-                    LOG.info("md5_Digest: " + _val[_headers]);
-                }
-                md5_Digest = _val[_headers];
-            } catch (IllegalArgumentException iaex) {
-                throw new InvalidMd5Exception("The value of the Content-MD5 header '" + _val[_headers] +
-                        "' was not the correct length after base-64 decoding");
+                LOG.info("addHeaderValue() " + field.getName() + " " + num_ex.getMessage());
             }
         }
     }
@@ -437,4 +475,131 @@ public class CasperHttpInfo {
     public void setEarlyEof() {
         earlyEof = true;
     }
+
+    /*
+    ** This will parse out various pieces of information needed for the V2 PUT command into easily
+    **   accessible String member variables. This is called when the headers have all been parsed by
+    **   the Jetty parser and prior to moving onto reading in the content data.
+     */
+    public void parseHeaders() {
+        expectedMD5 = getContentMD5Header();
+        md5Override = getHeaderString(MD5_OVERRIDE_HEADER);
+        etagOverride = getHeaderString(ETAG_OVERRIDE_HEADER);
+        partCountOverrideHeader = getHeaderString(PART_COUNT_OVERRIDE_HEADER);
+        try {
+            partCountOverride = partCountOverrideHeader == null ? null : Integer.parseInt(partCountOverrideHeader);
+        } catch (NumberFormatException e) {
+            throw new BadRequestException("Cannot parse partCountOverrideHeader" + partCountOverrideHeader, e);
+        }
+        etagRound = getHeaderString(POLICY_ROUND_HEADER);
+
+        vcnId = vcnIDFromRequest();
+        vcnDebugId = getHeaderString(VCN_ID_CASPER_DEBUG_HEADER);
+
+    }
+
+    /*
+    ** This extracts the expected MD5 checksum from the headers if it exists and then it validates that
+    **   it is the correct length.
+    ** Assuming it is found and the correct length it is then returned.
+     */
+    private String getContentMD5Header() {
+        String md5value = getHeaderString(CONTENT_MD5);
+        if (md5value == null || md5value.isEmpty()) {
+            return null;
+        }
+
+        try {
+            byte[] bytes = BaseEncoding.base64().decode(md5value);
+            if (bytes.length != 16) {
+                LOG.warn("The value of the Content-MD5 header '" + md5value +
+                        "' was not the correct length after base-64 decoding");
+                return null;
+            } else {
+                LOG.info("expectedMD5: " + md5value);
+            }
+        } catch (IllegalArgumentException iaex) {
+            LOG.warn("The value of the Content-MD5 header '" + md5value +
+                    "' was not the correct length after base-64 decoding");
+            return null;
+        }
+
+        return md5value;
+    }
+
+    /*
+    ** Return "namespace" from the PathParam
+     */
+    public String getNamespace() {
+        return null;
+    }
+
+    /*
+    ** Return the "bucket" from the PathParam
+     */
+    public String getBucket() {
+        return null;
+    }
+
+    /*
+    ** Return the "object" from the PathParam
+     */
+    public String getObject() {
+        return null;
+    }
+
+    /**
+     * Return the VCN ID, if any, in the request.
+     */
+    private String vcnIDFromRequest() {
+        return getHeaderString(X_VCN_ID);
+    }
+
+    /**
+     * Performs an integrity check on the body of an HTTP request if the Content-MD5 header is available.
+     *
+     * If Content-MD5 is not present, this function does nothing, otherwise it computes the MD5 value for the body and
+     * compares it to the value from the header.
+     *
+     * @param computedMd5 - The MD5 value computed from the content data read in.
+     */
+    public void checkContentMD5(String computedMd5) {
+        if (expectedMD5 != null) {
+            if (!expectedMD5.equals(computedMd5)) {
+                throw new ContentMD5UnmatchedException("The Content-MD5 you specified did not match what was received. expected: " +
+                        expectedMD5 + " computed: " + computedMd5);
+            }
+        }
+    }
+
+    private static String computeBase64MD5(byte[] bytes) {
+        return BaseEncoding.base64().encode(Hashing.md5().newHasher().putBytes(bytes).hash().asBytes());
+    }
+
+    private static String computeHexMD5(byte[] bytes) {
+        return Hex.encodeHexString(Hashing.md5().newHasher().putBytes(bytes).hash().asBytes());
+    }
+
+    /*
+    ** This finds all the occurrences of a passed in String in the headers key fields and adds those to the return
+    **   string.
+     */
+    private String getHeaderString(String name) {
+        List<String> values = (List)this.headers.get(name);
+        if (values == null) {
+            return null;
+        } else if (values.isEmpty()) {
+            return "";
+        } else {
+            Iterator<String> valuesIterator = values.iterator();
+            StringBuilder buffer = new StringBuilder((String)valuesIterator.next());
+
+            while(valuesIterator.hasNext()) {
+                buffer.append(',').append((String)valuesIterator.next());
+            }
+
+            return buffer.toString();
+        }
+    }
+
 }
