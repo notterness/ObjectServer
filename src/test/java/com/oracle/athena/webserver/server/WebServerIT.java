@@ -82,8 +82,6 @@ class WebServerIT {
         // send the request synchronously - this particular client supports async calls as well
         ContentResponse response = request.send();
         assertEquals(response.getStatus(), HttpStatus.OK_200, "A basic connection should result in a 200.");
-        int contentLength = Integer.parseInt(request.getHeaders().get(HttpHeader.CONTENT_LENGTH));
-        assertEquals(contentLength, request.getContent().getLength(), "The client should construct the headers correctly by default");
     }
 
     /**
