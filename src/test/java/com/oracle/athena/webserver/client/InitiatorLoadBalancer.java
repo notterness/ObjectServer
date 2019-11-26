@@ -13,13 +13,14 @@ class InitiatorLoadBalancer extends ServerLoadBalancer {
 
     private ConnectionStatePool<ClientConnState> connPool;
 
-    InitiatorLoadBalancer(final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId,
-                          ServerDigestThreadPool digestThreadPool) {
+    InitiatorLoadBalancer(final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId ){
 
-        super(queueSize, numWorkerThreads, memoryManager, serverClientId, digestThreadPool);
+        super(queueSize, numWorkerThreads, memoryManager, serverClientId);
     }
 
     void start() {
+        digestThreadPool.start();
+
         for (int i = 0; i < workerThreads; i++) {
             ServerWorkerThread worker = new ServerWorkerThread(maxQueueSize, memoryManager,
                     (serverBaseId + i), digestThreadPool);
