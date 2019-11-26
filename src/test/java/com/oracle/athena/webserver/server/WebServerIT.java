@@ -4,8 +4,11 @@ package com.oracle.athena.webserver.server;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.api.Request;
+import org.eclipse.jetty.client.api.Response;
 import org.eclipse.jetty.client.util.BytesContentProvider;
+import org.eclipse.jetty.client.util.InputStreamResponseListener;
 import org.eclipse.jetty.client.util.StringContentProvider;
+import org.eclipse.jetty.http.BadMessageException;
 import org.eclipse.jetty.http.HttpHeader;
 import org.eclipse.jetty.http.HttpMethod;
 import org.eclipse.jetty.http.HttpStatus;
@@ -16,9 +19,11 @@ import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -27,13 +32,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * What makes this an integration test vs. a unit test?
  * <ul>
  *     <li>It does not contain "Test" or "Tests" anywhere in the name and ends with "IT"</li>
- *     <li>It requires that the {@link ServerChannelLayer#BASE_TCP_PORT} be available on the machine performing the build</li>
+ *     <li>It requires that the {@link ServerChannelLayer#HTTP_TCP_PORT} be available on the machine performing the build</li>
  *     <li>It tests something end-to-end. These will typically manifest themselves as client interactions.</li>
  * </ul>
  */
 class WebServerIT {
 
-    private static final String TARGET_HOST = "http://localhost:" + ServerChannelLayer.BASE_TCP_PORT + "/";
+    private static final String TARGET_HOST = "http://localhost:" + ServerChannelLayer.HTTP_TCP_PORT + "/";
     private static HttpClient client;
     private static WebServer server;
 
@@ -56,6 +61,7 @@ class WebServerIT {
         // in async mode, force this particular client to send all events in order
         client.setStrictEventOrdering(true);
         client.start();
+
     }
 
     /**
@@ -68,22 +74,14 @@ class WebServerIT {
     }
 
     /**
-     * FIXME This doesn't work after the most recent changes and hangs forever.
-     *
      * This test merely attempts to connect a client to our custom Web Server and send a simple message across to it.
      */
     @Test
-    @Disabled("This doesn't work any more after the recent changes.")
     void validateBasicConnection() throws InterruptedException, ExecutionException, TimeoutException {
-        Request request = client.newRequest(TARGET_HOST).method(HttpMethod.PUT).content(new StringContentProvider("{\n" +
-                "  \"cidrBlock\": \"172.16.0.0/16\",\n" +
-                "  \"compartmentId\": \"ocid1.compartment.oc1.aaaaaaaauwjnv47knr7uuuvqar5bshnspi6xoxsfebh3vy72fi4swgrkvuvq\",\n" +
-                "  \"displayName\": \"Apex Virtual Cloud Network\"\n" +
-                "}\n\r\n"));
+        Request request = client.newRequest(TARGET_HOST).method(HttpMethod.PUT).content(new StringContentProvider("Hello world."));
         // send the request synchronously - this particular client supports async calls as well
         ContentResponse response = request.send();
         assertEquals(response.getStatus(), HttpStatus.OK_200, "A basic connection should result in a 200.");
-        // this is an example of a bad test
         int contentLength = Integer.parseInt(request.getHeaders().get(HttpHeader.CONTENT_LENGTH));
         assertEquals(contentLength, request.getContent().getLength(), "The client should construct the headers correctly by default");
     }
@@ -92,13 +90,32 @@ class WebServerIT {
      * Similar to the basic connection test, this test simply sends an array as its contents
      */
     @Test
-    void validateBasicBufferSend() {
+    void validateBasicBufferSend() throws InterruptedException, ExecutionException, TimeoutException {
         byte[] array = UUID.randomUUID().toString().getBytes();
         Request request = client.newRequest(TARGET_HOST).method(HttpMethod.PUT).content(new BytesContentProvider(array));
-        request.send(result -> {
-            assertTrue(result.isSucceeded());
-            assertEquals(result.getResponse().getStatus(), HttpStatus.OK_200, "A basic connection should result in a 200.");
-        });
+        ContentResponse response = request.send();
+        assertEquals(response.getStatus(), HttpStatus.OK_200, "A basic connection should result in a 200.");
+    }
+
+    /**
+     * This test validates that when a basic connection is passed in with a mix of both "\r" and "\n" the parser
+     * behaves correctly
+     */
+    @Test
+    @Disabled("This doesn't work and I suspect it's because of the control characters.")
+    void validateFunkyPayload() throws TimeoutException, InterruptedException, ExecutionException {
+        final String payload = "{\n" +
+                "  \"cidrBlock\": \"172.16.0.0/16\",\n" +
+                "  \"compartmentId\": \"ocid1.compartment.oc1.aaaaaaaauwjnv47knr7uuuvqar5bshnspi6xoxsfebh3vy72fi4swgrkvuvq\",\n" +
+                "  \"displayName\": \"Apex Virtual Cloud Network\"\n" +
+                "}\n\r\n";
+        Request request = client.newRequest(TARGET_HOST);
+        request.method(HttpMethod.PUT);
+        request.content(new StringContentProvider(payload));
+        InputStreamResponseListener listener = new InputStreamResponseListener();
+        // Wait for the response headers to arrive
+        Response response = listener.get(5, TimeUnit.SECONDS);
+        assertNotNull(response);
     }
 
     /**
@@ -106,15 +123,23 @@ class WebServerIT {
      * header value.
      */
     @Test
-    void validateMalformedContentLengthHeaders() {
-        Request request = client.newRequest(TARGET_HOST).method(HttpMethod.PUT).content(new StringContentProvider("Hello world!"));
+    void validateMalformedContentLengthHeaders() throws InterruptedException, TimeoutException {
+        // alternative method of getting stuff asynchronously
+        InputStreamResponseListener listener = new InputStreamResponseListener();
+        Request request = client.newRequest(TARGET_HOST);
+        request.method(HttpMethod.PUT);
+        request.content(new StringContentProvider("Hello world!"));
         request.header(HttpHeader.CONTENT_LENGTH, "10000");
-        request.send(result -> {
-           assertTrue(result.isFailed());
-            // we expect to get here - although unnecessary let's validate that the failure stack trace has a 500 in it
-            // (it's unnecessary because ExecutionException is what is thrown in the case of a 500 that marks
-            //  the result as failed)
-            assertTrue(result.getFailure().getMessage().contains("BadMessageException: 500"));
-        });
+        request.send(listener);
+        // Wait for the response headers to arrive
+        try {
+            Response response = listener.get(5, TimeUnit.SECONDS);
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause().getClass().isAssignableFrom(BadMessageException.class));
+            // this is a safe cast, but any cast should be frowned upon in production code
+            BadMessageException bme = (BadMessageException) e.getCause();
+            assertEquals(bme.getCode(), HttpStatus.INTERNAL_SERVER_ERROR_500);
+            assertTrue(bme.getReason().contains(HttpHeader.CONTENT_LENGTH.asString()));
+        }
     }
 }
