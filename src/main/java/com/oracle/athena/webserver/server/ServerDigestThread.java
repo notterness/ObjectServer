@@ -12,7 +12,7 @@ public class ServerDigestThread implements Runnable {
 
     private static final Logger LOG = LoggerFactory.getLogger(ServerDigestThread.class);
 
-    private final static int SERVER_DIGEST_COUNT = 2;
+    private final static int SERVER_DIGEST_MAX_QUEUE_SIZE = 20; // max connections * num buffers
 
     private BlockingQueue<BufferState> digestWorkQ;
 
@@ -21,8 +21,7 @@ public class ServerDigestThread implements Runnable {
     private int threadId;
 
     public ServerDigestThread() {
-        digestWorkQ = new LinkedBlockingQueue<>(50);
-
+        digestWorkQ = new LinkedBlockingQueue<>(SERVER_DIGEST_MAX_QUEUE_SIZE);
     }
 
     @Override
@@ -37,7 +36,7 @@ public class ServerDigestThread implements Runnable {
                     /*
                      ** compute the digest for the buffer.
                      */
-                    bufferWork.bufferUpdateDigest();
+                    bufferWork.updateBufferDigest();
                     /*
                      ** FIXME PS - account for queue full.
                      */

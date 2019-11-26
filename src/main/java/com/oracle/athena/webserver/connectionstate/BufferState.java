@@ -153,11 +153,11 @@ public class BufferState {
         bufferState = BufferStateEnum.PARSE_HTTP_DONE;
     }
 
-    public void setBufferStateDigestWait() {
-        bufferState = BufferStateEnum.DIGEST_WAIT;
+    public void setBufferState(BufferStateEnum bufferState) {
+        this.bufferState = bufferState;
     }
 
-    public void bufferUpdateDigest() {
+    public void updateBufferDigest() {
         appBuffer.flip();
         connState.updateDigest(appBuffer);
     }

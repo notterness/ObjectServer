@@ -969,23 +969,19 @@ public class WebServerConnState extends ConnectionState {
     ** This is a placeholder for the encryption step. Currently it is used to release the content buffers
      */
     void releaseContentBuffers() {
-        BufferState bufferState;
-        Iterator<BufferState> iter = dataMd5DoneQueue.iterator();
-        while (iter.hasNext()) {
-            bufferState = iter.next();
-            iter.remove();
+        BufferState[] md5DoneBuffers = new BufferState[0];
+        md5DoneBuffers = dataMd5DoneQueue.toArray(md5DoneBuffers);
+        BufferState[] readDoneBuffers = new BufferState[0];
+        readDoneBuffers = dataReadDoneQueue.toArray(readDoneBuffers);
 
+        for (BufferState bufferState : md5DoneBuffers) {
             bufferStatePool.freeBufferState(bufferState);
 
             int digestCompleted = dataBufferDigestCompleted.decrementAndGet();
             LOG.info("WebServerConnState[" + connStateId + "] releaseContentBuffers() " + digestCompleted);
         }
 
-        Iterator<BufferState> iterRead = dataReadDoneQueue.iterator();
-        while (iterRead.hasNext()) {
-            bufferState = iterRead.next();
-            iterRead.remove();
-
+        for (BufferState bufferState : readDoneBuffers) {
             bufferStatePool.freeBufferState(bufferState);
 
             int readsCompleted = dataBufferReadsCompleted.decrementAndGet();
