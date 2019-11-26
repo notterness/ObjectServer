@@ -94,8 +94,8 @@ public class BufferState {
      */
     public void setReadState(final BufferStateEnum newState) {
 
-        LOG.info("[" + connState.getConnStateId() + "] setReadState() current: " + bufferState.toString() + " new: " + newState.toString() +
-                " remaining: " + appBuffer.remaining());
+     //   LOG.info("[" + connState.getConnStateId() + "] setReadState() current: " + bufferState.toString() + " new: " + newState.toString() +
+     //           " remaining: " + appBuffer.remaining());
 
         if (newState == BufferStateEnum.READ_ERROR) {
             /*

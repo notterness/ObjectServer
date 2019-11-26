@@ -1,12 +1,9 @@
 package com.oracle.athena.webserver.server;
 
 import com.oracle.athena.webserver.connectionstate.BlockingConnectionStatePool;
-import com.oracle.athena.webserver.connectionstate.ConnectionState;
 import com.oracle.athena.webserver.connectionstate.ConnectionStatePool;
-import com.oracle.athena.webserver.connectionstate.WebServerConnState;
 import com.oracle.athena.webserver.memory.MemoryManager;
 
-import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.util.concurrent.ExecutorService;
@@ -116,15 +113,15 @@ public class ServerLoadBalancer {
      */
     //FIXME: avoid boolean return types in favor of void with exception handling, if all the return type means is
     //"completed without surprises."  Throw exceptions instead of returning false.
-    boolean startNewConnection(final AsynchronousSocketChannel chan, SSLContext sslContext) {
+    boolean startNewConnection(final AsynchronousSocketChannel chan) {
 
-        WebServerConnState work = connPool.allocConnectionState(chan, sslContext);
+        WebServerConnState work = connPool.allocConnectionState(chan);
         if (work == null) {
             /*
                 This means the primary pool of connections has been depleted and one needs to be allocated from the
                 special pool to return an error.
              */
-            work = reservedBlockingConnPool.allocConnectionState(chan, sslContext);
+            work = reservedBlockingConnPool.allocConnectionState(chan);
             if (work == null) {
                 /*
                 ** This means there was an exception while waiting to allocate the connection. Simply close the
@@ -143,8 +140,6 @@ public class ServerLoadBalancer {
 
             work.setOutOfResourceResponse();
         }
-
-        work.selectPipelineManagers();
 
         return addWorkToThread(work);
     }

@@ -9,53 +9,49 @@ import javax.net.ssl.SSLException;
 import java.util.function.Function;
 
 class SSLHandshakePipelineMgr extends ConnectionPipelineMgr {
-
-    private final WebServerConnState connectionState;
+    private WebServerSSLConnState connectionState;
     private boolean initialStage;
 
-    private Function<WebServerConnState, StateQueueResult> sslHandshakeInitialSetup = wsConn -> {
-        wsConn.setupSSL();
+    private Function<WebServerSSLConnState, StateQueueResult> sslHandshakeInitialSetup = wsConn -> {
+        wsConn.setupInitial();
         return StateQueueResult.STATE_RESULT_CONTINUE;
     };
 
-    private Function<WebServerConnState, StateQueueResult> sslHandshakeAllocBuffers = wsConn -> {
+    private Function<WebServerSSLConnState, StateQueueResult> sslHandshakeAllocBuffers = wsConn -> {
         StateQueueResult result = StateQueueResult.STATE_RESULT_CONTINUE;
         wsConn.allocSSLHandshakeBuffers();
         if (wsConn.isSSLBuffersNeeded() == true) {
             result = StateQueueResult.STATE_RESULT_WAIT;
         } else {
-
             try {
                 wsConn.beginHandshake();
             } catch (SSLException e) {
                 //FIXME: Handle this error condition
             }
-
         }
-
         return result;
     };
 
-    private Function<WebServerConnState, StateQueueResult> sslHandshakeExec = wsConn -> {
+    private Function<WebServerSSLConnState, StateQueueResult> sslHandshakeExec = wsConn -> {
         wsConn.doSSLHandshake();
         return StateQueueResult.STATE_RESULT_REQUEUE;
     };
 
     //FIXME: handle connection finished
-    private Function<WebServerConnState, StateQueueResult> sslHandshakeConnFinished = wsConn -> {
+    private Function<WebServerSSLConnState, StateQueueResult> sslHandshakeConnFinished = wsConn -> {
         initialStage = true;
         wsConn.freeSSLHandshakeBuffers();
         return StateQueueResult.STATE_RESULT_FREE;
     };
 
-    private Function<WebServerConnState, StateQueueResult> sslHandshakeNextPipeline = wsConn -> {
+    private Function<WebServerSSLConnState, StateQueueResult> sslHandshakeNextPipeline = wsConn -> {
         initialStage = true;
         wsConn.freeSSLHandshakeBuffers();
-        wsConn.setupNextSSLPipeline();
+        wsConn.setupNextPipeline();
         return StateQueueResult.STATE_RESULT_COMPLETE;
     };
 
-    SSLHandshakePipelineMgr(WebServerConnState connectionState) {
+    SSLHandshakePipelineMgr(WebServerSSLConnState connectionState) {
         super(connectionState, new StateMachine<>());
         this.connectionState = connectionState;
 
