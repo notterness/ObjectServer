@@ -1,16 +1,14 @@
 package com.oracle.athena.webserver.client;
 
 import com.oracle.athena.webserver.connectionstate.ConnectionPipelineMgr;
-import com.oracle.athena.webserver.connectionstate.ConnectionState;
 import com.oracle.athena.webserver.connectionstate.ConnectionStateEnum;
-import com.oracle.athena.webserver.connectionstate.WebServerConnState;
 import com.oracle.athena.webserver.statemachine.StateEntry;
 import com.oracle.athena.webserver.statemachine.StateMachine;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
 
 import java.util.function.Function;
 
-public class ClientPutPipelineMgr extends ConnectionPipelineMgr {
+public class ClientPutPipelineMgr implements ConnectionPipelineMgr {
 
     private ClientConnState connectionState;
 
@@ -85,8 +83,6 @@ public class ClientPutPipelineMgr extends ConnectionPipelineMgr {
 
 
     ClientPutPipelineMgr(ClientConnState connState) {
-
-        super(connState);
 
         this.connectionState = connState;
 

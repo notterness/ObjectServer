@@ -7,7 +7,7 @@ import org.eclipse.jetty.http.HttpStatus;
 
 import java.util.function.Function;
 
-public class OutOfResourcePipelineMgr extends ConnectionPipelineMgr {
+public class OutOfResourcePipelineMgr implements ConnectionPipelineMgr {
     private WebServerConnState connectionState;
 
     private boolean initialStage;
@@ -51,8 +51,6 @@ public class OutOfResourcePipelineMgr extends ConnectionPipelineMgr {
     };
 
     OutOfResourcePipelineMgr(WebServerConnState connState) {
-
-        super(connState);
 
         this.connectionState = connState;
 
