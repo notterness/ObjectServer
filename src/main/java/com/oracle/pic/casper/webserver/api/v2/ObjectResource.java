@@ -31,6 +31,7 @@ import com.oracle.pic.casper.common.metrics.MetricsBundle;
 import com.oracle.pic.casper.common.model.BucketStorageTier;
 import com.oracle.pic.casper.common.model.ObjectStorageTier;
 import com.oracle.pic.casper.common.model.Stripe;
+import com.oracle.pic.casper.common.rest.CommonHeaders;
 import com.oracle.pic.casper.common.util.AugmentedRequestIdFactory;
 import com.oracle.pic.casper.mds.MdsEncryptionKey;
 import com.oracle.pic.casper.mds.MdsObjectKey;
@@ -106,11 +107,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
-import javax.ws.rs.GET;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.core.Context;
+import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import java.io.InputStream;
 import java.time.Duration;
@@ -120,6 +121,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static javax.measure.unit.NonSI.BYTE;
@@ -191,57 +194,30 @@ public class ObjectResource {
                                  @PathParam("object") String object,
                                  InputStream objectInputStream,
                                  @Context ContainerRequest request) {
-        String vcnId = ExtractsRequestMetadata.vcnIDFromRequest(request);
-        String vcnDebugId = request.getHeaderString(ServiceGateway.VCN_ID_CASPER_DEBUG_HEADER);
+        enterEmbargo(namespace, bucket, object);
 
-        final EmbargoV3Operation embargoV3Operation = EmbargoV3Operation.builder()
-                .setApi(EmbargoV3Operation.Api.V2)
-                .setOperation(CasperOperation.PUT_OBJECT)
-                .setNamespace(namespace)
-                .setBucket(bucket)
-                .setObject(object)
-                .build();
-        auths.getEmbargoV3().enter(embargoV3Operation);
+        validate(namespace, request.getHeaders(), request.getPath(true));
 
-        Validator.validateV2Namespace(namespace);
-        HttpContentHelpers.negotiateStorageObjectContent(request, 0,
-                casperConfig.getWebServerConfigurations().getApiConfiguration().getMaxObjectSize().longValue(BYTE));
-        HttpMatchHelpers.validateConditionalHeaders(request, HttpMatchHelpers.IfMatchAllowed.YES_WITH_STAR,
-                HttpMatchHelpers.IfNoneMatchAllowed.STAR_ONLY, request.getPath(true));
-
-        final Map<String, String> metadata = HttpHeaderHelpers.getUserMetadataHeaders(request, request.getPath(true));
-        final String expectedMD5 = ChecksumHelper.getContentMD5Header(request).orElse(null);
+        final String etagRound = request.getHeaderString(CasperApiV2.POLICY_ROUND_HEADER);
+        final String opcRequestId = AugmentedRequestIdFactory.getFactory().newUniqueId();
         final String md5Override = request.getHeaderString(CasperApiV2.MD5_OVERRIDE_HEADER);
         final String etagOverride = request.getHeaderString(CasperApiV2.ETAG_OVERRIDE_HEADER);
-        final String partCountOverrideHeader = request.getHeaderString(CasperApiV2.PART_COUNT_OVERRIDE_HEADER);
-        final Integer partCountOverride;
-        try {
-            partCountOverride = partCountOverrideHeader == null ? null : Integer.parseInt(partCountOverrideHeader);
-        } catch (NumberFormatException e) {
-            throw new BadRequestException("Cannot parse partCountOverrideHeader" + partCountOverrideHeader, e);
-        }
-        final String etagRound = request.getHeaderString(CasperApiV2.POLICY_ROUND_HEADER);
+        final Integer partCountOverride = parsePartCountOverride(request.getHeaderString(CasperApiV2.PART_COUNT_OVERRIDE_HEADER));
 
-        final String opcRequestId = AugmentedRequestIdFactory.getFactory().newUniqueId();
 
-        final MetricScope rootScope = Utils.getMetricScope(request, casperConfig.getCommonConfigurations().getTracingConfiguration(), opcRequestId);
-        rootScope.annotate(CasperApiV2.MD5_OVERRIDE_HEADER, md5Override);
-        rootScope.annotate(CasperApiV2.ETAG_OVERRIDE_HEADER, etagOverride);
-        rootScope.annotate(CasperApiV2.POLICY_ROUND_HEADER, etagRound);
+        final String realIp = request.getHeaderString(CommonHeaders.X_REAL_IP.toString());
+        final MetricScope rootScope = buildMetricScope(
+                request.getMethod(), realIp, request.getRequestUri().toString(), etagRound, opcRequestId, md5Override, etagOverride);
 
-        final String userAgent = Optional.ofNullable(request.getHeaderString(HttpHeaders.USER_AGENT.toString()))
-                .orElse(DEFAULT_USER_AGENT);
-
-        final EmbargoContext visa = auths.getEmbargo().enter(request.getMethod(), request.getRequestUri().toString(), userAgent, rootScope);
-
-        final String ifMatchEtag = request.getHeaderString(io.vertx.core.http.HttpHeaders.IF_MATCH.toString());
-        final String ifNoneMatchEtag = request.getHeaderString(io.vertx.core.http.HttpHeaders.IF_NONE_MATCH.toString());
-
+        //TODO: javax.ws.rs.core usage in 'common' code
+        final Map<String, String> metadata = HttpHeaderHelpers.getUserMetadataHeaders(request, request.getPath(true));
         final ObjectMetadata objMeta = HttpContentHelpers.readObjectMetadata(
                 request, namespace, bucket, object, metadata);
-
         // Acquire can throw an exception(with err code of 503 or 429) if the request couldnt be accepted
         controller.acquire(objMeta.getNamespace(), TrafficRecorder.RequestType.PutObject, objMeta.getSizeInBytes());
+        Validator.validateBucket(objMeta.getBucketName());
+        Validator.validateObjectName(objMeta.getObjectName());
+        Validator.validateMetadata(objMeta.getMetadata(), jsonSerializer);
 
         AuthenticationInfo authInfo = auths.getAsyncAuthenticator().authenticatePutObject(request, request.getRequestUri().toString(), namespace, request.getMethod(), rootScope);
         if ((md5Override != null || etagOverride != null || partCountOverride != null ||
@@ -251,18 +227,13 @@ public class ObjectResource {
             throw new UnauthorizedHeaderException();
         }
 
-        Validator.validateBucket(objMeta.getBucketName());
-        Validator.validateObjectName(objMeta.getObjectName());
-        Validator.validateMetadata(objMeta.getMetadata(), jsonSerializer);
 
         HttpPathHelpers.logPathParameters(
                 rootScope, objMeta.getNamespace(), objMeta.getBucketName(), objMeta.getObjectName());
 
         trafficRecorder.requestStarted(
-                objMeta.getNamespace(),
-                opcRequestId, TrafficRecorder.RequestType.PutObject, objMeta.getSizeInBytes());
+                objMeta.getNamespace(), opcRequestId, TrafficRecorder.RequestType.PutObject, objMeta.getSizeInBytes());
         WSTenantBucketInfo bucketInfo = getBucketMetadata(rootScope, objMeta.getNamespace(), objMeta.getBucketName(), Api.V2);
-        final MetricScope childScope = rootScope.child("Backend:writeObject");
 
         // Blocking creation of objects in the recycle bin
         if (RecycleBinHelper.isBinObject(bucketInfo, objMeta.getObjectName())) {
@@ -271,51 +242,9 @@ public class ObjectResource {
                     "Not authorized to write or modify objects in the Recycle Bin");
         }
 
-
-        final Duration archiveMinRetention;
-        final Duration archiveNewObjPeriod;
-        // The object storage tier will always be set to STANDARD but when we read the object
-        // and if the time we read it is after the archive period we set for this object,
-        // we will treat this object as an archived object when we read it.
-        final ObjectStorageTier objectStorageTier = ObjectStorageTier.STANDARD;
-        if (bucketInfo.getStorageTier() == BucketStorageTier.Archive) {
-            archiveMinRetention = casperConfig.getWebServerConfigurations().getArchiveConfiguration().getMinimumRetentionPeriodForArchives();
-            archiveNewObjPeriod = casperConfig.getWebServerConfigurations().getArchiveConfiguration().getArchivePeriodForNewObject();
-        } else {
-            archiveMinRetention = null;
-            archiveNewObjPeriod = null;
-        }
-        final CasperTransactionId txnId = txnIdFactory.newCasperTransactionId("writeObject");
-
-        final boolean isSingleChunkObject =
-                (objMeta.getSizeInBytes() <= casperConfig.getWebServerConfigurations().getApiConfiguration().getChunkSize().longValue(BYTE)) &&
-                        casperConfig.getWebServerConfigurations().isSingleChunkOptimizationEnabled();
-        Optional<AuthorizationResponse> authorizationResponse = Utils.runWithScope(childScope, () -> {
-            // Authorize putting a new object or overwriting an existing object. We call this with
-            // the two permissions (create/overwrite) and authorizeAll = false. This means we will
-            // authorized if either of the permissions are allowed. We need to do this because we
-            // perform the authorization checks in two places. For create, we can check in BeginPut,
-            // but for overwrite, we need to check in FinishPut. So after calling authorize, we need
-            // to look at the AuthorizationResponse which contains the permissions that are actually
-            // allowed. Then we can use that to perform the checks in BeginPut and FinishPut.
-            return auths.getAuthorizer().authorize(
-                    authInfo,
-                    bucketInfo.getNamespaceKey(),
-                    bucketInfo.getBucketName(),
-                    bucketInfo.getCompartment(),
-                    bucketInfo.getPublicAccessType(),
-                    CasperOperation.PUT_OBJECT,
-                    bucketInfo.getKmsKeyId().orElse(null),
-                    false,
-                    bucketInfo.isTenancyDeleted(), rootScope,
-                    ALL_PUT_OBJECT_PERMISSIONS, visa, vcnId, vcnDebugId, namespace);
-        }, "authorizer");
-
-        if (!authorizationResponse.isPresent()) {
-            throw new NoSuchBucketException(BucketBackend.noSuchBucketMsg(bucketInfo.getBucketName(),
-                    bucketInfo.getNamespaceKey().getName()));
-        }
-        Set<CasperPermission> allowedPermissions = authorizationResponse.get().getCasperPermissions();
+        final MetricScope writeObjectScope = rootScope.child("Backend:writeObject");
+        Set<CasperPermission> allowedPermissions = checkAuthAndFetchPermissions(namespace, rootScope, authInfo,
+                bucketInfo, writeObjectScope, request.getMethod(), request.getRequestUri().toString(), request.getHeaders());
         ReplicationEnforcer.throwIfReadOnlyButNotReplicationScope(request, bucketInfo);
 
         final Optional<Tenant> resourceTenant =
@@ -327,99 +256,67 @@ public class ObjectResource {
             verifyStorageCapacityIsEnough(namespace, resourceTenant.get().getId(), objMeta.getSizeInBytes());
         }
 
-        final BeginPutRequest.Builder requestBuilder = BeginPutRequest.newBuilder()
-                .setBucketToken(bucketInfo.getMdsBucketToken().toByteString())
-                .setObjectKey(Backend.objectKey(
-                        objMeta.getObjectName(),
-                        bucketInfo.getNamespaceKey().getName(),
-                        bucketInfo.getBucketName(),
-                        bucketInfo.getNamespaceKey().getApi()))
-                .setStorageTier(MdsTransformer.toObjectStorageTier(objectStorageTier))
-                .setTransactionId(txnId.toString());
-        VolumeMetaAndVon volMetaAndVon = null;
-        if (isSingleChunkObject) {
-            volMetaAndVon = MetricScope.timeScopeF(rootScope,
-                    "pickVolume",
-                    innerScope -> volVonPicker.getNextVon(
-                            innerScope,
-                            createDefaultPickerContext(objMeta.getSizeInBytes(),
-                                    opcRequestId)));
+        final ObjectStorageTier objectStorageTier = ObjectStorageTier.STANDARD;
+        final CasperTransactionId txnId = txnIdFactory.newCasperTransactionId("writeObject");
+        final boolean isSingleChunkObject =
+                (objMeta.getSizeInBytes() <= casperConfig.getWebServerConfigurations().getApiConfiguration().getChunkSize().longValue(BYTE)) &&
+                        casperConfig.getWebServerConfigurations().isSingleChunkOptimizationEnabled();
+        VolumeMetaAndVon volMetaAndVon = getVolumeMetaAndVon(opcRequestId, rootScope, objMeta, isSingleChunkObject);
+        BeginPutRequest putRequest = constructPutRequest(objMeta, bucketInfo, objectStorageTier, txnId, volMetaAndVon);
 
-            requestBuilder.setVolumeId(Int64Value.of(volMetaAndVon.getVolumeMetadata().getVolumeId()))
-                    .setVon(Int32Value.of(volMetaAndVon.getVon()))
-                    .setSequenceNum(Int64Value.of(0L));
-        }
+        //FIXME: rename / figure out how to better convey meaning of this call
+        final String putResponseObjectId = executeRequestCheckPermissionsSendContinueReturnObjId(
+                opcRequestId, bucketInfo, writeObjectScope, allowedPermissions, putRequest);
 
-        final BeginPutResponse beginPutResponse = MetricScope.timeScopeF(childScope, "objectMds:beginPut", innerScope -> invokeMds(
-                MdsMetrics.OBJECT_MDS_BUNDLE, MdsMetrics.OBJECT_MDS_BEGIN_PUT,
-                false, () -> objectClient.execute(c -> Backend.getClientWithOptions(
-                        c, objectDeadlineSeconds, opcRequestId).beginPut(requestBuilder.build()))));
-
-        // Check the permissions the customer has. They need the OBJECT_CREATE permission if the object doesn't
-        // exist yet, and the OBJECT_OVERWRITE permission if there's already an existing object.
-        // The check for OBJECT_CREATE is sufficient here in BeginPut. However, the OBJECT_OVERWRITE check is not
-        // sufficient here because there could be a new object created by another operation after this point, so it
-        if (!beginPutResponse.hasExistingObject() && !allowedPermissions.contains(CasperPermission.OBJECT_CREATE) ||
-                beginPutResponse.hasExistingObject() && !allowedPermissions.contains(CasperPermission.OBJECT_OVERWRITE)) {
-            throw new NoSuchBucketException(BucketBackend.noSuchBucketMsg(bucketInfo.getBucketName(),
-                    bucketInfo.getNamespaceKey().getName()));
-        }
-
-        // TODO: Our NIO implementation needs to handle the 100-continue after a successful "begin put".  Jersey has no solution for this.
-        /*
-        if (!beginPutResponse.hasExistingObject()) {
-            curObjMeta = BackendConversions.mdsObjectSummaryToObjectMetadata(beginPutResponse.getExistingObject(), kms);
-            HttpMatchHelpers.checkConditionalHeaders(
-                    request, curObjMeta.map(ObjectMetadata::getETag).orElse(null));
-            HttpContentHelpers.write100Continue(request, response);
-        }*/
-
-        Digest expectedDigest = null;
-        CryptoMessageDigest objectDigestCalculator = DigestUtils.messageDigestFromAlgorithm(DigestAlgorithm.MD5);
-        if (expectedMD5 != null) {
-            expectedDigest = Digest.fromBase64Encoded(DigestAlgorithm.MD5, expectedMD5);
-        }
 
         long totalTransferred = 0;
         final long chunkSize = casperConfig.getWebServerConfigurations().getApiConfiguration().getChunkSize().longValue(BYTE);
         final EncryptionKey encKey = getEncryption(bucketInfo.getKmsKeyId().orElse(null), kms);
+        CryptoMessageDigest objectDigestCalculator = DigestUtils.messageDigestFromAlgorithm(DigestAlgorithm.MD5);
         try {
-            int seqNum = 0;
-            for (Chunk chunk : Chunk.getChunksFromStream(objectInputStream, (int) chunkSize)) {
-                if (chunk.getSize() == 0) continue;
-                totalTransferred += chunk.getSize();
-                objectDigestCalculator.update(chunk.getData());
-                processChunk(chunk, encKey, isSingleChunkObject, volMetaAndVon, opcRequestId, null, rootScope, bucketInfo, objMeta.getObjectName(), new ObjectId(beginPutResponse.getObjectId()), txnId, seqNum);
-                seqNum++;
-            }
+            totalTransferred = handleInputStream(objectInputStream, opcRequestId, rootScope, objMeta, bucketInfo, txnId, isSingleChunkObject, volMetaAndVon, putResponseObjectId, totalTransferred, (int) chunkSize, encKey, objectDigestCalculator);
         } catch (Exception e) {
-            final MetricScope innerScope = rootScope.child("abort");
-            final AbortPutRequest abortRequest = AbortPutRequest.newBuilder()
-                    .setBucketToken(bucketInfo.getMdsBucketToken().toByteString())
-                    .setObjectKey(Backend.objectKey(objMeta.getObjectName(), bucketInfo.getNamespaceKey().getName(),
-                            bucketInfo.getBucketName(), bucketInfo.getNamespaceKey().getApi()))
-                    .setTransactionId(txnId.toString())
-                    .setObjectId(beginPutResponse.getObjectId())
-                    .build();
-            try {
-                invokeMds(MdsMetrics.OBJECT_MDS_BUNDLE, MdsMetrics.OBJECT_MDS_ABORT_PUT,
-                        false, () -> objectClient.execute(c -> Backend.getClientWithOptions(
-                                c, objectDeadlineSeconds, opcRequestId).abortPut(abortRequest)));
-            } catch (Exception ex) {
-                innerScope.fail(ex);
-                LOG.warn("Failed to abort a Casper transaction with id {} on object {}", txnId,
-                        objMeta.getObjectName(), ex);
-            } finally {
-                innerScope.end();
-            }
+            buildAbortRequestAndInvokeMds(opcRequestId, rootScope, objMeta, bucketInfo, txnId, putResponseObjectId);
         } finally {
             rootScope.annotate("totalBytesTransferred", totalTransferred);
         }
         Digest objectDigest = new Digest(DigestAlgorithm.MD5, objectDigestCalculator.digest());
         String objectDigestString = objectDigest.getBase64Encoded();
         String encryptedMetadata = CryptoUtils.encryptMetadata(objMeta.getMetadata(), encKey);
+        final String ifMatchEtag = request.getHeaderString(HttpHeaders.IF_MATCH.toString());
+        final String ifNoneMatchEtag = request.getHeaderString(HttpHeaders.IF_NONE_MATCH.toString());
+        FinishPutRequest finishPutRequest = constructFinishPutRequest(md5Override, etagOverride, partCountOverride, objMeta, bucketInfo, allowedPermissions, objectStorageTier, txnId, isSingleChunkObject, putResponseObjectId, totalTransferred, encKey, objectDigestString, encryptedMetadata, ifMatchEtag, ifNoneMatchEtag);
+
+        sendRequestWithMDS(opcRequestId, finishPutRequest);
+
+        final Optional<String> expectedMD5 = ChecksumHelper.getContentMD5Header(request);
+        final Digest expectedDigest = expectedMD5.map(m->Digest.fromBase64Encoded(DigestAlgorithm.MD5, m)).orElse(null);
+        if (expectedDigest != null && objectDigest != null) {
+            if (!Objects.equals(expectedDigest, objectDigest)) {
+                throw new InvalidDigestException(expectedDigest, objectDigest);
+            }
+        }
+        if (totalTransferred != objMeta.getSizeInBytes()) {
+            throw new InvalidContentLengthException(
+                    "The size of the body (" + totalTransferred +
+                            " bytes) does not match the expected content length (" + objMeta.getSizeInBytes() + " bytes)");
+        }
+
+        return Response.ok().build();
+    }
+
+    private void sendRequestWithMDS(String opcRequestId, FinishPutRequest finishPutRequest) {
+        BackendConversions.mdsObjectSummaryToObjectMetadata(
+                invokeMds(
+                        MdsMetrics.OBJECT_MDS_BUNDLE, MdsMetrics.OBJECT_MDS_FINISH_PUT,
+                        false, () -> objectClient.execute(
+                                c -> Backend.getClientWithOptions(c, objectDeadlineSeconds, opcRequestId))
+                                .finishPut(finishPutRequest).getSummary()), kms);
+    }
+
+    private FinishPutRequest constructFinishPutRequest(String md5Override, String etagOverride, Integer partCountOverride, ObjectMetadata objMeta, WSTenantBucketInfo bucketInfo, Set<CasperPermission> allowedPermissions, ObjectStorageTier objectStorageTier, CasperTransactionId txnId, boolean isSingleChunkObject, String putResponseObjectId, long totalTransferred, EncryptionKey encKey, String objectDigestString, String encryptedMetadata, String ifMatchEtag, String ifNoneMatchEtag) {
         final FinishPutRequest.Builder builder = FinishPutRequest.newBuilder()
-                .setObjectId(beginPutResponse.getObjectId())
+                .setObjectId(putResponseObjectId)
                 .setBucketToken(bucketInfo.getMdsBucketToken().toByteString())
                 .setObjectKey(Backend.objectKey(objMeta.getObjectName(), bucketInfo.getNamespaceKey().getName(),
                         bucketInfo.getBucketName(), bucketInfo.getNamespaceKey().getApi()))
@@ -427,7 +324,6 @@ public class ObjectResource {
                 .setTransactionId(txnId.toString())
                 .setMetadata(encryptedMetadata)
                 .setMd5(md5Override == null ? objectDigestString : md5Override)
-                //.setMd5("RqLVO15kBRdPq47Rd5kpqA==")
                 .setEtag(etagOverride == null ? CommonUtils.generateETag() : etagOverride)
                 .setEncryptionKey(MdsTransformer.toMdsEncryptionKey(encKey))
                 .setEtagType(MdsEtagType.ET_ETAG)
@@ -440,10 +336,14 @@ public class ObjectResource {
                     .setSequenceNum(Int64Value.of(0L));
         }
 
-        if (archiveMinRetention != null) {
+        //FIXME: I moved this way down the method.  Figure out why it's okay that it's this far down, or if it's not okay, what we missed in the first pass
+        // The object storage tier will always be set to STANDARD but when we read the object
+        // and if the time we read it is after the archive period we set for this object,
+        // we will treat this object as an archived object when we read it.
+        if (bucketInfo.getStorageTier() == BucketStorageTier.Archive) {
+            final Duration archiveMinRetention = casperConfig.getWebServerConfigurations().getArchiveConfiguration().getMinimumRetentionPeriodForArchives();
             builder.setMinRetention(TimestampUtils.toProtoDuration(archiveMinRetention));
-        }
-        if (archiveNewObjPeriod != null) {
+            final Duration archiveNewObjPeriod = casperConfig.getWebServerConfigurations().getArchiveConfiguration().getArchivePeriodForNewObject();
             builder.setTimeToArchive(TimestampUtils.toProtoDuration(archiveNewObjPeriod));
         }
 
@@ -459,25 +359,184 @@ public class ObjectResource {
             builder.setPartcountOverride(partCountOverride);
         }
 
-        ObjectMetadata finishPutResult = BackendConversions.mdsObjectSummaryToObjectMetadata(
-                invokeMds(
-                        MdsMetrics.OBJECT_MDS_BUNDLE, MdsMetrics.OBJECT_MDS_FINISH_PUT,
-                        false, () -> objectClient.execute(
-                                c -> Backend.getClientWithOptions(c, objectDeadlineSeconds, opcRequestId))
-                                .finishPut(builder.build()).getSummary()), kms);
+        return builder.build();
+    }
 
-        if (expectedDigest != null && objectDigest != null) {
-            if (!Objects.equals(expectedDigest, objectDigest)) {
-                throw new InvalidDigestException(expectedDigest, objectDigest);
-            }
+    //FIXME: how should this work for the nio side? per-ByteBuffer, or something?
+    private long handleInputStream(InputStream objectInputStream, String opcRequestId, MetricScope rootScope, ObjectMetadata objMeta, WSTenantBucketInfo bucketInfo, CasperTransactionId txnId, boolean isSingleChunkObject, VolumeMetaAndVon volMetaAndVon, String putResponseObjectId, long totalTransferred, int chunkSize, EncryptionKey encKey, CryptoMessageDigest objectDigestCalculator) {
+        int seqNum = 0;
+        for (Chunk chunk : Chunk.getChunksFromStream(objectInputStream, chunkSize)) {
+            if (chunk.getSize() == 0) continue;
+            totalTransferred += chunk.getSize();
+            objectDigestCalculator.update(chunk.getData());
+            processChunk(chunk, encKey, isSingleChunkObject, volMetaAndVon, opcRequestId, null, rootScope, bucketInfo, objMeta.getObjectName(), new ObjectId(putResponseObjectId), txnId, seqNum);
+            seqNum++;
         }
-        if (totalTransferred != objMeta.getSizeInBytes()) {
-            throw new InvalidContentLengthException(
-                    "The size of the body (" + totalTransferred +
-                            " bytes) does not match the expected content length (" + objMeta.getSizeInBytes() + " bytes)");
+        return totalTransferred;
+    }
+
+    private void buildAbortRequestAndInvokeMds(String opcRequestId, MetricScope rootScope, ObjectMetadata objMeta, WSTenantBucketInfo bucketInfo, CasperTransactionId txnId, String putResponseObjectId) {
+        final MetricScope innerScope = rootScope.child("abort");
+        final AbortPutRequest abortRequest = AbortPutRequest.newBuilder()
+                .setBucketToken(bucketInfo.getMdsBucketToken().toByteString())
+                .setObjectKey(Backend.objectKey(objMeta.getObjectName(), bucketInfo.getNamespaceKey().getName(),
+                        bucketInfo.getBucketName(), bucketInfo.getNamespaceKey().getApi()))
+                .setTransactionId(txnId.toString())
+                .setObjectId(putResponseObjectId)
+                .build();
+        try {
+            invokeMds(MdsMetrics.OBJECT_MDS_BUNDLE, MdsMetrics.OBJECT_MDS_ABORT_PUT,
+                    false, () -> objectClient.execute(c -> Backend.getClientWithOptions(
+                            c, objectDeadlineSeconds, opcRequestId).abortPut(abortRequest)));
+        } catch (Exception ex) {
+            innerScope.fail(ex);
+            LOG.warn("Failed to abort a Casper transaction with id {} on object {}", txnId,
+                    objMeta.getObjectName(), ex);
+        } finally {
+            innerScope.end();
+        }
+    }
+
+    private String executeRequestCheckPermissionsSendContinueReturnObjId(String opcRequestId, WSTenantBucketInfo bucketInfo, MetricScope writeObjectScope, Set<CasperPermission> allowedPermissions, BeginPutRequest putRequest) {
+        Function<ObjectServiceGrpc.ObjectServiceBlockingStub, BeginPutResponse> getClient = c -> Backend.getClientWithOptions(
+                c, objectDeadlineSeconds, opcRequestId).beginPut(putRequest);
+        Callable<BeginPutResponse> execute = () -> objectClient.execute(getClient);
+        Function<MetricScope, BeginPutResponse> invokeMds = innerScope -> invokeMds(
+                MdsMetrics.OBJECT_MDS_BUNDLE, MdsMetrics.OBJECT_MDS_BEGIN_PUT,
+                false, execute);
+
+        final BeginPutResponse response = MetricScope.timeScopeF(writeObjectScope, "objectMds:beginPut", invokeMds);
+
+        // Check the permissions the customer has. They need the OBJECT_CREATE permission if the object doesn't
+        // exist yet, and the OBJECT_OVERWRITE permission if there'authorize already an existing object.
+        // The check for OBJECT_CREATE is sufficient here in BeginPut. However, the OBJECT_OVERWRITE check is not
+        // sufficient here because there could be a new object created by another operation after this point, so it
+        if (!response.hasExistingObject() && !allowedPermissions.contains(CasperPermission.OBJECT_CREATE) ||
+                response.hasExistingObject() && !allowedPermissions.contains(CasperPermission.OBJECT_OVERWRITE)) {
+            throw new NoSuchBucketException(BucketBackend.noSuchBucketMsg(bucketInfo.getBucketName(),
+                    bucketInfo.getNamespaceKey().getName()));
         }
 
-        return Response.ok().build();
+        // TODO: Our NIO implementation needs to handle the 100-continue after a successful "begin put".  Jersey has no solution for this.
+        /*
+        if (!beginPutResponse.hasExistingObject()) {
+            curObjMeta = BackendConversions.mdsObjectSummaryToObjectMetadata(beginPutResponse.getExistingObject(), kms);
+            HttpMatchHelpers.checkConditionalHeaders(
+                    request, curObjMeta.map(ObjectMetadata::getETag).orElse(null));
+            HttpContentHelpers.write100Continue(request, response);
+        }*/
+        return response.getObjectId();
+    }
+
+    private BeginPutRequest constructPutRequest(ObjectMetadata objMeta, WSTenantBucketInfo bucketInfo, ObjectStorageTier objectStorageTier, CasperTransactionId txnId, VolumeMetaAndVon volMetaAndVon) {
+        final BeginPutRequest.Builder requestBuilder = BeginPutRequest.newBuilder()
+                .setBucketToken(bucketInfo.getMdsBucketToken().toByteString())
+                .setObjectKey(Backend.objectKey(
+                        objMeta.getObjectName(),
+                        bucketInfo.getNamespaceKey().getName(),
+                        bucketInfo.getBucketName(),
+                        bucketInfo.getNamespaceKey().getApi()))
+                .setStorageTier(MdsTransformer.toObjectStorageTier(objectStorageTier))
+                .setTransactionId(txnId.toString());
+        if(volMetaAndVon == null) {
+            requestBuilder.setVolumeId(Int64Value.of(volMetaAndVon.getVolumeMetadata().getVolumeId()))
+                    .setVon(Int32Value.of(volMetaAndVon.getVon()))
+                    .setSequenceNum(Int64Value.of(0L));
+        }
+        return requestBuilder.build();
+    }
+
+    private VolumeMetaAndVon getVolumeMetaAndVon(String opcRequestId, MetricScope rootScope, ObjectMetadata objMeta, boolean isSingleChunkObject) {
+        VolumeMetaAndVon volMetaAndVon = null;
+        if (isSingleChunkObject) {
+            volMetaAndVon = MetricScope.timeScopeF(rootScope,
+                    "pickVolume",
+                    innerScope -> volVonPicker.getNextVon(
+                            innerScope,
+                            createDefaultPickerContext(objMeta.getSizeInBytes(),
+                                    opcRequestId)));
+        }
+        return volMetaAndVon;
+    }
+
+//TODO: parameter formatting
+    private Set<CasperPermission> checkAuthAndFetchPermissions(
+            String namespace, MetricScope rootScope, AuthenticationInfo authInfo, WSTenantBucketInfo bucketInfo,
+            MetricScope writeObjectScope, String method, String requestUri,MultivaluedMap<String, String> headers) {
+        //TODO this used to use ExtractsRequestMedatadata.vcnIdFromRequest.  Determine whether we've lost functionality.
+        String vcnId = headers.getFirst(CommonHeaders.X_VCN_ID.toString());
+        String vcnDebugId = headers.getFirst(ServiceGateway.VCN_ID_CASPER_DEBUG_HEADER);
+        final String userAgent = Optional.ofNullable(headers.getFirst(HttpHeaders.USER_AGENT.toString()))
+                .orElse(DEFAULT_USER_AGENT);
+        final EmbargoContext visa = auths.getEmbargo().enter(method, requestUri, userAgent, rootScope);
+        Supplier<Optional<AuthorizationResponse>> authorizeFunction = authorize(namespace, rootScope, authInfo, bucketInfo, vcnId, vcnDebugId, visa);
+        Optional<AuthorizationResponse> authorizationResponse = Utils.runWithScope(writeObjectScope, authorizeFunction, "authorizer");
+
+        if (!authorizationResponse.isPresent()) {
+            throw new NoSuchBucketException(BucketBackend.noSuchBucketMsg(bucketInfo.getBucketName(),
+                    bucketInfo.getNamespaceKey().getName()));
+        }
+        return authorizationResponse.get().getCasperPermissions();
+    }
+
+    private Supplier<Optional<AuthorizationResponse>> authorize(String namespace, MetricScope rootScope, AuthenticationInfo authInfo, WSTenantBucketInfo bucketInfo, String vcnId, String vcnDebugId, EmbargoContext visa) {
+        return () -> {
+                // Authorize putting a new object or overwriting an existing object. We call this with
+                // the two permissions (create/overwrite) and authorizeAll = false. This means we will
+                // authorized if either of the permissions are allowed. We need to do this because we
+                // perform the authorization checks in two places. For create, we can check in BeginPut,
+                // but for overwrite, we need to check in FinishPut. So after calling authorize, we need
+                // to look at the AuthorizationResponse which contains the permissions that are actually
+                // allowed. Then we can use that to perform the checks in BeginPut and FinishPut.
+                return auths.getAuthorizer().authorize(
+                        authInfo,
+                        bucketInfo.getNamespaceKey(),
+                        bucketInfo.getBucketName(),
+                        bucketInfo.getCompartment(),
+                        bucketInfo.getPublicAccessType(),
+                        CasperOperation.PUT_OBJECT,
+                        bucketInfo.getKmsKeyId().orElse(null),
+                        false,
+                        bucketInfo.isTenancyDeleted(), rootScope,
+                        ALL_PUT_OBJECT_PERMISSIONS, visa, vcnId, vcnDebugId, namespace);
+            };
+    }
+
+    private Integer parsePartCountOverride(String partCountOverrideHeader) {
+        final Integer partCountOverride;
+        try {
+            partCountOverride = partCountOverrideHeader == null ? null : Integer.parseInt(partCountOverrideHeader);
+        } catch (NumberFormatException e) {
+            throw new BadRequestException("Cannot parse partCountOverrideHeader" + partCountOverrideHeader, e);
+        }
+        return partCountOverride;
+    }
+
+    private MetricScope buildMetricScope(String method, String realIP, String requestURI, String etagRound, String opcRequestId, String md5Override, String etagOverride) {
+        final MetricScope rootScope = Utils.getMetricScope(method, realIP, requestURI, casperConfig.getCommonConfigurations().getTracingConfiguration(), opcRequestId);
+        rootScope.annotate(CasperApiV2.MD5_OVERRIDE_HEADER, md5Override);
+        rootScope.annotate(CasperApiV2.ETAG_OVERRIDE_HEADER, etagOverride);
+        rootScope.annotate(CasperApiV2.POLICY_ROUND_HEADER, etagRound);
+        return rootScope;
+    }
+
+    private void validate(String namespace, MultivaluedMap<String, String> headers, String path) {
+        Validator.validateV2Namespace(namespace);
+        HttpContentHelpers.negotiateStorageObjectContent(headers, 0,
+                casperConfig.getWebServerConfigurations().getApiConfiguration().getMaxObjectSize().longValue(BYTE));
+        HttpMatchHelpers.validateConditionalHeaders(headers, HttpMatchHelpers.IfMatchAllowed.YES_WITH_STAR,
+                HttpMatchHelpers.IfNoneMatchAllowed.STAR_ONLY, path);
+    }
+
+    private void enterEmbargo(String namespace, String bucket, String object) {
+        final EmbargoV3Operation embargoV3Operation = EmbargoV3Operation.builder()
+                .setApi(EmbargoV3Operation.Api.V2)
+                .setOperation(CasperOperation.PUT_OBJECT)
+                .setNamespace(namespace)
+                .setBucket(bucket)
+                .setObject(object)
+                .build();
+        auths.getEmbargoV3().enter(embargoV3Operation);
     }
 
     private void processChunk(Chunk chunk, EncryptionKey encKey, boolean isSingleChunk, VolumeMetaAndVon volumeMetaAndVon, String opcRequestId, String opcClientRequestId, MetricScope metricScope, WSTenantBucketInfo bucketInfo, String objName, ObjectId objId, CasperTransactionId txnId, long seqNum) {

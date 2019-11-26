@@ -86,6 +86,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
+import javax.ws.rs.core.MultivaluedMap;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -293,6 +294,31 @@ public final class HttpContentHelpers {
      */
     public static void negotiateStorageObjectContent(javax.ws.rs.core.HttpHeaders headers, long minSizeByte, long maxSizeBytes) {
         String contentLenStr = headers.getHeaderString(HttpHeaders.CONTENT_LENGTH.toString());
+        if (contentLenStr == null) {
+            throw new ContentLengthRequiredException("The Content-Length header is required");
+        }
+
+        try {
+            long contentLen = Long.parseLong(contentLenStr);
+            if (contentLen > maxSizeBytes) {
+                throw new ObjectTooLargeException("The Content-Length must be less than " + maxSizeBytes +
+                        " bytes (it was '" + contentLenStr + "')");
+            }
+
+            if (contentLen < minSizeByte) {
+                throw new InvalidContentLengthException("The Content-Length must be greater than or equal to " +
+                        minSizeByte + " (it was '" + contentLenStr + "')");
+            }
+        } catch (NumberFormatException nfex) {
+            throw new InvalidContentLengthException("The Content-Length must be a valid integer (it was '" +
+                    contentLenStr + "')");
+        }
+    }
+
+//FIXME: didn't want to change common code but need something that takes a string or a map here...
+    public static void negotiateStorageObjectContent(MultivaluedMap<String, String> headers, long minSizeByte, long maxSizeBytes) {
+        //TODO: is getFirst okay? Do we want error handling if there are multiple content lengths? What does casper do today?
+        String contentLenStr = headers.getFirst(HttpHeaders.CONTENT_LENGTH.toString());
         if (contentLenStr == null) {
             throw new ContentLengthRequiredException("The Content-Length header is required");
         }
