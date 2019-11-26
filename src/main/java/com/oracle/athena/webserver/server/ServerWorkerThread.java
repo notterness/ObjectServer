@@ -319,8 +319,11 @@ public class ServerWorkerThread implements Runnable {
         countDownLatch.countDown();
     }
 
-    public ServerDigestThreadPool getServerDigestThreadPool() {
-        return digestThreadPool;
+    public boolean addServerDigestWork(BufferState bufferState) {
+        boolean isQueued;
+
+        isQueued = digestThreadPool.addDigestWorkToThread(bufferState);
+        return isQueued;
     }
 
     public void addBufferCompleteWork(BufferState bufferState) {

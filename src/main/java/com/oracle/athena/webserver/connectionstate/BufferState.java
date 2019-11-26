@@ -113,6 +113,7 @@ public class BufferState {
                 bufferState = BufferStateEnum.READ_DATA_DONE;
             } else {
                 LOG.info("ERROR: [" + connState.getConnStateId() + "] setReadState() invalid current state: " + bufferState.toString());
+
             }
         }
     }
@@ -153,11 +154,11 @@ public class BufferState {
         bufferState = BufferStateEnum.PARSE_HTTP_DONE;
     }
 
-    public void setBufferStateDigestWait() {
-        bufferState = BufferStateEnum.DIGEST_WAIT;
+    public void setBufferState(BufferStateEnum bufferState) {
+        this.bufferState = bufferState;
     }
 
-    public void bufferUpdateDigest() {
+    public void updateBufferDigest() {
         appBuffer.flip();
         connState.updateDigest(appBuffer);
     }

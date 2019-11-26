@@ -7,16 +7,13 @@ import java.util.concurrent.Executors;
 
 public class ServerDigestThreadPool {
 
-    private final static int SERVER_DIGEST_COUNT = 2;
     protected final ExecutorService digestThreadPool;
     protected int lastCurrentThread;
     private final int threadCount;
-    private final int queueSize;
     private final ServerDigestThread[] digestThreads;
 
-    public ServerDigestThreadPool(final int threadCount, final int queueSize) {
+    public ServerDigestThreadPool(final int threadCount){
         this.threadCount = threadCount;
-        this.queueSize   = queueSize;
         digestThreads    = new ServerDigestThread[this.threadCount];
         digestThreadPool = Executors.newFixedThreadPool(this.threadCount);
         this.lastCurrentThread = 0;

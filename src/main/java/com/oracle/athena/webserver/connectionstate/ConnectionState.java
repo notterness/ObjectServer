@@ -761,7 +761,7 @@ abstract public class ConnectionState {
 
         try {
             dataReadDoneQueue.put(bufferState);
-            bufferState.setReadState(BufferStateEnum.READ_DONE);
+            //bufferState.setReadState(BufferStateEnum.READ_DONE);
             readCompletedCount = dataBufferReadsCompleted.incrementAndGet();
         } catch (InterruptedException int_ex) {
             /*
@@ -1084,25 +1084,17 @@ abstract public class ConnectionState {
         dataBufferDigestCompleted.incrementAndGet();
     }
 
-    public int sendBuffersToMd5Worker() {
-        int numSent = 0;
-        Iterator<BufferState> iter = dataReadDoneQueue.iterator();
-        BufferState bufferState;
+    public void sendBuffersToMd5Worker() {
+        BufferState md5ReadyBuffers[] = new BufferState[0];
+        md5ReadyBuffers = dataReadDoneQueue.toArray(md5ReadyBuffers);
 
-        while (iter.hasNext()) {
-            bufferState = iter.next();
-            if (bufferState.getBufferState() == BufferStateEnum.READ_DONE ||
-                bufferState.getBufferState() == BufferStateEnum.READ_DATA_DONE ) {
-                iter.remove();
-                dataBufferReadsCompleted.decrementAndGet();
-                if (workerThread.getServerDigestThreadPool().addDigestWorkToThread(bufferState)) {
-                    bufferState.setBufferStateDigestWait();
-                    dataBufferDigestSent.incrementAndGet();
-                    numSent++;
-                }
-            }
+        for (BufferState bufferState : md5ReadyBuffers) {
+            dataReadDoneQueue.remove(bufferState);
+            dataBufferReadsCompleted.decrementAndGet();
+            workerThread.addServerDigestWork(bufferState);
+            bufferState.setBufferState(BufferStateEnum.DIGEST_WAIT);
+            dataBufferDigestSent.incrementAndGet();
         }
-        return numSent;
     }
 
     public void md5CalculateComplete() {
@@ -1112,13 +1104,14 @@ abstract public class ConnectionState {
     }
 
     public void md5WorkerCallback(BufferState bufferState) {
-        LOG.info("add buffer comlete work");
         workerThread.addBufferCompleteWork(bufferState);
     }
 
     void md5BufferWorkComplete(BufferState bufferState) {
         dataMd5DoneQueue.add(bufferState);
+        dataBufferDigestCompleted.incrementAndGet();
         dataBufferDigestSent.decrementAndGet();
+        LOG.info("bufferToMd5 " + bufferState + " this :" + this);
         addToWorkQueue(false);
     }
 

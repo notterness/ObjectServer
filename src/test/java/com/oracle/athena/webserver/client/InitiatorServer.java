@@ -22,8 +22,7 @@ public class InitiatorServer extends ServerChannelLayer {
     }
 
     public void start() {
-        serverWorkHandler = new InitiatorLoadBalancer(ServerChannelLayer.WORK_QUEUE_SIZE, this.numberWorkerThreads, this.memoryManager,
-                (clientId * 100), null);
+        serverWorkHandler = new InitiatorLoadBalancer(ServerChannelLayer.WORK_QUEUE_SIZE, this.numberWorkerThreads, this.memoryManager, (clientId * 100));
         serverWorkHandler.start();
 
         serverAcceptThread = new Thread(this);
