@@ -1,7 +1,6 @@
 package com.oracle.athena.webserver.connectionstate;
 
 
-import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.statemachine.StateEntry;
 import com.oracle.athena.webserver.statemachine.StateMachine;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
@@ -9,7 +8,7 @@ import com.oracle.athena.webserver.statemachine.StateQueueResult;
 import javax.net.ssl.SSLException;
 import java.util.function.Function;
 
-class SSLHandshakePipelineMgr extends ConnectionPipelineMgr {
+class SSLHandshakePipelineMgr implements ConnectionPipelineMgr {
 
     private WebServerConnState connectionState;
 
@@ -77,8 +76,6 @@ class SSLHandshakePipelineMgr extends ConnectionPipelineMgr {
     };
 
     public SSLHandshakePipelineMgr(WebServerConnState connState) {
-
-        super(connState);
 
         connectionState = connState;
 

@@ -3,13 +3,12 @@ package com.oracle.athena.webserver.connectionstate;
 import com.oracle.athena.webserver.statemachine.StateEntry;
 import com.oracle.athena.webserver.statemachine.StateMachine;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
-import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.function.Function;
 
-public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
+public class ContentReadPipelineMgr implements ConnectionPipelineMgr {
 
     private static final Logger LOG = LoggerFactory.getLogger(ContentReadPipelineMgr.class);
 
@@ -133,8 +132,6 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
     };
 
     ContentReadPipelineMgr(WebServerConnState connState) {
-
-        super(connState);
 
         this.connectionState = connState;
 
