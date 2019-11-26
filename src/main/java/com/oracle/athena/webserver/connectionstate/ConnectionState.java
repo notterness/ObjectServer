@@ -761,7 +761,7 @@ abstract public class ConnectionState {
 
         try {
             dataReadDoneQueue.put(bufferState);
-            bufferState.setReadState(BufferStateEnum.READ_DONE);
+            //bufferState.setReadState(BufferStateEnum.READ_DONE);
             readCompletedCount = dataBufferReadsCompleted.incrementAndGet();
         } catch (InterruptedException int_ex) {
             /*
@@ -1093,7 +1093,7 @@ abstract public class ConnectionState {
             dataBufferReadsCompleted.decrementAndGet();
             workerThread.addServerDigestWork(bufferState);
             bufferState.setBufferState(BufferStateEnum.DIGEST_WAIT);
-            bufferState.bufferDigestComplete();
+            dataBufferDigestSent.incrementAndGet();
         }
     }
 
@@ -1109,7 +1109,9 @@ abstract public class ConnectionState {
 
     void md5BufferWorkComplete(BufferState bufferState) {
         dataMd5DoneQueue.add(bufferState);
+        dataBufferDigestCompleted.incrementAndGet();
         dataBufferDigestSent.decrementAndGet();
+        LOG.info("bufferToMd5 " + bufferState + " this :" + this);
         addToWorkQueue(false);
     }
 

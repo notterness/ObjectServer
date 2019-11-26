@@ -976,6 +976,7 @@ public class WebServerConnState extends ConnectionState {
 
         for (BufferState bufferState : md5DoneBuffers) {
             bufferStatePool.freeBufferState(bufferState);
+            dataMd5DoneQueue.remove(bufferState);
 
             int digestCompleted = dataBufferDigestCompleted.decrementAndGet();
             LOG.info("WebServerConnState[" + connStateId + "] releaseContentBuffers() " + digestCompleted);
@@ -983,6 +984,7 @@ public class WebServerConnState extends ConnectionState {
 
         for (BufferState bufferState : readDoneBuffers) {
             bufferStatePool.freeBufferState(bufferState);
+            dataReadDoneQueue.remove(bufferState);
 
             int readsCompleted = dataBufferReadsCompleted.decrementAndGet();
             LOG.info("WebServerConnState[" + connStateId + "] releaseContentBuffers() " + readsCompleted);

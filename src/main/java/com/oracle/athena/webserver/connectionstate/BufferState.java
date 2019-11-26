@@ -113,6 +113,7 @@ public class BufferState {
                 bufferState = BufferStateEnum.READ_DATA_DONE;
             } else {
                 LOG.info("ERROR: [" + connState.getConnStateId() + "] setReadState() invalid current state: " + bufferState.toString());
+
             }
         }
     }
