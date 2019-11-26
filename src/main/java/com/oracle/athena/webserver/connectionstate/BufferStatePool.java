@@ -56,12 +56,52 @@ public class BufferStatePool {
         return null;
     }
 
+    public BufferState allocBufferState(final ConnectionState connState, final BufferStateEnum initialState,
+                                        final int appBufferSize, final int netBufferSize) {
+        BufferState bufferState = new BufferState(connState);
+
+        if (bufferState != null) {
+            MemoryAvailableCallback memAvailCb;
+            ByteBuffer appBuffer;
+            ByteBuffer netBuffer;
+
+            memAvailCb = new MemoryAvailableCallback(connState, 2);
+            appBuffer = memoryAllocator.poolMemAlloc(appBufferSize, memAvailCb);
+            if (appBuffer != null) {
+                netBuffer = memoryAllocator.poolMemAlloc(netBufferSize, memAvailCb);
+                if (netBuffer != null) {
+                    bufferState.assignBuffer(appBuffer, netBuffer, initialState);
+
+                    if (!inUseList.offer(bufferState)) {
+                        LOG.error("ConnectionState[" + connState.getConnStateId() + "] Unable to add to inUseList");
+                    }
+
+                    return bufferState;
+                }else {
+                    /* TODO: May need composition strategy (hold this buffer,
+					   wait for the second buffer).
+					 */
+                    memoryAllocator.poolMemFree(appBuffer);
+                }
+            }
+
+            // Need to release the bufferState
+        }
+
+        // Unable to allocate the memory
+        return null;
+    }
+
+
     public void freeBufferState(BufferState bufferState) {
 
         ByteBuffer buffer = bufferState.getBuffer();
         memoryAllocator.poolMemFree(buffer);
-
-        bufferState.assignBuffer(null, BufferStateEnum.INVALID_STATE);
+        buffer = bufferState.getNetBuffer();
+        if (buffer != null) {
+            memoryAllocator.poolMemFree(buffer);
+        }
+        bufferState.assignBuffer(null, null, BufferStateEnum.INVALID_STATE);
 
         inUseList.remove(bufferState);
     }

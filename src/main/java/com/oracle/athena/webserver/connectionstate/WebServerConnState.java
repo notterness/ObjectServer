@@ -7,6 +7,8 @@ import com.oracle.athena.webserver.server.WriteConnection;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
 import org.eclipse.jetty.http.HttpStatus;
 
+import javax.net.ssl.*;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.util.Iterator;
@@ -39,6 +41,7 @@ public class WebServerConnState extends ConnectionState {
     private ContentReadPipelineMgr readPipelineMgr;
     private HttpParsePipelineMgr httpParsePipelineMgr;
     private OutOfResourcePipelineMgr outOfResourcePipelineMgr;
+    private SSLHandshakePipelineMgr sslHandshakePipelineMgr;
 
     /*
     ** The following variables are used in the ContentReadPipeline class. This is used to determine the
@@ -80,6 +83,7 @@ public class WebServerConnState extends ConnectionState {
     private int allocatedHttpBufferCount;
 
     private AtomicInteger outstandingHttpReadCount;
+    private AtomicInteger httpBufferReadsUnwrapNeeded;
     private AtomicInteger httpBufferReadsCompleted;
     private AtomicBoolean httpHeaderParsed;
 
@@ -140,6 +144,7 @@ public class WebServerConnState extends ConnectionState {
         responseChannelWriteDone = new AtomicBoolean(false);
 
         outstandingHttpReadCount = new AtomicInteger(0);
+        httpBufferReadsUnwrapNeeded = new AtomicInteger(0);
         requestedHttpBuffers = 0;
         allocatedHttpBufferCount = 0;
 
@@ -157,6 +162,12 @@ public class WebServerConnState extends ConnectionState {
     }
 
 
+    public void setupSSL() {
+        setupInitial();
+        setSSLHandshakeRequired(false);
+        setSSLBuffersNeeded(true);
+    }
+
     public void start() {
         super.start();
 
@@ -169,13 +180,13 @@ public class WebServerConnState extends ConnectionState {
         httpParser = new ByteBufferHttpParser(casperHttpInfo);
 
         httpParsePipelineMgr = new HttpParsePipelineMgr(this);
+        sslHandshakePipelineMgr = new SSLHandshakePipelineMgr(this);
         readPipelineMgr = new ContentReadPipelineMgr(this);
         outOfResourcePipelineMgr = new OutOfResourcePipelineMgr(this);
+    }
 
-        /*
-        ** start with the http manager.
-        */
-        pipelineManager = httpParsePipelineMgr;
+    public void selectPipelineManagers() {
+        pipelineManager = (sslContext == null) ? httpParsePipelineMgr : sslHandshakePipelineMgr;
     }
 
     /*
@@ -305,6 +316,9 @@ public class WebServerConnState extends ConnectionState {
         return (httpBufferReadsCompleted.get() > 0);
     }
 
+    boolean httpBuffersReadyToUnwrap() {
+        return (httpBufferReadsUnwrapNeeded.get() > 0);
+    }
     /*
     ** Returns the number of outstanding HTTP buffer reads there currently are.
      */
@@ -347,6 +361,10 @@ public class WebServerConnState extends ConnectionState {
         }
     }
 
+    public void setupNextSSLPipeline() {
+        pipelineManager = httpParsePipelineMgr;
+    }
+
     /*
      ** Allocate a buffer to read HTTP header information into and associate it with this ConnectionState
      **
@@ -356,8 +374,18 @@ public class WebServerConnState extends ConnectionState {
      **   when buffers are available and then the connection will go back and try the allocation again.
      */
     int allocHttpBufferState() {
+        BufferState bufferState;
+
         while (requestedHttpBuffers > 0) {
-            BufferState bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_HTTP_FROM_CHAN, MemoryManager.SMALL_BUFFER_SIZE);
+            if (isSSL()) {
+                int appBufferSize = engine.getSession().getApplicationBufferSize();
+                int netBufferSize = engine.getSession().getPacketBufferSize();
+                bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_HTTP_FROM_CHAN,
+                                                                appBufferSize, netBufferSize);
+            } else {
+                bufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_HTTP_FROM_CHAN, MemoryManager.SMALL_BUFFER_SIZE);
+            }
+
             if (bufferState != null) {
                 allocatedHttpBufferQueue.add(bufferState);
 
@@ -417,10 +445,12 @@ public class WebServerConnState extends ConnectionState {
         int readCount = outstandingHttpReadCount.decrementAndGet();
         try {
             httpReadDoneQueue.put(bufferState);
-            readCompletedCount = httpBufferReadsCompleted.incrementAndGet();
+
+            readCompletedCount = isSSL() ? httpBufferReadsUnwrapNeeded.incrementAndGet() :
+                                           httpBufferReadsCompleted.incrementAndGet();
         } catch (InterruptedException int_ex) {
             LOG.info("httpReadCompleted(" + connStateId + ") " + int_ex.getMessage());
-            readCompletedCount = httpBufferReadsCompleted.get();
+            readCompletedCount = isSSL() ? httpBufferReadsUnwrapNeeded.get() : httpBufferReadsCompleted.get();
         }
 
         /*
@@ -548,6 +578,54 @@ public class WebServerConnState extends ConnectionState {
         }
     }
 
+    public void sslReadUnwrap() {
+        ByteBuffer clientAppData;
+        ByteBuffer clientNetData;
+
+        int bufferReadsDone = httpBufferReadsUnwrapNeeded.get();
+        if (bufferReadsDone > 0) {
+            for (BufferState bufferState : httpReadDoneQueue) {
+
+                clientAppData = bufferState.getBuffer();
+                clientNetData = bufferState.getNetBuffer();
+                clientNetData.flip();
+                while (clientNetData.hasRemaining()) {
+                    clientAppData.clear();
+                    SSLEngineResult result;
+                    try {
+                        result = engine.unwrap(clientNetData, clientAppData);
+                    } catch (SSLException e) {
+                        System.out.println("Unable to unwrap data.  Will be evident in parse.");
+                        e.printStackTrace();
+                        return;
+                    }
+                    switch (result.getStatus()) {
+                        case OK:
+                            System.out.println("Unwrapped data!");
+                            httpBufferReadsUnwrapNeeded.decrementAndGet();
+                            httpBufferReadsCompleted.incrementAndGet();
+                            break;
+                        case BUFFER_OVERFLOW:
+                            //    clientAppData = enlargeApplicationBuffer(engine, peerAppData);
+                            break;
+                        case BUFFER_UNDERFLOW:
+                            // no data was read or the TLS packet was incomplete.
+                            break;
+                        case CLOSED:
+                            //("Client wants to close connection...");
+                            //closeConnection(socketChannel, engine);
+                            return;
+                        default:
+                            //Log this state that can't happen
+                            System.out.println("Illegal state: " + result.getStatus().toString());
+                            break;
+                    }
+                }
+            }
+        }
+
+    }
+
 
     /*
      ** This function walks through all the buffers that have reads completed and pushes
@@ -572,9 +650,7 @@ public class WebServerConnState extends ConnectionState {
                 httpBufferReadsCompleted.decrementAndGet();
 
                 buffer = bufferState.getBuffer();
-                int bufferTextCapacity = buffer.position();
-                buffer.rewind();
-                buffer.limit(bufferTextCapacity);
+                buffer.flip();
 
                 //displayBuffer(bufferState);
                 ByteBuffer remainingBuffer;
@@ -653,6 +729,11 @@ public class WebServerConnState extends ConnectionState {
         writeConn.assignAsyncWriteChannel(chan);
     }
 
+    @Override
+    public void setSslContext(SSLContext sslContext) {
+        super.initSslEngine(sslContext);
+    }
+
     /*
      ** Sets up the WriteConnection, but only does it once
      */
@@ -682,6 +763,17 @@ public class WebServerConnState extends ConnectionState {
             finalResponseSent = true;
 
             ByteBuffer respBuffer = resultBuilder.buildResponse(buffState, resultCode, true);
+
+            if (isSSL()) {
+                try {
+                    sslWrapData(buffState);
+                } catch (IOException e) {
+                    //FIXME: Any SSLEngine problems, drop connection, give up
+                    LOG.info("WebServerConnState[" + connStateId + "] SSLEngine threw " + e.toString());
+                    e.printStackTrace();
+                }
+                respBuffer = buffState.getNetBuffer();
+            }
 
             int bytesToWrite = respBuffer.position();
             respBuffer.flip();
@@ -719,8 +811,17 @@ public class WebServerConnState extends ConnectionState {
     ** This allocates the buffer to send the response
      */
     private BufferState allocateResponseBuffer() {
-        BufferState respBuffer = bufferStatePool.allocBufferState(this, BufferStateEnum.SEND_FINAL_RESPONSE, MemoryManager.MEDIUM_BUFFER_SIZE);
+        BufferState respBuffer;
+        if (!isSSL()) {
+            respBuffer = bufferStatePool.allocBufferState(this,
+                    BufferStateEnum.SEND_FINAL_RESPONSE, MemoryManager.MEDIUM_BUFFER_SIZE);
+        } else {
+            int appBufferSize = engine.getSession().getApplicationBufferSize();
+            int netBufferSize = engine.getSession().getPacketBufferSize();
 
+            respBuffer = bufferStatePool.allocBufferState(this,
+                    BufferStateEnum.SEND_FINAL_RESPONSE, appBufferSize, netBufferSize);
+        }
         responseBuffer = respBuffer;
 
         return respBuffer;

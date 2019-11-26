@@ -10,12 +10,11 @@ public class InitiatorServer extends ServerChannelLayer {
 
     private int clientId;
     private int numberWorkerThreads;
-
     private MemoryManager memoryManager;
     private ServerDigestThreadPool digestThreadPool;
 
-    InitiatorServer(int workerThreads, int listenPort, int uniqueId){
-        super(workerThreads, listenPort, uniqueId);
+    InitiatorServer(int workerThreads, int listenPort, int uniqueId) {
+        super(listenPort, uniqueId);
 
         this.numberWorkerThreads = workerThreads;
         this.clientId = uniqueId;
@@ -26,7 +25,7 @@ public class InitiatorServer extends ServerChannelLayer {
 
     public void start() {
         serverWorkHandler = new InitiatorLoadBalancer(ServerChannelLayer.WORK_QUEUE_SIZE, this.numberWorkerThreads, this.memoryManager,
-                (clientId * 100), digestThreadPool);
+                (clientId * 100), this.digestThreadPool);
         serverWorkHandler.start();
 
         serverAcceptThread = new Thread(this);

@@ -1,14 +1,20 @@
 package com.oracle.athena.webserver.server;
 
 import com.oracle.athena.webserver.http.parser.ByteBufferHttpParser;
-import com.oracle.athena.webserver.memory.MemoryManager;
 
+import javax.net.ssl.*;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
+import java.security.KeyManagementException;
+import java.security.KeyStore;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -17,14 +23,18 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-abstract public class ServerChannelLayer implements Runnable {
+public class ServerChannelLayer implements Runnable {
 
     private static final Logger LOG = LoggerFactory.getLogger(ServerChannelLayer.class);
 
     public static final int BASE_TCP_PORT = 5000;
+    public static final int HTTP_TCP_PORT = BASE_TCP_PORT + 80;
+    public static final int HTTPS_TCP_PORT = BASE_TCP_PORT + 443;
     public static final int DEFAULT_CLIENT_ID = 31415;
     private static final int CHAN_TIMEOUT = 100;
     public static final int WORK_QUEUE_SIZE = 10;
+
+    private SSLContext sslContext;
 
     private int portNum;
     //TODO: naming, should indicate it is the number of threads and not the threads themselves.
@@ -32,13 +42,12 @@ abstract public class ServerChannelLayer implements Runnable {
     //FIXME: this variable and its usage are not production ready.  We should not rely on trace statements in log files
     //for anything in production.
     int serverClientId;
+    boolean ssl;
 
     //FIXME: abstract class should not have a member variable it neither initializes nor uses. Probably delete this.
     protected Thread serverAcceptThread;
     //TODO: naming, either class ServerLoadBalancer or variable workHandler needs a new name (without server in it)
     ServerLoadBalancer serverWorkHandler;
-
-    protected MemoryManager memoryManager;
 
     protected ServerDigestThreadPool digestThreadPool;
 
@@ -55,23 +64,58 @@ abstract public class ServerChannelLayer implements Runnable {
     //FIXME - remove or use instance variable
     private ByteBufferHttpParser byteBufferHttpParser;
 
-    //TODO: constructor parameters should have the same name as the instance variables to which they are assigned, and
-    // constructor code should read this.varname = varname
-    public ServerChannelLayer(int numWorkerThreads, int listenPort, int clientId) {
-        portNum = listenPort;
-        workerThreads = numWorkerThreads;
-        serverClientId = clientId;
+    public ServerChannelLayer(ServerLoadBalancer serverWorkHandler, int portNum, int serverClientId, boolean ssl) {
+        this.serverWorkHandler = serverWorkHandler;
+        this.portNum = portNum;
+        this.serverClientId = serverClientId;
+        this.ssl = ssl;
 
-        this.memoryManager = new MemoryManager();
+        if (ssl) {
+            try {
+                sslContext = SSLContext.getInstance("TLSv1.2");
+
+                // TODO: figure out how to initialize with casper certs
+                sslContext.init(createKeyManagers("./src/main/resources/server.jks", "athena", "athena"), createTrustManagers("./src/main/resources/trustedCerts.jks", "athena"), new SecureRandom());
+
+            } catch (NoSuchAlgorithmException e) {
+                e.printStackTrace();
+            } catch (KeyManagementException e) {
+                e.printStackTrace();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        } else {
+            sslContext = null;
+        }
+
+        serverConnTransactionId = 0x5555;
+
+        serverAcceptThread = new Thread(this);
+        exitThreads = false;
+    }
+
+    public ServerChannelLayer(ServerLoadBalancer serverWorkHandler, int listenPort, int clientId) {
+         this(serverWorkHandler, listenPort, clientId, false);
+    }
+
+    public ServerChannelLayer(int listenPort, int clientId) {
+        this.serverWorkHandler = null;
+        portNum = listenPort;
+        serverClientId = clientId;
+        ssl = false;
+        sslContext = null;
 
         this.digestThreadPool = new ServerDigestThreadPool(2,10);
 
         serverConnTransactionId = 0x5555;
 
+        serverAcceptThread = new Thread(this);
         exitThreads = false;
     }
 
-    abstract public void start();
+    public void start() {
+        serverAcceptThread.start();
+    }
 
     /*
      ** Perform an orderly shutdown of the server channel and all of its associated resources.
@@ -105,13 +149,6 @@ abstract public class ServerChannelLayer implements Runnable {
             }
         } catch (InterruptedException int_ex) {
             LOG.info("Wait for threadpool shutdown failed: " + serverConnTransactionId + " " + int_ex.getMessage());
-        }
-
-        /*
-         ** Verify that the MemoryManger has all of its memory back in the free pools
-         */
-        if (this.memoryManager.verifyMemoryPools("ServerChannelLayer")) {
-            System.out.println("ServerChannelLayer[" + (serverClientId * 100) + "] Memory Verification All Passed");
         }
 
         System.out.println("ServerChannelLayer[" + (serverClientId * 100) + "] stop() finished");
@@ -162,7 +199,7 @@ abstract public class ServerChannelLayer implements Runnable {
 
                 LOG.info("Server run(" + serverClientId + "): accepted");
 
-                if (!serverWorkHandler.startNewConnection(clientChan)) {
+                if (!serverWorkHandler.startNewConnection(clientChan, sslContext)) {
                     /*
                     FIXME: currently this only happens if the load balancer was unable to allocate a connection pool
                     from the unreserved normal pool, and also unable to allocate a connection pool from the unreserved
@@ -178,4 +215,35 @@ abstract public class ServerChannelLayer implements Runnable {
 
         LOG.info("ServerChannelLayer(" + serverClientId + ") exit " + Thread.currentThread().getName());
     }
+
+    private KeyManager[] createKeyManagers(String filepath, String keystorePassword, String keyPassword) throws Exception {
+        KeyStore keyStore = KeyStore.getInstance("JKS");
+        InputStream keyStoreIS = new FileInputStream(filepath);
+        try {
+            keyStore.load(keyStoreIS, keystorePassword.toCharArray());
+        } finally {
+            if (keyStoreIS != null) {
+                keyStoreIS.close();
+            }
+        }
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        kmf.init(keyStore, keyPassword.toCharArray());
+        return kmf.getKeyManagers();
+    }
+
+    private TrustManager[] createTrustManagers(String filepath, String keystorePassword) throws Exception {
+        KeyStore trustStore = KeyStore.getInstance("JKS");
+        InputStream trustStoreIS = new FileInputStream(filepath);
+        try {
+            trustStore.load(trustStoreIS, keystorePassword.toCharArray());
+        } finally {
+            if (trustStoreIS != null) {
+                trustStoreIS.close();
+            }
+        }
+        TrustManagerFactory trustFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        trustFactory.init(trustStore);
+        return trustFactory.getTrustManagers();
+    }
+
 }

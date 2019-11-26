@@ -22,7 +22,7 @@ public class ServerDigestThreadPool {
         this.lastCurrentThread = 0;
     }
 
-    void start () {
+    public void start () {
         for (int i = 0; i < threadCount; i++) {
             ServerDigestThread thread = new ServerDigestThread();
             digestThreadPool.execute(thread);
@@ -30,7 +30,7 @@ public class ServerDigestThreadPool {
         }
     }
 
-    void stop () {
+    public void stop () {
         for (int i = 0; i < threadCount; i++) {
             digestThreads[i].stopServerDigestThread();
         }

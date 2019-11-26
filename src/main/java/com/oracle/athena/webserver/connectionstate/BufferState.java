@@ -14,20 +14,33 @@ public class BufferState {
 
     private ConnectionState connState;
 
-    private ByteBuffer buffer;
+    private ByteBuffer appBuffer;
+
+    private ByteBuffer netBuffer;
 
     private BufferStateEnum bufferState;
 
+    private int count;
+
     BufferState(final ConnectionState work) {
         bufferState = BufferStateEnum.INVALID_STATE;
-        buffer = null;
-
+        appBuffer = null;
+        netBuffer = null;
+        count = 0;
         connState = work;
     }
 
-    public void assignBuffer(final ByteBuffer userBuffer, final BufferStateEnum state) {
-        buffer = userBuffer;
-        bufferState = state;
+    public void assignBuffer(final ByteBuffer appBuffer, final BufferStateEnum bufferState) {
+        this.appBuffer = appBuffer;
+        this.bufferState = bufferState;
+        updateCount();
+    }
+
+    public void assignBuffer(final ByteBuffer appBuffer, ByteBuffer netBuffer, final BufferStateEnum bufferState) {
+        this.appBuffer = appBuffer;
+        this.netBuffer = netBuffer;
+        this.bufferState = bufferState;
+        updateCount();
     }
 
     public BufferStateEnum getBufferState() {
@@ -35,12 +48,21 @@ public class BufferState {
     }
 
     public ByteBuffer getBuffer() {
-        return buffer;
+        return appBuffer;
     }
 
     public int getOwnerId() { return connState.getConnStateId(); }
 
     public ConnectionStateEnum getConnectionNextState() { return connState.getNextState(); }
+
+    public ByteBuffer getNetBuffer() {
+        return netBuffer;
+    }
+
+    public ByteBuffer getChannelBuffer() {
+        return connState.isSSL() ? netBuffer : appBuffer;
+    }
+
 
     /*
     ** This is used to set the BufferState to a waiting for a read to complete state. This is called
@@ -52,7 +74,7 @@ public class BufferState {
          if (bufferState == BufferStateEnum.READ_HTTP_FROM_CHAN) {
             bufferState = BufferStateEnum.READ_WAIT_FOR_HTTP;
         } else if (bufferState == BufferStateEnum.READ_DATA_FROM_CHAN) {
-            bufferState = BufferStateEnum.READ_WAIT_FOR_DATA;
+             bufferState = BufferStateEnum.READ_WAIT_FOR_DATA;
         } else {
              // TODO: Add Assert((bufferState == READ_HTTP_FROM_CHAN) || (bufferState == READ_DATA_FROM_CHAN))
 
@@ -73,7 +95,7 @@ public class BufferState {
     public void setReadState(final BufferStateEnum newState) {
 
         LOG.info("[" + connState.getConnStateId() + "] setReadState() current: " + bufferState.toString() + " new: " + newState.toString() +
-                " remaining: " + buffer.remaining());
+                " remaining: " + appBuffer.remaining());
 
         if (newState == BufferStateEnum.READ_ERROR) {
             /*
@@ -96,25 +118,25 @@ public class BufferState {
     }
 
     /*
-    ** This will copy the contents of the newBuffer into the ByteBuffer associated with the BufferState.
+    ** This will copy the contents of the newBuffer into the appBuffer associated with the BufferState.
      */
     public void copyByteBuffer(ByteBuffer srcBuffer) {
         LOG.info("copyByteBuffer() newBuffer remaining: " + srcBuffer.remaining() + " limit: " +
                 srcBuffer.limit() + " position: " + srcBuffer.position());
 
-        int nBytesToCopy = Math.min(buffer.remaining(), srcBuffer.remaining());
-        if (!buffer.isDirect()) {
-            buffer.put(srcBuffer.array(), srcBuffer.arrayOffset() + srcBuffer.position(), nBytesToCopy);
+        int nBytesToCopy = Math.min(appBuffer.remaining(), srcBuffer.remaining());
+        if (!appBuffer.isDirect()) {
+            appBuffer.put(srcBuffer.array(), srcBuffer.arrayOffset() + srcBuffer.position(), nBytesToCopy);
         } else {
             /*
             ** Need to perform manual copy (Need to handle the allocate direct issue better)
              */
             for (int i = 0; i < nBytesToCopy; i++) {
-                buffer.put(srcBuffer.get(srcBuffer.position() + i));
+                appBuffer.put(srcBuffer.get(srcBuffer.position() + i));
             }
 
-            buffer.limit(nBytesToCopy);
-            buffer.position(0);
+            appBuffer.limit(nBytesToCopy);
+            appBuffer.position(0);
         }
     }
 
@@ -126,7 +148,7 @@ public class BufferState {
      */
     public void setBufferHttpParseDone() {
         LOG.info("setBufferHttpParseDone(): current " + bufferState.toString() +
-                " remaining: " + buffer.remaining());
+                " remaining: " + appBuffer.remaining());
 
         bufferState = BufferStateEnum.PARSE_HTTP_DONE;
     }
@@ -136,8 +158,8 @@ public class BufferState {
     }
 
     public void bufferUpdateDigest() {
-        buffer.flip();
-        connState.updateDigest(buffer);
+        appBuffer.flip();
+        connState.updateDigest(appBuffer);
     }
 
     /*
@@ -150,5 +172,18 @@ public class BufferState {
     public void bufferDigestComplete() {
         bufferState = BufferStateEnum.DIGEST_DONE;
         connState.md5BufferWorkComplete(this);
+    }
+    private void updateCount() {
+        count = 0;
+        if (this.appBuffer != null) {
+            count++;
+        }
+        if (this.netBuffer != null) {
+            count++;
+        }
+    }
+
+    public int count() {
+        return count;
     }
 }
