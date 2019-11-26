@@ -9,6 +9,7 @@ import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServerRequest;
 
 import javax.annotation.Nullable;
+import javax.ws.rs.core.MultivaluedMap;
 import java.util.Optional;
 
 /**
@@ -72,6 +73,17 @@ public final class HttpMatchHelpers {
         final String ifNoneMatch = request.getHeader(HttpHeaders.IF_NONE_MATCH);
         validateConditionalHeaders(request, ifMatch, ifNoneMatch, ifMatchAllowed, ifNoneMatchAllowed);
     }
+
+    public static void validateConditionalHeaders(
+            MultivaluedMap<String, String> headers, IfMatchAllowed ifMatchAllowed, IfNoneMatchAllowed ifNoneMatchAllowed, String path) {
+        //FIXME: figure out getFirst implications
+        final String ifMatch = headers.getFirst(HttpHeaders.IF_MATCH.toString());
+        final String ifNoneMatch = headers.getFirst(HttpHeaders.IF_NONE_MATCH.toString());
+        //FIXME: not sure why the bottommost method is reimplemented compared to the request and 4 other args method,
+        // or why it takes in a parameter it doesn't use, but it's exactly what I need so I'm using it until this class can be cleaned up.
+        validateConditionalHeaders(null, ifMatch, ifNoneMatch, ifMatchAllowed, ifNoneMatchAllowed, path);
+    }
+
 
     /**
      * Validate any existing If-Match and If-None-Match headers.

@@ -1,14 +1,13 @@
 package com.oracle.athena.webserver.connectionstate;
 
-import org.eclipse.jetty.http.HttpStatus;
-
 import com.oracle.athena.webserver.statemachine.StateEntry;
 import com.oracle.athena.webserver.statemachine.StateMachine;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
+import org.eclipse.jetty.http.HttpStatus;
 
 import java.util.function.Function;
 
-class HttpParsePipelineMgr extends ConnectionPipelineMgr {
+class HttpParsePipelineMgr implements ConnectionPipelineMgr {
 
     private WebServerConnState connectionState;
 
@@ -122,8 +121,6 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
     };
 
     public HttpParsePipelineMgr(WebServerConnState connState) {
-
-        super(connState);
 
         connectionState = connState;
 

@@ -1,5 +1,6 @@
 package com.oracle.athena.webserver.server;
 
+import com.oracle.athena.webserver.connectionstate.BufferState;
 import com.oracle.athena.webserver.connectionstate.BufferStatePool;
 import com.oracle.athena.webserver.connectionstate.ConnectionState;
 import com.oracle.athena.webserver.http.BuildHttpResult;
@@ -35,8 +36,12 @@ public class ServerWorkerThread implements Runnable {
 
     private MemoryManager memoryManager;
 
+    private ServerDigestThreadPool digestThreadPool;
+
     private BlockingQueue<ConnectionState> workQueue;
     private BlockingQueue<ConnectionState> timedWaitQueue;
+
+    private BlockingQueue<BufferState> bufferCompleteQ;
 
     private BufferStatePool bufferStatePool;
 
@@ -62,12 +67,14 @@ public class ServerWorkerThread implements Runnable {
     private volatile boolean stopReceived;
     private final CountDownLatch countDownLatch;
 
-    public ServerWorkerThread(final int queueSize, final MemoryManager memoryManager, final int threadId) {
+    public ServerWorkerThread(final int queueSize, final MemoryManager memoryManager, final int threadId,
+                              final ServerDigestThreadPool digestThreadPool) {
 
         maxQueueSize = queueSize;
 
         this.memoryManager = memoryManager;
         this.threadId = threadId;
+        this.digestThreadPool = digestThreadPool;
 
         queueMutex = new ReentrantLock();
         queueSignal = queueMutex.newCondition();
@@ -76,6 +83,7 @@ public class ServerWorkerThread implements Runnable {
         // TODO: Need to fix the queue size to account for reserved connections
         workQueue = new LinkedBlockingQueue<>(maxQueueSize * 2);
         timedWaitQueue = new LinkedBlockingQueue<>(maxQueueSize * 2);
+        bufferCompleteQ = new LinkedBlockingQueue<>(ConnectionState.MAX_OUTSTANDING_BUFFERS * maxQueueSize);
         bufferStatePool = new BufferStatePool(ConnectionState.MAX_OUTSTANDING_BUFFERS * maxQueueSize,
                 memoryManager);
         resultBuilder = new BuildHttpResult();
@@ -93,6 +101,7 @@ public class ServerWorkerThread implements Runnable {
             LOG.info("Server worker thread[" + threadId + "] failed: " + int_ex.getMessage());
         }
 
+        LOG.info("bufferQ " + bufferCompleteQ.size());
         /*
         ** Code to check that the BufferStatePool does not have BufferState objects on its in use list
         **   when the ServerWorkerThread is shutting down.
@@ -227,7 +236,6 @@ public class ServerWorkerThread implements Runnable {
         }
     }
 
-
     /*
     ** This is the method that does the actual work for this thread. It handles multiple
     **   connections at once.
@@ -296,6 +304,10 @@ public class ServerWorkerThread implements Runnable {
                         work.stateMachine();
                     }
                 } while (work != null);
+
+                if (!bufferCompleteQ.isEmpty()) {
+                    processBufferCompleteQ();
+                }
             }
 
             // FIXME CA: key  off of the value passed into stop
@@ -307,4 +319,22 @@ public class ServerWorkerThread implements Runnable {
         countDownLatch.countDown();
     }
 
+    public ServerDigestThreadPool getServerDigestThreadPool() {
+        return digestThreadPool;
+    }
+
+    public void addBufferCompleteWork(BufferState bufferState) {
+        // FIXME PS: need to look at handling being full.
+        boolean isQueuedtoComplete = bufferCompleteQ.offer(bufferState);
+    }
+
+    private void processBufferCompleteQ() {
+        BufferState completedBuffers[] = new BufferState[0];
+
+        completedBuffers = bufferCompleteQ.toArray(completedBuffers);
+        for (BufferState bufferState : completedBuffers) {
+            bufferCompleteQ.remove();
+            bufferState.bufferDigestComplete();
+        }
+    }
 }

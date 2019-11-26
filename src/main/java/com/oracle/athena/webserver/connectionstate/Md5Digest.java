@@ -4,7 +4,6 @@ import com.oracle.oci.casper.jopenssl.CryptoMessageDigest;
 import com.oracle.pic.casper.common.encryption.Digest;
 import com.oracle.pic.casper.common.encryption.DigestAlgorithm;
 import com.oracle.pic.casper.common.encryption.DigestUtils;
-import com.oracle.pic.casper.webserver.api.common.ChecksumHelper;
 
 import java.nio.ByteBuffer;
 

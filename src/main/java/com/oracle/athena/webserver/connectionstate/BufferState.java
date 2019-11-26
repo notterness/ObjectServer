@@ -153,6 +153,26 @@ public class BufferState {
         bufferState = BufferStateEnum.PARSE_HTTP_DONE;
     }
 
+    public void setBufferStateDigestWait() {
+        bufferState = BufferStateEnum.DIGEST_WAIT;
+    }
+
+    public void bufferUpdateDigest() {
+        appBuffer.flip();
+        connState.updateDigest(appBuffer);
+    }
+
+    /*
+     **  FIXME PS: may need to handle the full queue or change the queue tyoe.
+     */
+    public void bufferCompleteDigestCb() {
+       connState.md5WorkerCallback(this);
+    }
+
+    public void bufferDigestComplete() {
+        bufferState = BufferStateEnum.DIGEST_DONE;
+        connState.md5BufferWorkComplete(this);
+    }
     private void updateCount() {
         count = 0;
         if (this.appBuffer != null) {

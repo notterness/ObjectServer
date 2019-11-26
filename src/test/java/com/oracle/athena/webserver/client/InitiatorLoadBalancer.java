@@ -3,6 +3,7 @@ package com.oracle.athena.webserver.client;
 import com.oracle.athena.webserver.connectionstate.ConnectionState;
 import com.oracle.athena.webserver.connectionstate.ConnectionStatePool;
 import com.oracle.athena.webserver.memory.MemoryManager;
+import com.oracle.athena.webserver.server.ServerDigestThreadPool;
 import com.oracle.athena.webserver.server.ServerLoadBalancer;
 import com.oracle.athena.webserver.server.ServerWorkerThread;
 
@@ -12,15 +13,16 @@ class InitiatorLoadBalancer extends ServerLoadBalancer {
 
     private ConnectionStatePool<ClientConnState> connPool;
 
-    InitiatorLoadBalancer(final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId) {
+    InitiatorLoadBalancer(final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId,
+                          ServerDigestThreadPool digestThreadPool) {
 
-        super(queueSize, numWorkerThreads, memoryManager, serverClientId);
+        super(queueSize, numWorkerThreads, memoryManager, serverClientId, digestThreadPool);
     }
 
     void start() {
         for (int i = 0; i < workerThreads; i++) {
             ServerWorkerThread worker = new ServerWorkerThread(maxQueueSize, memoryManager,
-                    (serverBaseId + i));
+                    (serverBaseId + i), digestThreadPool);
             executorService.execute(worker);
             threadPool[i] = worker;
         }
