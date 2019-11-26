@@ -7,74 +7,56 @@ import org.eclipse.jetty.http.HttpStatus;
 
 import java.util.function.Function;
 
-public class OutOfResourcePipelineMgr implements ConnectionPipelineMgr {
-    private WebServerConnState connectionState;
-
+public class OutOfResourcePipelineMgr extends ConnectionPipelineMgr {
+    private final WebServerConnState connectionState;
     private boolean initialStage;
 
-    private StateMachine outOfResourceStateMachine;
-
-    private Function outOfResourceSendResponse = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn) {
-            wsConn.sendResponse(HttpStatus.TOO_MANY_REQUESTS_429);
-            return StateQueueResult.STATE_RESULT_WAIT;
-        }
+    private Function<WebServerConnState, StateQueueResult> outOfResourceSendResponse = wsConn -> {
+        wsConn.sendResponse(HttpStatus.TOO_MANY_REQUESTS_429);
+        return StateQueueResult.STATE_RESULT_WAIT;
     };
 
-    private Function outOfResourceConnFinished = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn) {
-            initialStage = true;
-
-            wsConn.reset();
-
-            return StateQueueResult.STATE_RESULT_FREE;
-        }
+    private Function<WebServerConnState, StateQueueResult> outOfResourceConnFinished = wsConn -> {
+        initialStage = true;
+        wsConn.reset();
+        return StateQueueResult.STATE_RESULT_FREE;
     };
 
-    private Function outOfResourceCheckSlowConnection = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn) {
-
-            return StateQueueResult.STATE_RESULT_CONTINUE;
-        }
+    private Function<WebServerConnState, StateQueueResult> outOfResourceCheckSlowConnection = wsConn -> {
+        return StateQueueResult.STATE_RESULT_CONTINUE;
     };
 
 
-    private Function OutOfResourceProcessFinalResponseSend = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn){
-            wsConn.processResponseWriteDone();
-            return StateQueueResult.STATE_RESULT_REQUEUE;
-        }
+    private Function<WebServerConnState, StateQueueResult> OutOfResourceProcessFinalResponseSend = wsConn -> {
+        wsConn.processResponseWriteDone();
+        return StateQueueResult.STATE_RESULT_REQUEUE;
     };
 
-    OutOfResourcePipelineMgr(WebServerConnState connState) {
-
-        this.connectionState = connState;
+    OutOfResourcePipelineMgr(WebServerConnState connectionState) {
+        super(connectionState, new StateMachine<>());
+        this.connectionState = connectionState;
 
         initialStage = true;
 
         /*
          ** Reset the state of the pipeline
          */
-        connectionState.resetResponses();
+        this.connectionState.resetResponses();
 
-        outOfResourceStateMachine = new StateMachine();
-        outOfResourceStateMachine.addStateEntry( ConnectionStateEnum.SEND_OUT_OF_RESOURCE_RESPONSE,
-                new StateEntry(outOfResourceSendResponse));
-        outOfResourceStateMachine.addStateEntry( ConnectionStateEnum.CONN_FINISHED, new StateEntry(outOfResourceConnFinished));
-        outOfResourceStateMachine.addStateEntry( ConnectionStateEnum.CHECK_SLOW_CHANNEL,
-                new StateEntry( outOfResourceCheckSlowConnection));
-        outOfResourceStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND,
-                new StateEntry(OutOfResourceProcessFinalResponseSend));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.SEND_OUT_OF_RESOURCE_RESPONSE,
+                new StateEntry<>(outOfResourceSendResponse));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.CONN_FINISHED, new StateEntry<>(outOfResourceConnFinished));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.CHECK_SLOW_CHANNEL,
+                new StateEntry<>(outOfResourceCheckSlowConnection));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND,
+                new StateEntry<>(OutOfResourceProcessFinalResponseSend));
 
     }
 
     /*
      ** This determines the pipeline stages used to read in the content data.
      */
+    @Override
     public ConnectionStateEnum nextPipelineStage() {
 
         /*
@@ -107,19 +89,5 @@ public class OutOfResourcePipelineMgr implements ConnectionPipelineMgr {
         }
 
         return ConnectionStateEnum.CHECK_SLOW_CHANNEL;
-    }
-
-    @Override
-    public StateQueueResult executePipeline() {
-        StateQueueResult result;
-        ConnectionStateEnum nextVerb;
-
-        do {
-            nextVerb = nextPipelineStage();
-            result = outOfResourceStateMachine.stateMachineExecute(connectionState, nextVerb);
-
-        } while (result == StateQueueResult.STATE_RESULT_CONTINUE);
-
-        return result;
     }
 }

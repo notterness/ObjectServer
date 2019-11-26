@@ -8,103 +8,78 @@ import com.oracle.athena.webserver.statemachine.StateQueueResult;
 
 import java.util.function.Function;
 
-public class ClientPutPipelineMgr implements ConnectionPipelineMgr {
+public class ClientPutPipelineMgr extends ConnectionPipelineMgr {
 
-    private ClientConnState connectionState;
-
+    private final ClientConnState connectionState;
     private boolean initialStage;
 
-    private StateMachine clientPutStateMachine;
+    private Function<ClientConnState, StateQueueResult> clientPutInitialSetup = conn -> {
+        conn.setupInitial();
+        return StateQueueResult.STATE_RESULT_CONTINUE;
+    };
 
-    private Function clientPutInitialSetup = new Function<ClientConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(ClientConnState wsConn) {
-            wsConn.setupInitial();
+    private Function<ClientConnState, StateQueueResult> clientPutRequestDataBuffers = conn -> {
+        if (conn.allocClientReadBufferState() == 0) {
+            return StateQueueResult.STATE_RESULT_WAIT;
+        } else {
             return StateQueueResult.STATE_RESULT_CONTINUE;
         }
     };
 
-    private Function clientPutRequestDataBuffers = new Function<ClientConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(ClientConnState conn) {
-            if (conn.allocClientReadBufferState() == 0) {
-                return StateQueueResult.STATE_RESULT_WAIT;
-            } else {
-                return StateQueueResult.STATE_RESULT_CONTINUE;
-            }
+    private Function<ClientConnState, StateQueueResult> clientPutReadDataBuffers = conn -> {
+        conn.readIntoDataBuffers();
+        return StateQueueResult.STATE_RESULT_CONTINUE;
+    };
+
+    private Function<ClientConnState, StateQueueResult> clientPutReadCb = conn -> {
+        conn.readClientBufferCallback();
+        return StateQueueResult.STATE_RESULT_REQUEUE;
+    };
+
+    private Function<ClientConnState, StateQueueResult> clientPutConnFinished = conn -> {
+        initialStage = true;
+        conn.reset();
+        return StateQueueResult.STATE_RESULT_FREE;
+    };
+
+    private Function<ClientConnState, StateQueueResult> clientPutCheckSlowConn = conn -> {
+        if (conn.checkSlowClientChannel()) {
+            return StateQueueResult.STATE_RESULT_CONTINUE;
+        } else {
+            return StateQueueResult.STATE_RESULT_WAIT;
         }
     };
 
-    private Function clientPutReadDataBuffers = new Function<ClientConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(ClientConnState conn) {
-            conn.readIntoDataBuffers();
+    private Function<ClientConnState, StateQueueResult> clientPutProcessReadError = conn -> {
+        if (conn.processReadErrorQueue()) {
             return StateQueueResult.STATE_RESULT_CONTINUE;
         }
-    };
-
-    private Function clientPutReadCb = new Function<ClientConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(ClientConnState conn) {
-            conn.readClientBufferCallback();
-            return StateQueueResult.STATE_RESULT_REQUEUE;
-        }
-    };
-
-    private Function clientPutConnFinished = new Function<ClientConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(ClientConnState conn) {
-            initialStage = true;
-            conn.reset();
-            return StateQueueResult.STATE_RESULT_FREE;
-        }
-    };
-
-    private Function clientPutCheckSlowConn = new Function<ClientConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(ClientConnState conn) {
-            if (conn.checkSlowClientChannel()) {
-                return StateQueueResult.STATE_RESULT_CONTINUE;
-            } else {
-                return StateQueueResult.STATE_RESULT_WAIT;
-            }
-        }
-    };
-
-    private Function clientPutProcessReadError = new Function<ClientConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(ClientConnState conn) {
-            if (conn.processReadErrorQueue()) {
-                return StateQueueResult.STATE_RESULT_CONTINUE;
-            }
-            return StateQueueResult.STATE_RESULT_REQUEUE;
-        }
+        return StateQueueResult.STATE_RESULT_REQUEUE;
     };
 
 
-    ClientPutPipelineMgr(ClientConnState connState) {
-
-        this.connectionState = connState;
+    ClientPutPipelineMgr(ClientConnState connectionState) {
+        super(connectionState, new StateMachine<>());
+        this.connectionState = connectionState;
 
         initialStage = true;
 
-        connectionState.memoryBuffersAreAvailable();
-        connectionState.resetRequestedDataBuffers();
-        connectionState.resetBuffersWaiting();
-        connectionState.resetDataBufferReadsCompleted();
+        this.connectionState.memoryBuffersAreAvailable();
+        this.connectionState.resetRequestedDataBuffers();
+        this.connectionState.resetBuffersWaiting();
+        this.connectionState.resetDataBufferReadsCompleted();
 
-        connectionState.resetContentAllRead();
+        this.connectionState.resetContentAllRead();
 
-        connectionState.resetClientCallbackCompleted();
+        this.connectionState.resetClientCallbackCompleted();
 
-        clientPutStateMachine = new StateMachine();
-        clientPutStateMachine.addStateEntry(ConnectionStateEnum.INITIAL_SETUP, new StateEntry( clientPutInitialSetup));
-        clientPutStateMachine.addStateEntry(ConnectionStateEnum.ALLOC_CLIENT_DATA_BUFFER, new StateEntry(clientPutRequestDataBuffers));
-        clientPutStateMachine.addStateEntry(ConnectionStateEnum.READ_CLIENT_DATA, new StateEntry(clientPutReadDataBuffers));
-        clientPutStateMachine.addStateEntry(ConnectionStateEnum.CLIENT_READ_CB, new StateEntry(clientPutReadCb));
-        clientPutStateMachine.addStateEntry(ConnectionStateEnum.CONN_FINISHED, new StateEntry(clientPutConnFinished));
-        clientPutStateMachine.addStateEntry(ConnectionStateEnum.CHECK_SLOW_CHANNEL, new StateEntry(clientPutCheckSlowConn));
-        clientPutStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_READ_ERROR, new StateEntry(clientPutProcessReadError));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.INITIAL_SETUP, new StateEntry<>(clientPutInitialSetup));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.ALLOC_CLIENT_DATA_BUFFER, new StateEntry<>(clientPutRequestDataBuffers));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.READ_CLIENT_DATA, new StateEntry<>(clientPutReadDataBuffers));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.CLIENT_READ_CB, new StateEntry<>(clientPutReadCb));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.CONN_FINISHED, new StateEntry<>(clientPutConnFinished));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.CHECK_SLOW_CHANNEL, new StateEntry<>(clientPutCheckSlowConn));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_READ_ERROR, new StateEntry<>(clientPutProcessReadError));
     }
 
     /*
@@ -137,7 +112,7 @@ public class ClientPutPipelineMgr implements ConnectionPipelineMgr {
          **
          ** TODO: Support the NIO.2 read that can be passed in an array of ByteBuffers
          */
-        if (connectionState.dataBuffersWaitingForRead()){
+        if (connectionState.dataBuffersWaitingForRead()) {
             return ConnectionStateEnum.READ_CLIENT_DATA;
         }
 
@@ -184,18 +159,5 @@ public class ClientPutPipelineMgr implements ConnectionPipelineMgr {
         }
 
         return ConnectionStateEnum.CHECK_SLOW_CHANNEL;
-    }
-
-    public StateQueueResult executePipeline() {
-        StateQueueResult result = StateQueueResult.STATE_RESULT_COMPLETE;
-        ConnectionStateEnum nextVerb;
-
-        do {
-            nextVerb = nextPipelineStage();
-            result = clientPutStateMachine.stateMachineExecute(connectionState, nextVerb);
-
-        } while (result == StateQueueResult.STATE_RESULT_CONTINUE);
-
-        return result;
     }
 }

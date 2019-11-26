@@ -1,12 +1,10 @@
 package com.oracle.athena.webserver.statemachine;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.Function;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * StateMachine class: An array of StateEntry objects.
@@ -23,7 +21,7 @@ public class StateMachine<T,K> {
         stateTable.put(verb, entry);
     }
 
-    public StateEntry getState(K verb) {
+    public StateEntry<T,StateQueueResult> getState(K verb) {
         return stateTable.get(verb);
     }
 
@@ -37,8 +35,8 @@ public class StateMachine<T,K> {
         StateQueueResult result = null;
 
         try {
-            StateEntry entry = stateTable.get(k);
-            result = (StateQueueResult)entry.getVerbExecute().apply(t);
+            StateEntry<T,StateQueueResult> entry = stateTable.get(k);
+            result = entry.getVerbExecute().apply(t);
         } catch ( NullPointerException e) {
             LOG.info("no state entry for key " + k);
             e.printStackTrace();

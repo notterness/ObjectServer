@@ -7,161 +7,122 @@ import org.eclipse.jetty.http.HttpStatus;
 
 import java.util.function.Function;
 
-class HttpParsePipelineMgr implements ConnectionPipelineMgr {
+class HttpParsePipelineMgr extends ConnectionPipelineMgr {
 
-    private WebServerConnState connectionState;
-
+    private final WebServerConnState connectionState;
     private boolean initialStage;
 
-    private StateMachine httpParseStateMachine;
+    private Function<WebServerConnState, StateQueueResult> httpParseInitialSetup = wsConn -> {
+        wsConn.setupInitial();
+        return StateQueueResult.STATE_RESULT_CONTINUE;
+    };
 
-
-    private Function httpParseInitialSetup = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn) {
-            wsConn.setupInitial();
+    private Function<WebServerConnState, StateQueueResult> httpParseAllocHttpBuffer = wsConn -> {
+        if (wsConn.allocHttpBufferState() == 0) {
+            return StateQueueResult.STATE_RESULT_WAIT;
+        } else {
             return StateQueueResult.STATE_RESULT_CONTINUE;
         }
     };
 
-    private Function httpParseAllocHttpBuffer = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn) {
-            if (wsConn.allocHttpBufferState() == 0){
-                return StateQueueResult.STATE_RESULT_WAIT;
-            }
-            else {
-                return StateQueueResult.STATE_RESULT_CONTINUE;
-            }
-        }
+    private Function<WebServerConnState, StateQueueResult> httpParseReadHttpBuffer = wsConn -> {
+        wsConn.readIntoMultipleBuffers();
+
+
+        return StateQueueResult.STATE_RESULT_REQUEUE;
     };
 
-    private Function httpParseReadHttpBuffer = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn) {
-            wsConn.readIntoMultipleBuffers();
-
-
-            return StateQueueResult.STATE_RESULT_REQUEUE;
-        }
+    private Function<WebServerConnState, StateQueueResult> httpParseUnwrapHttpsBuffer = wsConn -> {
+        wsConn.sslReadUnwrap();
+        return StateQueueResult.STATE_RESULT_CONTINUE;
     };
 
-    private Function httpParseUnwrapHttpsBuffer = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn) {
-            wsConn.sslReadUnwrap();
+    private Function<WebServerConnState, StateQueueResult> httpParseHttpBuffer = wsConn -> {
+        wsConn.parseHttp();
+        return StateQueueResult.STATE_RESULT_CONTINUE;
+    };
+
+    private Function<WebServerConnState, StateQueueResult> httpParseConnFinished = wsConn -> {
+        initialStage = true;
+        wsConn.reset();
+        return StateQueueResult.STATE_RESULT_FREE;
+    };
+
+    private Function<WebServerConnState, StateQueueResult> httpParseCheckSlowConnection = wsConn -> {
+        if (wsConn.checkSlowClientChannel()) {
             return StateQueueResult.STATE_RESULT_CONTINUE;
-        }
-    };
-
-    private Function httpParseHttpBuffer = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn) {
-            wsConn.parseHttp();
-            return StateQueueResult.STATE_RESULT_CONTINUE;
-        }
-    };
-
-    private Function httpParseConnFinished = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn) {
-            initialStage = true;
-
-            wsConn.reset();
-
-            return StateQueueResult.STATE_RESULT_FREE;
-        }
-    };
-
-    private Function httpParseCheckSlowConnection = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn) {
-            if (wsConn.checkSlowClientChannel()) {
-                return StateQueueResult.STATE_RESULT_CONTINUE;
-            } else {
-                return StateQueueResult.STATE_RESULT_WAIT;
-            }
-        }
-    };
-
-    private Function httpParseSendXferResponse = new Function<WebServerConnState, StateQueueResult>() {
-        public StateQueueResult apply(WebServerConnState wsConn) {
-            wsConn.sendResponse(wsConn.getHttpParseStatus());
+        } else {
             return StateQueueResult.STATE_RESULT_WAIT;
         }
     };
 
-    private Function httpParseSetupNextPipeline = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn){
-            initialStage = true;
-            wsConn.resetHttpReadValues();
-            wsConn.resetContentAllRead();
-            wsConn.setupNextPipeline();
-            return StateQueueResult.STATE_RESULT_COMPLETE;
-        }
+    private Function<WebServerConnState, StateQueueResult> httpParseSendXferResponse = wsConn -> {
+        wsConn.sendResponse(wsConn.getHttpParseStatus());
+        return StateQueueResult.STATE_RESULT_WAIT;
     };
 
-    private Function httpParseProcessReadError = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn){
-            if (wsConn.processReadErrorQueue()) {
-                return StateQueueResult.STATE_RESULT_CONTINUE;
-            }
-            return StateQueueResult.STATE_RESULT_REQUEUE;
-        }
+    private Function<WebServerConnState, StateQueueResult> httpParseSetupNextPipeline = wsConn -> {
+        initialStage = true;
+        wsConn.resetHttpReadValues();
+        wsConn.resetContentAllRead();
+        wsConn.setupNextPipeline();
+        return StateQueueResult.STATE_RESULT_COMPLETE;
     };
 
-    private Function httpParseProcessFinalResponseSend = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn){
-            wsConn.processResponseWriteDone();
+    private Function<WebServerConnState, StateQueueResult> httpParseProcessReadError = wsConn -> {
+        if (wsConn.processReadErrorQueue()) {
             return StateQueueResult.STATE_RESULT_CONTINUE;
         }
+        return StateQueueResult.STATE_RESULT_REQUEUE;
     };
 
-    public HttpParsePipelineMgr(WebServerConnState connState) {
+    private Function<WebServerConnState, StateQueueResult> httpParseProcessFinalResponseSend = wsConn -> {
+        wsConn.processResponseWriteDone();
+        return StateQueueResult.STATE_RESULT_CONTINUE;
+    };
 
-        connectionState = connState;
+    public HttpParsePipelineMgr(WebServerConnState connectionState) {
+        super(connectionState, new StateMachine<>());
+        this.connectionState = connectionState;
 
         initialStage = true;
 
         /*
-        ** Reset the state of the pipeline
+         ** Reset the state of the pipeline
          */
-        connectionState.resetHttpReadValues();
+        this.connectionState.resetHttpReadValues();
 
         /*
-        ** This must be set to false here as there may be content data included in a buffer used to
-        **   to read in the HTTP headers.
+         ** This must be set to false here as there may be content data included in a buffer used to
+         **   to read in the HTTP headers.
          */
-        connectionState.resetContentAllRead();
+        this.connectionState.resetContentAllRead();
 
         /*
-        ** In error cases, this pipeline will send out error responses.
+         ** In error cases, this pipeline will send out error responses.
          */
-        connectionState.resetResponses();
-        httpParseStateMachine = new StateMachine();
-        httpParseStateMachine.addStateEntry(ConnectionStateEnum.INITIAL_SETUP, new StateEntry(httpParseInitialSetup));
-        httpParseStateMachine.addStateEntry(ConnectionStateEnum.CHECK_SLOW_CHANNEL, new StateEntry(httpParseCheckSlowConnection));
-        httpParseStateMachine.addStateEntry(ConnectionStateEnum.ALLOC_HTTP_BUFFER, new StateEntry(httpParseAllocHttpBuffer));
-        httpParseStateMachine.addStateEntry(ConnectionStateEnum.READ_HTTP_BUFFER, new StateEntry(httpParseReadHttpBuffer));
-        httpParseStateMachine.addStateEntry(ConnectionStateEnum.UNWRAP_HTTP_BUFFER, new StateEntry(httpParseUnwrapHttpsBuffer));
-        httpParseStateMachine.addStateEntry(ConnectionStateEnum.PARSE_HTTP_BUFFER, new StateEntry(httpParseHttpBuffer));
-        httpParseStateMachine.addStateEntry(ConnectionStateEnum.CONN_FINISHED, new StateEntry(httpParseConnFinished));
-        httpParseStateMachine.addStateEntry(ConnectionStateEnum.SETUP_NEXT_PIPELINE, new StateEntry(httpParseSetupNextPipeline));
-        httpParseStateMachine.addStateEntry(ConnectionStateEnum.SEND_FINAL_RESPONSE, new StateEntry(httpParseSendXferResponse));
-        httpParseStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_READ_ERROR, new StateEntry(httpParseProcessReadError));
-        httpParseStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND, new StateEntry(httpParseProcessFinalResponseSend));
+        this.connectionState.resetResponses();
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.INITIAL_SETUP, new StateEntry<>(httpParseInitialSetup));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.CHECK_SLOW_CHANNEL, new StateEntry<>(httpParseCheckSlowConnection));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.ALLOC_HTTP_BUFFER, new StateEntry<>(httpParseAllocHttpBuffer));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.READ_HTTP_BUFFER, new StateEntry<>(httpParseReadHttpBuffer));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.UNWRAP_HTTP_BUFFER, new StateEntry<>(httpParseUnwrapHttpsBuffer));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.PARSE_HTTP_BUFFER, new StateEntry<>(httpParseHttpBuffer));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.CONN_FINISHED, new StateEntry<>(httpParseConnFinished));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.SETUP_NEXT_PIPELINE, new StateEntry<>(httpParseSetupNextPipeline));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.SEND_FINAL_RESPONSE, new StateEntry<>(httpParseSendXferResponse));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_READ_ERROR, new StateEntry<>(httpParseProcessReadError));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND, new StateEntry<>(httpParseProcessFinalResponseSend));
     }
 
     /*
-    ** This determines the pipeline stages used to read in and parse the HTTP headers.
+     ** This determines the pipeline stages used to read in and parse the HTTP headers.
      */
+    @Override
     public ConnectionStateEnum nextPipelineStage() {
 
         /*
-        ** Perform the initial setup
+         ** Perform the initial setup
          */
         if (initialStage) {
             initialStage = false;
@@ -201,7 +162,7 @@ class HttpParsePipelineMgr implements ConnectionPipelineMgr {
         }
 
         /*
-        ** Check if there are buffers in error that need to be processed.
+         ** Check if there are buffers in error that need to be processed.
          */
         if (connectionState.readErrorQueueNotEmpty()) {
             return ConnectionStateEnum.PROCESS_READ_ERROR;
@@ -255,18 +216,5 @@ class HttpParsePipelineMgr implements ConnectionPipelineMgr {
         }
 
         return ConnectionStateEnum.CHECK_SLOW_CHANNEL;
-    }
-
-    public StateQueueResult executePipeline() {
-        StateQueueResult result;
-        ConnectionStateEnum nextVerb;
-
-        do {
-            nextVerb = nextPipelineStage();
-            result = httpParseStateMachine.stateMachineExecute(connectionState, nextVerb);
-
-        } while (result == StateQueueResult.STATE_RESULT_CONTINUE);
-
-        return result;
     }
 }

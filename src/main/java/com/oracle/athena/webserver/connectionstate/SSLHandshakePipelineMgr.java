@@ -8,97 +8,77 @@ import com.oracle.athena.webserver.statemachine.StateQueueResult;
 import javax.net.ssl.SSLException;
 import java.util.function.Function;
 
-class SSLHandshakePipelineMgr implements ConnectionPipelineMgr {
+class SSLHandshakePipelineMgr extends ConnectionPipelineMgr {
 
-    private WebServerConnState connectionState;
-
+    private final WebServerConnState connectionState;
     private boolean initialStage;
 
-    private StateMachine sslHandshakeStateMachine;
-
-
-    private Function sslHandshakeInitialSetup = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn) {
-            wsConn.setupSSL();
-            return StateQueueResult.STATE_RESULT_CONTINUE;
-        }
+    private Function<WebServerConnState, StateQueueResult> sslHandshakeInitialSetup = wsConn -> {
+        wsConn.setupSSL();
+        return StateQueueResult.STATE_RESULT_CONTINUE;
     };
 
-    private Function sslHandshakeAllocBuffers = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn) {
-            StateQueueResult result = StateQueueResult.STATE_RESULT_CONTINUE;
-            wsConn.allocSSLHandshakeBuffers();
-            if (wsConn.isSSLBuffersNeeded() == true) {
-                result = StateQueueResult.STATE_RESULT_WAIT;
-            }
-            else {
+    private Function<WebServerConnState, StateQueueResult> sslHandshakeAllocBuffers = wsConn -> {
+        StateQueueResult result = StateQueueResult.STATE_RESULT_CONTINUE;
+        wsConn.allocSSLHandshakeBuffers();
+        if (wsConn.isSSLBuffersNeeded() == true) {
+            result = StateQueueResult.STATE_RESULT_WAIT;
+        } else {
 
-                try {
-                    wsConn.beginHandshake();
-                } catch (SSLException e) {
-                    //FIXME: Handle this error condition
-                }
-
+            try {
+                wsConn.beginHandshake();
+            } catch (SSLException e) {
+                //FIXME: Handle this error condition
             }
 
-            return result;
         }
+
+        return result;
     };
 
-    private Function sslHandshakeExec = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn) {
-            wsConn.doSSLHandshake();
-            return StateQueueResult.STATE_RESULT_REQUEUE;
-        }
+    private Function<WebServerConnState, StateQueueResult> sslHandshakeExec = wsConn -> {
+        wsConn.doSSLHandshake();
+        return StateQueueResult.STATE_RESULT_REQUEUE;
     };
 
     //FIXME: handle connection finished
-    private Function sslHandshakeConnFinished = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn) {
-            initialStage = true;
-            connectionState.freeSSLHandshakeBuffers();
-            return StateQueueResult.STATE_RESULT_FREE;
-        }
+    private Function<WebServerConnState, StateQueueResult> sslHandshakeConnFinished = wsConn -> {
+        initialStage = true;
+        wsConn.freeSSLHandshakeBuffers();
+        return StateQueueResult.STATE_RESULT_FREE;
     };
 
-    private Function sslHandshakeNextPipeline = new Function<WebServerConnState, StateQueueResult>() {
-        @Override
-        public StateQueueResult apply(WebServerConnState wsConn){
-            initialStage = true;
-            connectionState.freeSSLHandshakeBuffers();
-            wsConn.setupNextSSLPipeline();
-            return StateQueueResult.STATE_RESULT_COMPLETE;
-        }
+    private Function<WebServerConnState, StateQueueResult> sslHandshakeNextPipeline = wsConn -> {
+        initialStage = true;
+        wsConn.freeSSLHandshakeBuffers();
+        wsConn.setupNextSSLPipeline();
+        return StateQueueResult.STATE_RESULT_COMPLETE;
     };
 
-    public SSLHandshakePipelineMgr(WebServerConnState connState) {
-
-        connectionState = connState;
+    SSLHandshakePipelineMgr(WebServerConnState connectionState) {
+        super(connectionState, new StateMachine<>());
+        this.connectionState = connectionState;
 
         initialStage = true;
 
         /*
-        ** This must be set to false here as there may be content data included in a buffer used to
-        **   to read in the HTTP headers.
+         ** This must be set to false here as there may be content data included in a buffer used to
+         **   to read in the HTTP headers.
          */
-        sslHandshakeStateMachine = new StateMachine();
-        sslHandshakeStateMachine.addStateEntry(ConnectionStateEnum.INITIAL_SETUP, new StateEntry(sslHandshakeInitialSetup));
-        sslHandshakeStateMachine.addStateEntry(ConnectionStateEnum.SSL_ALLOC_BUFFERS, new StateEntry(sslHandshakeAllocBuffers));
-        sslHandshakeStateMachine.addStateEntry(ConnectionStateEnum.SSL_HANDSHAKE, new StateEntry(sslHandshakeExec));
-        sslHandshakeStateMachine.addStateEntry(ConnectionStateEnum.SETUP_NEXT_PIPELINE, new StateEntry(sslHandshakeNextPipeline));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.INITIAL_SETUP, new StateEntry<>(sslHandshakeInitialSetup));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.SSL_ALLOC_BUFFERS, new StateEntry<>(sslHandshakeAllocBuffers));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.SSL_HANDSHAKE, new StateEntry<>(sslHandshakeExec));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.SETUP_NEXT_PIPELINE, new StateEntry<>(sslHandshakeNextPipeline));
     }
 
     /*
-    ** This determines the pipeline stages used to read in and parse the HTTP headers.
+     ** This determines the pipeline stages used to read in and parse the HTTP headers.
      */
+    @Override
     public ConnectionStateEnum nextPipelineStage() {
 
         /*
-        ** Perform the initial setup
+         ** Perform the initial setup
          */
         if (initialStage) {
             initialStage = false;
@@ -134,18 +114,5 @@ class SSLHandshakePipelineMgr implements ConnectionPipelineMgr {
          ** If it reaches here, close connection
          */
         return ConnectionStateEnum.CONN_FINISHED;
-    }
-
-    public StateQueueResult executePipeline() {
-        StateQueueResult result;
-        ConnectionStateEnum nextVerb;
-
-        do {
-            nextVerb = nextPipelineStage();
-            result = sslHandshakeStateMachine.stateMachineExecute(connectionState, nextVerb);
-
-        } while (result == StateQueueResult.STATE_RESULT_CONTINUE);
-
-        return result;
     }
 }
