@@ -493,7 +493,7 @@ public class CasperHttpInfo {
         }
         etagRound = getHeaderString(POLICY_ROUND_HEADER);
 
-        vcnId = vcnIDFromRequest(request);
+        vcnId = vcnIDFromRequest();
         vcnDebugId = getHeaderString(VCN_ID_CASPER_DEBUG_HEADER);
 
     }
