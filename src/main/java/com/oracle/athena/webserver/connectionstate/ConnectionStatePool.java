@@ -40,25 +40,12 @@ public class ConnectionStatePool<T extends ConnectionState> {
      * @return <T> the {@link ConnectionState} with the channel assigned to it, null if no connections are available.
      *
      */
-    public T allocConnectionState(final AsynchronousSocketChannel chan, SSLContext sslContext) {
+    public T allocConnectionState(final AsynchronousSocketChannel chan) {
         T conn = connPoolFreeList.poll();
         if (conn != null) {
             conn.setChannel(chan);
-            conn.setSslContext(sslContext);
         }
         return conn;
-    }
-
-    /**
-     * A non-blocking method of setting up the {@link ConnectionState} for the client to perform reads.
-     *
-     * @param chan
-     *  an {@link AsynchronousSocketChannel} to assign to a {@link ConnectionState} from this {@link ConnectionStatePool}.
-     * @return <T> the {@link ConnectionState} with the channel assigned to it, null if no connections are available.
-     *
-     */
-    public T allocConnectionState(final AsynchronousSocketChannel chan) {
-        return allocConnectionState(chan, null);
     }
 
     /**

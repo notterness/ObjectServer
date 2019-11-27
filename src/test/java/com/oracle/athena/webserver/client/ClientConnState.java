@@ -327,11 +327,6 @@ public class ClientConnState extends ConnectionState {
         super.setAsyncChannel(chan);
     }
 
-    @Override
-    public void setSslContext(SSLContext sslContext) {
-        super.initSslEngine(sslContext);
-    }
-
     void setClientReadCallback(ClientDataReadCallback clientReadCb) {
         System.out.println("ClientConnState[" + getConnStateId() + "] setClientReadCallback()");
 
