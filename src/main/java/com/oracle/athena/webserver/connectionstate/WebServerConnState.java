@@ -228,7 +228,9 @@ public class WebServerConnState extends ConnectionState {
         LOG.error("WebServerConnState[" + connStateId + "] responseChannelWriteDone: " + responseChannelWriteDone.get() +
                 " finalResponseSendDone: " + finalResponseSendDone);
 
-        workerThread.dumpWorkerThreadQueues();
+        if (workerThread != null) {
+            workerThread.dumpWorkerThreadQueues();
+        }
         return pipelineManager.nextPipelineStage();
     }
 
