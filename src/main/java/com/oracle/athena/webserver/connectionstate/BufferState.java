@@ -170,10 +170,6 @@ public class BufferState {
        connState.md5WorkerCallback(this);
     }
 
-    public void bufferDigestComplete() {
-        bufferState = BufferStateEnum.DIGEST_DONE;
-        connState.md5BufferWorkComplete(this);
-    }
     private void updateCount() {
         count = 0;
         if (this.appBuffer != null) {

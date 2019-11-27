@@ -1104,19 +1104,29 @@ abstract public class ConnectionState {
     }
 
     public void md5WorkerCallback(BufferState bufferState) {
-        workerThread.addBufferCompleteWork(bufferState);
+        dataMd5DoneQueue.add(bufferState);
     }
 
-    void md5BufferWorkComplete(BufferState bufferState) {
-        dataMd5DoneQueue.add(bufferState);
-        dataBufferDigestCompleted.incrementAndGet();
-        dataBufferDigestSent.decrementAndGet();
-        LOG.info("bufferToMd5 " + bufferState + " this :" + this);
-        addToWorkQueue(false);
+    void md5BufferWorkComplete() {
+        BufferState[] md5DoneArray = new BufferState[0];
+        md5DoneArray = dataMd5DoneQueue.toArray(md5DoneArray);
+
+        for (BufferState bufferState : md5DoneArray) {
+            if (bufferState.getBufferState() == BufferStateEnum.DIGEST_WAIT) {
+                dataBufferDigestCompleted.incrementAndGet();
+                dataBufferDigestSent.decrementAndGet();
+                bufferState.setBufferState(BufferStateEnum.DIGEST_DONE);
+                LOG.info("bufferToMd5 " + bufferState + " this :" + this);
+            }
+        }
     }
 
     boolean getDigestComplete() {
         return digestComplete.get();
+    }
+
+    boolean hasMd5CompleteBuffers() {
+        return dataMd5DoneQueue.size() > dataBufferDigestCompleted.get();
     }
 
     /*
