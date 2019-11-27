@@ -95,6 +95,11 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         return StateQueueResult.STATE_RESULT_CONTINUE;
     };
 
+    private Function<WebServerConnState, StateQueueResult> contentMd5BufferDone = wsConn -> {
+        wsConn.md5BufferWorkComplete();
+        return StateQueueResult.STATE_RESULT_CONTINUE;
+    };
+
     ContentReadPipelineMgr(WebServerConnState connState) {
         super(connState, new StateMachine<>());
         this.connectionState = connState;
@@ -121,6 +126,7 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         connectionStateMachine.addStateEntry(ConnectionStateEnum.RELEASE_CONTENT_BUFFERS, new StateEntry<>(contentReadReleaseBuffers));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.MD5_CALCULATE, new StateEntry<>(contentCalculateMd5));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.MD5_CALCULATE_COMPLETE, new StateEntry<>(contentMd5Complete));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.MD5_BUFFER_DONE, new StateEntry<>(contentMd5BufferDone));
     }
 
     /*
@@ -178,8 +184,12 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
             return ConnectionStateEnum.CONN_FINISHED;
         }
 
-        if (connectionState.getDataBufferReadsCompleted() > 0) {
+        if (connectionState.getDataBufferReadsCompleted() > connectionState.getDataBufferDigestSent()) {
             return ConnectionStateEnum.MD5_CALCULATE;
+        }
+
+        if (connectionState.hasMd5CompleteBuffers()) {
+            return ConnectionStateEnum.MD5_BUFFER_DONE;
         }
 
         if (connectionState.hasAllContentBeenRead() && !connectionState.getDigestComplete() &&

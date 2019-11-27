@@ -41,8 +41,6 @@ public class ServerWorkerThread implements Runnable {
     private BlockingQueue<ConnectionState> workQueue;
     private BlockingQueue<ConnectionState> timedWaitQueue;
 
-    private BlockingQueue<BufferState> bufferCompleteQ;
-
     private BufferStatePool bufferStatePool;
 
     /*
@@ -83,7 +81,6 @@ public class ServerWorkerThread implements Runnable {
         // TODO: Need to fix the queue size to account for reserved connections
         workQueue = new LinkedBlockingQueue<>(maxQueueSize * 2);
         timedWaitQueue = new LinkedBlockingQueue<>(maxQueueSize * 2);
-        bufferCompleteQ = new LinkedBlockingQueue<>(ConnectionState.MAX_OUTSTANDING_BUFFERS * maxQueueSize);
         bufferStatePool = new BufferStatePool(ConnectionState.MAX_OUTSTANDING_BUFFERS * maxQueueSize,
                 memoryManager);
         resultBuilder = new BuildHttpResult();
@@ -101,7 +98,6 @@ public class ServerWorkerThread implements Runnable {
             LOG.info("Server worker thread[" + threadId + "] failed: " + int_ex.getMessage());
         }
 
-        LOG.info("bufferQ " + bufferCompleteQ.size());
         /*
         ** Code to check that the BufferStatePool does not have BufferState objects on its in use list
         **   when the ServerWorkerThread is shutting down.
@@ -304,10 +300,6 @@ public class ServerWorkerThread implements Runnable {
                         work.stateMachine();
                     }
                 } while (work != null);
-
-                if (!bufferCompleteQ.isEmpty()) {
-                    processBufferCompleteQ();
-                }
             }
 
             // FIXME CA: key  off of the value passed into stop
@@ -326,18 +318,4 @@ public class ServerWorkerThread implements Runnable {
         return isQueued;
     }
 
-    public void addBufferCompleteWork(BufferState bufferState) {
-        // FIXME PS: need to look at handling being full.
-        boolean isQueuedtoComplete = bufferCompleteQ.offer(bufferState);
-    }
-
-    private void processBufferCompleteQ() {
-        BufferState completedBuffers[] = new BufferState[0];
-
-        completedBuffers = bufferCompleteQ.toArray(completedBuffers);
-        for (BufferState bufferState : completedBuffers) {
-            bufferCompleteQ.remove();
-            bufferState.bufferDigestComplete();
-        }
-    }
 }
