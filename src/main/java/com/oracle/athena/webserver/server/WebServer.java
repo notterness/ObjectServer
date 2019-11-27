@@ -50,14 +50,11 @@ public class WebServer {
     }
 
     public void start() {
-        serverWorkHandler.start();
-        sslServerWorkHandler.start();
         http_server.start();
         https_server.start();
     }
 
     public void stop() {
-        serverWorkHandler.stop();
         http_server.stop();
         https_server.stop();
 

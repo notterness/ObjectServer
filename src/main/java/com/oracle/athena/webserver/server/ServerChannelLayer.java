@@ -76,6 +76,7 @@ public class ServerChannelLayer implements Runnable {
     }
 
     public void start() {
+        serverWorkHandler.start();
         serverAcceptThread.start();
     }
 
@@ -85,6 +86,8 @@ public class ServerChannelLayer implements Runnable {
     public void stop() {
 
         System.out.println("ServerChannelLayer[" + (serverClientId * 100) + "] stop()");
+
+        serverWorkHandler.stop();
 
         /*
          */
