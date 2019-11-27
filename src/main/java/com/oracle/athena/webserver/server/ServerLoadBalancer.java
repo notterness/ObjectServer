@@ -1,7 +1,9 @@
 package com.oracle.athena.webserver.server;
 
 import com.oracle.athena.webserver.connectionstate.BlockingConnectionStatePool;
+import com.oracle.athena.webserver.connectionstate.ConnectionState;
 import com.oracle.athena.webserver.connectionstate.ConnectionStatePool;
+import com.oracle.athena.webserver.connectionstate.WebServerConnState;
 import com.oracle.athena.webserver.memory.MemoryManager;
 
 import java.io.IOException;
@@ -22,8 +24,8 @@ public class ServerLoadBalancer {
 
     private static final Logger LOG = LoggerFactory.getLogger(ServerLoadBalancer.class);
 
-    private final static int RESERVED_CONN_COUNT = 2;
-    private final static int NUMBER_DIGEST_THREADS = 2;
+    protected final static int RESERVED_CONN_COUNT = 2;
+    protected final static int NUMBER_DIGEST_THREADS = 2;
 
     protected final ServerWorkerThread[] threadPool;
     protected final MemoryManager memoryManager;

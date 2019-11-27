@@ -4,10 +4,6 @@ import com.oracle.athena.webserver.http.BuildHttpResult;
 import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.server.*;
 
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.SSLEngineResult;
-import javax.net.ssl.SSLException;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
@@ -17,14 +13,12 @@ import java.nio.channels.CompletionHandler;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.ListIterator;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -87,14 +81,6 @@ abstract public class ConnectionState {
      */
     AsynchronousSocketChannel connChan;
 
-    private LinkedList<BufferState> allocatedSSLAppBufferQueue;
-    private LinkedList<BufferState> allocatedSSLNetBufferQueue;
-    private SSLEngineResult sslEngineResult;
-    private boolean sslHandshakeRequired;
-    private boolean sslHandshakeSuccess;
-    private boolean sslBuffersNeeded;
-    private SSLEngineResult.HandshakeStatus handshakeStatus;
-
     private final Object connChanMutex;
 
 
@@ -148,8 +134,6 @@ abstract public class ConnectionState {
     AtomicLong contentBytesToRead;
     private AtomicLong contentBytesAllocated;
     private AtomicLong contentBytesRead;
-
-    private SSLContext context;
 
     /*
      ** The next four items are associated with the thread that is running the ConnectionState
@@ -612,8 +596,11 @@ abstract public class ConnectionState {
         connChan = chan;
     }
 
-    protected boolean isSSL() {
-        return true;
+	/*
+    ** Connection type. Override in SSL derived classes.
+     */
+    public boolean isSSL() {
+        return false;
     }
 
     /*
@@ -674,7 +661,7 @@ abstract public class ConnectionState {
      ** NOTE: This is only called for the good path for reads. The error path is handled in the
      **   readCompletedError() function.
      */
-    protected void dataReadCompleted(final BufferState bufferState) {
+    public void dataReadCompleted(final BufferState bufferState) {
         int readCount = outstandingDataReadCount.decrementAndGet();
 
         int bytesRead = bufferState.getChannelBuffer().position();
@@ -944,6 +931,7 @@ abstract public class ConnectionState {
      ** If buffer is clear, read from channel and return future.  Otherwise
 	 ** return completed future.
      */
+    //TODO: replace with non blocking read
     public Future<Integer> readFromChannelFuture(final ByteBuffer buffer) {
         AsynchronousSocketChannel readChan;
 
@@ -958,6 +946,7 @@ abstract public class ConnectionState {
         }
     }
 
+    //TODO: replace with non blocking write
     public Future<Integer> writeToChannelFuture(final ByteBuffer buffer) {
         AsynchronousSocketChannel writeChan;
 
@@ -1059,28 +1048,4 @@ abstract public class ConnectionState {
         return StandardCharsets.UTF_8.decode(buffer).toString();
     }
 
-    public boolean isSSLHandshakeRequired() {
-        return sslHandshakeRequired;
-    }
-
-    public void setSSLHandshakeRequired(boolean sslHandshakeRequired) {
-        this.sslHandshakeRequired = sslHandshakeRequired;
-    }
-
-    public boolean isSSLHandshakeSuccess() {
-        return sslHandshakeSuccess;
-    }
-
-    public void setSSLHandshakeSuccess(boolean sslHandshakeSuccess) {
-        this.sslHandshakeSuccess = sslHandshakeSuccess;
-    }
-
-    public boolean isSSLBuffersNeeded() {
-        return sslBuffersNeeded;
-    }
-
-    public void setSSLBuffersNeeded( boolean sslBuffersNeeded ){
-        this.sslBuffersNeeded = sslBuffersNeeded;
-    }
-    
 }

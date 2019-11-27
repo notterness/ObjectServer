@@ -34,6 +34,9 @@ public class SSLEngineMgr {
     private LinkedList<BufferState> allocatedSSLAppBufferQueue;
     private LinkedList<BufferState> allocatedSSLNetBufferQueue;
     private SSLEngineResult.HandshakeStatus handshakeStatus;
+    private boolean sslHandshakeRequired;
+    private boolean sslHandshakeSuccess;
+    private boolean sslBuffersNeeded;
 
     SSLEngineMgr(SSLContext context) {
         this.context = context;
@@ -162,17 +165,15 @@ public class SSLEngineMgr {
             SSLEngineResult result  = engine.wrap(clientAppData, clientNetData);
             switch (result.getStatus()) {
                 case OK:
-                    System.out.println("Wrapped data.");
                     return;
                 case BUFFER_OVERFLOW:
-                    // FIXME: need to get a bigger buffer
+                    // TODO:
                     break;
                 case CLOSED:
-                    //FIXME: ("Client wants to close connection...");
+                    //TODO: ("Client wants to close connection...");
                     return;
                 default:
-                    //Log this state
-                    System.out.println("Illegal state: " + result.getStatus().toString());
+                    LOG.info("Unknown wrap state: " + result.getStatus().toString());
                     break;
             }
         }
@@ -182,8 +183,6 @@ public class SSLEngineMgr {
 
     public void beginHandshake() throws SSLException {
         engine.beginHandshake();
-//        setSSLHandshakeRequired(true);
-//        setSSLHandshakeSuccess(false);
         handshakeStatus = engine.getHandshakeStatus();
     }
 
@@ -355,5 +354,6 @@ public class SSLEngineMgr {
 
         return Status.CONTINUE;
     }
+
 
 }

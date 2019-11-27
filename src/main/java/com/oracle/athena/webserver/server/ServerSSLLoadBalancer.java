@@ -47,9 +47,11 @@ public class ServerSSLLoadBalancer extends ServerLoadBalancer {
             return;
         }
 
+        digestThreadPool.start();
+
         for (int i = 0; i < workerThreads; i++) {
             ServerWorkerThread worker = new ServerWorkerThread(maxQueueSize, memoryManager,
-                    (serverBaseId + i));
+                    (serverBaseId + i), digestThreadPool);
             executorService.execute(worker);
             threadPool[i] = worker;
         }
@@ -82,16 +84,6 @@ public class ServerSSLLoadBalancer extends ServerLoadBalancer {
         lastQueueUsed = 0;
     }
 
-    @Override
-    void stop() {
-        for (int i = 0; i < workerThreads; i++) {
-            ServerWorkerThread worker = threadPool[i];
-            threadPool[i] = null;
-            worker.stop();
-        }
-        // with the way ServerWorkerThread is configured, stop should return only once the thread has actually stopped
-        executorService.shutdown();
-    }
 
     /*
      ** The following is used to start a new Server read connection. In the event there are no available connections,

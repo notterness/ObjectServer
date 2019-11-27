@@ -5,6 +5,7 @@ import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.server.SSLEngineMgr;
 import com.oracle.athena.webserver.server.StatusWriteCompletion;
 import com.oracle.athena.webserver.server.WriteConnection;
+import com.oracle.pic.casper.volumemeta.config.OracleVolumeMetadata;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +14,8 @@ import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class WebServerSSLConnState extends WebServerConnState {
@@ -33,9 +36,13 @@ public class WebServerSSLConnState extends WebServerConnState {
     private SSLHandshakePipelineMgr sslHandshakePipelineMgr;
     protected HttpsParsePipelineMgr httpsParsePipelineMgr;
     private SSLContentReadPipelineMgr sslReadReadPipelineMgr;
+    private boolean sslHandshakeRequired;
+    private boolean sslHandshakeSuccess;
+    private boolean sslBuffersNeeded;
 
     private AtomicInteger httpBufferReadsUnwrapNeeded;
 
+    private BlockingQueue<BufferState> dataReadDoneUnwrap;
 
     /*
      ** The following is used to release this ConnectionState back to the free pool.
@@ -49,6 +56,7 @@ public class WebServerSSLConnState extends WebServerConnState {
         this.connectionStatePool = connectionStatePool;
         this.sslEngineMgr = sslEngineMgr;
         httpBufferReadsUnwrapNeeded = new AtomicInteger(0);
+        dataReadDoneUnwrap = new LinkedBlockingQueue<>(MAX_OUTSTANDING_BUFFERS * 2);
     }
 
     @Override
@@ -69,6 +77,9 @@ public class WebServerSSLConnState extends WebServerConnState {
         setupNextPipeline();
     }
 
+    @Override
+    public boolean isSSL() {return true;}
+
     /*
      ** Allocate a buffers for SSL handshaking.
      ** Server and client buffers are supposed to be large enough to hold all message data the server
@@ -81,7 +92,7 @@ public class WebServerSSLConnState extends WebServerConnState {
         if (numBuffers < (NUM_SSL_APP_BUFFERS + NUM_SSL_NET_BUFFERS)) {
             bufferAllocationFailed.set(true);
         } else {
-            bufferAllocationFailed.set(true);
+            bufferAllocationFailed.set(false);
             setSSLBuffersNeeded(false);
         }
 
@@ -199,7 +210,7 @@ public class WebServerSSLConnState extends WebServerConnState {
         return (httpBufferReadsUnwrapNeeded.get() > 0);
     }
 
-    public void unwrap() {
+    public void unwrapHttp() {
         SSLEngineResult result;
         int bufferReadsDone = httpBufferReadsUnwrapNeeded.get();
         if (bufferReadsDone > 0) {
@@ -211,23 +222,22 @@ public class WebServerSSLConnState extends WebServerConnState {
 
                 switch (result.getStatus()) {
                     case OK:
-                        System.out.println("Unwrapped data!");
                         httpBufferReadsUnwrapNeeded.decrementAndGet();
                         httpBufferReadsCompleted.incrementAndGet();
                         break;
                     case BUFFER_OVERFLOW:
-                        //    clientAppData = enlargeApplicationBuffer(engine, peerAppData);
+                        //TODO: handle
                         break;
                     case BUFFER_UNDERFLOW:
-                        // no data was read or the TLS packet was incomplete.
+                        //TODO: hnandle
                         break;
                     case CLOSED:
                         //("Client wants to close connection...");
-                        //closeConnection(socketChannel, engine);
+                        //TODO: handle
                         return;
                     default:
-                        //Log this state that can't happen
-                        System.out.println("Illegal state: " + result.getStatus().toString());
+                        //Log this state that shouldn't happen
+                        System.out.println("Unknown state: " + result.getStatus().toString());
                         break;
                 }
             }
@@ -235,6 +245,39 @@ public class WebServerSSLConnState extends WebServerConnState {
         }
     }
 
+    public void unwrapData() {
+        SSLEngineResult result;
+        int bufferReadsDone = httpBufferReadsUnwrapNeeded.get();
+        if (bufferReadsDone > 0) {
+            for (BufferState bufferState : httpReadDoneQueue) {
+                int bytesRead = bufferState.getNetBuffer().position();
+                result = sslEngineMgr.unwrap(bufferState);
+                if (result == null) {
+                    //TODO: if not able to unwrap
+                }
+
+                switch (result.getStatus()) {
+                    case OK:
+                        addDataBuffer(bufferState, bytesRead);
+                        break;
+                    case BUFFER_OVERFLOW:
+                        //TODO
+                        break;
+                    case BUFFER_UNDERFLOW:
+                        //TODO
+                        break;
+                    case CLOSED:
+                        //TODO
+                        return;
+                    default:
+                        //Log this state that shouldn't happen
+                        System.out.println("Unknown state: " + result.getStatus().toString());
+                        break;
+                }
+            }
+
+        }
+    }
 
     /*
         Mark that the read is done and ready for unwrap.  On the NIO completion thread.
@@ -264,6 +307,32 @@ public class WebServerSSLConnState extends WebServerConnState {
     }
 
     /*
+        Mark that the read is done and ready for unwrap.  On the NIO completion thread.
+     */
+    @Override
+    public void dataReadCompleted(final BufferState bufferState) {
+        int readCount = outstandingDataReadCount.decrementAndGet();
+
+        try {
+            dataReadDoneUnwrap.put(bufferState);
+        } catch (InterruptedException int_ex) {
+            /*
+             ** TODO: This is an error case and the connection needs to be closed
+             */
+            LOG.info("dataReadCompleted(" + connStateId + ") " + int_ex.getMessage());
+        }
+
+        /*
+         ** Update the channel's health timeout
+         */
+        timeoutChecker.updateTime();
+
+        LOG.info("WebServerSSLConnState[" + connStateId + "] dataReadCompleted() outstandingReadCount: " + readCount);
+
+        addToWorkQueue(false);
+    }
+
+    /*
      ** This will send out a specified response type on the server channel back to the client
      */
     @Override
@@ -279,6 +348,7 @@ public class WebServerSSLConnState extends WebServerConnState {
             finalResponseSent = true;
 
             resultBuilder.buildResponse(buffState, resultCode, true);
+            buffState.getBuffer().flip();
 
             try {
                 sslEngineMgr.wrap(buffState);
@@ -368,6 +438,34 @@ public class WebServerSSLConnState extends WebServerConnState {
          ** Now release this back to the free pool so it can be reused
          */
         connectionStatePool.freeConnectionState(this);
+    }
+
+    public boolean isSSLHandshakeRequired() {
+        return sslHandshakeRequired;
+    }
+
+    public void setSSLHandshakeRequired(boolean sslHandshakeRequired) {
+        this.sslHandshakeRequired = sslHandshakeRequired;
+    }
+
+    public boolean isSSLHandshakeSuccess() {
+        return sslHandshakeSuccess;
+    }
+
+    public void setSSLHandshakeSuccess(boolean sslHandshakeSuccess) {
+        this.sslHandshakeSuccess = sslHandshakeSuccess;
+    }
+
+    public boolean isSSLBuffersNeeded() {
+        return sslBuffersNeeded;
+    }
+
+    public void setSSLBuffersNeeded( boolean sslBuffersNeeded ){
+        this.sslBuffersNeeded = sslBuffersNeeded;
+    }
+
+    public int getDataBuffersUnwrapRequired() {
+        return dataReadDoneUnwrap.size();
     }
 
 }

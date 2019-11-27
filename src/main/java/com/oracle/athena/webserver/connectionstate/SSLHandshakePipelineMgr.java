@@ -9,7 +9,7 @@ import javax.net.ssl.SSLException;
 import java.util.function.Function;
 
 class SSLHandshakePipelineMgr extends ConnectionPipelineMgr {
-    private WebServerSSLConnState connectionState;
+    private final WebServerSSLConnState connectionState;
     private boolean initialStage;
 
     private Function<WebServerSSLConnState, StateQueueResult> sslHandshakeInitialSetup = wsConn -> {
@@ -111,4 +111,5 @@ class SSLHandshakePipelineMgr extends ConnectionPipelineMgr {
          */
         return ConnectionStateEnum.CONN_FINISHED;
     }
+
 }
