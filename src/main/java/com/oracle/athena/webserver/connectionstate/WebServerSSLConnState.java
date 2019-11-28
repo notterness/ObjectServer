@@ -1,15 +1,13 @@
 package com.oracle.athena.webserver.connectionstate;
 
 import com.oracle.athena.webserver.http.parser.ByteBufferHttpParser;
-import com.oracle.athena.webserver.memory.MemoryManager;
-import com.oracle.athena.webserver.server.SSLEngineMgr;
 import com.oracle.athena.webserver.server.StatusWriteCompletion;
 import com.oracle.athena.webserver.server.WriteConnection;
-import com.oracle.pic.casper.volumemeta.config.OracleVolumeMetadata;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
 import java.io.IOException;
@@ -32,6 +30,7 @@ public class WebServerSSLConnState extends WebServerConnState {
     }
 
     private SSLConnState sslConnState;
+    private SSLContext sslContext;
     private SSLEngineMgr sslEngineMgr;
     private SSLHandshakePipelineMgr sslHandshakePipelineMgr;
     protected HttpsParsePipelineMgr httpsParsePipelineMgr;
@@ -51,10 +50,10 @@ public class WebServerSSLConnState extends WebServerConnState {
 
 
     public WebServerSSLConnState(final ConnectionStatePool<WebServerSSLConnState> connectionStatePool,
-                                 SSLEngineMgr sslEngineMgr, final int uniqueId) {
+                                 SSLContext sslContext, final int uniqueId) {
         super(uniqueId);
         this.connectionStatePool = connectionStatePool;
-        this.sslEngineMgr = sslEngineMgr;
+        this.sslContext = sslContext;
         httpBufferReadsUnwrapNeeded = new AtomicInteger(0);
         dataReadDoneUnwrap = new LinkedBlockingQueue<>(MAX_OUTSTANDING_BUFFERS * 2);
     }
@@ -63,6 +62,7 @@ public class WebServerSSLConnState extends WebServerConnState {
     public void setupInitial() {
         super.setupInitial();
         setSSLHandshakeRequired(false);
+        setSSLHandshakeSuccess(false);
         setSSLBuffersNeeded(true);
     }
 
@@ -73,8 +73,15 @@ public class WebServerSSLConnState extends WebServerConnState {
         sslHandshakePipelineMgr = new SSLHandshakePipelineMgr(this);
         httpsParsePipelineMgr = new HttpsParsePipelineMgr(this);
         sslReadReadPipelineMgr = new SSLContentReadPipelineMgr(this);
+        initSSLEngineMgr();
+
         sslConnState = SSLConnState.SSL_CONN_STATE_INIITAL;
         setupNextPipeline();
+    }
+
+    private void initSSLEngineMgr() {
+        sslEngineMgr = new SSLEngineMgr(sslContext);
+        sslEngineMgr.setUseClientMode(false);
     }
 
     @Override
@@ -130,7 +137,7 @@ public class WebServerSSLConnState extends WebServerConnState {
          ** First check if this is an out of resources response
          */
         if (outOfResourcesResponse) {
-            LOG.info("WebServerConnState[" + connStateId + "] setupNextPipeline() outOfResourcePipelineMgr");
+            LOG.info("WebServerSSLConnState[" + connStateId + "] setupNextPipeline() outOfResourcePipelineMgr");
 
             pipelineManager = outOfResourcePipelineMgr;
             return;
@@ -152,7 +159,7 @@ public class WebServerSSLConnState extends WebServerConnState {
                  ** Now, based on the HTTP method, figure out the next pipeline
                  */
                 HttpMethodEnum method = casperHttpInfo.getMethod();
-                LOG.info("WebServerConnState[" + connStateId + "] setupNextPipeline() " + method.toString());
+                LOG.info("WebServerSSLConnState[" + connStateId + "] setupNextPipeline() " + method.toString());
 
                 switch (method) {
                     case PUT_METHOD:
@@ -172,6 +179,7 @@ public class WebServerSSLConnState extends WebServerConnState {
             }
         }
     }
+
 
     /*
      ** Allocate buffers to read SSL encoded HTTP header information into and associate it with this ConnectionState
@@ -291,7 +299,7 @@ public class WebServerSSLConnState extends WebServerConnState {
             httpReadDoneQueue.put(bufferState);
             readCompletedCount = httpBufferReadsUnwrapNeeded.incrementAndGet();
         } catch (InterruptedException int_ex) {
-            LOG.info("httpReadCompleted(" + connStateId + ") " + int_ex.getMessage());
+            LOG.info("WebServerSSLConnState: httpReadCompleted(" + connStateId + ") " + int_ex.getMessage());
             readCompletedCount = httpBufferReadsUnwrapNeeded.get();
         }
 
@@ -319,7 +327,7 @@ public class WebServerSSLConnState extends WebServerConnState {
             /*
              ** TODO: This is an error case and the connection needs to be closed
              */
-            LOG.info("dataReadCompleted(" + connStateId + ") " + int_ex.getMessage());
+            LOG.info("WebServerSSLConnState: dataReadCompleted(" + connStateId + ") " + int_ex.getMessage());
         }
 
         /*
@@ -354,7 +362,7 @@ public class WebServerSSLConnState extends WebServerConnState {
                 sslEngineMgr.wrap(buffState);
             } catch (IOException e) {
                 //FIXME: Any SSLEngine problems, drop connection, give up
-                LOG.info("WebServerConnState[" + connStateId + "] SSLEngine threw " + e.toString());
+                LOG.info("WebServerSSLConnState[" + connStateId + "] SSLEngine threw " + e.toString());
                 e.printStackTrace();
             }
 
@@ -370,15 +378,15 @@ public class WebServerSSLConnState extends WebServerConnState {
 
             HttpStatus.Code result = HttpStatus.getCode(resultCode);
             if (result != null) {
-                LOG.info("WebServerConnState[" + connStateId + "] sendResponse() resultCode: " + result.getCode() + " " + result.getMessage());
+                LOG.info("WebServerSSLConnState[" + connStateId + "] sendResponse() resultCode: " + result.getCode() + " " + result.getMessage());
             } else {
-                LOG.info("WebServerConnState[" + connStateId + "] sendResponse() resultCode: " + result.getCode());
+                LOG.info("WebServerSSLConnState[" + connStateId + "] sendResponse() resultCode: " + result.getCode());
             }
         } else {
             /*
              ** If we are out of memory to allocate a response, might as well close out the connection and give up.
              */
-            LOG.info("WebServerConnState[" + connStateId + "] sendResponse() unable to allocate response buffer");
+            LOG.info("WebServerSSLConnState[" + connStateId + "] sendResponse() unable to allocate response buffer");
 
             /*
              ** Set the finalResponseSendDone flag to allow the state machine to complete.
@@ -389,6 +397,18 @@ public class WebServerSSLConnState extends WebServerConnState {
              */
             finalResponseSendDone = true;
         }
+    }
+
+    /*
+     ** This is called when the status write completes back to the client.
+     **
+     ** TODO: Pass the buffer back instead of relying on the responseBuffer
+     */
+    @Override
+    public void statusWriteCompleted(final ByteBuffer buffer) {
+        responseChannelWriteDone.set(true);
+        LOG.info("WebServerConnState[" + connStateId + "] statusWriteCompleted");
+  //     addToWorkQueue(false);
     }
 
     /*
@@ -425,6 +445,7 @@ public class WebServerSSLConnState extends WebServerConnState {
          ** Reset the pipeline back to the handshake
          */
         pipelineManager = sslHandshakePipelineMgr;
+        initSSLEngineMgr();
 
         /*
          ** Clear the write connection (it may already be null) since it will not be valid with the next

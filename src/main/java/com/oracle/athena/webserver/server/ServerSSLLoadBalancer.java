@@ -58,8 +58,6 @@ public class ServerSSLLoadBalancer extends ServerLoadBalancer {
 
         connPool = new ConnectionStatePool<>(workerThreads * maxQueueSize);
         reservedBlockingConnPool = new BlockingConnectionStatePool<>(RESERVED_CONN_COUNT);
-        SSLEngineMgr sslEngineMgr = new SSLEngineMgr(sslContext);
-        sslEngineMgr.setUseClientMode(false);
 
         //TODO: check if SSLEngine could not be instantiated
 
@@ -69,14 +67,14 @@ public class ServerSSLLoadBalancer extends ServerLoadBalancer {
          */
         WebServerSSLConnState conn;
         for (int i = 0; i < (workerThreads * maxQueueSize); i++) {
-            conn = new WebServerSSLConnState(connPool, sslEngineMgr, (serverBaseId + i + 1));
+            conn = new WebServerSSLConnState(connPool, sslContext, (serverBaseId + i + 1));
             conn.start();
             connPool.freeConnectionState(conn);
         }
         // also populate the reserved connection pool
         int startingId = serverBaseId + (workerThreads * maxQueueSize) + 1;
         for (int i = 0; i < RESERVED_CONN_COUNT; i++) {
-            conn = new WebServerSSLConnState(reservedBlockingConnPool, sslEngineMgr, (startingId + i));
+            conn = new WebServerSSLConnState(reservedBlockingConnPool, sslContext, (startingId + i));
             conn.start();
             reservedBlockingConnPool.freeConnectionState(conn);
         }

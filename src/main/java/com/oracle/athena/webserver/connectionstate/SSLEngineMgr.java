@@ -1,7 +1,5 @@
-package com.oracle.athena.webserver.server;
+package com.oracle.athena.webserver.connectionstate;
 
-import com.oracle.athena.webserver.connectionstate.*;
-import io.grpc.netty.shaded.io.netty.internal.tcnative.SSL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,7 +13,6 @@ import java.util.LinkedList;
 import java.util.ListIterator;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 
 public class SSLEngineMgr {
@@ -34,9 +31,6 @@ public class SSLEngineMgr {
     private LinkedList<BufferState> allocatedSSLAppBufferQueue;
     private LinkedList<BufferState> allocatedSSLNetBufferQueue;
     private SSLEngineResult.HandshakeStatus handshakeStatus;
-    private boolean sslHandshakeRequired;
-    private boolean sslHandshakeSuccess;
-    private boolean sslBuffersNeeded;
 
     SSLEngineMgr(SSLContext context) {
         this.context = context;
@@ -168,9 +162,11 @@ public class SSLEngineMgr {
                     return;
                 case BUFFER_OVERFLOW:
                     // TODO:
+                    LOG.info("wrap buffer overflow: " + result.getStatus().toString());
                     break;
                 case CLOSED:
                     //TODO: ("Client wants to close connection...");
+                    LOG.info("wrap client closed event: " + result.getStatus().toString());
                     return;
                 default:
                     LOG.info("Unknown wrap state: " + result.getStatus().toString());
