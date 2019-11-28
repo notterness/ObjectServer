@@ -12,7 +12,7 @@ public class ServerDigestThreadPool {
     private final int threadCount;
     private final ServerDigestThread[] digestThreads;
 
-    public ServerDigestThreadPool(final int threadCount) {
+    public ServerDigestThreadPool(final int threadCount){
         this.threadCount = threadCount;
         digestThreads    = new ServerDigestThread[this.threadCount];
         digestThreadPool = Executors.newFixedThreadPool(this.threadCount);

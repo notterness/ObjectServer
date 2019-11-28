@@ -180,8 +180,7 @@ abstract public class ConnectionState {
     ** The following queue is used to hold allocated BufferStates and it is only accessed from the main
     **   work thread so it does not need to be thread safe.
      */
-    //private LinkedList<BufferState> allocatedDataBufferQueue;
-    public LinkedList<BufferState> allocatedDataBufferQueue;
+    private LinkedList<BufferState> allocatedDataBufferQueue;
 
     /*
     ** The following queue is used to keep track of the BufferState that had a failed read. Items are placed
@@ -486,7 +485,7 @@ abstract public class ConnectionState {
                      */
                     int bufferSize = bufferState.getBuffer().limit();
                     contentBytesAllocated.addAndGet(bufferSize);
-                    LOG.info("readAllocBuf " + bufferState);
+
                     requestedDataBuffers--;
                 } else {
                     /*
@@ -512,7 +511,6 @@ abstract public class ConnectionState {
     **   only allow a single outstanding read to take place. This is due to the way sockets work in NIO.2.
      */
     public boolean dataBuffersWaitingForRead() {
-        LOG.info("allocBuff " + allocatedDataBuffers + " outstanding " + outstandingDataReadCount.get());
         return ((allocatedDataBuffers > 0) && (outstandingDataReadCount.get() == 0));
     }
 
@@ -579,7 +577,6 @@ abstract public class ConnectionState {
                 iter.remove();
 
                 allocatedDataBuffers--;
-                LOG.info("read " + bufferState);
 
                 outstandingDataReadCount.incrementAndGet();
                 readFromChannel(bufferState);
@@ -663,7 +660,6 @@ abstract public class ConnectionState {
     public void reset() {
 
         LOG.info("ConnectionState[" + connStateId + "] reset()");
-
 
         workerThread.removeFromQueue(this);
 
@@ -765,7 +761,7 @@ abstract public class ConnectionState {
 
         try {
             dataReadDoneQueue.put(bufferState);
-            bufferState.setReadState(BufferStateEnum.READ_DATA_DONE);
+            //bufferState.setReadState(BufferStateEnum.READ_DONE);
             readCompletedCount = dataBufferReadsCompleted.incrementAndGet();
         } catch (InterruptedException int_ex) {
             /*
@@ -775,7 +771,6 @@ abstract public class ConnectionState {
             readCompletedCount = dataBufferReadsCompleted.get();
         }
 
-        LOG.info("readCompleted " + bufferState);
         LOG.info("ConnectionState[" + connStateId + "] addDataBuffer() readCompletedCount: " + readCompletedCount +
                 " contentBytesRead: " + totalBytesRead);
 
@@ -1038,7 +1033,6 @@ abstract public class ConnectionState {
                 } else if (bytesRead == 0) {
                     setReadState(readBufferState, BufferStateEnum.READ_ERROR);
                 }
-                LOG.info("readFromChan - complete " + readBufferState.getBufferState() );
             }
 
             @Override
@@ -1051,7 +1045,6 @@ abstract public class ConnectionState {
                  ** This buffer read failed, need to mark the buffer to indicate that it is not valid
                  */
                 setReadState(readBufferState, BufferStateEnum.READ_ERROR);
-                LOG.info("readFromChan - complete error" + readBufferState.getBufferState() );
             }
         });  // end of chan.read()
     }
@@ -1088,6 +1081,7 @@ abstract public class ConnectionState {
 
     public void updateDigest(ByteBuffer byteBuffer) {
         md5Digest.digestByteBuffer(byteBuffer);
+        dataBufferDigestCompleted.incrementAndGet();
     }
 
     public void sendBuffersToMd5Worker() {
@@ -1100,7 +1094,6 @@ abstract public class ConnectionState {
             workerThread.addServerDigestWork(bufferState);
             bufferState.setBufferState(BufferStateEnum.DIGEST_WAIT);
             dataBufferDigestSent.incrementAndGet();
-            LOG.info("digestSend " + bufferState);
         }
     }
 
@@ -1123,6 +1116,7 @@ abstract public class ConnectionState {
                 dataBufferDigestCompleted.incrementAndGet();
                 dataBufferDigestSent.decrementAndGet();
                 bufferState.setBufferState(BufferStateEnum.DIGEST_DONE);
+                LOG.info("bufferToMd5 " + bufferState + " this :" + this);
             }
         }
     }

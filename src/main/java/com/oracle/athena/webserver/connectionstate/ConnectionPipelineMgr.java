@@ -2,16 +2,12 @@ package com.oracle.athena.webserver.connectionstate;
 
 import com.oracle.athena.webserver.statemachine.StateMachine;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A ConnectionPipelineMgr is a manager of pipes that enforces all pipeline managers to provide a mechanism for
  * executing and advancing the pipeline.
  */
 public abstract class ConnectionPipelineMgr {
-
-    private static final Logger LOG = LoggerFactory.getLogger(CasperHttpInfo.class);
 
     private final ConnectionState connectionState;
     protected final StateMachine<ConnectionState, ConnectionStateEnum> connectionStateMachine;

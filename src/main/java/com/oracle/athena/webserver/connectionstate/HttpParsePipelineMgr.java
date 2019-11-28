@@ -7,11 +7,8 @@ import org.eclipse.jetty.http.HttpStatus;
 
 import java.util.function.Function;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 class HttpParsePipelineMgr extends ConnectionPipelineMgr {
-    private static final Logger LOG = LoggerFactory.getLogger(HttpParsePipelineMgr.class);
+
     private final WebServerConnState connectionState;
     private boolean initialStage;
 
