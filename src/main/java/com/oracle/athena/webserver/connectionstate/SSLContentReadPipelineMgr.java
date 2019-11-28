@@ -100,6 +100,7 @@ public class SSLContentReadPipelineMgr extends ConnectionPipelineMgr {
         wsConn.md5CalculateComplete();
         return StateQueueResult.STATE_RESULT_CONTINUE;
     };
+
     SSLContentReadPipelineMgr(WebServerSSLConnState connectionState) {
         super(connectionState, new StateMachine<>());
         this.connectionState = connectionState;
