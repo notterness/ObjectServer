@@ -32,7 +32,7 @@ public class TestMain {
          */
         //threadCount.incrementAndGet();
         //waitForTestsToComplete(threadCount);
-
+/*
         ClientTest client_checkMd5 = new ClientTest_CheckMd5("ClientTest_CheckMd5", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_checkMd5.start();
 
@@ -40,15 +40,16 @@ public class TestMain {
 
         ClientTest client_1 = new ClientTest_2("ClientTest_2", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_1.start();
-
+*/
         ClientTest earlyClose = new ClientTest_EarlyClose("EarlyClose", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         earlyClose.start();
-
+/*
         ClientTest slowHeaderSend = new ClientTest_SlowHeaderSend("SlowHeaderSend", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         slowHeaderSend.start();
 
         ClientTest oneMbPut = new ClientTest_OneMbPut("OneMbPut", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         oneMbPut.start();
+*/
 
         /*
         ClientTest outOfConnections = new ClientTest_OutOfConnections("OutOfConnections", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
@@ -66,10 +67,10 @@ public class TestMain {
             System.out.println("FAILURE: At Least One Test Failed - first failed test " + failedTestName);
         }
 
-        client_1.stop();
+        //client_1.stop();
         earlyClose.stop();
-        slowHeaderSend.stop();
-        oneMbPut.stop();
+        //slowHeaderSend.stop();
+        //oneMbPut.stop();
         //outOfConnections.stop();
 
         if (failedTestName == null) {

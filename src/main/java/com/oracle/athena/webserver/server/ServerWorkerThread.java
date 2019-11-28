@@ -192,6 +192,7 @@ public class ServerWorkerThread implements Runnable {
     **   the expected queue.
      */
     public void removeFromQueue(final ConnectionState work) {
+        bufferStatePool.showInUseBufferState(threadId);
         queueMutex.lock();
         try {
             if (workQueue.remove(work)) {
@@ -316,6 +317,9 @@ public class ServerWorkerThread implements Runnable {
 
         isQueued = digestThreadPool.addDigestWorkToThread(bufferState);
         return isQueued;
+    }
+    public void debugDump() {
+        bufferStatePool.showInUseBufferState(threadId);
     }
 
 }

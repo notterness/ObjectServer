@@ -228,6 +228,7 @@ public class WebServerConnState extends ConnectionState {
         LOG.error("WebServerConnState[" + connStateId + "] responseChannelWriteDone: " + responseChannelWriteDone.get() +
                 " finalResponseSendDone: " + finalResponseSendDone);
 
+
         workerThread.dumpWorkerThreadQueues();
         return pipelineManager.nextPipelineStage();
     }
@@ -426,6 +427,7 @@ public class WebServerConnState extends ConnectionState {
                 allocatedHttpBufferCount--;
 
                 outstandingHttpReadCount.incrementAndGet();
+                LOG.info("buffer removed from alloc " + bufferState);
                 readFromChannel(bufferState);
             }
         }
@@ -502,10 +504,10 @@ public class WebServerConnState extends ConnectionState {
 
         if (!readErrorQueue.isEmpty()) {
             BufferState bufferState;
-
             Iterator<BufferState> iter = readErrorQueue.iterator();
             while (iter.hasNext()) {
                 bufferState = iter.next();
+                LOG.info("process read error " + bufferState.getBufferState() + " " +bufferState );
                 iter.remove();
 
                 if (bufferState.getBufferState() == BufferStateEnum.READ_WAIT_FOR_HTTP) {
@@ -797,6 +799,7 @@ public class WebServerConnState extends ConnectionState {
 
             int bytesToWrite = respBuffer.position();
             respBuffer.flip();
+            LOG.info("responseBuf alloc " + respBuffer);
 
             WriteConnection writeConn = getWriteConnection();
             StatusWriteCompletion statusComp = new StatusWriteCompletion(this, writeConn, respBuffer,
@@ -882,6 +885,7 @@ public class WebServerConnState extends ConnectionState {
                 break;
         }
 
+        LOG.info("processResponse " + responseBuffer);
         bufferStatePool.freeBufferState(responseBuffer);
         responseBuffer = null;
 
@@ -995,11 +999,15 @@ public class WebServerConnState extends ConnectionState {
         BufferState[] readDoneBuffers = new BufferState[0];
         readDoneBuffers = dataReadDoneQueue.toArray(readDoneBuffers);
 
+        LOG.info("allocatedBuffers " + allocatedDataBufferQueue.size());
+        LOG.info("md5 " + dataMd5DoneQueue.size() + " data " + dataReadDoneQueue.size() );
+        LOG.info("readError " + readErrorQueue.size());
         for (BufferState bufferState : md5DoneBuffers) {
             bufferStatePool.freeBufferState(bufferState);
             dataMd5DoneQueue.remove(bufferState);
 
             int digestCompleted = dataBufferDigestCompleted.decrementAndGet();
+            LOG.info("release Md5 " + bufferState);
             LOG.info("WebServerConnState[" + connStateId + "] releaseContentBuffers() " + digestCompleted);
         }
 
@@ -1008,6 +1016,7 @@ public class WebServerConnState extends ConnectionState {
             dataReadDoneQueue.remove(bufferState);
 
             int readsCompleted = dataBufferReadsCompleted.decrementAndGet();
+            LOG.info("release bufferReads " + bufferState);
             LOG.info("WebServerConnState[" + connStateId + "] releaseContentBuffers() " + readsCompleted);
         }
     }
