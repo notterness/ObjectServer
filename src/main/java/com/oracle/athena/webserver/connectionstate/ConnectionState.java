@@ -960,7 +960,6 @@ abstract public class ConnectionState {
 
     public void updateDigest(ByteBuffer byteBuffer) {
         md5Digest.digestByteBuffer(byteBuffer);
-        dataBufferDigestCompleted.incrementAndGet();
     }
 
     public void sendBuffersToMd5Worker() {
@@ -995,7 +994,6 @@ abstract public class ConnectionState {
                 dataBufferDigestCompleted.incrementAndGet();
                 dataBufferDigestSent.decrementAndGet();
                 bufferState.setBufferState(BufferStateEnum.DIGEST_DONE);
-                LOG.info("bufferToMd5 " + bufferState + " this :" + this);
             }
         }
     }
