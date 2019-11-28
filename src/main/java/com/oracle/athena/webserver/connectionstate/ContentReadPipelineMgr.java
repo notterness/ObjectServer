@@ -193,16 +193,24 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         }
 
         if (connectionState.hasAllContentBeenRead() && !connectionState.getDigestComplete() &&
+                connectionState.getDataBufferDigestCompleted() > 0 &&
                 connectionState.getDataBufferReadsCompleted() == 0 &&
                 connectionState.getDataBufferDigestSent() == 0) {
             return ConnectionStateEnum.MD5_CALCULATE_COMPLETE;
         }
+
         /*
          ** This is where the processing of the content data buffers will start. For now, this just
          **   goes directly to the release content buffers stage, which only releases the buffers back to the free
          **   pool.
          */
-        if (connectionState.getDataBufferReadsCompleted() > 0) {
+        if (connectionState.getDataBufferReadsCompleted() > 0 || connectionState.getDataBufferDigestCompleted() > 0 ) {
+            if (connectionState.getDigestComplete()) {
+                return ConnectionStateEnum.RELEASE_CONTENT_BUFFERS;
+            } else if ( connectionState.getDataBufferDigestSent() == 0) {
+                return ConnectionStateEnum.RELEASE_CONTENT_BUFFERS;
+            }
+
             return ConnectionStateEnum.RELEASE_CONTENT_BUFFERS;
         }
 
