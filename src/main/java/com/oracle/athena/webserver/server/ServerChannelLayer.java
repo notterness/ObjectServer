@@ -34,8 +34,6 @@ public class ServerChannelLayer implements Runnable {
     private static final int CHAN_TIMEOUT = 100;
     public static final int WORK_QUEUE_SIZE = 10;
 
-    private SSLContext sslContext;
-
     private int portNum;
     //TODO: naming, should indicate it is the number of threads and not the threads themselves.
     int workerThreads;
@@ -62,54 +60,23 @@ public class ServerChannelLayer implements Runnable {
     //FIXME - remove or use instance variable
     private ByteBufferHttpParser byteBufferHttpParser;
 
-    public ServerChannelLayer(ServerLoadBalancer serverWorkHandler, int portNum, int serverClientId, boolean ssl) {
+    public ServerChannelLayer(ServerLoadBalancer serverWorkHandler, int portNum, int serverClientId) {
         this.serverWorkHandler = serverWorkHandler;
         this.portNum = portNum;
         this.serverClientId = serverClientId;
-        this.ssl = ssl;
-
-        if (ssl) {
-            try {
-                sslContext = SSLContext.getInstance("TLSv1.2");
-
-                // TODO: figure out how to initialize with casper certs
-                sslContext.init(createKeyManagers("./src/main/resources/server.jks", "athena", "athena"), createTrustManagers("./src/main/resources/trustedCerts.jks", "athena"), new SecureRandom());
-
-            } catch (NoSuchAlgorithmException e) {
-                e.printStackTrace();
-            } catch (KeyManagementException e) {
-                e.printStackTrace();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        } else {
-            sslContext = null;
-        }
 
         serverConnTransactionId = 0x5555;
 
         serverAcceptThread = new Thread(this);
         exitThreads = false;
-    }
-
-    public ServerChannelLayer(ServerLoadBalancer serverWorkHandler, int listenPort, int clientId) {
-         this(serverWorkHandler, listenPort, clientId, false);
     }
 
     public ServerChannelLayer(int listenPort, int clientId) {
-        this.serverWorkHandler = null;
-        portNum = listenPort;
-        serverClientId = clientId;
-        ssl = false;
-        sslContext = null;
-
-        serverConnTransactionId = 0x5555;
-
-        serverAcceptThread = new Thread(this);
-        exitThreads = false;
+        this(null, listenPort, clientId);
     }
 
     public void start() {
+        serverWorkHandler.start();
         serverAcceptThread.start();
     }
 
@@ -119,6 +86,8 @@ public class ServerChannelLayer implements Runnable {
     public void stop() {
 
         System.out.println("ServerChannelLayer[" + (serverClientId * 100) + "] stop()");
+
+        serverWorkHandler.stop();
 
         /*
          */
@@ -191,7 +160,7 @@ public class ServerChannelLayer implements Runnable {
 
                 LOG.info("Server run(" + serverClientId + "): accepted");
 
-                if (!serverWorkHandler.startNewConnection(clientChan, sslContext)) {
+                if (!serverWorkHandler.startNewConnection(clientChan)) {
                     /*
                     FIXME: currently this only happens if the load balancer was unable to allocate a connection pool
                     from the unreserved normal pool, and also unable to allocate a connection pool from the unreserved
@@ -208,34 +177,4 @@ public class ServerChannelLayer implements Runnable {
         LOG.info("ServerChannelLayer(" + serverClientId + ") exit " + Thread.currentThread().getName());
     }
 
-    private KeyManager[] createKeyManagers(String filepath, String keystorePassword, String keyPassword) throws Exception {
-        KeyStore keyStore = KeyStore.getInstance("JKS");
-        InputStream keyStoreIS = new FileInputStream(filepath);
-        try {
-            keyStore.load(keyStoreIS, keystorePassword.toCharArray());
-        } finally {
-            if (keyStoreIS != null) {
-                keyStoreIS.close();
-            }
-        }
-        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-        kmf.init(keyStore, keyPassword.toCharArray());
-        return kmf.getKeyManagers();
-    }
-
-    private TrustManager[] createTrustManagers(String filepath, String keystorePassword) throws Exception {
-        KeyStore trustStore = KeyStore.getInstance("JKS");
-        InputStream trustStoreIS = new FileInputStream(filepath);
-        try {
-            trustStore.load(trustStoreIS, keystorePassword.toCharArray());
-        } finally {
-            if (trustStoreIS != null) {
-                trustStoreIS.close();
-            }
-        }
-        TrustManagerFactory trustFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-        trustFactory.init(trustStore);
-        return trustFactory.getTrustManagers();
-    }
-
-}
+ }

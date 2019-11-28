@@ -7,43 +7,50 @@ import org.eclipse.jetty.http.HttpStatus;
 
 import java.util.function.Function;
 
-class HttpParsePipelineMgr extends ConnectionPipelineMgr {
+class HttpsParsePipelineMgr extends ConnectionPipelineMgr {
 
-    private final WebServerConnState connectionState;
+    private final WebServerSSLConnState connectionState;
+
     private boolean initialStage;
 
-    private Function<WebServerConnState, StateQueueResult> httpParseInitialSetup = wsConn -> {
+    private Function<WebServerConnState, StateQueueResult> httpsParseInitialSetup = wsConn -> {
         wsConn.setupInitial();
         return StateQueueResult.STATE_RESULT_CONTINUE;
     };
 
-    private Function<WebServerConnState, StateQueueResult> httpParseAllocHttpBuffer = wsConn -> {
-        if (wsConn.allocHttpBufferState() == 0) {
+    private Function<WebServerSSLConnState, StateQueueResult> httpsParseAllocHttpBuffer = wsConn -> {
+        if (wsConn.allocHttpBufferState() == 0){
             return StateQueueResult.STATE_RESULT_WAIT;
         } else {
             return StateQueueResult.STATE_RESULT_CONTINUE;
         }
     };
 
-    private Function<WebServerConnState, StateQueueResult> httpParseReadHttpBuffer = wsConn -> {
+    private Function<WebServerSSLConnState, StateQueueResult> httpsParseReadHttpBuffer = wsConn -> {
         wsConn.readIntoMultipleBuffers();
-
 
         return StateQueueResult.STATE_RESULT_REQUEUE;
     };
 
-    private Function<WebServerConnState, StateQueueResult> httpParseHttpBuffer = wsConn -> {
+    private Function<WebServerSSLConnState, StateQueueResult> httpsParseUnwrapHttpsBuffer = wsConn -> {
+        wsConn.unwrapHttp();
+        return StateQueueResult.STATE_RESULT_CONTINUE;
+    };
+
+    private Function<WebServerSSLConnState, StateQueueResult> httpsParseHttpBuffer = wsConn -> {
         wsConn.parseHttp();
         return StateQueueResult.STATE_RESULT_CONTINUE;
     };
 
-    private Function<WebServerConnState, StateQueueResult> httpParseConnFinished = wsConn -> {
+    private Function<WebServerSSLConnState, StateQueueResult> httpsParseConnFinished = wsConn -> {
         initialStage = true;
+
         wsConn.reset();
+
         return StateQueueResult.STATE_RESULT_FREE;
     };
 
-    private Function<WebServerConnState, StateQueueResult> httpParseCheckSlowConnection = wsConn -> {
+    private Function<WebServerSSLConnState, StateQueueResult> httpsParseCheckSlowConnection = wsConn -> {
         if (wsConn.checkSlowClientChannel()) {
             return StateQueueResult.STATE_RESULT_CONTINUE;
         } else {
@@ -51,12 +58,12 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         }
     };
 
-    private Function<WebServerConnState, StateQueueResult> httpParseSendXferResponse = wsConn -> {
+    private Function<WebServerSSLConnState, StateQueueResult> httpsParseSendXferResponse = wsConn -> {
         wsConn.sendResponse(wsConn.getHttpParseStatus());
         return StateQueueResult.STATE_RESULT_WAIT;
     };
 
-    private Function<WebServerConnState, StateQueueResult> httpParseSetupNextPipeline = wsConn -> {
+    private Function<WebServerSSLConnState, StateQueueResult> httpsParseSetupNextPipeline = wsConn -> {
         initialStage = true;
         wsConn.resetHttpReadValues();
         wsConn.resetContentAllRead();
@@ -64,59 +71,61 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         return StateQueueResult.STATE_RESULT_COMPLETE;
     };
 
-    private Function<WebServerConnState, StateQueueResult> httpParseProcessReadError = wsConn -> {
+    private Function<WebServerSSLConnState, StateQueueResult> httpsParseProcessReadError = wsConn -> {
         if (wsConn.processReadErrorQueue()) {
             return StateQueueResult.STATE_RESULT_CONTINUE;
         }
         return StateQueueResult.STATE_RESULT_REQUEUE;
     };
 
-    private Function<WebServerConnState, StateQueueResult> httpParseProcessFinalResponseSend = wsConn -> {
+    private Function<WebServerSSLConnState, StateQueueResult> httpsParseProcessFinalResponseSend = wsConn -> {
         wsConn.processResponseWriteDone();
         return StateQueueResult.STATE_RESULT_CONTINUE;
     };
 
-    public HttpParsePipelineMgr(WebServerConnState connectionState) {
+    public HttpsParsePipelineMgr(WebServerSSLConnState connectionState) {
         super(connectionState, new StateMachine<>());
         this.connectionState = connectionState;
 
         initialStage = true;
 
         /*
-         ** Reset the state of the pipeline
+        ** Reset the state of the pipeline
          */
         this.connectionState.resetHttpReadValues();
 
         /*
-         ** This must be set to false here as there may be content data included in a buffer used to
-         **   to read in the HTTP headers.
+        ** This must be set to false here as there may be content data included in a buffer used to
+        **   to read in the HTTP headers.
          */
         this.connectionState.resetContentAllRead();
 
         /*
-         ** In error cases, this pipeline will send out error responses.
+        ** In error cases, this pipeline will send out error responses.
          */
         this.connectionState.resetResponses();
-        connectionStateMachine.addStateEntry(ConnectionStateEnum.INITIAL_SETUP, new StateEntry<>(httpParseInitialSetup));
-        connectionStateMachine.addStateEntry(ConnectionStateEnum.CHECK_SLOW_CHANNEL, new StateEntry<>(httpParseCheckSlowConnection));
-        connectionStateMachine.addStateEntry(ConnectionStateEnum.ALLOC_HTTP_BUFFER, new StateEntry<>(httpParseAllocHttpBuffer));
-        connectionStateMachine.addStateEntry(ConnectionStateEnum.READ_HTTP_BUFFER, new StateEntry<>(httpParseReadHttpBuffer));
-        connectionStateMachine.addStateEntry(ConnectionStateEnum.PARSE_HTTP_BUFFER, new StateEntry<>(httpParseHttpBuffer));
-        connectionStateMachine.addStateEntry(ConnectionStateEnum.CONN_FINISHED, new StateEntry<>(httpParseConnFinished));
-        connectionStateMachine.addStateEntry(ConnectionStateEnum.SETUP_NEXT_PIPELINE, new StateEntry<>(httpParseSetupNextPipeline));
-        connectionStateMachine.addStateEntry(ConnectionStateEnum.SEND_FINAL_RESPONSE, new StateEntry<>(httpParseSendXferResponse));
-        connectionStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_READ_ERROR, new StateEntry<>(httpParseProcessReadError));
-        connectionStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND, new StateEntry<>(httpParseProcessFinalResponseSend));
-    }
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.INITIAL_SETUP, new StateEntry<>(httpsParseInitialSetup));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.CHECK_SLOW_CHANNEL, new StateEntry(httpsParseCheckSlowConnection));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.ALLOC_HTTP_BUFFER, new StateEntry(httpsParseAllocHttpBuffer));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.READ_HTTP_BUFFER, new StateEntry(httpsParseReadHttpBuffer));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.UNWRAP_HTTP_BUFFER, new StateEntry(httpsParseUnwrapHttpsBuffer));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.PARSE_HTTP_BUFFER, new StateEntry(httpsParseHttpBuffer));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.CONN_FINISHED, new StateEntry(httpsParseConnFinished));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.SETUP_NEXT_PIPELINE, new StateEntry(httpsParseSetupNextPipeline));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.SEND_FINAL_RESPONSE, new StateEntry(httpsParseSendXferResponse));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_READ_ERROR, new StateEntry(httpsParseProcessReadError));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND, new StateEntry(httpsParseProcessFinalResponseSend));
+
+   }
 
     /*
-     ** This determines the pipeline stages used to read in and parse the HTTP headers.
+    ** This determines the pipeline stages used to read in and parse the HTTP headers.
      */
     @Override
     public ConnectionStateEnum nextPipelineStage() {
 
         /*
-         ** Perform the initial setup
+        ** Perform the initial setup
          */
         if (initialStage) {
             initialStage = false;
@@ -156,7 +165,7 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         }
 
         /*
-         ** Check if there are buffers in error that need to be processed.
+        ** Check if there are buffers in error that need to be processed.
          */
         if (connectionState.readErrorQueueNotEmpty()) {
             return ConnectionStateEnum.PROCESS_READ_ERROR;
@@ -193,6 +202,13 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
          */
         if (connectionState.getHttpParseStatus() != HttpStatus.OK_200) {
             return ConnectionStateEnum.SEND_FINAL_RESPONSE;
+        }
+
+        /*
+         ** Are there completed reads ready to unwrap
+         */
+        if (connectionState.httpBuffersReadyToUnwrap()) {
+            return ConnectionStateEnum.UNWRAP_HTTP_BUFFER;
         }
 
         /*
