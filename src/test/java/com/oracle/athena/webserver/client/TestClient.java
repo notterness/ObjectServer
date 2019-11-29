@@ -92,9 +92,9 @@ public class TestClient implements Runnable {
 
         boolean connected = false;
         if (writeConn != null) {
-            writeConn.open(tcpPort, timeoutMs);
-
-            connected = true;
+            if (writeConn.open(tcpPort, timeoutMs) != null) {
+                connected = true;
+            }
         } else {
             System.out.println("No WriteConnection found");
         }
@@ -175,8 +175,12 @@ public class TestClient implements Runnable {
     ** This logs the first test that failed. If multiple tests fail, only the first one is retained
      */
     public void setTestFailed(final String failedTest) {
-        if (failedTestName != null) {
+        if (failedTestName == null) {
+            System.out.println("Adding test failure: " + failedTest);
+
             failedTestName = failedTest;
+        } else {
+            System.out.println("Cannot add test failure: " + failedTest);
         }
     }
 

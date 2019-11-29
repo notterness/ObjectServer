@@ -60,7 +60,7 @@ public class WebServerConnState extends ConnectionState {
     **   responseChannelWriteDone - This is set when the callback from the channel write completes
      */
     protected boolean dataRequestResponseSendDone;
-    protected boolean finalResponseSent;
+    protected AtomicBoolean finalResponseSent;
     protected AtomicBoolean responseChannelWriteDone;
     protected boolean finalResponseSendDone;
 
@@ -136,7 +136,7 @@ public class WebServerConnState extends ConnectionState {
         connectionStatePool = pool;
 
         responseBuffer = null;
-        finalResponseSent = false;
+        finalResponseSent = new AtomicBoolean(false);
         dataRequestResponseSendDone = false;
         finalResponseSendDone = false;
 
@@ -710,7 +710,7 @@ public class WebServerConnState extends ConnectionState {
 
         BufferState buffState = allocateResponseBuffer();
         if (buffState != null) {
-            finalResponseSent = true;
+            finalResponseSent.set(true);
 
             ByteBuffer respBuffer = resultBuilder.buildResponse(buffState, resultCode, true);
 
@@ -830,7 +830,7 @@ public class WebServerConnState extends ConnectionState {
     **   but does not mean it has actually been sent.
      */
     boolean hasFinalResponseBeenSent() {
-        return finalResponseSent;
+        return finalResponseSent.get();
     }
 
     /*
@@ -843,7 +843,7 @@ public class WebServerConnState extends ConnectionState {
 
     void resetResponses() {
         dataRequestResponseSendDone = false;
-        finalResponseSent = false;
+        finalResponseSent.set(false);
         finalResponseSendDone = false;
     }
 

@@ -7,7 +7,7 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
-public class ClientTest_OneMbPut extends ClientTest {
+class ClientTest_OneMbPut extends ClientTest {
 
     private final int BYTES_IN_CONTENT = 10240;
 

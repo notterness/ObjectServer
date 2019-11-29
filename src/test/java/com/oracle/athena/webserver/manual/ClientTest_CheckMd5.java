@@ -6,7 +6,7 @@ import com.oracle.athena.webserver.memory.MemoryManager;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ClientTest_CheckMd5 extends ClientTest {
+class ClientTest_CheckMd5 extends ClientTest {
 
     private final int BYTES_IN_CONTENT = 1024;
 

@@ -355,7 +355,7 @@ public class WebServerSSLConnState extends WebServerConnState {
                                     BufferStateEnum.SEND_FINAL_RESPONSE);
         if (buffState != null) {
             responseBuffer = buffState;
-            finalResponseSent = true;
+            finalResponseSent.set(true);
 
             resultBuilder.buildResponse(buffState, resultCode, true);
             buffState.getBuffer().flip();

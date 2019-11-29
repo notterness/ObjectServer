@@ -51,8 +51,8 @@ public class TestMain {
             ClientTest slowHeaderSend = new ClientTest_SlowHeaderSend("SlowHeaderSend", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
             slowHeaderSend.start();
 
-            //ClientTest oneMbPut = new ClientTest_OneMbPut("OneMbPut", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
-            //oneMbPut.start();
+            ClientTest oneMbPut = new ClientTest_OneMbPut("OneMbPut", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            oneMbPut.start();
 
         /*
         ClientTest outOfConnections = new ClientTest_OutOfConnections("OutOfConnections", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
@@ -66,7 +66,7 @@ public class TestMain {
             client_1.stop();
             earlyClose.stop();
             slowHeaderSend.stop();
-            //oneMbPut.stop();
+            oneMbPut.stop();
             //outOfConnections.stop();
         }
 

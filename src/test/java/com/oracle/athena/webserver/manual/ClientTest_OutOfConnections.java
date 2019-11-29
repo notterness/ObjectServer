@@ -6,7 +6,7 @@ import org.eclipse.jetty.http.HttpStatus;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ClientTest_OutOfConnections extends ClientTest {
+class ClientTest_OutOfConnections extends ClientTest {
 
     ClientTest_OutOfConnections(final String testName, final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
         super(testName, client, myServerId, myTargetId, threadCount);
@@ -14,7 +14,7 @@ public class ClientTest_OutOfConnections extends ClientTest {
 
     @Override
     String buildRequestString() {
-        String tmp = new String("PUT / HTTP/1.1\n" +
+        return new String("PUT / HTTP/1.1\n" +
                 "Host: ClientTest-" + super.clientTestName + "\n" +
                 "Content-Type: application/json\n" +
                 "Connection: keep-alive\n" +
@@ -28,8 +28,6 @@ public class ClientTest_OutOfConnections extends ClientTest {
                 "  \"compartmentId\": \"ocid1.compartment.oc1..aaaaaaaauwjnv47knr7uuuvqar5bshnspi6xoxsfebh3vy72fi4swgrkvuvq\",\n" +
                 "  \"displayName\": \"Apex Virtual Cloud Network\"\n" +
                 "}\n\r\n");
-
-        return tmp;
     }
 
     /*

@@ -26,42 +26,45 @@ public abstract class ClientTest implements Runnable {
 
     private Thread clientThread;
 
-    private volatile WaitSignal writeDone;
+    private final Object writeDone;
 
     MemoryManager memoryAllocator;
 
     private HttpResponseListener responseListener;
     private HttpParser httpParser;
 
-    private HttpResponseCompleted httpResponseCb;
+    protected WriteConnection writeConn;
+    protected final TestClient client;
 
-    WriteConnection writeConn;
-    TestClient client;
-
+    /*
+    ** httpStatus is used in the sub-classes to validate that the correct response was
+    **   returned from the Web Server code.
+     */
     protected int httpStatus;
-    protected String clientTestName;
+    protected final String clientTestName;
 
     ClientTest(final String testName, final TestClient testClient, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
 
-        serverConnId = myServerId;
-        clientConnId = myTargetId;
+        this.serverConnId = myServerId;
+        this.clientConnId = myTargetId;
 
         clientCount = threadCount;
         clientCount.incrementAndGet();
 
-        client = testClient;
+        this.client = testClient;
 
-        httpStatus = 0;
+        this.httpStatus = 0;
 
-        clientTestName = testName;
+        this.clientTestName = testName;
+
+        this.writeDone = new Object();
     }
 
     void start() {
-
         clientThread = new Thread(this);
         clientThread.start();
 
-        httpResponseCb = new HttpResponseCompleted(this);
+        HttpResponseCompleted httpResponseCb = new HttpResponseCompleted(this);
         responseListener = new HttpResponseListener(httpResponseCb);
         httpParser = new HttpParser(responseListener);
 
@@ -90,7 +93,7 @@ public abstract class ClientTest implements Runnable {
     }
 
     /*
-     ** TODO: Extend this to perform data writes after the header is sent.
+     **
      */
     public void run() {
 
@@ -99,8 +102,6 @@ public abstract class ClientTest implements Runnable {
         } catch (InterruptedException int_ex) {
             int_ex.printStackTrace();
         }
-
-        writeDone = new WaitSignal();
 
         writeConn = client.addNewTarget(clientConnId, 5);
 
@@ -151,12 +152,15 @@ public abstract class ClientTest implements Runnable {
                     clientTestName);
 
             client.disconnectTarget(writeConn);
+        } else {
+            System.out.println("Completed ClientTest[" + writeConn.getTransactionId() + "] unable to connect to target");
+            client.setTestFailed(clientTestName);
         }
 
         clientCount.decrementAndGet();
     }
 
-    void userWriteCompleted(int result) {
+    private void userWriteCompleted(int result) {
 
         System.out.println("ClientTest[" + writeConn.getTransactionId() + "]userWriteComp(): " + result);
 
@@ -202,7 +206,7 @@ public abstract class ClientTest implements Runnable {
     }
 
 
-    boolean waitForStatus() {
+    private boolean waitForStatus() {
         boolean status = true;
 
         synchronized (writeDone) {
@@ -222,10 +226,6 @@ public abstract class ClientTest implements Runnable {
         System.out.println("ClientTest[" + writeConn.getTransactionId() + "] waitForStatus() done: " + status);
 
         return status;
-    }
-
-    static class WaitSignal {
-        int count;
     }
 
     private void str_to_bb(ByteBuffer out, String in) {
