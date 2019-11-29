@@ -22,7 +22,7 @@ public class SSLContentReadPipelineMgr extends ConnectionPipelineMgr {
     };
 
     private Function<WebServerSSLConnState, StateQueueResult> contentReadRequestDataBuffers = wsConn -> {
-        if (wsConn.allocClientReadBufferState() == 0) {
+        if (wsConn.allocContentReadBuffers() == 0) {
             return StateQueueResult.STATE_RESULT_WAIT;
         } else {
             return StateQueueResult.STATE_RESULT_CONTINUE;
@@ -116,8 +116,8 @@ public class SSLContentReadPipelineMgr extends ConnectionPipelineMgr {
 
         connectionState.resetResponses();
         connectionStateMachine.addStateEntry(ConnectionStateEnum.SETUP_CONTENT_READ, new StateEntry<>(contentReadSetup));
-        connectionStateMachine.addStateEntry(ConnectionStateEnum.ALLOC_CLIENT_DATA_BUFFER, new StateEntry<>(contentReadRequestDataBuffers));
-        connectionStateMachine.addStateEntry(ConnectionStateEnum.READ_CLIENT_DATA, new StateEntry<>(contentReadDataBuffers));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.ALLOC_CONTENT_DATA_BUFFER, new StateEntry<>(contentReadRequestDataBuffers));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.READ_CONTENT_DATA, new StateEntry<>(contentReadDataBuffers));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.CHECK_SLOW_CHANNEL, new StateEntry<>(contentReadCheckSlowChannel));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.SEND_FINAL_RESPONSE, new StateEntry<>(contentReadSendXferResponse));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.CONN_FINISHED, new StateEntry<>(contentReadConnFinished));
@@ -152,8 +152,8 @@ public class SSLContentReadPipelineMgr extends ConnectionPipelineMgr {
          **   allocation right away.
          **
          */
-        if (!connectionState.outOfMemory() && connectionState.needsMoreDataBuffers()) {
-            return ConnectionStateEnum.ALLOC_CLIENT_DATA_BUFFER;
+        if (!connectionState.outOfMemory() && connectionState.needsMoreContentBuffers()) {
+            return ConnectionStateEnum.ALLOC_CONTENT_DATA_BUFFER;
         }
 
         /*
@@ -162,7 +162,7 @@ public class SSLContentReadPipelineMgr extends ConnectionPipelineMgr {
          ** TODO: Support the NIO.2 read that can be passed in an array of ByteBuffers
          */
         if (connectionState.dataBuffersWaitingForRead()) {
-            return ConnectionStateEnum.READ_CLIENT_DATA;
+            return ConnectionStateEnum.READ_CONTENT_DATA;
         }
 
         if (connectionState.getDataBuffersUnwrapRequired() > 0) {

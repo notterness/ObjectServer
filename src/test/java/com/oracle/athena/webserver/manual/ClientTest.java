@@ -102,7 +102,7 @@ public abstract class ClientTest implements Runnable {
 
         writeDone = new WaitSignal();
 
-        writeConn = client.addNewTarget(clientConnId);
+        writeConn = client.addNewTarget(clientConnId, 5);
 
         System.out.println("ClientTest[" + writeConn.getTransactionId() + "] " + clientTestName +
                 " serverConnId: " + serverConnId + " clientConnId: " + clientConnId);

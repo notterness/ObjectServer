@@ -16,20 +16,28 @@ public class WriteConnThread implements Runnable {
 
     private BlockingQueue<WriteConnection> workQueue;
 
+    private Thread connWriteThread;
+
     private volatile boolean stopReceived;
-    private final CountDownLatch countDownLatch;
     private int writeThreadId;
 
     public WriteConnThread(int threadId) {
         writeThreadId = threadId;
-        countDownLatch = new CountDownLatch(1);
         workQueue = new LinkedBlockingQueue<>(WORK_QUEUE_SIZE);
+
+        stopReceived = false;
     }
+
+    public void start() {
+        connWriteThread = new Thread(this);
+        connWriteThread.start();
+    }
+
 
     public boolean stop(long timeout, TimeUnit unit) {
         stopReceived = true;
         try {
-            return countDownLatch.await(timeout, unit);
+            connWriteThread.join(1000);
         } catch (InterruptedException e) {
             LOG.info("Unable to join client write thread: " + e.getMessage());
         }
@@ -73,7 +81,6 @@ public class WriteConnThread implements Runnable {
         }
 
         LOG.info("writeConnThread(" + writeThreadId + ") exit");
-        countDownLatch.countDown();
     }
 
 }

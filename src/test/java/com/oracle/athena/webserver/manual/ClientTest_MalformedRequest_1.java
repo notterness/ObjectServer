@@ -15,7 +15,7 @@ public class ClientTest_MalformedRequest_1 extends ClientTest {
     @Override
     String buildRequestString() {
         String tmp = new String("PUT / HTTP/9.9\n" +
-                "Host: iaas.us-phoenix-1.oraclecloud.com\n" +
+                "Host: ClientTest-" + super.clientTestName + "\n" +
                 "Content-Type: Something Random\n" +
                 "Connection: keep-alive\n" +
                 "Accept: */*\n" +

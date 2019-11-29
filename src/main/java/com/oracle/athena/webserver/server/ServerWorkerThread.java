@@ -6,9 +6,10 @@ import com.oracle.athena.webserver.connectionstate.ConnectionState;
 import com.oracle.athena.webserver.http.BuildHttpResult;
 import com.oracle.athena.webserver.memory.MemoryManager;
 
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
@@ -47,7 +48,7 @@ public class ServerWorkerThread implements Runnable {
      ** When a write is needed, the request is queued up to the writeThread to
      **   take place in the background
      */
-    private WriteConnThread writeThread;
+    private WriteConnThread writeConnThread;
 
     /*
      ** For now create a BuildHttpResult per worker thread
@@ -63,7 +64,9 @@ public class ServerWorkerThread implements Runnable {
 
 
     private volatile boolean stopReceived;
-    private final CountDownLatch countDownLatch;
+
+    private Thread connThread;
+
 
     public ServerWorkerThread(final int queueSize, final MemoryManager memoryManager, final int threadId,
                               final ServerDigestThreadPool digestThreadPool) {
@@ -84,18 +87,22 @@ public class ServerWorkerThread implements Runnable {
         bufferStatePool = new BufferStatePool(ConnectionState.MAX_OUTSTANDING_BUFFERS * maxQueueSize,
                 memoryManager);
         resultBuilder = new BuildHttpResult();
-        writeThread = new WriteConnThread(threadId);
-        countDownLatch = new CountDownLatch(1);
+    }
+
+    public void start() {
+        connThread = new Thread(this);
+        connThread.start();
     }
 
     // FIXME CTSA: expose timeout and units if applicable
     public void stop() {
         stopReceived = true;
-        writeThread.stop(1000, TimeUnit.MILLISECONDS);
+        writeConnThread.stop(1000, TimeUnit.MILLISECONDS);
+
         try {
-            countDownLatch.await(1000, TimeUnit.MILLISECONDS);
+            connThread.join(1000);
         } catch (InterruptedException int_ex) {
-            LOG.info("Server worker thread[" + threadId + "] failed: " + int_ex.getMessage());
+            System.out.println("Server worker thread[" + threadId + "] failed: " + int_ex.getMessage());
         }
 
         /*
@@ -125,7 +132,7 @@ public class ServerWorkerThread implements Runnable {
      **
      */
     public WriteConnThread getWriteThread() {
-        return writeThread;
+        return writeConnThread;
     }
 
     /*
@@ -239,31 +246,33 @@ public class ServerWorkerThread implements Runnable {
     public void run() {
 
         LOG.info("ServerWorkerThread(" + threadId + ") start " + Thread.currentThread().getName());
-        //FIXME: pool this?
-        // every time this thread is created, create a second thread to handle the WriteConnection
-        final Thread writeConnThread = new Thread(writeThread);
+
+        writeConnThread = new WriteConnThread(threadId);
+        writeConnThread.start();
+
         try {
             ConnectionState work;
 
             // kick off the writeThread
-            writeConnThread.start();
             while (!stopReceived) {
-                ConnectionState connections[] = new ConnectionState[0];
+                List<ConnectionState> connections = new ArrayList<ConnectionState>();
 
                 queueMutex.lock();
                 try {
                     if (workQueued || queueSignal.await(100, TimeUnit.MILLISECONDS)) {
-                        connections = workQueue.toArray(connections);
+                        int drainedCount = workQueue.drainTo(connections, MAX_EXEC_WORK_LOOP_COUNT);
                         for (ConnectionState connState : connections) {
                             LOG.info("ConnectionState[" + connState.getConnStateId() + "] pulled from workQueue");
-                            workQueue.remove(connState);
                             connState.markRemovedFromQueue(false);
                         }
 
                         /*
-                        ** Make sure this is only modified with the queueMutex lock
+                        ** Make sure this is only modified with the queueMutex lock. If there might still be
+                        **   elements on the queue, do not clear the workQueued flag.
                          */
-                        workQueued = false;
+                        if (drainedCount != MAX_EXEC_WORK_LOOP_COUNT) {
+                            workQueued = false;
+                        }
                     }
                 } finally {
                     queueMutex.unlock();
@@ -302,20 +311,15 @@ public class ServerWorkerThread implements Runnable {
                 } while (work != null);
             }
 
-            // FIXME CA: key  off of the value passed into stop
-            writeConnThread.join(1000);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+
         LOG.info("ServerWorkerThread(" + threadId + ") exit " + Thread.currentThread().getName());
-        countDownLatch.countDown();
     }
 
-    public boolean addServerDigestWork(BufferState bufferState) {
-        boolean isQueued;
-
-        isQueued = digestThreadPool.addDigestWorkToThread(bufferState);
-        return isQueued;
+    public void addServerDigestWork(BufferState bufferState) {
+        digestThreadPool.addDigestWorkToThread(bufferState);
     }
 
 }

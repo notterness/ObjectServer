@@ -190,7 +190,7 @@ public class WebServerSSLConnState extends WebServerConnState {
      **   when buffers are available and then the connection will go back and try the allocation again.
      */
     @Override
-    int allocHttpBufferState() {
+    int allocHttpBuffer() {
         while (requestedHttpBuffers > 0) {
             BufferState bufferState = bufferStatePool.allocBufferState(this,
                     BufferStateEnum.READ_HTTP_FROM_CHAN,
@@ -223,6 +223,9 @@ public class WebServerSSLConnState extends WebServerConnState {
         int bufferReadsDone = httpBufferReadsUnwrapNeeded.get();
         if (bufferReadsDone > 0) {
             for (BufferState bufferState : httpReadDoneQueue) {
+
+                outstandingHttpReadCount--;
+
                 result = sslEngineMgr.unwrap(bufferState);
                 if (result == null) {
                     //TODO: if not able to unwrap
@@ -258,6 +261,7 @@ public class WebServerSSLConnState extends WebServerConnState {
         int bufferReadsDone = httpBufferReadsUnwrapNeeded.get();
         if (bufferReadsDone > 0) {
             for (BufferState bufferState : httpReadDoneQueue) {
+
                 int bytesRead = bufferState.getNetBuffer().position();
                 result = sslEngineMgr.unwrap(bufferState);
                 if (result == null) {
@@ -294,7 +298,6 @@ public class WebServerSSLConnState extends WebServerConnState {
     void httpReadCompleted(final BufferState bufferState) {
         int readCompletedCount;
 
-        int readCount = outstandingHttpReadCount.decrementAndGet();
         try {
             httpReadDoneQueue.put(bufferState);
             readCompletedCount = httpBufferReadsUnwrapNeeded.incrementAndGet();
@@ -308,8 +311,7 @@ public class WebServerSSLConnState extends WebServerConnState {
          */
         timeoutChecker.updateTime();
 
-        LOG.info("WebServerSLLConnState[" + connStateId + "] httpReadCompleted() HTTP readCount: " + readCount +
-                 " readCompletedCount: " + readCompletedCount);
+        LOG.info("WebServerSLLConnState[" + connStateId + "] httpReadCompleted() HTTP readCompletedCount: " + readCompletedCount);
 
         addToWorkQueue(false);
     }

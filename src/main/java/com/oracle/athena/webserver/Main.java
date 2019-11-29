@@ -1,6 +1,7 @@
 package com.oracle.athena.webserver;
 
 import com.oracle.athena.webserver.server.WebServer;
+import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,7 +16,7 @@ public class Main {
 
     public static void main(String[] args) {
         // TODO: Determine how many threads our webserver should actually consume when deployed
-        WebServer server = new WebServer(1);
+        WebServer server = new WebServer(WebServerFlavor.INTEGRATION_TESTS, 1);
         server.start();
         LOG.info("Athena WebServer initialized.");
     }

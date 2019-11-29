@@ -69,12 +69,12 @@ public class TestClient implements Runnable {
 
 
     // Each new target opens up a connection to a remote server
-    public WriteConnection addNewTarget(int clientTargetId) {
+    public WriteConnection addNewTarget(final int clientTargetId, final int uniqueId) {
         tcpPort = ServerChannelLayer.BASE_TCP_PORT + clientTargetId;
         if (targetServer == null) {
             // Setup the server for this clientId
             int serverTcpPort = ServerChannelLayer.BASE_TCP_PORT + serverTargetId;
-            targetServer = new InitiatorServer(2, serverTcpPort, serverTargetId);
+            targetServer = new InitiatorServer(2, serverTcpPort, uniqueId);
             targetServer.start();
         }
 

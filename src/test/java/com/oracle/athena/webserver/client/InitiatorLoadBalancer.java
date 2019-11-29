@@ -16,6 +16,8 @@ class InitiatorLoadBalancer extends ServerLoadBalancer {
     InitiatorLoadBalancer(final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId ){
 
         super(queueSize, numWorkerThreads, memoryManager, serverClientId);
+
+        System.out.println("InitiatorLoadBalancer[" + serverClientId + "] workerThreads: " + workerThreads + " maxQueueSize: " + maxQueueSize);
     }
 
     void start() {
@@ -24,7 +26,7 @@ class InitiatorLoadBalancer extends ServerLoadBalancer {
         for (int i = 0; i < workerThreads; i++) {
             ServerWorkerThread worker = new ServerWorkerThread(maxQueueSize, memoryManager,
                     (serverBaseId + i), digestThreadPool);
-            executorService.execute(worker);
+            worker.start();
             threadPool[i] = worker;
         }
 

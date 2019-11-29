@@ -15,13 +15,14 @@ public class ClientTest_SlowHeaderSend extends ClientTest {
     @Override
     String buildRequestString() {
         String tmp = new String("POST / HTTP/1.1\n" +
-                "Host: iaas.us-phoenix-1.oraclecloud.com\n" +
+                "Host: ClientTest-" + super.clientTestName + "\n" +
                 "Content-Type: application/json\n" +
                 "Connection: keep-alive\n" +
                 "Accept: */*\n" +
                 "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
                 "Accept-Language: en-us\n" +
                 "Accept-Encoding: gzip, deflate\n" +
+                "Content-MD5: ZsrFNJgrF3p0e7+GyNjAIA==\n" +
                 "Content-Length: 187\n\n" +
                 "{\n" +
                 "  \"cidrBlock\": \"172.16.0.0/16\",\n" +

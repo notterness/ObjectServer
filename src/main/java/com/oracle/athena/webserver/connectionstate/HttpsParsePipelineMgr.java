@@ -19,7 +19,7 @@ class HttpsParsePipelineMgr extends ConnectionPipelineMgr {
     };
 
     private Function<WebServerSSLConnState, StateQueueResult> httpsParseAllocHttpBuffer = wsConn -> {
-        if (wsConn.allocHttpBufferState() == 0){
+        if (wsConn.allocHttpBuffer() == 0){
             return StateQueueResult.STATE_RESULT_WAIT;
         } else {
             return StateQueueResult.STATE_RESULT_CONTINUE;
@@ -27,7 +27,7 @@ class HttpsParsePipelineMgr extends ConnectionPipelineMgr {
     };
 
     private Function<WebServerSSLConnState, StateQueueResult> httpsParseReadHttpBuffer = wsConn -> {
-        wsConn.readIntoMultipleBuffers();
+        wsConn.readIntoHttpBuffers();
 
         return StateQueueResult.STATE_RESULT_REQUEUE;
     };
@@ -38,7 +38,7 @@ class HttpsParsePipelineMgr extends ConnectionPipelineMgr {
     };
 
     private Function<WebServerSSLConnState, StateQueueResult> httpsParseHttpBuffer = wsConn -> {
-        wsConn.parseHttp();
+        wsConn.parseHttpBuffers();
         return StateQueueResult.STATE_RESULT_CONTINUE;
     };
 
@@ -134,20 +134,6 @@ class HttpsParsePipelineMgr extends ConnectionPipelineMgr {
         }
 
         /*
-         ** Check if the header parsing is completed and if so, setup the initial reads
-         **   for the content.
-         **
-         ** NOTE: This check is done prior to seeing if buffers need to be allocated to
-         **   read in content data.
-         */
-        if (connectionState.httpHeadersParsed()) {
-            /*
-             ** Figure out how many buffers to read.
-             */
-            return ConnectionStateEnum.SETUP_NEXT_PIPELINE;
-        }
-
-        /*
          ** Are there outstanding buffers to be allocated. If the code had attempted to allocate
          **   buffers and failed, check if there is other work to do. No point trying the buffer
          **   allocation right away.
@@ -162,6 +148,20 @@ class HttpsParsePipelineMgr extends ConnectionPipelineMgr {
          */
         if (connectionState.httpBuffersAllocated()) {
             return ConnectionStateEnum.READ_HTTP_BUFFER;
+        }
+
+        /*
+         ** Are there completed reads ready to unwrap
+         */
+        if (connectionState.httpBuffersReadyToUnwrap()) {
+            return ConnectionStateEnum.UNWRAP_HTTP_BUFFER;
+        }
+
+        /*
+         ** Are there completed reads, priority is processing the HTTP header
+         */
+        if (connectionState.httpBuffersReadyForParsing()) {
+            return ConnectionStateEnum.PARSE_HTTP_BUFFER;
         }
 
         /*
@@ -205,18 +205,19 @@ class HttpsParsePipelineMgr extends ConnectionPipelineMgr {
         }
 
         /*
-         ** Are there completed reads ready to unwrap
+         ** Check if the header parsing is completed and if so, setup the initial reads
+         **   for the content.
+         **
+         ** NOTE: This check is done prior to seeing if buffers need to be allocated to
+         **   read in content data.
          */
-        if (connectionState.httpBuffersReadyToUnwrap()) {
-            return ConnectionStateEnum.UNWRAP_HTTP_BUFFER;
+        if (connectionState.httpHeadersParsed()) {
+            /*
+             ** Figure out how many buffers to read.
+             */
+            return ConnectionStateEnum.SETUP_NEXT_PIPELINE;
         }
 
-        /*
-         ** Are there completed reads, priority is processing the HTTP header
-         */
-        if (connectionState.httpBuffersReadyForParsing()) {
-            return ConnectionStateEnum.PARSE_HTTP_BUFFER;
-        }
 
         return ConnectionStateEnum.CHECK_SLOW_CHANNEL;
     }

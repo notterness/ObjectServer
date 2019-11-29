@@ -4,10 +4,14 @@ import com.oracle.oci.casper.jopenssl.CryptoMessageDigest;
 import com.oracle.pic.casper.common.encryption.Digest;
 import com.oracle.pic.casper.common.encryption.DigestAlgorithm;
 import com.oracle.pic.casper.common.encryption.DigestUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
 public class Md5Digest {
+
+    private static final Logger LOG = LoggerFactory.getLogger(Md5Digest.class);
 
     private Digest expectedDigest;
 

@@ -33,44 +33,42 @@ public class TestMain {
         //threadCount.incrementAndGet();
         //waitForTestsToComplete(threadCount);
 
-        ClientTest client_checkMd5 = new ClientTest_CheckMd5("ClientTest_CheckMd5", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        ClientTest client_checkMd5 = new ClientTest_CheckMd5("CheckMd5", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_checkMd5.start();
 
-        waitForTestsToComplete(threadCount);
+        String failedTestName = waitForTestsToComplete(threadCount, client);
 
-        ClientTest client_1 = new ClientTest_2("ClientTest_2", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
-        client_1.start();
+        client_checkMd5.stop();
 
-        ClientTest earlyClose = new ClientTest_EarlyClose("EarlyClose", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
-        earlyClose.start();
+        if (failedTestName == null) {
 
-        ClientTest slowHeaderSend = new ClientTest_SlowHeaderSend("SlowHeaderSend", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
-        slowHeaderSend.start();
+            ClientTest client_1 = new ClientTest_2("ClientTest_2", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            client_1.start();
 
-        ClientTest oneMbPut = new ClientTest_OneMbPut("OneMbPut", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
-        oneMbPut.start();
+            ClientTest earlyClose = new ClientTest_EarlyClose("EarlyClose", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            earlyClose.start();
+
+            ClientTest slowHeaderSend = new ClientTest_SlowHeaderSend("SlowHeaderSend", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            slowHeaderSend.start();
+
+            //ClientTest oneMbPut = new ClientTest_OneMbPut("OneMbPut", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            //oneMbPut.start();
 
         /*
         ClientTest outOfConnections = new ClientTest_OutOfConnections("OutOfConnections", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         outOfConnections.start();
         */
 
-        System.out.println("Starting Tests");
+            System.out.println("Starting Tests");
 
-        waitForTestsToComplete(threadCount);
+            failedTestName = waitForTestsToComplete(threadCount, client);
 
-        String failedTestName = client.getFailedTestName();
-        if (failedTestName == null) {
-            System.out.println("\nData Transfer Tests Completed With No Failures\n");
-        } else {
-            System.out.println("FAILURE: At Least One Test Failed - first failed test " + failedTestName);
+            client_1.stop();
+            earlyClose.stop();
+            slowHeaderSend.stop();
+            //oneMbPut.stop();
+            //outOfConnections.stop();
         }
-
-        client_1.stop();
-        earlyClose.stop();
-        slowHeaderSend.stop();
-        oneMbPut.stop();
-        //outOfConnections.stop();
 
         if (failedTestName == null) {
             /*
@@ -85,18 +83,11 @@ public class TestMain {
             ClientTest noContentLength = new ClientTest_NoContentLength("NoContentLength", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
             noContentLength.start();
 
-            waitForTestsToComplete(threadCount);
+            failedTestName = waitForTestsToComplete(threadCount, client);
 
             malformedRequest_1.stop();
             invalidContentLength.stop();
             noContentLength.stop();
-
-            failedTestName = client.getFailedTestName();
-            if (failedTestName == null) {
-                System.out.println("All HTTP Request Tests Completed With No Failures");
-            } else {
-                System.out.println("FAILURE: At Least One Test Failed - first failed test " + failedTestName);
-            }
         }
 
         /* Stop the TestClient */
@@ -112,7 +103,7 @@ public class TestMain {
     **   decrements it when it completes. This allows the code to wait for a group of tests to complete
     **   prior to moving onto another set of tests or exiting.
      */
-    static void waitForTestsToComplete(AtomicInteger testRunningCount) {
+    static String waitForTestsToComplete(AtomicInteger testRunningCount, TestClient client) {
         // running infinite loop for getting
         // client request
         while (true) {
@@ -138,6 +129,15 @@ public class TestMain {
         } catch (InterruptedException int_ex) {
             System.out.println("Wait after test run was interrupted");
         }
+
+        String failedTestName = client.getFailedTestName();
+        if (failedTestName == null) {
+            System.out.println("\nData Transfer Tests Completed With No Failures\n");
+        } else {
+            System.out.println("FAILURE: At Least One Test Failed - first failed test " + failedTestName);
+        }
+
+        return failedTestName;
     }
 
 }
