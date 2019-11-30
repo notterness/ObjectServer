@@ -38,10 +38,10 @@ class ClientTest_CheckMd5 extends ClientTest {
                 pattern++;
             }
 
-            dataBuffer.flip();
-
             digest.digestByteBuffer(dataBuffer);
             objectDigestString = digest.getFinalDigest();
+
+            dataBuffer.rewind();
 
             System.out.println("MD5 Digest String: " + objectDigestString);
         }

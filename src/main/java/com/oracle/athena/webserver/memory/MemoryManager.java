@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,7 +23,7 @@ public class MemoryManager {
 
     private BlockingQueue<MemoryAvailableCallback> waitingForBuffersQueue;
 
-    // These are publicly visible.
+    // These are publicly visible and used in the buffer allocation calls.
     // TODO: Get rid of names from the interface.
     public static final int SMALL_BUFFER_SIZE = 0x100;  // 256
     public static final int MEDIUM_BUFFER_SIZE = 0x400;  // 1 kB;
@@ -31,11 +32,17 @@ public class MemoryManager {
     public static final int CHUNK_BUFFER_SIZE = 0x8000000;  // 128 MB
 
     // These really don't need to be.
-    private static final int SMALL_BUFFER_COUNT = 1000;
-    private static final int MEDIUM_BUFFER_COUNT = 100;
-    private static final int XFER_BUFFER_COUNT = 10;
-    private static final int LARGE_BUFFER_COUNT =  10;
-    private static final int CHUNK_BUFFER_COUNT =    1;  // If this is more than 2, get OOM in unit test.
+    private static final int PRODUCTION_SMALL_BUFFER_COUNT = 1000;
+    private static final int PRODUCTION_MEDIUM_BUFFER_COUNT = 100;
+    private static final int PRODUCTION_XFER_BUFFER_COUNT = 10;
+    private static final int PRODUCTION_LARGE_BUFFER_COUNT =  10;
+    private static final int PRODUCTION_CHUNK_BUFFER_COUNT =    1;  // If this is more than 2, get OOM in unit test.
+
+    private static final int INTEGRATION_SMALL_BUFFER_COUNT = 1000;
+    private static final int INTEGRATION_MEDIUM_BUFFER_COUNT = 100;
+    private static final int INTEGRATION_XFER_BUFFER_COUNT = 10;
+    private static final int INTEGRATION_LARGE_BUFFER_COUNT =  10;
+    private static final int INTEGRATION_CHUNK_BUFFER_COUNT =    1;  // If this is more than 2, get OOM in unit test.
 
     /*
     ** TODO: This should be the number of ConnectionState objects
@@ -47,13 +54,38 @@ public class MemoryManager {
     private static final int numPools = 5;
     private FixedSizeBufferPool[] thePool;
 
-    public MemoryManager() {
+    public MemoryManager(WebServerFlavor flavor) {
+        int smallBufferCount;
+        int mediumBufferCount;
+        int xferBufferCount;
+        int largeBufferCount;
+        int chunkBufferCount;
+
+        /*
+        ** The number of buffers allocated in each pool needs to be smaller for the
+        **    WebServerFlavor.INTEGRATION configuration to allow it to run on the
+        **    desktop.
+         */
+        if (flavor == WebServerFlavor.STANDARD) {
+            smallBufferCount = PRODUCTION_SMALL_BUFFER_COUNT;
+            mediumBufferCount = PRODUCTION_MEDIUM_BUFFER_COUNT;
+            xferBufferCount = PRODUCTION_XFER_BUFFER_COUNT;
+            largeBufferCount = PRODUCTION_LARGE_BUFFER_COUNT;
+            chunkBufferCount = PRODUCTION_CHUNK_BUFFER_COUNT;
+        } else {
+            smallBufferCount = INTEGRATION_SMALL_BUFFER_COUNT;
+            mediumBufferCount = INTEGRATION_MEDIUM_BUFFER_COUNT;
+            xferBufferCount = INTEGRATION_XFER_BUFFER_COUNT;
+            largeBufferCount = INTEGRATION_LARGE_BUFFER_COUNT;
+            chunkBufferCount = INTEGRATION_CHUNK_BUFFER_COUNT;
+        }
+
         thePool = new FixedSizeBufferPool[numPools];
-        thePool[0] = new FixedSizeBufferPool( SMALL_BUFFER_SIZE,  SMALL_BUFFER_COUNT );
-        thePool[1] = new FixedSizeBufferPool( MEDIUM_BUFFER_SIZE, MEDIUM_BUFFER_COUNT );
-        thePool[2] = new FixedSizeBufferPool( XFER_BUFFER_SIZE,   XFER_BUFFER_COUNT );
-        thePool[3] = new FixedSizeBufferPool( LARGE_BUFFER_SIZE,  LARGE_BUFFER_COUNT );
-        thePool[4] = new FixedSizeBufferPool( CHUNK_BUFFER_SIZE,  CHUNK_BUFFER_COUNT );
+        thePool[0] = new FixedSizeBufferPool( SMALL_BUFFER_SIZE,  smallBufferCount );
+        thePool[1] = new FixedSizeBufferPool( MEDIUM_BUFFER_SIZE, mediumBufferCount );
+        thePool[2] = new FixedSizeBufferPool( XFER_BUFFER_SIZE,   xferBufferCount );
+        thePool[3] = new FixedSizeBufferPool( LARGE_BUFFER_SIZE,  largeBufferCount );
+        thePool[4] = new FixedSizeBufferPool( CHUNK_BUFFER_SIZE,  chunkBufferCount );
 
         waitingForBuffersQueue = new LinkedBlockingQueue<>(MAX_WAITING_MEMORY_CONNECTIONS);
     }
@@ -129,18 +161,6 @@ public class MemoryManager {
         }
 
         return memoryPoolsOkay;
-    }
-}
-
-class PoolArrayEntry {
-    final int buffSize;
-    final int buffCount;
-    final FixedSizeBufferPool buffPool;
-
-    PoolArrayEntry( int bufferSize, int bufferCount, FixedSizeBufferPool bufferPool ) {
-        buffSize = bufferSize;
-        buffCount = bufferCount;
-        buffPool = bufferPool;
     }
 }
 

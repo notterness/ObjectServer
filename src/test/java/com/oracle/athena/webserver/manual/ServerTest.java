@@ -46,7 +46,7 @@ public class ServerTest implements Runnable {
 
         System.out.println("ServerTest[" + serverConnId + "] thread start");
 
-        WebServer server = new WebServer(WebServerFlavor.INTEGRATION_TESTS, 1, tcpPort, serverConnId);
+        WebServer server = new WebServer(WebServerFlavor.INTEGRATION_TESTS, tcpPort, serverConnId);
         server.start();
 
         while (!exitThread) {
@@ -58,7 +58,7 @@ public class ServerTest implements Runnable {
         }
 
         /*
-        ** Stop the WebServer so it can cleaup and verify the resources
+        ** Stop the WebServer so it can cleanup and verify the resources
          */
         server.stop();
 

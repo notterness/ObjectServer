@@ -8,10 +8,9 @@ import com.oracle.athena.webserver.statemachine.StateQueueResult;
 import com.oracle.pic.casper.webserver.api.auth.CasperOperation;
 import com.oracle.pic.casper.webserver.api.ratelimit.EmbargoV3Operation;
 import com.oracle.pic.casper.webserver.server.WebServerAuths;
+import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.eclipse.jetty.http.HttpStatus;
 
-import javax.net.ssl.*;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.util.*;
@@ -86,6 +85,12 @@ public class WebServerConnState extends ConnectionState {
     protected AtomicInteger httpBufferReadsCompleted;
     protected AtomicBoolean httpHeaderParsed;
 
+    /*
+    ** httpReadBufferSize is dependent upon the configuration of WebServer being
+    **   run. For INTEGRATION the size is made smaller to test boundary crossing
+    **   conditions when the entire HTTP request will not fit in a single buffer.
+     */
+    private final int httpReadBufferSize;
 
     /*
     ** The following is set to indicate that the first buffer is being sent through the HTTP parser.
@@ -126,14 +131,20 @@ public class WebServerConnState extends ConnectionState {
     /*
      ** The following is used to release this ConnectionState back to the free pool.
      */
-    private ConnectionStatePool<WebServerConnState> connectionStatePool;
+    private final ConnectionStatePool<WebServerConnState> connectionStatePool;
 
 
-    public WebServerConnState(final ConnectionStatePool<WebServerConnState> pool, final int uniqueId) {
+    public WebServerConnState(final WebServerFlavor flavor, final ConnectionStatePool<WebServerConnState> pool, final int uniqueId) {
 
         super(uniqueId);
 
         connectionStatePool = pool;
+
+        if (flavor == WebServerFlavor.STANDARD) {
+            httpReadBufferSize = MemoryManager.MEDIUM_BUFFER_SIZE;
+        } else {
+            httpReadBufferSize = MemoryManager.SMALL_BUFFER_SIZE;
+        }
 
         responseBuffer = null;
         finalResponseSent = new AtomicBoolean(false);
@@ -158,10 +169,6 @@ public class WebServerConnState extends ConnectionState {
         outOfResourcesResponse = false;
 
         writeConn = null;
-    }
-
-    public WebServerConnState(final int uniqueId) {
-        this(null, uniqueId);
     }
 
 
@@ -372,7 +379,7 @@ public class WebServerConnState extends ConnectionState {
 
         while (requestedHttpBuffers > 0) {
             BufferState bufferState = bufferStatePool.allocBufferState(this,
-                    BufferStateEnum.READ_HTTP_FROM_CHAN, MemoryManager.SMALL_BUFFER_SIZE);
+                    BufferStateEnum.READ_HTTP_FROM_CHAN, httpReadBufferSize);
 
             if (bufferState != null) {
                 allocatedHttpBufferQueue.add(bufferState);
@@ -598,8 +605,8 @@ public class WebServerConnState extends ConnectionState {
                     /*
                     ** Allocate a new BufferState to hold the remaining data
                      */
-                    BufferState newBufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_DONE, MemoryManager.SMALL_BUFFER_SIZE);
-                    bufferState.copyByteBuffer(remainingBuffer);
+                    BufferState newBufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_DONE, httpReadBufferSize);
+                    newBufferState.copyByteBuffer(remainingBuffer);
 
                     int bytesRead = remainingBuffer.limit();
                     addDataBuffer(newBufferState, bytesRead);
@@ -773,10 +780,6 @@ public class WebServerConnState extends ConnectionState {
     ** This is triggered after the write callback has taken place
      */
     void processResponseWriteDone() {
-        if (!responseChannelWriteDone.get()) {
-            LOG.warn("WebServerConnState[" + connStateId + "] processResponseWriteDone() should not be here");
-        }
-
         if (responseBuffer == null) {
             LOG.warn("WebServerConnState[" + connStateId + "] processResponseWriteDone: null responseBuffer");
             return;
@@ -938,6 +941,20 @@ public class WebServerConnState extends ConnectionState {
         responseChannelWriteDone.set(false);
 
         /*
+        ** For certain error cases (namely those where the connection is closed early due
+        **   to an HTTP parsing error or a lack of connections to handle a new request), there
+        **   may be BufferState sitting on the dataReadDoneQueue() that need to be released.
+        **   The BufferState end up there if the buffer used to read in the HTTP request was
+        **   larger than the request and the extra part was content data.
+         */
+        List<BufferState> buffersToRelease = new ArrayList<>();
+        dataReadDoneQueue.drainTo(buffersToRelease);
+        for (BufferState bufferState : buffersToRelease) {
+            LOG.info("WebServerConnState[" + connStateId + "] reset() release buffer");
+            bufferStatePool.freeBufferState(bufferState);
+        }
+
+        /*
         ** Reset the pipeline back to the Parse HTTP Pipeline for the next iteration of this connection
          */
         pipelineManager = httpParsePipelineMgr;
@@ -949,11 +966,6 @@ public class WebServerConnState extends ConnectionState {
         writeConn = null;
 
         outOfResourcesResponse = false;
-
-        /*
-        ** Reset the pipeline manager back to default
-         */
-        pipelineManager = httpParsePipelineMgr;
 
         super.reset();
 

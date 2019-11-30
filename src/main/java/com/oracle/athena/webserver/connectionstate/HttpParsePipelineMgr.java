@@ -74,8 +74,6 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
 
     private Function<WebServerConnState, StateQueueResult> httpParseReadHttpBuffer = wsConn -> {
         wsConn.readIntoHttpBuffers();
-
-
         return StateQueueResult.STATE_RESULT_REQUEUE;
     };
 

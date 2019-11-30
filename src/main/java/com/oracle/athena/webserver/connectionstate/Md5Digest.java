@@ -42,6 +42,22 @@ public class Md5Digest {
         if (dataBuffer.isDirect()) {
             byte[] a = new byte[dataBuffer.limit()];
             dataBuffer.get(a, 0, dataBuffer.limit());
+/*
+            LOG.info("digestByteBuffer() size: " + a.length + " limit: " + dataBuffer.limit());
+
+            String out = "";
+            int count = 0;
+            for (int i = 0; i < 64; i = i + 1) {
+                out += a[i] + " ";
+
+                count++;
+                if (count == 16) {
+                    LOG.info("  " + out);
+                    out = "";
+                    count = 0;
+                }
+            }
+*/
             objectDigestCalculator.update(a);
         } else {
             objectDigestCalculator.update(dataBuffer.array());
@@ -52,4 +68,5 @@ public class Md5Digest {
         Digest objectDigest = new Digest(DigestAlgorithm.MD5, objectDigestCalculator.digest());
         return objectDigest.getBase64Encoded();
     }
+
 }

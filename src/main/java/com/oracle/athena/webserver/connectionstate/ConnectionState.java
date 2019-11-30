@@ -497,12 +497,11 @@ abstract public class ConnectionState {
         while (iter.hasNext()) {
             bufferState = iter.next();
             iter.remove();
+            LOG.info("ConnectionState[" + connStateId + "] releaseBufferState() release data buffer");
 
             bufferStatePool.freeBufferState(bufferState);
-
             allocatedDataBuffers--;
         }
-
     }
 
     /*
@@ -1016,10 +1015,9 @@ abstract public class ConnectionState {
     public void sendBuffersToMd5Worker() {
         List<BufferState> md5ReadyBuffers = new ArrayList<>();
         int bufferCount = dataReadDoneQueue.drainTo(md5ReadyBuffers);
-        LOG.info("ConnectionState[" + connStateId + "] sendBuffersToMd5Worker() " + bufferCount);
+        //LOG.info("ConnectionState[" + connStateId + "] sendBuffersToMd5Worker() " + bufferCount);
 
         for (BufferState bufferState : md5ReadyBuffers) {
-            LOG.info("ConnectionState[" + connStateId + "] sendBuffersToMd5Worker(1)");
             bufferState.setBufferState(BufferStateEnum.DIGEST_WAIT);
             dataBufferDigestSent.incrementAndGet();
             workerThread.addServerDigestWork(bufferState);

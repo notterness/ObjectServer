@@ -6,6 +6,7 @@ import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.server.ServerDigestThreadPool;
 import com.oracle.athena.webserver.server.ServerLoadBalancer;
 import com.oracle.athena.webserver.server.ServerWorkerThread;
+import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 
 import java.nio.channels.AsynchronousSocketChannel;
 
@@ -15,15 +16,15 @@ class InitiatorLoadBalancer extends ServerLoadBalancer {
 
     InitiatorLoadBalancer(final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId ){
 
-        super(queueSize, numWorkerThreads, memoryManager, serverClientId);
+        super(WebServerFlavor.INTEGRATION_TESTS, queueSize, numWorkerThreads, memoryManager, serverClientId);
 
-        System.out.println("InitiatorLoadBalancer[" + serverClientId + "] workerThreads: " + workerThreads + " maxQueueSize: " + maxQueueSize);
+        System.out.println("InitiatorLoadBalancer[" + serverClientId + "] workerThreads: " + numWorkerThreads + " maxQueueSize: " + maxQueueSize);
     }
 
     void start() {
         digestThreadPool.start();
 
-        for (int i = 0; i < workerThreads; i++) {
+        for (int i = 0; i < numWorkerThreads; i++) {
             ServerWorkerThread worker = new ServerWorkerThread(maxQueueSize, memoryManager,
                     (serverBaseId + i), digestThreadPool);
             worker.start();
@@ -32,14 +33,14 @@ class InitiatorLoadBalancer extends ServerLoadBalancer {
 
         lastQueueUsed = 0;
 
-        connPool = new ConnectionStatePool<>(workerThreads * maxQueueSize);
+        connPool = new ConnectionStatePool<>(numWorkerThreads * maxQueueSize);
 
         /*
          ** The following ugly code is due to the fact that you cannot create a object of generic type <T> within
          **   and generic class that uses <T>
          */
         ClientConnState conn;
-        for (int i = 0; i < (workerThreads * maxQueueSize); i++) {
+        for (int i = 0; i < (numWorkerThreads * maxQueueSize); i++) {
             conn = new ClientConnState(connPool, (serverBaseId + i + 1));
 
             conn.start();

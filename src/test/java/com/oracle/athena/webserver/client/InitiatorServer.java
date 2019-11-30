@@ -3,6 +3,7 @@ package com.oracle.athena.webserver.client;
 import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.server.ServerChannelLayer;
 import com.oracle.athena.webserver.server.ServerDigestThreadPool;
+import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 
 public class InitiatorServer extends ServerChannelLayer {
 
@@ -18,7 +19,7 @@ public class InitiatorServer extends ServerChannelLayer {
         this.numberWorkerThreads = workerThreads;
         this.clientId = uniqueId;
 
-        this.memoryManager = new MemoryManager();
+        this.memoryManager = new MemoryManager(WebServerFlavor.INTEGRATION_TESTS);
     }
 
     public void start() {
