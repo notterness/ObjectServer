@@ -367,6 +367,10 @@ public class WebServerConnState extends ConnectionState {
         }
     }
 
+    BufferState allocBufferState(BufferStateEnum state) {
+        return bufferStatePool.allocBufferState(this, state, httpReadBufferSize);
+    }
+
     /*
      ** Allocate a buffer to read HTTP header information into and associate it with this ConnectionState
      **
@@ -378,8 +382,7 @@ public class WebServerConnState extends ConnectionState {
     int allocHttpBuffer() {
 
         while (requestedHttpBuffers > 0) {
-            BufferState bufferState = bufferStatePool.allocBufferState(this,
-                    BufferStateEnum.READ_HTTP_FROM_CHAN, httpReadBufferSize);
+            BufferState bufferState = allocBufferState(BufferStateEnum.READ_HTTP_FROM_CHAN);
 
             if (bufferState != null) {
                 allocatedHttpBufferQueue.add(bufferState);
@@ -605,7 +608,7 @@ public class WebServerConnState extends ConnectionState {
                     /*
                     ** Allocate a new BufferState to hold the remaining data
                      */
-                    BufferState newBufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_DONE, httpReadBufferSize);
+                    BufferState newBufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_DONE, remainingBuffer.limit());
                     newBufferState.copyByteBuffer(remainingBuffer);
 
                     int bytesRead = remainingBuffer.limit();
@@ -719,7 +722,7 @@ public class WebServerConnState extends ConnectionState {
         if (buffState != null) {
             finalResponseSent.set(true);
 
-            ByteBuffer respBuffer = resultBuilder.buildResponse(buffState, resultCode, true);
+            ByteBuffer respBuffer = resultBuilder.buildResponse(buffState, resultCode, true, true);
 
             int bytesToWrite = respBuffer.position();
             respBuffer.flip();

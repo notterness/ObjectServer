@@ -23,6 +23,7 @@ public class SSLEngineMgr {
         BUFFER_OVERFLOW,
         BUFFER_UNDERFLOW,
         NOT_HANDSHAKING,
+        CLOSED,
         CONTINUE;
     }
 
@@ -62,7 +63,10 @@ public class SSLEngineMgr {
         int appBufferSize = engine.getSession().getApplicationBufferSize();
         int netBufferSize = engine.getSession().getPacketBufferSize();
 
-        return bufferStatePool.allocBufferState(connState, state, appBufferSize, netBufferSize);
+        BufferState bufferState = bufferStatePool.allocBufferState(connState, state, appBufferSize, netBufferSize);
+        bufferState.getBuffer().limit(appBufferSize);
+        bufferState.getNetBuffer().limit(netBufferSize);
+        return bufferState;
     }
 
         /*
@@ -105,7 +109,7 @@ public class SSLEngineMgr {
         }
 
         //setSSLBuffersNeeded(false);
-        return allocatedSSLAppBufferQueue.size() + allocatedSSLAppBufferQueue.size();
+        return allocatedSSLAppBufferQueue.size() + allocatedSSLNetBufferQueue.size();
     }
 
 
@@ -351,5 +355,9 @@ public class SSLEngineMgr {
         return Status.CONTINUE;
     }
 
-
+    //test code to figure out how the close pipeline should work
+    public void sslClose(WebServerSSLConnState conn) {
+        engine.closeOutbound();
+        handshakeStatus = engine.getHandshakeStatus();
+    }
 }

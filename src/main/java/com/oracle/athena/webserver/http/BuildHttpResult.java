@@ -17,7 +17,7 @@ public class BuildHttpResult {
         httpStatus = new HttpStatus();
     }
 
-    public ByteBuffer buildResponse(final BufferState respBufferState, int resultCode, boolean addContext) {
+    public ByteBuffer buildResponse(final BufferState respBufferState, int resultCode, boolean addContext, boolean close) {
 
         ByteBuffer respBuffer = respBufferState.getBuffer();
         String tmpStr;
@@ -50,8 +50,12 @@ public class BuildHttpResult {
                         .append("\r\n")
                         .append("Content-Length: ")
                         .append(contentLength)
-                        .append("\r\n")
-                        .append("Connection: close\r\n")
+                        .append("\r\n");
+                if (close) {
+                    tmpBuiltStr
+                        .append("Connection: close\r\n");
+                }
+                tmpBuiltStr
                         .append("\r\n")
                         .append(content);
             } else {

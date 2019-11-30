@@ -75,7 +75,7 @@ public class WebServer {
     }
 
     public WebServer(WebServerFlavor flavor, int serverClientId) {
-        this(flavor, ServerChannelLayer.HTTP_TCP_PORT, serverClientId);
+        this(flavor, ServerChannelLayer.BASE_TCP_PORT, serverClientId);
     }
 
     public WebServer(WebServerFlavor flavor, int listenPort, int serverClientId) {
@@ -185,8 +185,9 @@ public class WebServer {
         sslServerWorkHandler = new ServerSSLLoadBalancer(flavor, numConnectionsPerWorkerThread, numWorkerThreads,
                 memoryManager, sslWebServerClientIdBase);
 
-        http_server = new ServerChannelLayer(serverWorkHandler, listenPort, webServerClientIdBase);
-        https_server = new ServerChannelLayer(sslServerWorkHandler, listenPort + 443,
+        http_server = new ServerChannelLayer(serverWorkHandler, listenPort + ServerChannelLayer.HTTP_PORT_OFFSET,
+                webServerClientIdBase);
+        https_server = new ServerChannelLayer(sslServerWorkHandler, listenPort + ServerChannelLayer.HTTPS_PORT_OFFSET,
                 sslWebServerClientIdBase);
     }
 
