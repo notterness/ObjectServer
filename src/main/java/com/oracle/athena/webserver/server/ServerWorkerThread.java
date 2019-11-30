@@ -81,9 +81,8 @@ public class ServerWorkerThread implements Runnable {
         queueSignal = queueMutex.newCondition();
         workQueued = false;
 
-        // TODO: Need to fix the queue size to account for reserved connections
-        workQueue = new LinkedBlockingQueue<>(maxQueueSize * 2);
-        timedWaitQueue = new LinkedBlockingQueue<>(maxQueueSize * 2);
+        workQueue = new LinkedBlockingQueue<>(maxQueueSize + ServerLoadBalancer.RESERVED_CONN_COUNT);
+        timedWaitQueue = new LinkedBlockingQueue<>(maxQueueSize + ServerLoadBalancer.RESERVED_CONN_COUNT);
         bufferStatePool = new BufferStatePool(ConnectionState.MAX_OUTSTANDING_BUFFERS * maxQueueSize,
                 memoryManager);
         resultBuilder = new BuildHttpResult();
@@ -245,7 +244,7 @@ public class ServerWorkerThread implements Runnable {
      */
     public void run() {
 
-        LOG.info("ServerWorkerThread(" + threadId + ") start " + Thread.currentThread().getName());
+        LOG.info("ServerWorkerThread[" + threadId + "] start " + Thread.currentThread().getName());
 
         writeConnThread = new WriteConnThread(threadId);
         writeConnThread.start();
@@ -315,7 +314,7 @@ public class ServerWorkerThread implements Runnable {
             e.printStackTrace();
         }
 
-        LOG.info("ServerWorkerThread(" + threadId + ") exit " + Thread.currentThread().getName());
+        LOG.info("ServerWorkerThread[" + threadId + "] exit " + Thread.currentThread().getName());
     }
 
     public void addServerDigestWork(BufferState bufferState) {

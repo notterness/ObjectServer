@@ -66,21 +66,19 @@ public class WebServer {
     private ServerLoadBalancer serverWorkHandler;
     private ServerSSLLoadBalancer sslServerWorkHandler;
     private MemoryManager memoryManager;
-    private ServerDigestThreadPool digestThreadPool;
-    private ServerDigestThreadPool sslDigestThreadPool;
-    private int webServerClientIdBase;
-    private int sslWebServerClientIdBase;
+    private final int webServerClientIdBase;
+    private final int sslWebServerClientIdBase;
 
 
-    public WebServer(WebServerFlavor flavor, int workerThreads) {
-        this(flavor, workerThreads, ServerChannelLayer.DEFAULT_CLIENT_ID);
+    public WebServer(WebServerFlavor flavor) {
+        this(flavor, ServerChannelLayer.DEFAULT_CLIENT_ID);
     }
 
-    public WebServer(WebServerFlavor flavor, int workerThreads, int serverClientId) {
-        this(flavor, workerThreads, ServerChannelLayer.HTTP_TCP_PORT, serverClientId);
+    public WebServer(WebServerFlavor flavor, int serverClientId) {
+        this(flavor, ServerChannelLayer.HTTP_TCP_PORT, serverClientId);
     }
 
-    public WebServer(WebServerFlavor flavor, int workerThreads, int listenPort, int serverClientId) {
+    public WebServer(WebServerFlavor flavor, int listenPort, int serverClientId) {
         this.webServerClientIdBase = serverClientId * WEB_SERVER_ID_OFFSET;
         this.sslWebServerClientIdBase = (serverClientId + 1) * WEB_SERVER_ID_OFFSET;
 
@@ -162,14 +160,30 @@ public class WebServer {
                 new NoOpEventPublisher();
         */
 
-        memoryManager = new MemoryManager();
+        memoryManager = new MemoryManager(flavor);
 
         /*
-         ** The queueSize is set to 2 to insure that the system runs out of connections and can be tested for
-         **   the out of connections handling.
+         ** For INTEGRATION_TESTS the number of worker threads is set to 1.
+         **
+         ** For INTEGRATION_TESTS the number of connections per worker thread is set to 2 to insure that the
+         **   system runs out of connections and can be tested for the out of connections handling.
+         **
+         ** TODO: Need to add some statistics so the thread usage and number of connections can be tracked for
+         **   later performance tunning.
          */
-        serverWorkHandler = new ServerLoadBalancer(2, workerThreads, memoryManager, webServerClientIdBase);
-        sslServerWorkHandler = new ServerSSLLoadBalancer(2, workerThreads, memoryManager,sslWebServerClientIdBase);
+        int numConnectionsPerWorkerThread;
+        int numWorkerThreads;
+        if (flavor == WebServerFlavor.INTEGRATION_TESTS) {
+            numConnectionsPerWorkerThread = 2;
+            numWorkerThreads = 1;
+        } else {
+            numConnectionsPerWorkerThread = 100;
+            numWorkerThreads = 10;
+        }
+        serverWorkHandler = new ServerLoadBalancer(flavor, numConnectionsPerWorkerThread, numWorkerThreads,
+                memoryManager, webServerClientIdBase);
+        sslServerWorkHandler = new ServerSSLLoadBalancer(flavor, numConnectionsPerWorkerThread, numWorkerThreads,
+                memoryManager, sslWebServerClientIdBase);
 
         http_server = new ServerChannelLayer(serverWorkHandler, listenPort, webServerClientIdBase);
         https_server = new ServerChannelLayer(sslServerWorkHandler, listenPort + 443,

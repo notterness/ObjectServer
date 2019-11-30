@@ -5,6 +5,7 @@ import com.oracle.athena.webserver.connectionstate.ConnectionState;
 import com.oracle.athena.webserver.http.HttpResponseListener;
 import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.server.WriteConnection;
+import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.eclipse.jetty.http.HttpParser;
 
 import java.nio.ByteBuffer;
@@ -68,7 +69,7 @@ public abstract class ClientTest implements Runnable {
         responseListener = new HttpResponseListener(httpResponseCb);
         httpParser = new HttpParser(responseListener);
 
-        memoryAllocator = new MemoryManager();
+        memoryAllocator = new MemoryManager(WebServerFlavor.INTEGRATION_TESTS);
     }
 
     void stop() {

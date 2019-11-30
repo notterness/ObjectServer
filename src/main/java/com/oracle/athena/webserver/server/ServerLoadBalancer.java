@@ -11,6 +11,7 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,12 +25,13 @@ public class ServerLoadBalancer {
 
     private static final Logger LOG = LoggerFactory.getLogger(ServerLoadBalancer.class);
 
-    protected final static int RESERVED_CONN_COUNT = 2;
+    public final static int RESERVED_CONN_COUNT = 2;
     protected final static int NUMBER_DIGEST_THREADS = 1;
 
+    protected final WebServerFlavor flavor;
     protected final ServerWorkerThread[] threadPool;
     protected final MemoryManager memoryManager;
-    protected final int workerThreads;
+    protected final int numWorkerThreads;
     protected final int maxQueueSize;
     protected int lastQueueUsed;
     protected final int serverBaseId;
@@ -48,30 +50,31 @@ public class ServerLoadBalancer {
      ** queueSize * numWorkerThreads is the maximum number of concurrent client connections that can
      **   be handled by the server.
      */
-    public ServerLoadBalancer(final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId) {
+    public ServerLoadBalancer(final WebServerFlavor flavor, final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId) {
 
-        this.workerThreads = numWorkerThreads;
+        this.flavor = flavor;
+        this.numWorkerThreads = numWorkerThreads;
         this.maxQueueSize = queueSize;
         this.serverBaseId = serverClientId;
         this.memoryManager = memoryManager;
-        LOG.info("ServerLoadBalancer[" + serverClientId + "] workerThreads: " + workerThreads + " maxQueueSize: " + maxQueueSize);
+        LOG.info("ServerLoadBalancer[" + serverClientId + "] workerThreads: " + this.numWorkerThreads + " maxQueueSize: " + maxQueueSize);
 
         this.digestThreadPool = new ServerDigestThreadPool(NUMBER_DIGEST_THREADS, this.serverBaseId);
-        this.threadPool = new ServerWorkerThread[workerThreads];
+        this.threadPool = new ServerWorkerThread[this.numWorkerThreads];
     }
 
     void start() {
 
         digestThreadPool.start();
 
-        for (int i = 0; i < workerThreads; i++) {
+        for (int i = 0; i < numWorkerThreads; i++) {
             ServerWorkerThread worker = new ServerWorkerThread(maxQueueSize, memoryManager,
                     (serverBaseId + i), digestThreadPool);
             worker.start();
             threadPool[i] = worker;
         }
 
-        connPool = new ConnectionStatePool<>(workerThreads * maxQueueSize);
+        connPool = new ConnectionStatePool<>(numWorkerThreads * maxQueueSize);
         reservedBlockingConnPool = new BlockingConnectionStatePool<>(RESERVED_CONN_COUNT);
 
         /*
@@ -79,15 +82,16 @@ public class ServerLoadBalancer {
         **   and generic class that uses <T>
          */
         WebServerConnState conn;
-        for (int i = 0; i < (workerThreads * maxQueueSize); i++) {
-            conn = new WebServerConnState(connPool, (serverBaseId + i + 1));
+        for (int i = 0; i < (numWorkerThreads * maxQueueSize); i++) {
+            conn = new WebServerConnState(flavor, connPool, (serverBaseId + i + 1));
             conn.start();
             connPool.freeConnectionState(conn);
         }
+
         // also populate the reserved connection pool
-        int startingId = serverBaseId + (workerThreads * maxQueueSize) + 1;
+        int startingId = serverBaseId + (numWorkerThreads * maxQueueSize) + 1;
         for (int i = 0; i < RESERVED_CONN_COUNT; i++) {
-            conn = new WebServerConnState(reservedBlockingConnPool, (startingId + i));
+            conn = new WebServerConnState(flavor, reservedBlockingConnPool, (startingId + i));
             conn.start();
             reservedBlockingConnPool.freeConnectionState(conn);
         }
@@ -96,7 +100,7 @@ public class ServerLoadBalancer {
     }
 
     void stop() {
-        for (int i = 0; i < workerThreads; i++) {
+        for (int i = 0; i < numWorkerThreads; i++) {
             ServerWorkerThread worker = threadPool[i];
             threadPool[i] = null;
             worker.stop();
@@ -164,7 +168,7 @@ public class ServerLoadBalancer {
                     work.addToWorkQueue(false);
 
                     lastQueueUsed = currQueue + 1;
-                    if (lastQueueUsed == workerThreads) {
+                    if (lastQueueUsed == numWorkerThreads) {
                         lastQueueUsed = 0;
                     }
                     break;
@@ -172,7 +176,7 @@ public class ServerLoadBalancer {
                     LOG.info("addReadWork(): no capacity: " + queueCap + " maxQueueSize: " + maxQueueSize);
 
                     currQueue++;
-                    if (currQueue == workerThreads) {
+                    if (currQueue == numWorkerThreads) {
                         currQueue = 0;
                     }
 

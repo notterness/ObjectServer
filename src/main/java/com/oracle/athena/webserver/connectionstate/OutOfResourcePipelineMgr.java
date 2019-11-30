@@ -29,7 +29,7 @@ public class OutOfResourcePipelineMgr extends ConnectionPipelineMgr {
 
     private Function<WebServerConnState, StateQueueResult> OutOfResourceProcessFinalResponseSend = wsConn -> {
         wsConn.processResponseWriteDone();
-        return StateQueueResult.STATE_RESULT_REQUEUE;
+        return StateQueueResult.STATE_RESULT_CONTINUE;
     };
 
     OutOfResourcePipelineMgr(WebServerConnState connectionState) {

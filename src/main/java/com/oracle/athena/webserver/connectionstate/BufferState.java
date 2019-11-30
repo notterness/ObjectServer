@@ -2,6 +2,7 @@ package com.oracle.athena.webserver.connectionstate;
 
 import java.nio.ByteBuffer;
 
+import com.oracle.athena.webserver.memory.MemoryManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -159,12 +160,12 @@ public class BufferState {
     }
 
     public void updateBufferDigest() {
-        appBuffer.flip();
+        appBuffer.rewind();
+        //displayBuffer();
         connState.updateDigest(appBuffer);
     }
 
     /*
-     **  FIXME PS: may need to handle the full queue or change the queue tyoe.
      */
     public void bufferCompleteDigestCb() {
        connState.md5WorkerCallback(this);
@@ -183,4 +184,29 @@ public class BufferState {
     public int count() {
         return count;
     }
+
+    /*
+    ** The following is for debug only, it is just a way to print out values from a buffer.
+     */
+    private void displayBuffer() {
+        LOG.info("displayBuffer(start) [" + connState.getConnStateId() + "] position: " + appBuffer.position() +
+                " limit: " + appBuffer.limit());
+
+        String out = "";
+        int count = 0;
+        for (int i = 0; i < 128; i = i + 8) {
+            long pattern = appBuffer.get(i);
+            out += pattern + " ";
+
+            count++;
+            if (count == 8) {
+                LOG.info("  [" + connState.getConnStateId() + "] " + out);
+                out = "";
+                count = 0;
+            }
+        }
+        LOG.info("displayBuffer(end) [" + connState.getConnStateId() + "] position: " + appBuffer.position() +
+                " limit: " + appBuffer.limit());
+    }
+
 }

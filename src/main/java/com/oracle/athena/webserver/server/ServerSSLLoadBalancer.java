@@ -2,6 +2,7 @@ package com.oracle.athena.webserver.server;
 
 import com.oracle.athena.webserver.connectionstate.*;
 import com.oracle.athena.webserver.memory.MemoryManager;
+import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,10 +26,10 @@ public class ServerSSLLoadBalancer extends ServerLoadBalancer {
     private ConnectionStatePool<WebServerSSLConnState> connPool;
     private ConnectionStatePool<WebServerSSLConnState> reservedBlockingConnPool;
 
-    public ServerSSLLoadBalancer(final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId) {
-        super(queueSize, numWorkerThreads, memoryManager, serverClientId);
+    public ServerSSLLoadBalancer(final WebServerFlavor flavor, final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId) {
+        super(flavor, queueSize, numWorkerThreads, memoryManager, serverClientId);
 
-        LOG.info("SSLServerLoadBalancer[" + serverClientId + "] workerThreads: " + workerThreads + " maxQueueSize: " + maxQueueSize);
+        LOG.info("SSLServerLoadBalancer[" + serverClientId + "] workerThreads: " + numWorkerThreads + " maxQueueSize: " + maxQueueSize);
     }
 
     @Override
@@ -49,14 +50,14 @@ public class ServerSSLLoadBalancer extends ServerLoadBalancer {
 
         digestThreadPool.start();
 
-        for (int i = 0; i < workerThreads; i++) {
+        for (int i = 0; i < numWorkerThreads; i++) {
             ServerWorkerThread worker = new ServerWorkerThread(maxQueueSize, memoryManager,
                     (serverBaseId + i), digestThreadPool);
             worker.start();
             threadPool[i] = worker;
         }
 
-        connPool = new ConnectionStatePool<>(workerThreads * maxQueueSize);
+        connPool = new ConnectionStatePool<>(numWorkerThreads * maxQueueSize);
         reservedBlockingConnPool = new BlockingConnectionStatePool<>(RESERVED_CONN_COUNT);
 
         //TODO: check if SSLEngine could not be instantiated
@@ -66,15 +67,15 @@ public class ServerSSLLoadBalancer extends ServerLoadBalancer {
         **   and generic class that uses <T>
          */
         WebServerSSLConnState conn;
-        for (int i = 0; i < (workerThreads * maxQueueSize); i++) {
-            conn = new WebServerSSLConnState(connPool, sslContext, (serverBaseId + i + 1));
+        for (int i = 0; i < (numWorkerThreads * maxQueueSize); i++) {
+            conn = new WebServerSSLConnState(flavor, connPool, sslContext, (serverBaseId + i + 1));
             conn.start();
             connPool.freeConnectionState(conn);
         }
         // also populate the reserved connection pool
-        int startingId = serverBaseId + (workerThreads * maxQueueSize) + 1;
+        int startingId = serverBaseId + (numWorkerThreads * maxQueueSize) + 1;
         for (int i = 0; i < RESERVED_CONN_COUNT; i++) {
-            conn = new WebServerSSLConnState(reservedBlockingConnPool, sslContext, (startingId + i));
+            conn = new WebServerSSLConnState(flavor, reservedBlockingConnPool, sslContext, (startingId + i));
             conn.start();
             reservedBlockingConnPool.freeConnectionState(conn);
         }
