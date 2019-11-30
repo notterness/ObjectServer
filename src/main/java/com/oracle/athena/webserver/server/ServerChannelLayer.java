@@ -28,8 +28,10 @@ public class ServerChannelLayer implements Runnable {
     private static final Logger LOG = LoggerFactory.getLogger(ServerChannelLayer.class);
 
     public static final int BASE_TCP_PORT = 5000;
-    public static final int HTTP_TCP_PORT = BASE_TCP_PORT + 80;
-    public static final int HTTPS_TCP_PORT = BASE_TCP_PORT + 443;
+    public static final int HTTP_PORT_OFFSET = 80;
+    public static final int HTTPS_PORT_OFFSET = 443;
+    public static final int HTTP_TCP_PORT = BASE_TCP_PORT + HTTP_PORT_OFFSET;
+    public static final int HTTPS_TCP_PORT = BASE_TCP_PORT + HTTPS_PORT_OFFSET;
     public static final int DEFAULT_CLIENT_ID = 31415;
     private static final int CHAN_TIMEOUT = 100;
     public static final int WORK_QUEUE_SIZE = 10;
