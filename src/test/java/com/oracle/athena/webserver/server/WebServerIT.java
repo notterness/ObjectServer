@@ -1,6 +1,7 @@
 package com.oracle.athena.webserver.server;
 
 
+import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.api.Request;
@@ -55,7 +56,7 @@ class WebServerIT {
 
             Load tests should be handled in a separate test area similar to how the "manual" ones are handled today.
          */
-        server = new WebServer(1);
+        server = new WebServer(WebServerFlavor.INTEGRATION_TESTS, 1);
         server.start();
         client = new HttpClient();
         // in async mode, force this particular client to send all events in order

@@ -14,9 +14,7 @@ import javax.net.ssl.*;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.ListIterator;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -62,7 +60,7 @@ public class WebServerConnState extends ConnectionState {
     **   responseChannelWriteDone - This is set when the callback from the channel write completes
      */
     protected boolean dataRequestResponseSendDone;
-    protected boolean finalResponseSent;
+    protected AtomicBoolean finalResponseSent;
     protected AtomicBoolean responseChannelWriteDone;
     protected boolean finalResponseSendDone;
 
@@ -84,7 +82,7 @@ public class WebServerConnState extends ConnectionState {
     protected int requestedHttpBuffers;
     protected int allocatedHttpBufferCount;
 
-    protected AtomicInteger outstandingHttpReadCount;
+    protected int outstandingHttpReadCount;
     protected AtomicInteger httpBufferReadsCompleted;
     protected AtomicBoolean httpHeaderParsed;
 
@@ -138,13 +136,13 @@ public class WebServerConnState extends ConnectionState {
         connectionStatePool = pool;
 
         responseBuffer = null;
-        finalResponseSent = false;
+        finalResponseSent = new AtomicBoolean(false);
         dataRequestResponseSendDone = false;
         finalResponseSendDone = false;
 
         responseChannelWriteDone = new AtomicBoolean(false);
 
-        outstandingHttpReadCount = new AtomicInteger(0);
+        outstandingHttpReadCount = 0;
 
         requestedHttpBuffers = 0;
         allocatedHttpBufferCount = 0;
@@ -276,7 +274,7 @@ public class WebServerConnState extends ConnectionState {
      ** The resets all the values for the HttpParsePipelineMgr
      */
     void resetHttpReadValues() {
-        outstandingHttpReadCount.set(0);
+        outstandingHttpReadCount = 0;
         requestedHttpBuffers = 0;
         allocatedHttpBufferCount = 0;
         httpBufferReadsCompleted.set(0);
@@ -319,9 +317,12 @@ public class WebServerConnState extends ConnectionState {
 
     /*
     ** Returns the number of outstanding HTTP buffer reads there currently are.
+    **
+    ** TODO: Need to look at the channel failure handling again and how the
+    **   outstanding operations are handled.
      */
     int outstandingHttpBufferReads() {
-        return outstandingHttpReadCount.get();
+        return outstandingHttpReadCount;
     }
 
     /*
@@ -367,7 +368,7 @@ public class WebServerConnState extends ConnectionState {
      **   sufficient buffers available to allocate all that are requested, so there will be a wakeup call
      **   when buffers are available and then the connection will go back and try the allocation again.
      */
-    int allocHttpBufferState() {
+    int allocHttpBuffer() {
 
         while (requestedHttpBuffers > 0) {
             BufferState bufferState = bufferStatePool.allocBufferState(this,
@@ -395,7 +396,7 @@ public class WebServerConnState extends ConnectionState {
      ** This is used to start reads into one or more buffers. It looks for BufferState objects that have
      **   their state set to READ_FROM_CHAN. It then sends those buffers off to perform asynchronous reads.
      */
-    void readIntoMultipleBuffers() {
+    void readIntoHttpBuffers() {
         BufferState bufferState;
 
         /*
@@ -409,7 +410,7 @@ public class WebServerConnState extends ConnectionState {
 
                 allocatedHttpBufferCount--;
 
-                outstandingHttpReadCount.incrementAndGet();
+                outstandingHttpReadCount++;
                 readFromChannel(bufferState);
             }
         }
@@ -429,7 +430,6 @@ public class WebServerConnState extends ConnectionState {
      void httpReadCompleted(final BufferState bufferState) {
         int readCompletedCount;
 
-        int readCount = outstandingHttpReadCount.decrementAndGet();
         try {
             httpReadDoneQueue.put(bufferState);
 
@@ -444,8 +444,7 @@ public class WebServerConnState extends ConnectionState {
          */
         timeoutChecker.updateTime();
 
-        LOG.info("WebServerConnState[" + connStateId + "] httpReadCompleted() HTTP readCount: " + readCount +
-                " readCompletedCount: " + readCompletedCount);
+        LOG.info("WebServerConnState[" + connStateId + "] httpReadCompleted() HTTP readCompletedCount: " + readCompletedCount);
 
         addToWorkQueue(false);
     }
@@ -492,7 +491,7 @@ public class WebServerConnState extends ConnectionState {
                 iter.remove();
 
                 if (bufferState.getBufferState() == BufferStateEnum.READ_WAIT_FOR_HTTP) {
-                    httpReadCount = outstandingHttpReadCount.decrementAndGet();
+                    httpReadCount = outstandingHttpReadCount--;
                 } else {
                     dataReadCount = outstandingDataReadCount.decrementAndGet();
                 }
@@ -571,7 +570,7 @@ public class WebServerConnState extends ConnectionState {
      **   recycle the data buffers, so those may not need to be sent through the HTTP Parser'
      **   and instead should be handled directly.
      */
-    void parseHttp() {
+    void parseHttpBuffers() {
         BufferState bufferState;
         ByteBuffer buffer;
 
@@ -582,6 +581,8 @@ public class WebServerConnState extends ConnectionState {
             while (iter.hasNext()) {
                 bufferState = iter.next();
                 iter.remove();
+
+                outstandingHttpReadCount--;
 
                 // TODO: Assert (bufferState.getState() == READ_HTTP_DONE)
                 httpBufferReadsCompleted.decrementAndGet();
@@ -709,7 +710,7 @@ public class WebServerConnState extends ConnectionState {
 
         BufferState buffState = allocateResponseBuffer();
         if (buffState != null) {
-            finalResponseSent = true;
+            finalResponseSent.set(true);
 
             ByteBuffer respBuffer = resultBuilder.buildResponse(buffState, resultCode, true);
 
@@ -829,7 +830,7 @@ public class WebServerConnState extends ConnectionState {
     **   but does not mean it has actually been sent.
      */
     boolean hasFinalResponseBeenSent() {
-        return finalResponseSent;
+        return finalResponseSent.get();
     }
 
     /*
@@ -842,7 +843,7 @@ public class WebServerConnState extends ConnectionState {
 
     void resetResponses() {
         dataRequestResponseSendDone = false;
-        finalResponseSent = false;
+        finalResponseSent.set(false);
         finalResponseSendDone = false;
     }
 
@@ -901,25 +902,11 @@ public class WebServerConnState extends ConnectionState {
     ** This is a placeholder for the encryption step. Currently it is used to release the content buffers
      */
     void releaseContentBuffers() {
-        BufferState[] md5DoneBuffers = new BufferState[0];
-        md5DoneBuffers = dataMd5DoneQueue.toArray(md5DoneBuffers);
-        BufferState[] readDoneBuffers = new BufferState[0];
-        readDoneBuffers = dataReadDoneQueue.toArray(readDoneBuffers);
+        List<BufferState> completedBuffers = new ArrayList<BufferState>();
+        encryptBufferQueue.drainTo(completedBuffers);
 
-        for (BufferState bufferState : md5DoneBuffers) {
+        for (BufferState bufferState : completedBuffers) {
             bufferStatePool.freeBufferState(bufferState);
-            dataMd5DoneQueue.remove(bufferState);
-
-            int digestCompleted = dataBufferDigestCompleted.decrementAndGet();
-            LOG.info("WebServerConnState[" + connStateId + "] releaseContentBuffers() " + digestCompleted);
-        }
-
-        for (BufferState bufferState : readDoneBuffers) {
-            bufferStatePool.freeBufferState(bufferState);
-            dataReadDoneQueue.remove(bufferState);
-
-            int readsCompleted = dataBufferReadsCompleted.decrementAndGet();
-            LOG.info("WebServerConnState[" + connStateId + "] releaseContentBuffers() " + readsCompleted);
         }
     }
 

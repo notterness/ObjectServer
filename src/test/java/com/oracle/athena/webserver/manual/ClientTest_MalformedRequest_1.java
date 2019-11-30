@@ -6,7 +6,7 @@ import org.eclipse.jetty.http.HttpStatus;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ClientTest_MalformedRequest_1 extends ClientTest {
+class ClientTest_MalformedRequest_1 extends ClientTest {
 
     ClientTest_MalformedRequest_1(final String testName, final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
         super(testName, client, myServerId, myTargetId, threadCount);
@@ -14,8 +14,8 @@ public class ClientTest_MalformedRequest_1 extends ClientTest {
 
     @Override
     String buildRequestString() {
-        String tmp = new String("PUT / HTTP/9.9\n" +
-                "Host: iaas.us-phoenix-1.oraclecloud.com\n" +
+        return new String("PUT / HTTP/9.9\n" +
+                "Host: ClientTest-" + super.clientTestName + "\n" +
                 "Content-Type: Something Random\n" +
                 "Connection: keep-alive\n" +
                 "Accept: */*\n" +
@@ -28,8 +28,6 @@ public class ClientTest_MalformedRequest_1 extends ClientTest {
                 "  \"compartmentId\": \"ocid1.compartment.oc1..aaaaaaaauwjnv47knr7uuuvqar5bshnspi6xoxsfebh3vy72fi4swgrkvuvq\",\n" +
                 "  \"displayName\": \"Apex Virtual Cloud Network\"\n" +
                 "}\n\r\n");
-
-        return tmp;
     }
 
 

@@ -6,7 +6,7 @@ import org.eclipse.jetty.http.HttpStatus;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ClientTest_InvalidContentLength extends ClientTest {
+class ClientTest_InvalidContentLength extends ClientTest {
 
     ClientTest_InvalidContentLength(final String testName, final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
         super(testName, client, myServerId, myTargetId, threadCount);
@@ -14,8 +14,8 @@ public class ClientTest_InvalidContentLength extends ClientTest {
 
     @Override
     String buildRequestString() {
-        String tmp = new String("PUT / HTTP/1.1\n" +
-                "Host: iaas.us-phoenix-1.oraclecloud.com\n" +
+        return new String("PUT / HTTP/1.1\n" +
+                "Host: ClientTest-" + super.clientTestName + "\n" +
                 "Content-Type: Something Random\n" +
                 "Connection: keep-alive\n" +
                 "Accept: */*\n" +
@@ -23,8 +23,6 @@ public class ClientTest_InvalidContentLength extends ClientTest {
                 "Accept-Language: en-us\n" +
                 "Accept-Encoding: gzip, deflate\n" +
                 "Content-Length: -100\n\n");
-
-        return tmp;
     }
 
 

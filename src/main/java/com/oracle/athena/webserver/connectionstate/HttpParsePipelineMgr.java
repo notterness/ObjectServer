@@ -7,6 +7,53 @@ import org.eclipse.jetty.http.HttpStatus;
 
 import java.util.function.Function;
 
+/*
+** Description of how the HTTP Parse Pipeline works
+**
+**   The HTTP Parse Pipeline consists of the following stages:
+**
+**     1) INITIAL_SETUP
+**          RUNS ON WORKER THREAD
+**          Sets up the allocation for a single HTTP buffer using
+**             requestedHttpBuffers - int
+**
+**     2) allocHttpBuffers()
+**           RUNS ON WORKER THREAD
+**           Checks if buffers are requested and if so, allocates them
+**              checks requestedHttpBuffers - int
+**           adds buffers to
+**              allocatedHttpBufferQueue - LinkedList<BufferState>
+**              allocatedHttpBufferCount - int (increment)
+**              requestedHttpBuffers - int (decrement)
+**
+**     3) readIntoHttpBuffers()
+**           RUNS ON WORKER THREAD
+**           Checks if buffers have been allocated and if so reads into them
+**              checks allocatedHttpBufferCount - int
+**           Sets the number of outstanding reads
+**              outstandingHttpReadCount - int (increment)
+**              allocatedHttpBuffers - int (decrement)
+**
+**     3a) httpReadCompleted()
+**            RUNS ON NIO.2 THREAD - CALLBACK FUNCTION
+**            Moves BufferState onto read completed queue
+**              httpReadDoneQueue - BlockingQueue<BufferState> (offer)
+**              httpBufferReadsCompleted - AtomicInteger (increment)
+**
+**     4) parseHttpBuffers()
+**           RUNS ON WORKER THREAD
+**           Checks if there are BufferState with data in them ready to be parsed and if so,
+**             feeds the data into the Jetty parser.
+**             httpBufferReadsComplete - AtomicInteger (check and decrement)
+**             httpReadDoneQueue - BlockingQueue<BufferState> (iterate and remove)
+**             outstandingHttpReadCount - int (decrement)
+**           Releases BufferState back to the free pool
+**
+**     5) setupNextPipeline()
+**           RUNS ON WORKER THREAD
+**           Updates the information needed to begin reading in the content data and
+**             sets the next pipeline up.
+ */
 class HttpParsePipelineMgr extends ConnectionPipelineMgr {
 
     private final WebServerConnState connectionState;
@@ -18,7 +65,7 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
     };
 
     private Function<WebServerConnState, StateQueueResult> httpParseAllocHttpBuffer = wsConn -> {
-        if (wsConn.allocHttpBufferState() == 0) {
+        if (wsConn.allocHttpBuffer() == 0) {
             return StateQueueResult.STATE_RESULT_WAIT;
         } else {
             return StateQueueResult.STATE_RESULT_CONTINUE;
@@ -26,14 +73,14 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
     };
 
     private Function<WebServerConnState, StateQueueResult> httpParseReadHttpBuffer = wsConn -> {
-        wsConn.readIntoMultipleBuffers();
+        wsConn.readIntoHttpBuffers();
 
 
         return StateQueueResult.STATE_RESULT_REQUEUE;
     };
 
     private Function<WebServerConnState, StateQueueResult> httpParseHttpBuffer = wsConn -> {
-        wsConn.parseHttp();
+        wsConn.parseHttpBuffers();
         return StateQueueResult.STATE_RESULT_CONTINUE;
     };
 
@@ -125,24 +172,9 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         }
 
         /*
-         ** Check if the header parsing is completed and if so, setup the initial reads
-         **   for the content.
-         **
-         ** NOTE: This check is done prior to seeing if buffers need to be allocated to
-         **   read in content data.
-         */
-        if (connectionState.httpHeadersParsed()) {
-            /*
-             ** Figure out how many buffers to read.
-             */
-            return ConnectionStateEnum.SETUP_NEXT_PIPELINE;
-        }
-
-        /*
          ** Are there outstanding buffers to be allocated. If the code had attempted to allocate
          **   buffers and failed, check if there is other work to do. No point trying the buffer
          **   allocation right away.
-         **
          */
         if (!connectionState.outOfMemory() && connectionState.httpBuffersNeeded()) {
             return ConnectionStateEnum.ALLOC_HTTP_BUFFER;
@@ -153,6 +185,13 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
          */
         if (connectionState.httpBuffersAllocated()) {
             return ConnectionStateEnum.READ_HTTP_BUFFER;
+        }
+
+        /*
+         ** Are there completed reads, priority is processing the HTTP header
+         */
+        if (connectionState.httpBuffersReadyForParsing()) {
+            return ConnectionStateEnum.PARSE_HTTP_BUFFER;
         }
 
         /*
@@ -196,10 +235,15 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         }
 
         /*
-         ** Are there completed reads, priority is processing the HTTP header
+         ** Check if the header parsing is completed and if so, setup the initial reads
+         **   for the content.
+         **
          */
-        if (connectionState.httpBuffersReadyForParsing()) {
-            return ConnectionStateEnum.PARSE_HTTP_BUFFER;
+        if (connectionState.httpHeadersParsed()) {
+            /*
+             ** Figure out how many buffers to read.
+             */
+            return ConnectionStateEnum.SETUP_NEXT_PIPELINE;
         }
 
         return ConnectionStateEnum.CHECK_SLOW_CHANNEL;

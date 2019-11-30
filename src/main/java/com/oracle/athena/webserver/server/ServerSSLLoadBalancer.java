@@ -52,7 +52,7 @@ public class ServerSSLLoadBalancer extends ServerLoadBalancer {
         for (int i = 0; i < workerThreads; i++) {
             ServerWorkerThread worker = new ServerWorkerThread(maxQueueSize, memoryManager,
                     (serverBaseId + i), digestThreadPool);
-            executorService.execute(worker);
+            worker.start();
             threadPool[i] = worker;
         }
 

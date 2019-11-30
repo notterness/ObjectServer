@@ -2,6 +2,7 @@ package com.oracle.athena.webserver.manual;
 
 import com.oracle.athena.webserver.server.ServerChannelLayer;
 import com.oracle.athena.webserver.server.WebServer;
+import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -45,7 +46,7 @@ public class ServerTest implements Runnable {
 
         System.out.println("ServerTest[" + serverConnId + "] thread start");
 
-        WebServer server = new WebServer(1, tcpPort, serverConnId);
+        WebServer server = new WebServer(WebServerFlavor.INTEGRATION_TESTS, 1, tcpPort, serverConnId);
         server.start();
 
         while (!exitThread) {

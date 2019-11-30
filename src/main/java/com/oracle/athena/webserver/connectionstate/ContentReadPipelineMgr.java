@@ -1,5 +1,58 @@
 package com.oracle.athena.webserver.connectionstate;
 
+/*
+** Description of how the Content Read Pipeline works
+**
+**   The HTTP Parse Pipeline consists of the following stages:
+**
+**     1) ALLOC_CONTENT_DATA_BUFFERS
+**           RUNS ON THE WORKER THREAD
+**           Attempts to allocate buffers to read in content data.
+**              requestedDataBuffers - int (decrement)
+**              allocatedDataBuffers - int (increment)
+**              allocatedDataBufferQueue - LinkedList<BufferState>
+**              contentBytesAllocated - AtomicLong
+**
+**    2) READ_CONTENT_DATA
+**          RUNS ON THE WORKER THREAD
+**          Reads data from the channel into the content data buffers
+**             allocatedDataBuffers - int (decrement)
+**             allocatedDataBufferQueue - LinkedList<BufferState>
+**             outstandingDataReadCount - AtomicInteger (increment)
+**
+**    2a) dataReadCompleted()
+**           RUNS ON NIO.2 THREAD - CALLBACK FUNCTION
+**           Moves BufferState onto read completed queue
+**             dataReadDoneQueue - BlockingQueue<BufferState> (offer)
+**             outstandingDataReadCount - AtomicInteger (decrement)
+**             dataBufferReadsCompleted - AtomicInteger (incremented in addDataBuffer())
+**
+**    3) MD5_CALCULATE - connectionState.sendBuffersToMd5Worker()
+**          RUNS ON THE WORKER THREAD
+**          Moves BufferState from the read completed queue to the MD5 threads queue.
+**            dataReadDoneQueue - BlockingQueue<BufferState> (toArray, which should be a drainTo)
+**            digestWorkQueue - BlockingQueue<BufferState> (offer)
+**            dataBufferDigestSent - AtomicInteger (increment)
+**
+**    4) Compute the MD5
+**          RUNS ON ONE OF THE ServerDigestThread(s)
+**          This computes the accumulating MD5 digest for a particular BufferState
+**             digestWorkQueue - BlockingQueue<BufferState> (poll and remove)
+**             dataMd5DoneQueue - BlockingQueue<BufferState> (add, but should be offer)
+**
+**    5) MD5_BUFFER_DONE
+**          RUNS ON THE WORKER THREAD
+**          This pulls buffers that have had their MD5 calculation completed off the queue and ...
+**            dataMd5DoneQueue - BlockingQueue<BufferState> (drainTo)
+**            dataBufferDigestCompleted - AtomicInteger (increment)
+**            dataBufferDigestSent - AtomicInteger (decrement)
+**
+**    6) MD5_CALCULATE_COMPLETE
+**          Pulls the final MD5 value from the calculation and compares it to the value passed
+**             in through the header.
+**             digestComplete() - AtomicBoolean (set)
+*/
+
 import com.oracle.athena.webserver.statemachine.StateEntry;
 import com.oracle.athena.webserver.statemachine.StateMachine;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
@@ -20,15 +73,15 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
         wsConn.determineNextContentRead();
         return StateQueueResult.STATE_RESULT_CONTINUE;
     };
-    private Function<WebServerConnState, StateQueueResult> contentReadRequestDataBuffers = wsConn -> {
-        if (wsConn.allocClientReadBufferState() == 0) {
+    private Function<WebServerConnState, StateQueueResult> contentReadRequestBuffers = wsConn -> {
+        if (wsConn.allocContentReadBuffers() == 0) {
             return StateQueueResult.STATE_RESULT_WAIT;
         } else {
             return StateQueueResult.STATE_RESULT_CONTINUE;
         }
     };
 
-    private Function<WebServerConnState, StateQueueResult> contentReadDataBuffers = wsConn -> {
+    private Function<WebServerConnState, StateQueueResult> contentReadIntoBuffers = wsConn -> {
         wsConn.readIntoDataBuffers();
         return StateQueueResult.STATE_RESULT_CONTINUE;
     };
@@ -80,14 +133,8 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
     };
 
     private Function<WebServerConnState, StateQueueResult> contentCalculateMd5 = wsConn -> {
-        /*
-        **  the MD5 threads are busy - requeue
-        if (wsConn.sendBuffersToMd5Worker() == 0) {
-            return StateQueueResult.STATE_RESULT_REQUEUE;
-        }
-        */
         wsConn.sendBuffersToMd5Worker();
-        return StateQueueResult.STATE_RESULT_WAIT;
+        return StateQueueResult.STATE_RESULT_CONTINUE;
     };
 
     private Function<WebServerConnState, StateQueueResult> contentMd5Complete = wsConn -> {
@@ -115,8 +162,8 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
 
         connectionState.resetResponses();
         connectionStateMachine.addStateEntry(ConnectionStateEnum.SETUP_CONTENT_READ, new StateEntry<>(contentReadSetup));
-        connectionStateMachine.addStateEntry(ConnectionStateEnum.ALLOC_CLIENT_DATA_BUFFER, new StateEntry<>(contentReadRequestDataBuffers));
-        connectionStateMachine.addStateEntry(ConnectionStateEnum.READ_CLIENT_DATA, new StateEntry<>(contentReadDataBuffers));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.ALLOC_CONTENT_DATA_BUFFER, new StateEntry<>(contentReadRequestBuffers));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.READ_CONTENT_DATA, new StateEntry<>(contentReadIntoBuffers));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.CHECK_SLOW_CHANNEL, new StateEntry<>(contentReadCheckSlowChannel));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.SEND_FINAL_RESPONSE, new StateEntry<>(contentReadSendXferResponse));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.CONN_FINISHED, new StateEntry<>(contentReadConnFinished));
@@ -142,7 +189,6 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
          */
         if (initialStage) {
             initialStage = false;
-
             return ConnectionStateEnum.SETUP_CONTENT_READ;
         }
 
@@ -152,8 +198,8 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
          **   allocation right away.
          **
          */
-        if (!connectionState.outOfMemory() && connectionState.needsMoreDataBuffers()) {
-            return ConnectionStateEnum.ALLOC_CLIENT_DATA_BUFFER;
+        if (!connectionState.outOfMemory() && connectionState.needsMoreContentBuffers()) {
+            return ConnectionStateEnum.ALLOC_CONTENT_DATA_BUFFER;
         }
 
         /*
@@ -162,7 +208,7 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
          ** TODO: Support the NIO.2 read that can be passed in an array of ByteBuffers
          */
         if (connectionState.dataBuffersWaitingForRead()) {
-            return ConnectionStateEnum.READ_CLIENT_DATA;
+            return ConnectionStateEnum.READ_CONTENT_DATA;
         }
 
         if (connectionState.getResponseChannelWriteDone()) {
@@ -184,7 +230,7 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
             return ConnectionStateEnum.CONN_FINISHED;
         }
 
-        if (connectionState.getDataBufferReadsCompleted() > connectionState.getDataBufferDigestSent()) {
+        if (connectionState.getDataBufferReadsCompleted() > 0) {
             return ConnectionStateEnum.MD5_CALCULATE;
         }
 
@@ -192,10 +238,7 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
             return ConnectionStateEnum.MD5_BUFFER_DONE;
         }
 
-        if (connectionState.hasAllContentBeenRead() && !connectionState.getDigestComplete() &&
-                connectionState.getDataBufferDigestCompleted() > 0 &&
-                connectionState.getDataBufferReadsCompleted() == 0 &&
-                connectionState.getDataBufferDigestSent() == 0) {
+        if (connectionState.getDataBufferDigestCompleted()) {
             return ConnectionStateEnum.MD5_CALCULATE_COMPLETE;
         }
 
@@ -204,13 +247,7 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
          **   goes directly to the release content buffers stage, which only releases the buffers back to the free
          **   pool.
          */
-        if (connectionState.getDataBufferReadsCompleted() > 0 || connectionState.getDataBufferDigestCompleted() > 0 ) {
-            if (connectionState.getDigestComplete()) {
-                return ConnectionStateEnum.RELEASE_CONTENT_BUFFERS;
-            } else if ( connectionState.getDataBufferDigestSent() == 0) {
-                return ConnectionStateEnum.RELEASE_CONTENT_BUFFERS;
-            }
-
+        if (connectionState.buffersOnEncryptQueue() > 0) {
             return ConnectionStateEnum.RELEASE_CONTENT_BUFFERS;
         }
 
@@ -219,7 +256,7 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
          **
          ** TODO: Start adding in the steps to process the content data instead of just sending status
          */
-        if (connectionState.hasAllContentBeenRead() && !connectionState.hasFinalResponseBeenSent()) {
+        if (connectionState.hasAllConnectionProcessingCompleted() && !connectionState.hasFinalResponseBeenSent()) {
             return ConnectionStateEnum.SEND_FINAL_RESPONSE;
         }
 

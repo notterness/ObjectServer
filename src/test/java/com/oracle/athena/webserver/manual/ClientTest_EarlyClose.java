@@ -6,7 +6,7 @@ import com.oracle.athena.webserver.memory.MemoryManager;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ClientTest_EarlyClose extends ClientTest {
+class ClientTest_EarlyClose extends ClientTest {
 
     ClientTest_EarlyClose(final String testName, final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
         super(testName, client, myServerId, myTargetId, threadCount);
@@ -14,8 +14,8 @@ public class ClientTest_EarlyClose extends ClientTest {
 
     @Override
     String buildRequestString() {
-        String tmp = new String("POST / HTTP/1.1\n" +
-                "Host: iaas.us-phoenix-1.oraclecloud.com\n" +
+        return new String("POST / HTTP/1.1\n" +
+                "Host: ClientTest-" + super.clientTestName + "\n" +
                 "Content-Type: application/json\n" +
                 "Connection: keep-alive\n" +
                 "Accept: */*\n" +
@@ -28,8 +28,6 @@ public class ClientTest_EarlyClose extends ClientTest {
                 "  \"compartmentId\": \"ocid1.compartment.oc1..aaaaaaaauwjnv47knr7uuuvqar5bshnspi6xoxsfebh3vy72fi4swgrkvuvq\",\n" +
                 "  \"displayName\": \"Apex Virtual Cloud Network\"\n" +
                 "}\n\r\n");
-
-        return tmp;
     }
 
     /*

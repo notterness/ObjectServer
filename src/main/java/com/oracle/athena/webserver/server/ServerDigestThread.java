@@ -3,7 +3,6 @@ package com.oracle.athena.webserver.server;
 import com.oracle.athena.webserver.connectionstate.BufferState;
 
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,58 +11,63 @@ public class ServerDigestThread implements Runnable {
 
     private static final Logger LOG = LoggerFactory.getLogger(ServerDigestThread.class);
 
-    private final static int SERVER_DIGEST_MAX_QUEUE_SIZE = 20; // max connections * num buffers
+    private final BlockingQueue<BufferState> digestWorkQ;
+    private final int threadId;
 
-    private BlockingQueue<BufferState> digestWorkQ;
+    private volatile boolean running;
+    private Thread digestThread;
 
-    private boolean running;
 
-    private int threadId;
+    public ServerDigestThread(final BlockingQueue<BufferState> workQueue, int threadId) {
+        this.digestWorkQ = workQueue;
+        this.threadId = threadId;
 
-    public ServerDigestThread() {
-        digestWorkQ = new LinkedBlockingQueue<>(SERVER_DIGEST_MAX_QUEUE_SIZE);
+        running = true;
     }
 
-    @Override
-    public void run() {
-        running = true;
+    public void start() {
+        digestThread = new Thread(this);
+        digestThread.start();
+    }
 
+    void stop() {
+        running = false;
         try {
-            while (running) {
-                BufferState bufferWork = digestWorkQ.poll(100, TimeUnit.MILLISECONDS);
-
-                if (bufferWork != null) {
-                    /*
-                     ** compute the digest for the buffer.
-                     */
-                    bufferWork.updateBufferDigest();
-                    /*
-                     ** FIXME PS - account for queue full.
-                     */
-                    digestWorkQ.remove(bufferWork);
-
-                    /*
-                     **  this call queues the buffer back to the server worker. Changes to the state are made on that thread.
-                     */
-                    bufferWork.bufferCompleteDigestCb();
-                }
-            }
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+            digestThread.join(1000);
+        } catch (InterruptedException int_ex) {
+            System.out.println("digestThread[] failed: " + int_ex.getMessage());
         }
     }
 
-    void stopServerDigestThread() {
-        running = false;
+    public void run() {
+        LOG.info("ServerDigestThread[" + threadId + "] started");
+
+        while (running) {
+            BufferState bufferWork;
+
+            try {
+                bufferWork = digestWorkQ.poll(100, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException int_ex) {
+                LOG.warn("ServerDigestThread[" + threadId + "] " + int_ex.getMessage());
+                bufferWork = null;
+                running = false;
+            }
+
+            if (bufferWork != null) {
+                LOG.info("ServerDigestThread[" + threadId + "] buffer from: " + bufferWork.getOwnerId());
+                /*
+                ** compute the digest for the buffer.
+                 */
+                bufferWork.updateBufferDigest();
+
+                /*
+                **  this call queues the buffer back to the server worker. Changes to the state are made on that thread.
+                 */
+                bufferWork.bufferCompleteDigestCb();
+            }
+        }
+
+        LOG.info("ServerDigestThread[" + threadId + "] finished");
     }
 
-    /*
-     ** if there is no room here, we need to push this back to the server worker thread.
-     */
-    public boolean addDigestWork(BufferState bufferState) {
-        boolean isQueued;
-        isQueued = digestWorkQ.offer(bufferState);
-
-        return isQueued;
-    }
 }

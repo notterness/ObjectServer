@@ -1,6 +1,5 @@
 package com.oracle.athena.webserver.memory;
 
-import com.oracle.athena.webserver.connectionstate.ConnectionState;
 import com.oracle.athena.webserver.connectionstate.MemoryAvailableCallback;
 
 import java.nio.ByteBuffer;
@@ -19,7 +18,7 @@ import org.slf4j.LoggerFactory;
 public class MemoryManager {
     // TODO:  Add a high-water mark for each pool.
 
-    private static Logger LOG = LoggerFactory.getLogger(MemoryManager.class);
+    private static final Logger LOG = LoggerFactory.getLogger(MemoryManager.class);
 
     private BlockingQueue<MemoryAvailableCallback> waitingForBuffersQueue;
 
@@ -32,11 +31,11 @@ public class MemoryManager {
     public static final int CHUNK_BUFFER_SIZE = 0x8000000;  // 128 MB
 
     // These really don't need to be.
-    public static final int SMALL_BUFFER_COUNT = 1000;
-    public static final int MEDIUM_BUFFER_COUNT = 100;
-    public static final int XFER_BUFFER_COUNT = 10;
-    public static final int LARGE_BUFFER_COUNT =  10;
-    public static final int CHUNK_BUFFER_COUNT =    1;  // If this is more than 2, get OOM in unit test.
+    private static final int SMALL_BUFFER_COUNT = 1000;
+    private static final int MEDIUM_BUFFER_COUNT = 100;
+    private static final int XFER_BUFFER_COUNT = 10;
+    private static final int LARGE_BUFFER_COUNT =  10;
+    private static final int CHUNK_BUFFER_COUNT =    1;  // If this is more than 2, get OOM in unit test.
 
     /*
     ** TODO: This should be the number of ConnectionState objects

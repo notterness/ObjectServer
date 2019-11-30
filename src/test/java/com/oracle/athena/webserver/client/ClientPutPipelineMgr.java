@@ -19,7 +19,7 @@ public class ClientPutPipelineMgr extends ConnectionPipelineMgr {
     };
 
     private Function<ClientConnState, StateQueueResult> clientPutRequestDataBuffers = conn -> {
-        if (conn.allocClientReadBufferState() == 0) {
+        if (conn.allocContentReadBuffers() == 0) {
             return StateQueueResult.STATE_RESULT_WAIT;
         } else {
             return StateQueueResult.STATE_RESULT_CONTINUE;
@@ -74,8 +74,8 @@ public class ClientPutPipelineMgr extends ConnectionPipelineMgr {
         this.connectionState.resetClientCallbackCompleted();
 
         connectionStateMachine.addStateEntry(ConnectionStateEnum.INITIAL_SETUP, new StateEntry<>(clientPutInitialSetup));
-        connectionStateMachine.addStateEntry(ConnectionStateEnum.ALLOC_CLIENT_DATA_BUFFER, new StateEntry<>(clientPutRequestDataBuffers));
-        connectionStateMachine.addStateEntry(ConnectionStateEnum.READ_CLIENT_DATA, new StateEntry<>(clientPutReadDataBuffers));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.ALLOC_CONTENT_DATA_BUFFER, new StateEntry<>(clientPutRequestDataBuffers));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.READ_CONTENT_DATA, new StateEntry<>(clientPutReadDataBuffers));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.CLIENT_READ_CB, new StateEntry<>(clientPutReadCb));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.CONN_FINISHED, new StateEntry<>(clientPutConnFinished));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.CHECK_SLOW_CHANNEL, new StateEntry<>(clientPutCheckSlowConn));
@@ -103,8 +103,8 @@ public class ClientPutPipelineMgr extends ConnectionPipelineMgr {
          **   allocation right away.
          **
          */
-        if (!connectionState.outOfMemory() && connectionState.needsMoreDataBuffers()) {
-            return ConnectionStateEnum.ALLOC_CLIENT_DATA_BUFFER;
+        if (!connectionState.outOfMemory() && connectionState.needsMoreContentBuffers()) {
+            return ConnectionStateEnum.ALLOC_CONTENT_DATA_BUFFER;
         }
 
         /*
@@ -113,7 +113,7 @@ public class ClientPutPipelineMgr extends ConnectionPipelineMgr {
          ** TODO: Support the NIO.2 read that can be passed in an array of ByteBuffers
          */
         if (connectionState.dataBuffersWaitingForRead()) {
-            return ConnectionStateEnum.READ_CLIENT_DATA;
+            return ConnectionStateEnum.READ_CONTENT_DATA;
         }
 
         if (connectionState.getDataBufferReadsCompleted() > 0) {

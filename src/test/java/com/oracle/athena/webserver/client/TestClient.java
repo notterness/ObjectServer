@@ -69,12 +69,12 @@ public class TestClient implements Runnable {
 
 
     // Each new target opens up a connection to a remote server
-    public WriteConnection addNewTarget(int clientTargetId) {
+    public WriteConnection addNewTarget(final int clientTargetId, final int uniqueId) {
         tcpPort = ServerChannelLayer.BASE_TCP_PORT + clientTargetId;
         if (targetServer == null) {
             // Setup the server for this clientId
             int serverTcpPort = ServerChannelLayer.BASE_TCP_PORT + serverTargetId;
-            targetServer = new InitiatorServer(2, serverTcpPort, serverTargetId);
+            targetServer = new InitiatorServer(2, serverTcpPort, uniqueId);
             targetServer.start();
         }
 
@@ -92,9 +92,9 @@ public class TestClient implements Runnable {
 
         boolean connected = false;
         if (writeConn != null) {
-            writeConn.open(tcpPort, timeoutMs);
-
-            connected = true;
+            if (writeConn.open(tcpPort, timeoutMs) != null) {
+                connected = true;
+            }
         } else {
             System.out.println("No WriteConnection found");
         }
@@ -175,8 +175,12 @@ public class TestClient implements Runnable {
     ** This logs the first test that failed. If multiple tests fail, only the first one is retained
      */
     public void setTestFailed(final String failedTest) {
-        if (failedTestName != null) {
+        if (failedTestName == null) {
+            System.out.println("Adding test failure: " + failedTest);
+
             failedTestName = failedTest;
+        } else {
+            System.out.println("Cannot add test failure: " + failedTest);
         }
     }
 

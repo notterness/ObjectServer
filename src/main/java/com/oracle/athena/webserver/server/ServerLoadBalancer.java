@@ -25,7 +25,7 @@ public class ServerLoadBalancer {
     private static final Logger LOG = LoggerFactory.getLogger(ServerLoadBalancer.class);
 
     protected final static int RESERVED_CONN_COUNT = 2;
-    protected final static int NUMBER_DIGEST_THREADS = 2;
+    protected final static int NUMBER_DIGEST_THREADS = 1;
 
     protected final ServerWorkerThread[] threadPool;
     protected final MemoryManager memoryManager;
@@ -37,8 +37,6 @@ public class ServerLoadBalancer {
 
     private ConnectionStatePool<WebServerConnState> connPool;
     private ConnectionStatePool<WebServerConnState> reservedBlockingConnPool;
-
-    protected final ExecutorService executorService;
 
     /*
      ** The queueSize is the maximum number of outstanding connections a thread can manage
@@ -52,24 +50,24 @@ public class ServerLoadBalancer {
      */
     public ServerLoadBalancer(final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId) {
 
-        workerThreads = numWorkerThreads;
-        maxQueueSize = queueSize;
-        serverBaseId = serverClientId;
+        this.workerThreads = numWorkerThreads;
+        this.maxQueueSize = queueSize;
+        this.serverBaseId = serverClientId;
         this.memoryManager = memoryManager;
-        this.digestThreadPool = new ServerDigestThreadPool(NUMBER_DIGEST_THREADS);
-
-        threadPool = new ServerWorkerThread[workerThreads];
-        executorService = Executors.newFixedThreadPool(workerThreads);
         LOG.info("ServerLoadBalancer[" + serverClientId + "] workerThreads: " + workerThreads + " maxQueueSize: " + maxQueueSize);
+
+        this.digestThreadPool = new ServerDigestThreadPool(NUMBER_DIGEST_THREADS, this.serverBaseId);
+        this.threadPool = new ServerWorkerThread[workerThreads];
     }
 
     void start() {
+
         digestThreadPool.start();
 
         for (int i = 0; i < workerThreads; i++) {
             ServerWorkerThread worker = new ServerWorkerThread(maxQueueSize, memoryManager,
                     (serverBaseId + i), digestThreadPool);
-            executorService.execute(worker);
+            worker.start();
             threadPool[i] = worker;
         }
 
@@ -103,9 +101,6 @@ public class ServerLoadBalancer {
             threadPool[i] = null;
             worker.stop();
         }
-        // with the way ServerWorkerThread is configured, stop should return only once the thread has actually stopped
-        executorService.shutdown();
-        digestThreadPool.stop();
     }
 
     /*

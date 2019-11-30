@@ -7,7 +7,7 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
-public class ClientTest_OneMbPut extends ClientTest {
+class ClientTest_OneMbPut extends ClientTest {
 
     private final int BYTES_IN_CONTENT = 10240;
 
@@ -18,7 +18,7 @@ public class ClientTest_OneMbPut extends ClientTest {
     @Override
     String buildRequestString() {
         return new String("PUT / HTTP/1.1\n" +
-                "Host: iaas.us-phoenix-1.oraclecloud.com\n" +
+                "Host: ClientTest-" + super.clientTestName + "\n" +
                 "Content-Type: application/json\n" +
                 "Connection: keep-alive\n" +
                 "Accept: */*\n" +

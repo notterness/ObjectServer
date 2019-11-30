@@ -6,7 +6,7 @@ import com.oracle.athena.webserver.memory.MemoryManager;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ClientTest_SlowHeaderSend extends ClientTest {
+class ClientTest_SlowHeaderSend extends ClientTest {
 
     ClientTest_SlowHeaderSend(final String testName, final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
         super(testName, client, myServerId, myTargetId, threadCount);
@@ -14,22 +14,21 @@ public class ClientTest_SlowHeaderSend extends ClientTest {
 
     @Override
     String buildRequestString() {
-        String tmp = new String("POST / HTTP/1.1\n" +
-                "Host: iaas.us-phoenix-1.oraclecloud.com\n" +
+        return new String("POST / HTTP/1.1\n" +
+                "Host: ClientTest-" + super.clientTestName + "\n" +
                 "Content-Type: application/json\n" +
                 "Connection: keep-alive\n" +
                 "Accept: */*\n" +
                 "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
                 "Accept-Language: en-us\n" +
                 "Accept-Encoding: gzip, deflate\n" +
+                "Content-MD5: ZsrFNJgrF3p0e7+GyNjAIA==\n" +
                 "Content-Length: 187\n\n" +
                 "{\n" +
                 "  \"cidrBlock\": \"172.16.0.0/16\",\n" +
                 "  \"compartmentId\": \"ocid1.compartment.oc1..aaaaaaaauwjnv47knr7uuuvqar5bshnspi6xoxsfebh3vy72fi4swgrkvuvq\",\n" +
                 "  \"displayName\": \"Apex Virtual Cloud Network\"\n" +
                 "}\n\r\n");
-
-        return tmp;
     }
 
     /*

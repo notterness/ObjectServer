@@ -13,7 +13,9 @@ import java.nio.channels.CompletionHandler;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.ListIterator;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
@@ -178,6 +180,9 @@ abstract public class ConnectionState {
      */
     protected BlockingQueue<BufferState> dataMd5DoneQueue;
 
+
+    protected BlockingQueue<BufferState> encryptBufferQueue;
+
     /*
     ** The following is used to indicate that there was a channel error and the connection should be
     **   closed out.
@@ -230,6 +235,8 @@ abstract public class ConnectionState {
         dataReadDoneQueue = new LinkedBlockingQueue<>(MAX_OUTSTANDING_BUFFERS * 2);
 
         dataMd5DoneQueue = new LinkedBlockingQueue<>(MAX_OUTSTANDING_BUFFERS * 2);
+
+        encryptBufferQueue = new LinkedBlockingQueue<>(MAX_OUTSTANDING_BUFFERS * 2);
 
         contentBytesToRead = new AtomicLong(0);
         contentBytesAllocated = new AtomicLong(0);
@@ -399,7 +406,7 @@ abstract public class ConnectionState {
     /*
     ** Returns if there are outstanding requests for data buffers
      */
-    public boolean needsMoreDataBuffers() {
+    public boolean needsMoreContentBuffers() {
         return (requestedDataBuffers > 0);
     }
 
@@ -419,8 +426,8 @@ abstract public class ConnectionState {
     ** This is the function to add BufferState to the available queue. This means the BufferState are
     **   now ready to have data read into them.
      */
-    public int allocClientReadBufferState() {
-        LOG.info("ServerWorkerThread[" + connStateId + "] allocClientReadBufferState(1) ");
+    public int allocContentReadBuffers() {
+        LOG.info("ServerWorkerThread[" + connStateId + "] allocClontentReadBuffers(1) ");
 
         while (requestedDataBuffers > 0) {
             /*
@@ -433,7 +440,7 @@ abstract public class ConnectionState {
                     allocatedDataBuffers += bufferState.count();
                     allocatedDataBufferQueue.add(bufferState);
 
-                    LOG.info("ServerWorkerThread[" + connStateId + "] allocClientReadBufferState(2) allocatedDataBuffers: " + allocatedDataBuffers);
+                    LOG.info("ServerWorkerThread[" + connStateId + "] allocContentReadBuffers(2) allocatedDataBuffers: " + allocatedDataBuffers);
 
                     /*
                     ** Update the Content information if this is a server connection. This is keeping track of how many
@@ -645,6 +652,8 @@ abstract public class ConnectionState {
         dataBufferDigestCompleted.set(0);
         dataBufferDigestSent.set(0);
 
+        dataBufferReadsCompleted.set(0);
+
         httpParsingError.set(false);
         md5Digest = null;
     }
@@ -675,6 +684,11 @@ abstract public class ConnectionState {
 
         LOG.info("ConnectionState[" + connStateId + "] dataReadCompleted() outstandingReadCount: " + readCount);
 
+        /*
+        ** Since this is executing under the context of a different thread, there
+        **   is the possibility that the connection is sitting on the delayed wakeup queue.
+        **   Move it to the execution queue instead of waiting for the timeout.
+         */
         addToWorkQueue(false);
     }
 
@@ -700,22 +714,19 @@ abstract public class ConnectionState {
          */
         long totalBytesRead = contentBytesRead.addAndGet(bytesRead);
 
-        try {
-            dataReadDoneQueue.put(bufferState);
+       if (dataReadDoneQueue.offer(bufferState)) {
             //bufferState.setReadState(BufferStateEnum.READ_DONE);
             readCompletedCount = dataBufferReadsCompleted.incrementAndGet();
-        } catch (InterruptedException int_ex) {
+        } else {
             /*
              ** TODO: This is an error case and the connection needs to be closed
              */
-            LOG.info("dataReadCompleted(" + connStateId + ") " + int_ex.getMessage());
+            LOG.info("addDataBuffer[" + connStateId + "] offer() failed");
             readCompletedCount = dataBufferReadsCompleted.get();
         }
 
         LOG.info("ConnectionState[" + connStateId + "] addDataBuffer() readCompletedCount: " + readCompletedCount +
                 " contentBytesRead: " + totalBytesRead);
-
-        determineNextContentRead();
     }
 
 
@@ -724,20 +735,33 @@ abstract public class ConnectionState {
     ** This returns the number of data buffer reads that have completed (these are the reads to bring in the content)
      */
     public int getDataBufferReadsCompleted() {
-        return dataBufferReadsCompleted.get();
+        return dataReadDoneQueue.size();
     }
 
     public void resetDataBufferReadsCompleted() {
         dataBufferReadsCompleted.set(0);
     }
 
-    public int getDataBufferDigestCompleted() {
-        return dataBufferDigestCompleted.get();
+    /*
+    ** This checks if all the buffers that had reads into them have been processed
+    **   through the digest calculator and all the content has been read.
+    ** It also checks to make sure the md5CalculateComplete() routine was not already
+    **   called by checking the contentComplete boolean.
+     */
+    public boolean getDataBufferDigestCompleted() {
+        LOG.info("ConnectionState[" + connStateId + "] getDataBufferDigestCompleted() dataBufferDigestCompleted: " + dataBufferDigestCompleted.get() +
+                " dataBufferReadsCompleted: " + dataBufferReadsCompleted.get() +
+                " contentAllRead: " + contentAllRead.get());
+
+        return (contentAllRead.get() &&
+                (dataBufferDigestCompleted.get() == dataBufferReadsCompleted.get()) &&
+                !digestComplete.get());
     }
 
     public int getDataBufferDigestSent() {
         return dataBufferDigestSent.get();
     }
+
     /*
     ** This method determines what to do next with content buffers. It determines how much of the
     **   data being sent has aleady been read in and determines how many buffers (if any) are needed
@@ -762,15 +786,16 @@ abstract public class ConnectionState {
             buffersNeeded = 0;
         }
 
+        int outstandingReads = outstandingDataReadCount.get();
+
         LOG.info("ConnectionState[" + connStateId + "] determineNextContentRead() buffersNeeded: " + buffersNeeded +
-                " allocatedDataBuffers: " + allocatedDataBuffers + " requestedDataBuffers: " + requestedDataBuffers);
+                " allocatedDataBuffers: " + allocatedDataBuffers + " requestedDataBuffers: " + requestedDataBuffers +
+                " outstandingReads: " + outstandingReads);
 
         if (buffersNeeded > 0) {
             /*
             ** How many buffers are outstanding waiting for reads to complete?
              */
-            int outstandingReads = outstandingDataReadCount.get();
-
             if (outstandingReads < OUTSTANDING_READ_ALLOC_POINT) {
                 requestedDataBuffers += buffersNeeded;
             }
@@ -780,7 +805,6 @@ abstract public class ConnectionState {
             **   and there are no allocated data buffers waiting to start reads, then we can determine how
             **   much data is actually remaining to be read.
              */
-            int outstandingReads = outstandingDataReadCount.get();
             if (outstandingReads == 0) {
                 long actualBytesRead = contentBytesRead.get();
                 if (actualBytesRead > bytesToRead) {
@@ -789,6 +813,10 @@ abstract public class ConnectionState {
                      */
                     actualBytesRead = bytesToRead;
                 }
+
+                LOG.info("ConnectionState[" + connStateId + "] determineNextContentRead() actualBytesRead: " +
+                        actualBytesRead + " bytesToRead: " + bytesToRead);
+
 
                 long remainingToRead = bytesToRead - actualBytesRead;
                 if (remainingToRead == 0) {
@@ -804,6 +832,9 @@ abstract public class ConnectionState {
                      **   500 bytes were read in). So, this means that more buffers are required.
                      */
                     buffersNeeded = (int) (remainingToRead / MemoryManager.MEDIUM_BUFFER_SIZE);
+                    if ((remainingToRead % MemoryManager.MEDIUM_BUFFER_SIZE) != 0) {
+                        buffersNeeded++;
+                    }
                     if (buffersNeeded > MAX_OUTSTANDING_BUFFERS) {
                         buffersNeeded = MAX_OUTSTANDING_BUFFERS;
                     }
@@ -828,6 +859,22 @@ abstract public class ConnectionState {
 
     public int dataReadsPending() {
         return outstandingDataReadCount.get();
+    }
+
+    public boolean hasAllConnectionProcessingCompleted() {
+        /*
+        ** First check if there was an error
+         */
+
+        /*
+        ** Check if all the data has been read and the MD5 calculation has
+        **   completed
+         */
+        if (contentAllRead.get() && digestComplete.get()) {
+            return true;
+        }
+
+        return false;
     }
 
     /*
@@ -962,38 +1009,73 @@ abstract public class ConnectionState {
         md5Digest.digestByteBuffer(byteBuffer);
     }
 
+    /*
+    **  TODO - This does not need to be its own state and instead could take place on the
+    **         dataReadCompleted() callback.
+    */
     public void sendBuffersToMd5Worker() {
-        BufferState md5ReadyBuffers[] = new BufferState[0];
-        md5ReadyBuffers = dataReadDoneQueue.toArray(md5ReadyBuffers);
+        List<BufferState> md5ReadyBuffers = new ArrayList<>();
+        int bufferCount = dataReadDoneQueue.drainTo(md5ReadyBuffers);
+        LOG.info("ConnectionState[" + connStateId + "] sendBuffersToMd5Worker() " + bufferCount);
 
         for (BufferState bufferState : md5ReadyBuffers) {
-            dataReadDoneQueue.remove(bufferState);
-            dataBufferReadsCompleted.decrementAndGet();
-            workerThread.addServerDigestWork(bufferState);
+            LOG.info("ConnectionState[" + connStateId + "] sendBuffersToMd5Worker(1)");
             bufferState.setBufferState(BufferStateEnum.DIGEST_WAIT);
             dataBufferDigestSent.incrementAndGet();
+            workerThread.addServerDigestWork(bufferState);
+        }
+
+        /*
+        ** Since this is where the dataReadDoneQueue is processed, need to check if there
+        **   are more reads required.
+         */
+        if (!contentAllRead.get()) {
+            determineNextContentRead();
         }
     }
 
     public void md5CalculateComplete() {
         String dataDigestString = md5Digest.getFinalDigest();
-        LOG.info("md5Digest " + dataDigestString );
+        LOG.info("ConnectionState[" + connStateId + "] Computed md5Digest " + dataDigestString );
         digestComplete.set(true);
     }
 
+    /*
+    ** This is called back from one of the ServerDigestThreads when the MD5 calculation
+    **   is completed for a BufferState.
+     */
     public void md5WorkerCallback(BufferState bufferState) {
         dataMd5DoneQueue.add(bufferState);
+
+        /*
+        ** Since this is executing under the context of a different thread, there
+        **   is the possibility that the connection is sitting on the delayed wakeup queue.
+        **   Move it to the execution queue instead of waiting for the timeout.
+         */
+        addToWorkQueue(false);
     }
 
-    void md5BufferWorkComplete() {
-        BufferState[] md5DoneArray = new BufferState[0];
-        md5DoneArray = dataMd5DoneQueue.toArray(md5DoneArray);
+    boolean hasMd5CompleteBuffers() {
+        return (dataMd5DoneQueue.size() > 0);
+    }
 
-        for (BufferState bufferState : md5DoneArray) {
+    /*
+    ** The following is used to pull BufferState off the MD5 digest complete queue
+    **   and move them to the next processing queue.
+     */
+    void md5BufferWorkComplete() {
+        List<BufferState> md5DoneList = new ArrayList<BufferState>();
+        dataMd5DoneQueue.drainTo(md5DoneList);
+
+        for (BufferState bufferState : md5DoneList) {
             if (bufferState.getBufferState() == BufferStateEnum.DIGEST_WAIT) {
                 dataBufferDigestCompleted.incrementAndGet();
                 dataBufferDigestSent.decrementAndGet();
                 bufferState.setBufferState(BufferStateEnum.DIGEST_DONE);
+
+                encryptBufferQueue.offer(bufferState);
+            } else {
+
             }
         }
     }
@@ -1002,8 +1084,8 @@ abstract public class ConnectionState {
         return digestComplete.get();
     }
 
-    boolean hasMd5CompleteBuffers() {
-        return dataMd5DoneQueue.size() > dataBufferDigestCompleted.get();
+    int buffersOnEncryptQueue() {
+        return encryptBufferQueue.size();
     }
 
     /*

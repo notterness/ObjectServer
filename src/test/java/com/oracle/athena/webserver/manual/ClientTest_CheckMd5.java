@@ -6,7 +6,7 @@ import com.oracle.athena.webserver.memory.MemoryManager;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ClientTest_CheckMd5 extends ClientTest {
+class ClientTest_CheckMd5 extends ClientTest {
 
     private final int BYTES_IN_CONTENT = 1024;
 
@@ -52,7 +52,7 @@ public class ClientTest_CheckMd5 extends ClientTest {
     @Override
     String buildRequestString(final String Md5_Digest) {
         return new String("PUT / HTTP/1.1\n" +
-                "Host: iaas.us-phoenix-1.oraclecloud.com\n" +
+                "Host: ClientTest-" + super.clientTestName + "\n" +
                 "Content-Type: application/json\n" +
                 "Connection: keep-alive\n" +
                 "Accept: */*\n" +
