@@ -418,7 +418,7 @@ abstract public class ConnectionState {
         requestedDataBuffers++;
     }
 
-    private BufferState allocateContentDataBuffers() {
+    public BufferState allocateContentDataBuffers() {
         return bufferStatePool.allocBufferState(this, BufferStateEnum.READ_DATA_FROM_CHAN, MemoryManager.MEDIUM_BUFFER_SIZE);
     }
 

@@ -52,16 +52,37 @@ public class SSLContentReadPipelineMgr extends ConnectionPipelineMgr {
         return StateQueueResult.STATE_RESULT_WAIT;
     };
 
-    private Function<WebServerSSLConnState, StateQueueResult> contentReadConnFinished = wsConn ->{
+    private Function<WebServerSSLConnState, StateQueueResult> contentReadCloseConn = wsConn ->{
         wsConn.releaseContentBuffers();
+        wsConn.startSSLClose();
+        return StateQueueResult.STATE_RESULT_CONTINUE;
+    };
+
+    private Function<WebServerSSLConnState, StateQueueResult> sslHandshakeAllocBuffers = wsConn -> {
+        wsConn.allocSSLHandshakeBuffers();
+        if (wsConn.isSSLBuffersNeeded() == true) {
+            return  StateQueueResult.STATE_RESULT_WAIT;
+        }
+        return StateQueueResult.STATE_RESULT_CONTINUE;
+    };
+
+    private Function<WebServerSSLConnState, StateQueueResult> sslHandshakeExec = wsConn -> {
+        wsConn.doSSLHandshake();
+        return StateQueueResult.STATE_RESULT_REQUEUE;
+    };
+
+    private Function<WebServerSSLConnState, StateQueueResult> contentReadConnFinished = wsConn -> {
         initialStage = true;
+        wsConn.freeSSLHandshakeBuffers();
         wsConn.reset();
         return StateQueueResult.STATE_RESULT_FREE;
     };
 
+
     private Function<WebServerSSLConnState, StateQueueResult> contentReadSetNextPipeline = wsConn -> {
         initialStage = true;
         wsConn.resetRequestedDataBuffers();
+        wsConn.freeSSLHandshakeBuffers();
         wsConn.resetBuffersWaiting();
         wsConn.resetDataBufferReadsCompleted();
         wsConn.resetResponses();
@@ -127,6 +148,10 @@ public class SSLContentReadPipelineMgr extends ConnectionPipelineMgr {
         connectionStateMachine.addStateEntry(ConnectionStateEnum.RELEASE_CONTENT_BUFFERS, new StateEntry<>(contentReadReleaseBuffers));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.MD5_CALCULATE, new StateEntry<>(contentCalculateMd5));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.MD5_CALCULATE_COMPLETE, new StateEntry<>(contentMd5Complete));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.UNWRAP_DATA_BUFFER, new StateEntry<>(contentReadUnwrap));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.SSL_CONN_CLOSE, new StateEntry<>(contentReadCloseConn));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.SSL_ALLOC_BUFFERS, new StateEntry<>(sslHandshakeAllocBuffers));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.SSL_HANDSHAKE, new StateEntry<>(sslHandshakeExec));
     }
 
     /*
@@ -185,8 +210,9 @@ public class SSLContentReadPipelineMgr extends ConnectionPipelineMgr {
          **   reads. The channel failure will be set in the PROCESS_READ_ERROR state.
          */
         if (connectionState.hasChannelFailed() && connectionState.getDataBufferDigestSent() == 0) {
-            return ConnectionStateEnum.CONN_FINISHED;
+            return ConnectionStateEnum.SSL_CONN_CLOSE;
         }
+
 
         if (connectionState.getDataBufferReadsCompleted() > 0) {
             return ConnectionStateEnum.MD5_CALCULATE;
@@ -220,8 +246,21 @@ public class SSLContentReadPipelineMgr extends ConnectionPipelineMgr {
          **   steps for dealing with user data are added it is.
          */
         if (connectionState.finalResponseSent()) {
+            return ConnectionStateEnum.SSL_CONN_CLOSE;
+        }
+
+        if (connectionState.isSSLBuffersNeeded()) {
+            return ConnectionStateEnum.SSL_ALLOC_BUFFERS;
+        }
+
+        if (connectionState.isSSLHandshakeSuccess()) {
             return ConnectionStateEnum.CONN_FINISHED;
         }
+
+        if (connectionState.isSSLHandshakeRequired()){
+            return ConnectionStateEnum.SSL_HANDSHAKE;
+        }
+
 
         /*
          ** First setup to perform the content reads. This is required since the buffer used to read in the
