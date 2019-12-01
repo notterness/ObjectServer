@@ -4,13 +4,6 @@ import com.google.common.hash.Hashing;
 import com.google.common.io.BaseEncoding;
 import com.oracle.pic.casper.common.exceptions.BadRequestException;
 import com.oracle.pic.casper.common.exceptions.ContentMD5UnmatchedException;
-import com.oracle.pic.casper.common.exceptions.InvalidMd5Exception;
-import com.oracle.pic.casper.webserver.api.common.ChecksumHelper;
-import com.oracle.pic.casper.webserver.api.common.HttpContentHelpers;
-import com.oracle.pic.casper.webserver.api.common.HttpHeaderHelpers;
-import com.oracle.pic.casper.webserver.api.common.HttpMatchHelpers;
-import com.oracle.pic.casper.webserver.api.v2.CasperApiV2;
-import io.vertx.core.http.HttpServerRequest;
 import org.apache.commons.codec.binary.Hex;
 import org.eclipse.jetty.http.BadMessageException;
 import org.eclipse.jetty.http.HostPortHttpField;
@@ -20,13 +13,10 @@ import org.eclipse.jetty.http.HttpStatus;
 import java.util.*;
 
 import org.glassfish.jersey.internal.util.collection.StringKeyIgnoreCaseMultivaluedMap;
-import org.glassfish.jersey.server.ContainerRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.core.MultivaluedMap;
-
-import static javax.measure.unit.NonSI.BYTE;
 
 public class CasperHttpInfo {
 
@@ -215,9 +205,13 @@ public class CasperHttpInfo {
     private String etagRound;
 
     /*
-     ** This comes from the "Content-MD5" header (CONTENT_MD5)
+     ** This comes from the "Content-MD5" header (CONTENT_MD5). If the validation of
+     **   the passed in Content-MD5 header fails, expectedMd5 will be set to null. There
+     **   is the case that there is no "Content-MD5" header in which case, md5parsed will
+     **   be set to false;
      */
     private String expectedMD5;
+    private boolean md5parsed;
 
     /*
     ** This comes from the "x-vcn-id" header (X_VCN_ID)
@@ -260,6 +254,7 @@ public class CasperHttpInfo {
 
         httpMethod = HttpMethodEnum.INVALID_METHOD;
         expectedMD5 = null;
+        md5parsed = false;
 
         /*
         ** Create a map of the HTTP methods to make the parsing easier
@@ -315,6 +310,7 @@ public class CasperHttpInfo {
 
         opcRequestId = null;
         expectedMD5 = null;
+        md5parsed = false;
 
         storageTier = "Standard";
 
@@ -495,7 +491,6 @@ public class CasperHttpInfo {
 
         vcnId = vcnIDFromRequest();
         vcnDebugId = getHeaderString(VCN_ID_CASPER_DEBUG_HEADER);
-
     }
 
     /*
@@ -506,9 +501,11 @@ public class CasperHttpInfo {
     private String getContentMD5Header() {
         String md5value = getHeaderString(CONTENT_MD5);
         if (md5value == null || md5value.isEmpty()) {
+            md5parsed = false;
             return null;
         }
 
+        md5parsed = true;
         try {
             byte[] bytes = BaseEncoding.base64().decode(md5value);
             if (bytes.length != 16) {
@@ -516,7 +513,7 @@ public class CasperHttpInfo {
                         "' was not the correct length after base-64 decoding");
                 return null;
             } else {
-                LOG.info("expectedMD5: " + md5value);
+                //LOG.info("expectedMD5: " + md5value);
             }
         } catch (IllegalArgumentException iaex) {
             LOG.warn("The value of the Content-MD5 header '" + md5value +
@@ -563,13 +560,35 @@ public class CasperHttpInfo {
      *
      * @param computedMd5 - The MD5 value computed from the content data read in.
      */
-    public void checkContentMD5(String computedMd5) {
+    public boolean checkContentMD5(String computedMd5) {
+        if ((md5parsed == false) || (md5Override != null))
+        {
+            LOG.warn("checkContentMd5() [" + connectionState.getConnStateId() + "] md5parsed: " + md5parsed +
+                    " md5Override: " + md5Override);
+            return true;
+        }
+
         if (expectedMD5 != null) {
             if (!expectedMD5.equals(computedMd5)) {
-                throw new ContentMD5UnmatchedException("The Content-MD5 you specified did not match what was received. expected: " +
+                LOG.warn("Content-MD5 [" + connectionState.getConnStateId() +  "] did not match computed. expected: " +
                         expectedMD5 + " computed: " + computedMd5);
+
+                parseFailureCode = HttpStatus.UNPROCESSABLE_ENTITY_422;
+                parseFailureReason = HttpStatus.getMessage(parseFailureCode);
+                connectionState.setHttpParsingError();
+                return false;
             }
+        } else {
+            LOG.warn("Content-MD5 [" + connectionState.getConnStateId() +  "] passed in was invalid. computed: " +
+                    computedMd5);
+            parseFailureCode = HttpStatus.BAD_REQUEST_400;
+            parseFailureReason = HttpStatus.getMessage(parseFailureCode);
+            connectionState.setHttpParsingError();
+            return false;
         }
+
+        LOG.warn("checkContentMd5() [" + connectionState.getConnStateId() +  "] passed");
+        return true;
     }
 
     private static String computeBase64MD5(byte[] bytes) {

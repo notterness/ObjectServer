@@ -86,14 +86,14 @@ public class StringChunk {
          ** End of buffer checking
          */
         if (currentPosition == remaining) {
-            LOG.info("StringChunk getRemainingBuffer() null");
+            //LOG.info("StringChunk getRemainingBuffer() null");
             return null;
         }
 
         ByteBuffer bb = initialBuffer.slice();
 
-        LOG.info("StringChunk position: " + bb.position() + " limit: " + bb.limit() +
-                " remaining: " + bb.remaining());
+        //LOG.info("StringChunk position: " + bb.position() + " limit: " + bb.limit() +
+        //        " remaining: " + bb.remaining());
 
         return bb;
     }

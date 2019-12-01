@@ -4,18 +4,18 @@ import com.oracle.athena.webserver.connectionstate.BufferState;
 
 import java.util.concurrent.BlockingQueue;
 
-public class ServerDigestThread extends ComputeThread {
+public class EncryptThread extends ComputeThread {
 
-    ServerDigestThread(final BlockingQueue<BufferState> workQueue, int threadId) {
+    EncryptThread(final BlockingQueue<BufferState> workQueue, int threadId) {
         super(workQueue, threadId);
     }
 
     @Override
     void performComputeTask(BufferState bufferState) {
         /*
-         ** compute the digest for the buffer.
+         ** Encrypt the buffer while copying it to a Chunk for eventual writing out
+         **   to the Storage Server.
          */
-        bufferState.updateBufferDigest();
     }
 
     @Override
@@ -23,7 +23,7 @@ public class ServerDigestThread extends ComputeThread {
         /*
          **  this call queues the buffer back to the server worker. Changes to the state are made on that thread.
          */
-        bufferState.bufferCompleteDigestCb();
+        bufferState.bufferEncryptCompleteCb();
     }
 
 }

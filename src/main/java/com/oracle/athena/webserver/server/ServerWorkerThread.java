@@ -38,6 +38,7 @@ public class ServerWorkerThread implements Runnable {
     private MemoryManager memoryManager;
 
     private ServerDigestThreadPool digestThreadPool;
+    private EncryptThreadPool encryptThreadPool;
 
     private BlockingQueue<ConnectionState> workQueue;
     private BlockingQueue<ConnectionState> timedWaitQueue;
@@ -69,13 +70,15 @@ public class ServerWorkerThread implements Runnable {
 
 
     public ServerWorkerThread(final int queueSize, final MemoryManager memoryManager, final int threadId,
-                              final ServerDigestThreadPool digestThreadPool) {
+                              final ServerDigestThreadPool digestThreadPool,
+                              final EncryptThreadPool encryptThreadPool) {
 
         maxQueueSize = queueSize;
 
         this.memoryManager = memoryManager;
         this.threadId = threadId;
         this.digestThreadPool = digestThreadPool;
+        this.encryptThreadPool = encryptThreadPool;
 
         queueMutex = new ReentrantLock();
         queueSignal = queueMutex.newCondition();
@@ -149,8 +152,8 @@ public class ServerWorkerThread implements Runnable {
     public void addToWorkQueue(final ConnectionState work) {
         queueMutex.lock();
         try {
-            LOG.info("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue() onExecutionQueue: " + work.isOnWorkQueue() +
-                    " onTimedWaitQueue: " + work.isOnTimedWaitQueue());
+            //LOG.info("ConnectionState[" + work.getConnStateId() + "] addToWorkQueue() onExecutionQueue: " + work.isOnWorkQueue() +
+            //        " onTimedWaitQueue: " + work.isOnTimedWaitQueue());
 
             if (!work.isOnWorkQueue()) {
                 if (work.isOnTimedWaitQueue()) {
@@ -178,8 +181,8 @@ public class ServerWorkerThread implements Runnable {
     public void addToDelayedQueue(final ConnectionState work) {
         queueMutex.lock();
         try {
-            LOG.info("ConnectionState[" + work.getConnStateId() + "] addToDelayedQueue() onExecutionQueue: " + work.isOnWorkQueue() +
-                    " onTimedWaitQueue: " + work.isOnTimedWaitQueue());
+            //LOG.info("ConnectionState[" + work.getConnStateId() + "] addToDelayedQueue() onExecutionQueue: " + work.isOnWorkQueue() +
+            //        " onTimedWaitQueue: " + work.isOnTimedWaitQueue());
 
             if (!work.isOnWorkQueue() && !work.isOnTimedWaitQueue()) {
                 if (!timedWaitQueue.offer(work)) {
@@ -201,13 +204,13 @@ public class ServerWorkerThread implements Runnable {
         queueMutex.lock();
         try {
             if (workQueue.remove(work)) {
-                LOG.info("ConnectionState[" + work.getConnStateId() + "] removeFromQueue() workQueue");
+                //LOG.info("ConnectionState[" + work.getConnStateId() + "] removeFromQueue() workQueue");
                 work.markRemovedFromQueue(false);
             } else if (timedWaitQueue.remove(work)) {
-                LOG.info("ConnectionState[" + work.getConnStateId() + "] removeFromQueue() timeWaitQueue");
+                //LOG.info("ConnectionState[" + work.getConnStateId() + "] removeFromQueue() timeWaitQueue");
                 work.markRemovedFromQueue(true);
             } else {
-                LOG.info("ConnectionState[" + work.getConnStateId() + "] removeFromQueue() not on any queue");
+                LOG.warn("ConnectionState[" + work.getConnStateId() + "] removeFromQueue() not on any queue");
             }
         } finally {
             queueMutex.unlock();
@@ -261,7 +264,7 @@ public class ServerWorkerThread implements Runnable {
                     if (workQueued || queueSignal.await(100, TimeUnit.MILLISECONDS)) {
                         int drainedCount = workQueue.drainTo(connections, MAX_EXEC_WORK_LOOP_COUNT);
                         for (ConnectionState connState : connections) {
-                            LOG.info("ConnectionState[" + connState.getConnStateId() + "] pulled from workQueue");
+                            //LOG.info("ConnectionState[" + connState.getConnStateId() + "] pulled from workQueue");
                             connState.markRemovedFromQueue(false);
                         }
 
@@ -293,7 +296,8 @@ public class ServerWorkerThread implements Runnable {
                     try {
                         if ((work = timedWaitQueue.peek()) != null) {
                             if (work.hasWaitTimeElapsed()) {
-                                LOG.info("ConnectionState[" + work.getConnStateId() + "] pulled from timedWaitQueue");
+                                //?:q!
+                                // ;;q:LOG.info("ConnectionState[" + work.getConnStateId() + "] pulled from timedWaitQueue");
                                 timedWaitQueue.remove(work);
                                 work.markRemovedFromQueue(true);
                             } else {
@@ -318,7 +322,11 @@ public class ServerWorkerThread implements Runnable {
     }
 
     public void addServerDigestWork(BufferState bufferState) {
-        digestThreadPool.addDigestWorkToThread(bufferState);
+        digestThreadPool.addComputeWorkToThread(bufferState);
+    }
+
+    public void addEncryptWork(BufferState bufferState) {
+        encryptThreadPool.addComputeWorkToThread(bufferState);
     }
 
 }

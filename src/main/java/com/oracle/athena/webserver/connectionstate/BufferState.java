@@ -166,9 +166,19 @@ public class BufferState {
     }
 
     /*
+    ** The following is the callback made by the Md5 digest thread when the computation has
+    **   been completed and the BufferState is no longer owned by that thread.
      */
     public void bufferCompleteDigestCb() {
        connState.md5WorkerCallback(this);
+    }
+
+    /*
+     ** The following is the callback made by the encryption thread when the encryption has
+     **   been completed and the BufferState is no longer owned by that thread.
+     */
+    public void bufferEncryptCompleteCb() {
+        connState.encryptWorkerCallback(this);
     }
 
     private void updateCount() {

@@ -185,7 +185,7 @@ public class WebServer {
         sslServerWorkHandler = new ServerSSLLoadBalancer(flavor, numConnectionsPerWorkerThread, numWorkerThreads,
                 memoryManager, sslWebServerClientIdBase);
 
-        http_server = new ServerChannelLayer(serverWorkHandler, listenPort + ServerChannelLayer.HTTP_PORT_OFFSET,
+        http_server = new ServerChannelLayer(serverWorkHandler, listenPort,
                 webServerClientIdBase);
         https_server = new ServerChannelLayer(sslServerWorkHandler, listenPort + ServerChannelLayer.HTTPS_PORT_OFFSET,
                 sslWebServerClientIdBase);

@@ -112,6 +112,13 @@ public class WebServerConnState extends ConnectionState {
     protected CasperHttpInfo casperHttpInfo;
 
     /*
+    ** This is set after the Md5 digest has completed and the comparison to the passed in
+    **   "Content-MD5" header is made.
+     */
+    protected boolean contentHasValidMd5Digest;
+
+
+    /*
      ** There is an ByteBufferHttpParser per Connection since each parser keeps its own state.
      */
     protected ByteBufferHttpParser httpParser;
@@ -167,6 +174,8 @@ public class WebServerConnState extends ConnectionState {
         httpHeaderParsed = new AtomicBoolean(false);
 
         outOfResourcesResponse = false;
+
+        contentHasValidMd5Digest = false;
 
         writeConn = null;
     }
@@ -645,6 +654,7 @@ public class WebServerConnState extends ConnectionState {
                 }
             } else {
                 LOG.info("WebServerConnState[" + connStateId + "] header was parsed");
+                casperHttpInfo.parseHeaders();
             }
         }
     }
@@ -660,6 +670,18 @@ public class WebServerConnState extends ConnectionState {
 
         contentBytesToRead.set(contentLength);
     }
+
+    /*
+    ** The following is used to mark the Md5 Calculation complete and validate the digest
+     */
+    public void md5CalculateComplete() {
+        String dataDigestString = md5Digest.getFinalDigest();
+        LOG.info("ConnectionState[" + connStateId + "] Computed md5Digest " + dataDigestString );
+        digestComplete.set(true);
+
+        contentHasValidMd5Digest = casperHttpInfo.checkContentMD5(dataDigestString);
+    }
+
 
     /*
     ** This is used to perform the Embargo checking for this request
@@ -936,6 +958,8 @@ public class WebServerConnState extends ConnectionState {
         //httpParser.resetHttpParser();
         httpParser = null;
         httpParser = new ByteBufferHttpParser(casperHttpInfo);
+
+        contentHasValidMd5Digest = false;
 
         resetHttpReadValues();
         resetContentAllRead();
