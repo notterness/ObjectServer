@@ -9,6 +9,7 @@ import com.oracle.athena.webserver.memory.MemoryManager;
 import java.io.IOException;
 import java.nio.channels.AsynchronousSocketChannel;
 
+import com.oracle.pic.casper.webserver.server.WebServerAuths;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +32,7 @@ public class ServerLoadBalancer {
     protected final static int NUMBER_COMPUTE_THREADS = 1;
 
     protected final WebServerFlavor flavor;
+    protected final WebServerAuths webServerAuths;
     protected final ServerWorkerThread[] threadPool;
     protected final MemoryManager memoryManager;
     protected final int numWorkerThreads;
@@ -73,9 +75,10 @@ public class ServerLoadBalancer {
      **         StorageServer. Since the EncryptThread(s) are CPU intensive, there is a limited
      **         number that are shared between all connections.
      */
-    public ServerLoadBalancer(final WebServerFlavor flavor, final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId) {
+    public ServerLoadBalancer(final WebServerFlavor flavor, final WebServerAuths auths, final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId) {
 
         this.flavor = flavor;
+        this.webServerAuths = auths;
 
         /*
         ** Limit the maximum number of worker threads to 100. That is still probably too many
@@ -126,7 +129,7 @@ public class ServerLoadBalancer {
          */
         WebServerConnState conn;
         for (int i = 0; i < (numWorkerThreads * maxQueueSize); i++) {
-            conn = new WebServerConnState(flavor, connPool, (serverBaseId + i + 1));
+            conn = new WebServerConnState(flavor, webServerAuths, connPool, (serverBaseId + i + 1));
             conn.start();
             connPool.freeConnectionState(conn);
         }
@@ -134,7 +137,7 @@ public class ServerLoadBalancer {
         // also populate the reserved connection pool
         int startingId = serverBaseId + (numWorkerThreads * maxQueueSize) + 1;
         for (int i = 0; i < RESERVED_CONN_COUNT; i++) {
-            conn = new WebServerConnState(flavor, reservedBlockingConnPool, (startingId + i));
+            conn = new WebServerConnState(flavor, webServerAuths, reservedBlockingConnPool, (startingId + i));
             conn.start();
             reservedBlockingConnPool.freeConnectionState(conn);
         }

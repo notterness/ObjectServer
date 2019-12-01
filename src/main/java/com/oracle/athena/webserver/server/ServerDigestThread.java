@@ -4,7 +4,7 @@ import com.oracle.athena.webserver.connectionstate.BufferState;
 
 import java.util.concurrent.BlockingQueue;
 
-public class ServerDigestThread extends ComputeThread {
+class ServerDigestThread extends ComputeThread {
 
     ServerDigestThread(final BlockingQueue<BufferState> workQueue, int threadId) {
         super(workQueue, threadId);

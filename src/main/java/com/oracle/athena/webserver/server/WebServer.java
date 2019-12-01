@@ -84,7 +84,10 @@ public class WebServer {
 
         /*
         ** The following are required to allow the WebServer to perform required operations
-        *
+        **
+        ** TODO: Need to figure out how to get all of this working. Not sure if there are
+        **   special files for the desktop or something else.
+        **
         GlobalSystemPropertiesConfigurer.configure();
 
         final ConfigRegion region = ConfigRegion.fromSystemProperty();
@@ -93,7 +96,7 @@ public class WebServer {
 
         final CasperConfig config = CasperConfig.create(region, ad);
 
-         mapper = ObjectMappers.createCasperObjectMapper();
+        mapper = ObjectMappers.createCasperObjectMapper();
         final JacksonSerDe jacksonSerDe = new JacksonSerDe(mapper);
 
         final StaticHostInfoProvider staticHostInfoProvider = new DefaultStaticHostInfoProvider("web-server", "docker");
@@ -161,6 +164,7 @@ public class WebServer {
         */
 
         memoryManager = new MemoryManager(flavor);
+        WebServerAuths auths = null;
 
         /*
          ** For INTEGRATION_TESTS the number of worker threads is set to 1.
@@ -180,9 +184,9 @@ public class WebServer {
             numConnectionsPerWorkerThread = 100;
             numWorkerThreads = 10;
         }
-        serverWorkHandler = new ServerLoadBalancer(flavor, numConnectionsPerWorkerThread, numWorkerThreads,
+        serverWorkHandler = new ServerLoadBalancer(flavor, auths, numConnectionsPerWorkerThread, numWorkerThreads,
                 memoryManager, webServerClientIdBase);
-        sslServerWorkHandler = new ServerSSLLoadBalancer(flavor, numConnectionsPerWorkerThread, numWorkerThreads,
+        sslServerWorkHandler = new ServerSSLLoadBalancer(flavor, auths, numConnectionsPerWorkerThread, numWorkerThreads,
                 memoryManager, sslWebServerClientIdBase);
 
         http_server = new ServerChannelLayer(serverWorkHandler, listenPort,

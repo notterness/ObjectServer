@@ -6,8 +6,7 @@ import org.slf4j.LoggerFactory;
 public class ServerDigestThreadPool extends ComputeThreadPool {
     private static final Logger LOG = LoggerFactory.getLogger(ServerDigestThreadPool.class);
 
-
-    ServerDigestThreadPool(final int threadCount, final int baseThreadId){
+    public ServerDigestThreadPool(final int threadCount, final int baseThreadId){
         super(threadCount, baseThreadId);
         LOG.error("ServerDigestThreadPool[" + baseThreadId + "] threadCount: " + threadCount);
     }

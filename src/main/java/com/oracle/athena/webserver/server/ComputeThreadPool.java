@@ -31,15 +31,9 @@ abstract class ComputeThreadPool {
 
     }
 
-    public void start () {
-        for (int i = 0; i < threadCount; i++) {
-            ServerDigestThread digestThread = new ServerDigestThread(computeWorkQueue, (baseThreadId + i));
-            digestThread.start();
-            computeThreads[i] = digestThread;
-        }
-    }
+    abstract void start ();
 
-    public void stop () {
+    void stop () {
         for (int i = 0; i < threadCount; i++) {
             computeThreads[i].stop();
         }
