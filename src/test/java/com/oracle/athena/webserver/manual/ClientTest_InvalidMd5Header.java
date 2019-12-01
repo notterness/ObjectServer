@@ -8,7 +8,7 @@ import org.eclipse.jetty.http.HttpStatus;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
-class ClientTest_BadMd5 extends ClientTest {
+class ClientTest_InvalidMd5Header extends ClientTest {
 
     private final int BYTES_IN_CONTENT = 1024;
 
@@ -17,7 +17,7 @@ class ClientTest_BadMd5 extends ClientTest {
     private ByteBuffer dataBuffer;
 
 
-    ClientTest_BadMd5(final String testName, final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
+    ClientTest_InvalidMd5Header(final String testName, final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
         super(testName, client, myServerId, myTargetId, threadCount);
 
         digest = new Md5Digest();
@@ -52,8 +52,9 @@ class ClientTest_BadMd5 extends ClientTest {
     }
 
     /*
-    ** The correct MD5 for the buffer is "Ye3L9i73DeNB8BhgjUXAhA==", note that the
-    **   Content-MD5 value is different. First three characters are replaced by "abc".
+     ** The correct MD5 for the buffer is "Ye3L9i73DeNB8BhgjUXAhA==", note that the
+     **   Content-MD5 value is different. In this test, the passed in Md5 value
+     **   is not 16 bytes, but instead 12. This will cause a parsing error.
      */
     @Override
     String buildRequestString(final String Md5_Digest) {
@@ -65,7 +66,7 @@ class ClientTest_BadMd5 extends ClientTest {
                 "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
                 "Accept-Language: en-us\n" +
                 "Accept-Encoding: gzip, deflate\n" +
-                "Content-MD5: abcL9i73DeNB8BhgjUXAhA==\n" +
+                "Content-MD5: 9i73DeNB8BhgjUXAhA==\n" +
                 "Content-Length: " + BYTES_IN_CONTENT + "\n\n");
     }
 
@@ -106,12 +107,11 @@ class ClientTest_BadMd5 extends ClientTest {
 
     /*
      ** In this test, the full HTTP message is written and then a response is expected from the server.
-     ** The response must have a result code of 422, indicating that the Md5 computation
-     **   did not match the expected value passed in via the "Content-MD5" header.
+     ** The response must have a result code of 400, indicating a bad request.
      */
     @Override
     void targetResponse(final int result, final ByteBuffer readBuffer) {
-        if ((result == 0) && (super.httpStatus ==  HttpStatus.UNPROCESSABLE_ENTITY_422)) {
+        if ((result == 0) && (super.httpStatus ==  HttpStatus.BAD_REQUEST_400)) {
             System.out.println(super.clientTestName + " passed");
         } else {
             System.out.println(super.clientTestName + " failed httpStatus: " + super.httpStatus);
