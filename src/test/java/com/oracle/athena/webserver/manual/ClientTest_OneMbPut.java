@@ -78,9 +78,9 @@ class ClientTest_OneMbPut extends ClientTest {
     void targetResponse(final int result, final ByteBuffer readBuffer) {
         if (result == -1) {
             System.out.println(super.clientTestName + " failed");
+            super.client.setTestFailed(super.clientTestName);
         } else {
             System.out.println(super.clientTestName + " passed");
-            super.client.setTestFailed(super.clientTestName);
         }
 
         statusReceived(result);

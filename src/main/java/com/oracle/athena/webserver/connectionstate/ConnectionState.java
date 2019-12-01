@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.bouncycastle.cms.jcajce.JcaSelectorConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -351,7 +352,7 @@ abstract public class ConnectionState {
     }
 
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        LOG.info("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (connOnDelayedQueue) {
             if (!delayedExecutionQueue) {
                 LOG.warn("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
@@ -427,7 +428,8 @@ abstract public class ConnectionState {
     **   now ready to have data read into them.
      */
     public int allocContentReadBuffers() {
-        LOG.info("ServerWorkerThread[" + connStateId + "] allocClontentReadBuffers(1) ");
+        LOG.info("ServerWorkerThread[" + connStateId + "] allocC:qontentReadBuffers() requestedBuffers: " +
+                requestedDataBuffers);
 
         while (requestedDataBuffers > 0) {
             /*
@@ -439,8 +441,6 @@ abstract public class ConnectionState {
                 if (bufferState != null) {
                     allocatedDataBuffers += bufferState.count();
                     allocatedDataBufferQueue.add(bufferState);
-
-                    LOG.info("ServerWorkerThread[" + connStateId + "] allocContentReadBuffers(2) allocatedDataBuffers: " + allocatedDataBuffers);
 
                     /*
                     ** Update the Content information if this is a server connection. This is keeping track of how many
@@ -748,10 +748,11 @@ abstract public class ConnectionState {
     **   called by checking the contentComplete boolean.
      */
     public boolean getDataBufferDigestCompleted() {
+        /*
         LOG.info("ConnectionState[" + connStateId + "] getDataBufferDigestCompleted() dataBufferDigestCompleted: " + dataBufferDigestCompleted.get() +
                 " dataBufferReadsCompleted: " + dataBufferReadsCompleted.get() +
                 " contentAllRead: " + contentAllRead.get());
-
+        */
         return (contentAllRead.get() &&
                 (dataBufferDigestCompleted.get() == dataBufferReadsCompleted.get()) &&
                 !digestComplete.get());
@@ -1030,12 +1031,6 @@ abstract public class ConnectionState {
         if (!contentAllRead.get()) {
             determineNextContentRead();
         }
-    }
-
-    public void md5CalculateComplete() {
-        String dataDigestString = md5Digest.getFinalDigest();
-        LOG.info("ConnectionState[" + connStateId + "] Computed md5Digest " + dataDigestString );
-        digestComplete.set(true);
     }
 
     /*
