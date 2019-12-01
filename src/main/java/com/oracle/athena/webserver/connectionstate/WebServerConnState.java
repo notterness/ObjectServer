@@ -27,6 +27,12 @@ public class WebServerConnState extends ConnectionState {
     private static final Logger LOG = LoggerFactory.getLogger(WebServerConnState.class);
 
     /*
+    ** The WebServerAuths are setup when the WebServer class in instantiated. They are used
+    **   for all connections.
+     */
+    WebServerAuths webServerAuths;
+
+    /*
      ** The following is needed to allow the ConnectionState to allocate buffers to send responses.
      **
      */
@@ -41,6 +47,7 @@ public class WebServerConnState extends ConnectionState {
     private ContentReadPipelineMgr readPipelineMgr;
     private HttpParsePipelineMgr httpParsePipelineMgr;
     protected OutOfResourcePipelineMgr outOfResourcePipelineMgr;
+    private AuthenticatePipelineMgr authenticatePipelineMgr;
 
     /*
     ** The following variables are used in the ContentReadPipeline class. This is used to determine the
@@ -141,19 +148,20 @@ public class WebServerConnState extends ConnectionState {
     private final ConnectionStatePool<WebServerConnState> connectionStatePool;
 
 
-    public WebServerConnState(final WebServerFlavor flavor, final ConnectionStatePool<WebServerConnState> pool, final int uniqueId) {
+    public WebServerConnState(final WebServerFlavor flavor, final WebServerAuths auths, final ConnectionStatePool<WebServerConnState> pool, final int uniqueId) {
 
         super(uniqueId);
 
-        connectionStatePool = pool;
+        this.connectionStatePool = pool;
+        this.webServerAuths = auths;
 
         if (flavor == WebServerFlavor.STANDARD) {
-            httpReadBufferSize = MemoryManager.MEDIUM_BUFFER_SIZE;
+            this.httpReadBufferSize = MemoryManager.MEDIUM_BUFFER_SIZE;
         } else {
-            httpReadBufferSize = MemoryManager.SMALL_BUFFER_SIZE;
+            this.httpReadBufferSize = MemoryManager.SMALL_BUFFER_SIZE;
         }
 
-        responseBuffer = null;
+        this.responseBuffer = null;
         finalResponseSent = new AtomicBoolean(false);
         dataRequestResponseSendDone = false;
         finalResponseSendDone = false;
@@ -195,6 +203,7 @@ public class WebServerConnState extends ConnectionState {
         httpParsePipelineMgr = new HttpParsePipelineMgr(this);
         readPipelineMgr = new ContentReadPipelineMgr(this);
         outOfResourcePipelineMgr = new OutOfResourcePipelineMgr(this);
+        authenticatePipelineMgr = new AuthenticatePipelineMgr(this);
 
         /*
          ** start with the http manager.
@@ -682,11 +691,20 @@ public class WebServerConnState extends ConnectionState {
         contentHasValidMd5Digest = casperHttpInfo.checkContentMD5(dataDigestString);
     }
 
+    /*
+    ** This is used to return the various steps that authentication goes through and
+    **   there status.
+    **
+    ** TODO: Wire this through
+     */
+    AuthenticateResultEnum getAuthenticateResult() {
+        return AuthenticateResultEnum.INVALID_RESULT;
+    }
 
     /*
     ** This is used to perform the Embargo checking for this request
      */
-    void checkEmbargo(WebServerAuths auths) {
+    void checkEmbargo() {
         final String namespace = casperHttpInfo.getNamespace();
         final String bucket = casperHttpInfo.getBucket();
         final String object = casperHttpInfo.getObject();
@@ -698,7 +716,14 @@ public class WebServerConnState extends ConnectionState {
                 .setBucket(bucket)
                 .setObject(object)
                 .build();
-        auths.getEmbargoV3().enter(embargoV3Operation);
+        webServerAuths.getEmbargoV3().enter(embargoV3Operation);
+    }
+
+    /*
+    ** The performs the authentication for a HTTP request
+     */
+    void authenticateRequest() {
+
     }
 
     /*
@@ -833,7 +858,8 @@ public class WebServerConnState extends ConnectionState {
      }
 
     /*
-    **
+    ** The responseChannelWriteDone is set the true after the status for the channel write
+    **   has been received through the associated write callback.
      */
     boolean getResponseChannelWriteDone() {
         boolean responseWriteCompleted = responseChannelWriteDone.get();

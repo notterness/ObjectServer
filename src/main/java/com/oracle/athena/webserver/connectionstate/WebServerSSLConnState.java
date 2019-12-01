@@ -1,9 +1,9 @@
 package com.oracle.athena.webserver.connectionstate;
 
 import com.oracle.athena.webserver.http.parser.ByteBufferHttpParser;
-import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.server.StatusWriteCompletion;
 import com.oracle.athena.webserver.server.WriteConnection;
+import com.oracle.pic.casper.webserver.server.WebServerAuths;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -30,7 +30,7 @@ public class WebServerSSLConnState extends WebServerConnState {
         SSL_CONN_STATE_HANDSHAKE,
         SSL_CONN_STATE_HTTPS,
         SSL_CONN_STATE_RX_OBJECT,
-        SSL_CONN_STATE_CLOSE;
+        SSL_CONN_STATE_CLOSE
     }
 
     private SSLConnState sslConnState;
@@ -53,9 +53,10 @@ public class WebServerSSLConnState extends WebServerConnState {
     private ConnectionStatePool<WebServerSSLConnState> connectionStatePool;
 
 
-    public WebServerSSLConnState(final WebServerFlavor flavor, final ConnectionStatePool<WebServerSSLConnState> connectionStatePool,
+    public WebServerSSLConnState(final WebServerFlavor flavor, final WebServerAuths auths,
+                                 final ConnectionStatePool<WebServerSSLConnState> connectionStatePool,
                                  SSLContext sslContext, final int uniqueId) {
-        super(flavor, null, uniqueId);
+        super(flavor, auths,null, uniqueId);
         this.connectionStatePool = connectionStatePool;
         this.sslContext = sslContext;
         httpBufferReadsUnwrapNeeded = new AtomicInteger(0);

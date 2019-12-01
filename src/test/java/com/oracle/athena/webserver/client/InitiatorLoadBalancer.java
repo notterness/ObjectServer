@@ -16,7 +16,7 @@ class InitiatorLoadBalancer extends ServerLoadBalancer {
 
     InitiatorLoadBalancer(final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId ){
 
-        super(WebServerFlavor.INTEGRATION_TESTS, queueSize, numWorkerThreads, memoryManager, serverClientId);
+        super(WebServerFlavor.INTEGRATION_TESTS, null, queueSize, numWorkerThreads, memoryManager, serverClientId);
 
         System.out.println("InitiatorLoadBalancer[" + serverClientId + "] workerThreads: " + numWorkerThreads + " maxQueueSize: " + maxQueueSize);
     }

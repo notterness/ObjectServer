@@ -6,7 +6,7 @@ import org.slf4j.LoggerFactory;
 public class EncryptThreadPool extends ComputeThreadPool {
     private static final Logger LOG = LoggerFactory.getLogger(EncryptThreadPool.class);
 
-    EncryptThreadPool(final int threadCount, final int baseThreadId){
+    public EncryptThreadPool(final int threadCount, final int baseThreadId){
         super(threadCount, baseThreadId);
         LOG.error("EncryptThreadPool[" + baseThreadId + "] threadCount: " + threadCount);
     }

@@ -296,8 +296,6 @@ public class ServerWorkerThread implements Runnable {
                     try {
                         if ((work = timedWaitQueue.peek()) != null) {
                             if (work.hasWaitTimeElapsed()) {
-                                //?:q!
-                                // ;;q:LOG.info("ConnectionState[" + work.getConnStateId() + "] pulled from timedWaitQueue");
                                 timedWaitQueue.remove(work);
                                 work.markRemovedFromQueue(true);
                             } else {
