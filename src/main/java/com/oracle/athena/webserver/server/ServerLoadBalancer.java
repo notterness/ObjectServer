@@ -8,8 +8,6 @@ import com.oracle.athena.webserver.memory.MemoryManager;
 
 import java.io.IOException;
 import java.nio.channels.AsynchronousSocketChannel;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.slf4j.Logger;
@@ -25,8 +23,12 @@ public class ServerLoadBalancer {
 
     private static final Logger LOG = LoggerFactory.getLogger(ServerLoadBalancer.class);
 
+    private final static int MAX_WORKER_THREADS = 100;
+    private final static int DIGEST_THREAD_ID_OFFSET = 500;
+    private final static int ENCRYPT_THREAD_ID_OFFSET = 550;
+
     public final static int RESERVED_CONN_COUNT = 2;
-    protected final static int NUMBER_DIGEST_THREADS = 1;
+    protected final static int NUMBER_COMPUTE_THREADS = 1;
 
     protected final WebServerFlavor flavor;
     protected final ServerWorkerThread[] threadPool;
@@ -36,6 +38,7 @@ public class ServerLoadBalancer {
     protected int lastQueueUsed;
     protected final int serverBaseId;
     protected final ServerDigestThreadPool digestThreadPool;
+    protected final EncryptThreadPool encryptThreadPool;
 
     private ConnectionStatePool<WebServerConnState> connPool;
     private ConnectionStatePool<WebServerConnState> reservedBlockingConnPool;
@@ -49,27 +52,67 @@ public class ServerLoadBalancer {
      **
      ** queueSize * numWorkerThreads is the maximum number of concurrent client connections that can
      **   be handled by the server.
+     **
+     ** THREAD POOLS
+     **   There a currently (only three are implemented as of this moment) four thread pool that are
+     **     used to process a connection.
+     **       Worker Thread Pool - A worker thread can process multiple connections at the same time. This is
+     **         the driver of the work required to handle an operation (i.e. a PUT). The connection moves
+     **         through its various stages under the direction of different pipeline managers. For example, there
+     **         is an HttpParsePipelineMgr to handle reading in the HTTP request header and extracting certain
+     **         pieces of information out of it. There is a ContentReadPipelineMgr to handle the PUT operations
+     **         reading of content data and then moving that data through various steps until it is written to
+     **         the Storage Server.
+     **
+     **       ServerDigestThreadPool - This is a number of ComputeThreads that are used to compute the Md5
+     **         digest for a buffer. Since the ServerDigestThread(s) are CPU intensive, there is a limited
+     **         number that are shared between all connections.
+     **
+     **       EncryptThreadPool - This is a number of ComputeThreads that are used to encrypt the data within
+     **         a buffer and place the encrypted data into the Chunk buffer that is used to write out to the
+     **         StorageServer. Since the EncryptThread(s) are CPU intensive, there is a limited
+     **         number that are shared between all connections.
      */
     public ServerLoadBalancer(final WebServerFlavor flavor, final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId) {
 
         this.flavor = flavor;
-        this.numWorkerThreads = numWorkerThreads;
+
+        /*
+        ** Limit the maximum number of worker threads to 100. That is still probably too many
+        **   threads to be running when most systems have far fewer than 100 cores available
+        **   to run workloads on.
+         */
+        if (numWorkerThreads > MAX_WORKER_THREADS) {
+            LOG.info("ServerLoadBalancer[" + serverClientId + "] workerThreads apped at: " + MAX_WORKER_THREADS);
+            this.numWorkerThreads = MAX_WORKER_THREADS;
+        } else {
+            this.numWorkerThreads = numWorkerThreads;
+        }
         this.maxQueueSize = queueSize;
         this.serverBaseId = serverClientId;
         this.memoryManager = memoryManager;
         LOG.info("ServerLoadBalancer[" + serverClientId + "] workerThreads: " + this.numWorkerThreads + " maxQueueSize: " + maxQueueSize);
 
-        this.digestThreadPool = new ServerDigestThreadPool(NUMBER_DIGEST_THREADS, this.serverBaseId);
+        /*
+        ** To uniquely identify the ServerDigestThread(s) and EncryptThread(s), the base Id range
+        **   will start at +500 and +550 from the serverBaseId. There will never be more than
+        **   100 ServerThreads as that is not a very efficient use of worker threads when each one
+        **   is capable of handling hundreds of connections.
+         */
+        this.digestThreadPool = new ServerDigestThreadPool(NUMBER_COMPUTE_THREADS, (this.serverBaseId + DIGEST_THREAD_ID_OFFSET));
+        this.encryptThreadPool = new EncryptThreadPool(NUMBER_COMPUTE_THREADS, (this.serverBaseId + ENCRYPT_THREAD_ID_OFFSET));
+
         this.threadPool = new ServerWorkerThread[this.numWorkerThreads];
     }
 
     void start() {
 
         digestThreadPool.start();
+        encryptThreadPool.start();
 
         for (int i = 0; i < numWorkerThreads; i++) {
             ServerWorkerThread worker = new ServerWorkerThread(maxQueueSize, memoryManager,
-                    (serverBaseId + i), digestThreadPool);
+                    (serverBaseId + i), digestThreadPool, encryptThreadPool);
             worker.start();
             threadPool[i] = worker;
         }
@@ -100,6 +143,10 @@ public class ServerLoadBalancer {
     }
 
     void stop() {
+
+        digestThreadPool.stop();
+        encryptThreadPool.stop();
+
         for (int i = 0; i < numWorkerThreads; i++) {
             ServerWorkerThread worker = threadPool[i];
             threadPool[i] = null;

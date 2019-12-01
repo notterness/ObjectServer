@@ -38,6 +38,7 @@ public class ServerWorkerThread implements Runnable {
     private MemoryManager memoryManager;
 
     private ServerDigestThreadPool digestThreadPool;
+    private EncryptThreadPool encryptThreadPool;
 
     private BlockingQueue<ConnectionState> workQueue;
     private BlockingQueue<ConnectionState> timedWaitQueue;
@@ -69,13 +70,15 @@ public class ServerWorkerThread implements Runnable {
 
 
     public ServerWorkerThread(final int queueSize, final MemoryManager memoryManager, final int threadId,
-                              final ServerDigestThreadPool digestThreadPool) {
+                              final ServerDigestThreadPool digestThreadPool,
+                              final EncryptThreadPool encryptThreadPool) {
 
         maxQueueSize = queueSize;
 
         this.memoryManager = memoryManager;
         this.threadId = threadId;
         this.digestThreadPool = digestThreadPool;
+        this.encryptThreadPool = encryptThreadPool;
 
         queueMutex = new ReentrantLock();
         queueSignal = queueMutex.newCondition();
@@ -319,7 +322,11 @@ public class ServerWorkerThread implements Runnable {
     }
 
     public void addServerDigestWork(BufferState bufferState) {
-        digestThreadPool.addDigestWorkToThread(bufferState);
+        digestThreadPool.addComputeWorkToThread(bufferState);
+    }
+
+    public void addEncryptWork(BufferState bufferState) {
+        encryptThreadPool.addComputeWorkToThread(bufferState);
     }
 
 }

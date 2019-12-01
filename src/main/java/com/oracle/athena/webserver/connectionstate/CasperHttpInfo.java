@@ -579,7 +579,7 @@ public class CasperHttpInfo {
                 return false;
             }
         } else {
-            LOG.warn("Content-MD5 [" + connectionState.getConnStateId() +  "] passed in invalid. computed: " +
+            LOG.warn("Content-MD5 [" + connectionState.getConnStateId() +  "] passed in was invalid. computed: " +
                     computedMd5);
             parseFailureCode = HttpStatus.BAD_REQUEST_400;
             parseFailureReason = HttpStatus.getMessage(parseFailureCode);

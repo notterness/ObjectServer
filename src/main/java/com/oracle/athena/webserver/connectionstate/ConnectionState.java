@@ -1053,6 +1053,25 @@ abstract public class ConnectionState {
     }
 
     /*
+     ** This is called back from one of the EncryptThread(s) when the encryption
+     **   is completed for a BufferState and the encrypted data has been placed
+     **   into the Chunk buffer.
+     */
+    public void encryptWorkerCallback(BufferState bufferState) {
+
+        /*
+         ** Since this is executing under the context of a different thread, there
+         **   is the possibility that the connection is sitting on the delayed wakeup queue.
+         **   Move it to the execution queue instead of waiting for the timeout.
+         */
+        addToWorkQueue(false);
+    }
+
+    boolean hasEncryptCompleteBuffers() {
+        return (false);
+    }
+
+    /*
     ** The following is used to pull BufferState off the MD5 digest complete queue
     **   and move them to the next processing queue.
      */
