@@ -5,32 +5,27 @@ import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.server.StatusWriteCompletion;
 import com.oracle.athena.webserver.server.WriteConnection;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
-import com.oracle.pic.casper.webserver.api.auth.CasperOperation;
-import com.oracle.pic.casper.webserver.api.ratelimit.EmbargoV3Operation;
 import com.oracle.pic.casper.webserver.server.WebServerAuths;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.eclipse.jetty.http.HttpStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.ListIterator;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 public class WebServerConnState extends ConnectionState {
 
     private static final Logger LOG = LoggerFactory.getLogger(WebServerConnState.class);
-
-    /*
-    ** The WebServerAuths are setup when the WebServer class in instantiated. They are used
-    **   for all connections.
-     */
-    WebServerAuths webServerAuths;
 
     /*
      ** The following is needed to allow the ConnectionState to allocate buffers to send responses.
@@ -153,7 +148,6 @@ public class WebServerConnState extends ConnectionState {
         super(uniqueId);
 
         this.connectionStatePool = pool;
-        this.webServerAuths = auths;
 
         if (flavor == WebServerFlavor.STANDARD) {
             this.httpReadBufferSize = MemoryManager.MEDIUM_BUFFER_SIZE;
@@ -186,11 +180,6 @@ public class WebServerConnState extends ConnectionState {
         contentHasValidMd5Digest = false;
 
         writeConn = null;
-    }
-
-
-    public void start() {
-        super.start();
 
         /*
          ** The CasperHttpInfo keeps track of the details of a particular
@@ -203,7 +192,7 @@ public class WebServerConnState extends ConnectionState {
         httpParsePipelineMgr = new HttpParsePipelineMgr(this);
         readPipelineMgr = new ContentReadPipelineMgr(this);
         outOfResourcePipelineMgr = new OutOfResourcePipelineMgr(this);
-        authenticatePipelineMgr = new AuthenticatePipelineMgr(this);
+        authenticatePipelineMgr = new AuthenticatePipelineMgr(this, casperHttpInfo, auths);
 
         /*
          ** start with the http manager.
@@ -689,41 +678,6 @@ public class WebServerConnState extends ConnectionState {
         digestComplete.set(true);
 
         contentHasValidMd5Digest = casperHttpInfo.checkContentMD5(dataDigestString);
-    }
-
-    /*
-    ** This is used to return the various steps that authentication goes through and
-    **   there status.
-    **
-    ** TODO: Wire this through
-     */
-    AuthenticateResultEnum getAuthenticateResult() {
-        return AuthenticateResultEnum.INVALID_RESULT;
-    }
-
-    /*
-    ** This is used to perform the Embargo checking for this request
-     */
-    void checkEmbargo() {
-        final String namespace = casperHttpInfo.getNamespace();
-        final String bucket = casperHttpInfo.getBucket();
-        final String object = casperHttpInfo.getObject();
-
-        final EmbargoV3Operation embargoV3Operation = EmbargoV3Operation.builder()
-                .setApi(EmbargoV3Operation.Api.V2)
-                .setOperation(CasperOperation.PUT_OBJECT)
-                .setNamespace(namespace)
-                .setBucket(bucket)
-                .setObject(object)
-                .build();
-        webServerAuths.getEmbargoV3().enter(embargoV3Operation);
-    }
-
-    /*
-    ** The performs the authentication for a HTTP request
-     */
-    void authenticateRequest() {
-
     }
 
     /*

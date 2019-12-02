@@ -3,37 +3,27 @@ package com.oracle.athena.webserver.connectionstate;
 import com.oracle.athena.webserver.statemachine.StateEntry;
 import com.oracle.athena.webserver.statemachine.StateMachine;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
+import com.oracle.pic.casper.webserver.api.auth.CasperOperation;
+import com.oracle.pic.casper.webserver.api.ratelimit.EmbargoV3Operation;
+import com.oracle.pic.casper.webserver.server.WebServerAuths;
 
 import java.util.function.Function;
 
 public class AuthenticatePipelineMgr extends ConnectionPipelineMgr {
+
+    /*
+     ** The WebServerAuths are setup when the WebServer class in instantiated. They are used
+     **   for all connections.
+     */
+    private final WebServerAuths webServerAuths;
     private final WebServerConnState connectionState;
+    private final CasperHttpInfo casperHttpInfo;
     private boolean initialStage;
     private boolean authenticateCheckCompleted;
 
-    private Function<WebServerConnState, StateQueueResult> authenticateCheckEmbargo = wsConn -> {
-        wsConn.checkEmbargo();
-        return StateQueueResult.STATE_RESULT_WAIT;
-    };
-
-    private Function<WebServerConnState, StateQueueResult> authenticateRequest = wsConn -> {
-        wsConn.authenticateRequest();
-        return StateQueueResult.STATE_RESULT_WAIT;
-    };
-
-    private Function<WebServerConnState, StateQueueResult> authenticateFinished = wsConn -> {
-        return StateQueueResult.STATE_RESULT_WAIT;
-    };
-
-    private Function<WebServerConnState, StateQueueResult> authenticateFailedSendResponse = wsConn -> {
-        wsConn.sendResponse(wsConn.getHttpParseStatus());
-
-        return StateQueueResult.STATE_RESULT_WAIT;
-    };
-
     private Function<WebServerConnState, StateQueueResult> authenticateResponseSent = wsConn -> {
         /*
-        ** Cleanup from the response send and then return back to the previous pipeline
+         ** Cleanup from the response send and then return back to the previous pipeline
          */
         wsConn.processResponseWriteDone();
 
@@ -48,10 +38,14 @@ public class AuthenticatePipelineMgr extends ConnectionPipelineMgr {
         }
     };
 
-    AuthenticatePipelineMgr(WebServerConnState connectionState) {
+    AuthenticatePipelineMgr(
+            final WebServerConnState connectionState,
+            final CasperHttpInfo casperHttpInfo,
+            final WebServerAuths webServerAuths) {
         super(connectionState, new StateMachine<>());
         this.connectionState = connectionState;
-
+        this.webServerAuths = webServerAuths;
+        this.casperHttpInfo = casperHttpInfo;
         this.initialStage = true;
         this.authenticateCheckCompleted = false;
 
@@ -61,13 +55,16 @@ public class AuthenticatePipelineMgr extends ConnectionPipelineMgr {
         this.connectionState.resetResponses();
 
         connectionStateMachine.addStateEntry(ConnectionStateEnum.CHECK_EMBARGO,
-                new StateEntry<>(authenticateCheckEmbargo));
+                new StateEntry<>(wsConn -> checkEmbargo()));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.AUTHENTICATE_REQUEST,
-                new StateEntry<>(authenticateRequest));
+                new StateEntry<>(wsConn -> authenticate()));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.AUTHENTICATE_FINISHED,
-                new StateEntry<>(authenticateFinished));
+                new StateEntry<>(wsConn -> StateQueueResult.STATE_RESULT_WAIT));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.SEND_FINAL_RESPONSE,
-                new StateEntry<>(authenticateFailedSendResponse));
+                new StateEntry<>(wsConn -> {
+                    connectionState.sendResponse(connectionState.getHttpParseStatus());
+                    return StateQueueResult.STATE_RESULT_WAIT;
+                }));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND,
                 new StateEntry<>(authenticateResponseSent));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.CHECK_SLOW_CHANNEL,
@@ -91,7 +88,7 @@ public class AuthenticatePipelineMgr extends ConnectionPipelineMgr {
         }
 
         if (!authenticateCheckCompleted) {
-            AuthenticateResultEnum result = connectionState.getAuthenticateResult();
+            AuthenticateResultEnum result = getAuthenticateResult();
             switch (result) {
                 case EMBARGO_CHECK_IN_PROGRESS:
                 case AUTHENTICATE_IN_PROGRESS:
@@ -115,8 +112,8 @@ public class AuthenticatePipelineMgr extends ConnectionPipelineMgr {
         }
 
         /*
-        ** Since the authentication failed, send out the final response to the client with the
-        **   appropriate error.
+         ** Since the authentication failed, send out the final response to the client with the
+         **   appropriate error.
          */
         if (!connectionState.hasFinalResponseBeenSent()) {
             return ConnectionStateEnum.SEND_FINAL_RESPONSE;
@@ -134,5 +131,42 @@ public class AuthenticatePipelineMgr extends ConnectionPipelineMgr {
         }
 
         return ConnectionStateEnum.CHECK_SLOW_CHANNEL;
+    }
+
+    /**
+     * This is used to perform the Embargo checking for this request
+     */
+    private StateQueueResult checkEmbargo() {
+        final String namespace = casperHttpInfo.getNamespace();
+        final String bucket = casperHttpInfo.getBucket();
+        final String object = casperHttpInfo.getObject();
+
+        final EmbargoV3Operation embargoV3Operation = EmbargoV3Operation.builder()
+                .setApi(EmbargoV3Operation.Api.V2)
+                .setOperation(CasperOperation.PUT_OBJECT)
+                .setNamespace(namespace)
+                .setBucket(bucket)
+                .setObject(object)
+                .build();
+        webServerAuths.getEmbargoV3().enter(embargoV3Operation);
+        return StateQueueResult.STATE_RESULT_WAIT;
+    }
+
+    /**
+     * The performs the authentication for a HTTP request
+     */
+    private StateQueueResult authenticate() {
+        // TODO Wire this up
+        return StateQueueResult.STATE_RESULT_WAIT;
+    }
+
+    /**
+     * This is used to return the various steps that authentication goes through and
+     *   there status.
+     *
+     * TODO: Wire this through
+     */
+    private AuthenticateResultEnum getAuthenticateResult() {
+        return AuthenticateResultEnum.INVALID_RESULT;
     }
 }
