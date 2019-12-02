@@ -88,6 +88,11 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         return StateQueueResult.STATE_RESULT_FREE;
     };
 
+    private Function<WebServerConnState, StateQueueResult> httpParseAuthenticate = wsConn -> {
+        wsConn.startAuthenticatePipeline();
+        return StateQueueResult.STATE_RESULT_WAIT;
+    };
+
     private Function<WebServerConnState, StateQueueResult> httpParseCheckSlowConnection = wsConn -> {
         if (wsConn.checkSlowClientChannel()) {
             return StateQueueResult.STATE_RESULT_CONTINUE;
@@ -147,6 +152,7 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
         connectionStateMachine.addStateEntry(ConnectionStateEnum.ALLOC_HTTP_BUFFER, new StateEntry<>(httpParseAllocHttpBuffer));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.READ_HTTP_BUFFER, new StateEntry<>(httpParseReadHttpBuffer));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.PARSE_HTTP_BUFFER, new StateEntry<>(httpParseHttpBuffer));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.RUN_AUTHENTICATION_PIPELINE, new StateEntry<>(httpParseAuthenticate));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.CONN_FINISHED, new StateEntry<>(httpParseConnFinished));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.SETUP_NEXT_PIPELINE, new StateEntry<>(httpParseSetupNextPipeline));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.SEND_FINAL_RESPONSE, new StateEntry<>(httpParseSendXferResponse));
@@ -232,6 +238,14 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
             return ConnectionStateEnum.SEND_FINAL_RESPONSE;
         }
 
+        AuthenticateResultEnum authenticateResult = connectionState.authenticationComplete();
+        if (authenticateResult != AuthenticateResultEnum.INVALID_RESULT) {
+            /*
+             ** Figure out how many buffers to read (meaning setup the ContentReadPipelineMgr)
+             */
+            return ConnectionStateEnum.SETUP_NEXT_PIPELINE;
+        }
+
         /*
          ** Check if the header parsing is completed and if so, setup the initial reads
          **   for the content.
@@ -241,7 +255,7 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
             /*
              ** Figure out how many buffers to read.
              */
-            return ConnectionStateEnum.SETUP_NEXT_PIPELINE;
+            return ConnectionStateEnum.RUN_AUTHENTICATION_PIPELINE;
         }
 
         return ConnectionStateEnum.CHECK_SLOW_CHANNEL;

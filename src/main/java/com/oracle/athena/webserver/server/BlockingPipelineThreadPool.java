@@ -77,7 +77,7 @@ public class BlockingPipelineThreadPool {
     ** There is a single work queue for all of the BlockingWorkerThread(s). Any thread can pull work off and
     **   perform work on the ConnectionState.
      */
-    void addBlockingWorkToThread(ConnectionState connectionState) {
+    public void addBlockingWorkToThread(ConnectionState connectionState) {
 
         if (!blockingWorkQueue.offer(connectionState)) {
             LOG.error("Unable to offer() [" + connectionState.getConnStateId() + "]");

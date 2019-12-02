@@ -89,9 +89,9 @@ public class ServerLoadBalancer {
         this.webServerAuths = auths;
 
         /*
-        ** Limit the maximum number of worker threads to 100. That is still probably too many
-        **   threads to be running when most systems have far fewer than 100 cores available
-        **   to run workloads on.
+         ** Limit the maximum number of worker threads to 100. That is still probably too many
+         **   threads to be running when most systems have far fewer than 100 cores available
+         **   to run workloads on.
          */
         if (numWorkerThreads > MAX_WORKER_THREADS) {
             LOG.info("ServerLoadBalancer[" + serverClientId + "] workerThreads capped at: " + MAX_WORKER_THREADS);
@@ -105,11 +105,11 @@ public class ServerLoadBalancer {
         LOG.info("ServerLoadBalancer[" + serverClientId + "] workerThreads: " + this.numWorkerThreads + " maxQueueSize: " + maxQueueSize);
 
         /*
-        ** To uniquely identify the ServerDigestThread(s) and EncryptThread(s), the base Id range
-        **   will start at +500 and +550 from the serverBaseId. There will never be more than
-        **   100 ServerThreads as that is not a very efficient use of worker threads when each one
-        **   is capable of handling hundreds of connections.
-        ** The BlockingThreadPool base thread Id will start at +600 from the serverBaseId.
+         ** To uniquely identify the ServerDigestThread(s) and EncryptThread(s), the base Id range
+         **   will start at +500 and +550 from the serverBaseId. There will never be more than
+         **   100 ServerThreads as that is not a very efficient use of worker threads when each one
+         **   is capable of handling hundreds of connections.
+         ** The BlockingThreadPool base thread Id will start at +600 from the serverBaseId.
          */
         this.digestThreadPool = new ServerDigestThreadPool(NUMBER_COMPUTE_THREADS, (this.serverBaseId + DIGEST_THREAD_ID_OFFSET));
         this.encryptThreadPool = new EncryptThreadPool(NUMBER_COMPUTE_THREADS, (this.serverBaseId + ENCRYPT_THREAD_ID_OFFSET));
@@ -137,20 +137,23 @@ public class ServerLoadBalancer {
         reservedBlockingConnPool = new BlockingConnectionStatePool<>(RESERVED_CONN_COUNT);
 
         /*
-        ** The following ugly code is due to the fact that you cannot create a object of generic type <T> within
-        **   and generic class that uses <T>
+         ** The following ugly code is due to the fact that you cannot create a object of generic type <T> within
+         **   and generic class that uses <T>
          */
         WebServerConnState conn;
         for (int i = 0; i < (numWorkerThreads * maxQueueSize); i++) {
-            conn = new WebServerConnState(flavor, webServerAuths, connPool, (serverBaseId + i + 1));
+            conn = new WebServerConnState(flavor, webServerAuths, connPool, blockingThreadPool, (serverBaseId + i + 1));
             conn.start();
             connPool.freeConnectionState(conn);
         }
 
-        // also populate the reserved connection pool
+        /*
+         **  Also populate the reserved connection pool. Requests to this pool will block until the request is
+         **    fulfilled.
+         */
         int startingId = serverBaseId + (numWorkerThreads * maxQueueSize) + 1;
         for (int i = 0; i < RESERVED_CONN_COUNT; i++) {
-            conn = new WebServerConnState(flavor, webServerAuths, reservedBlockingConnPool, (startingId + i));
+            conn = new WebServerConnState(flavor, webServerAuths, reservedBlockingConnPool, blockingThreadPool, (startingId + i));
             conn.start();
             reservedBlockingConnPool.freeConnectionState(conn);
         }
@@ -189,8 +192,8 @@ public class ServerLoadBalancer {
             work = reservedBlockingConnPool.allocConnectionState(chan);
             if (work == null) {
                 /*
-                ** This means there was an exception while waiting to allocate the connection. Simply close the
-                **    connection and give up.
+                 ** This means there was an exception while waiting to allocate the connection. Simply close the
+                 **    connection and give up.
                  */
                 try {
                     chan.close();
@@ -225,8 +228,8 @@ public class ServerLoadBalancer {
                             currQueue + " queueCap: " + queueCap);
 
                     /*
-                    ** Need to assign the thread this ConnectionState is going to run on prior to adding it
-                    **   to the execution queue for the worker thread.
+                     ** Need to assign the thread this ConnectionState is going to run on prior to adding it
+                     **   to the execution queue for the worker thread.
                      */
                     work.assignWorkerThread(threadPool[currQueue]);
                     work.addToWorkQueue(false);

@@ -2,6 +2,7 @@ package com.oracle.athena.webserver.connectionstate;
 
 import com.oracle.athena.webserver.http.parser.ByteBufferHttpParser;
 import com.oracle.athena.webserver.memory.MemoryManager;
+import com.oracle.athena.webserver.server.BlockingPipelineThreadPool;
 import com.oracle.athena.webserver.server.StatusWriteCompletion;
 import com.oracle.athena.webserver.server.WriteConnection;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;
@@ -13,11 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.ListIterator;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -43,6 +40,9 @@ public class WebServerConnState extends ConnectionState {
     private HttpParsePipelineMgr httpParsePipelineMgr;
     protected OutOfResourcePipelineMgr outOfResourcePipelineMgr;
     private AuthenticatePipelineMgr authenticatePipelineMgr;
+
+    private Stack<ConnectionPipelineMgr> pipelineExecStack;
+
 
     /*
     ** The following variables are used in the ContentReadPipeline class. This is used to determine the
@@ -107,6 +107,12 @@ public class WebServerConnState extends ConnectionState {
     protected LinkedList<BufferState> allocatedHttpBufferQueue;
     protected BlockingQueue<BufferState> httpReadDoneQueue;
 
+    /*
+    ** The following are used to keep track of the AuthenticatePipelineMgr and if it is successful and completed
+     */
+    private AtomicBoolean authenticationCheckComplete;
+    private AuthenticateResultEnum authenticateResult;
+
 
     /*
      ** The following is the complete information for the HTTP connection
@@ -142,12 +148,19 @@ public class WebServerConnState extends ConnectionState {
      */
     private final ConnectionStatePool<WebServerConnState> connectionStatePool;
 
+    /*
+    ** The BlockingPipelineThreadPool is used run pipelines that will have stages that block thread execution
+     */
+    private final BlockingPipelineThreadPool blockingPipelineThreadPool;
 
-    public WebServerConnState(final WebServerFlavor flavor, final WebServerAuths auths, final ConnectionStatePool<WebServerConnState> pool, final int uniqueId) {
+
+    public WebServerConnState(final WebServerFlavor flavor, final WebServerAuths auths, final ConnectionStatePool<WebServerConnState> pool,
+                              final BlockingPipelineThreadPool blockingPipelineThreadPool, int uniqueId) {
 
         super(uniqueId);
 
         this.connectionStatePool = pool;
+        this.blockingPipelineThreadPool = blockingPipelineThreadPool;
 
         if (flavor == WebServerFlavor.STANDARD) {
             this.httpReadBufferSize = MemoryManager.MEDIUM_BUFFER_SIZE;
@@ -182,6 +195,12 @@ public class WebServerConnState extends ConnectionState {
         writeConn = null;
 
         /*
+        ** Authentication status
+         */
+        authenticationCheckComplete = new AtomicBoolean(false);
+        authenticateResult = AuthenticateResultEnum.INVALID_RESULT;
+
+        /*
          ** The CasperHttpInfo keeps track of the details of a particular
          **   HTTP transfer and the parsed information.
          */
@@ -189,6 +208,7 @@ public class WebServerConnState extends ConnectionState {
 
         httpParser = new ByteBufferHttpParser(casperHttpInfo);
 
+        pipelineExecStack = new Stack<>();
         httpParsePipelineMgr = new HttpParsePipelineMgr(this);
         readPipelineMgr = new ContentReadPipelineMgr(this);
         outOfResourcePipelineMgr = new OutOfResourcePipelineMgr(this);
@@ -674,10 +694,59 @@ public class WebServerConnState extends ConnectionState {
      */
     public void md5CalculateComplete() {
         String dataDigestString = md5Digest.getFinalDigest();
-        LOG.info("ConnectionState[" + connStateId + "] Computed md5Digest " + dataDigestString );
+        LOG.info("WebServerConnState[" + connStateId + "] Computed md5Digest " + dataDigestString );
         digestComplete.set(true);
 
         contentHasValidMd5Digest = casperHttpInfo.checkContentMD5(dataDigestString);
+    }
+
+    /*
+    ** The following methods are used to kick off the authentication pipeline to run on a different thread
+    **   and provide the callback for when the authentication is complete.
+     */
+    void startAuthenticatePipeline() {
+        /*
+        ** Save the current pipeline
+         */
+        pipelineExecStack.push(pipelineManager);
+
+        pipelineManager = authenticatePipelineMgr;
+
+        LOG.info("WebServerConnState[" + connStateId + "] startAuthenticatePipeline()");
+        /*
+        ** Kick off the authenticate pipeline manager via the BlockingPipelineThreadPool.
+         */
+        blockingPipelineThreadPool.addBlockingWorkToThread(this);
+    }
+
+    /*
+    ** This callback will be called from the BlockingWorkerThread
+     */
+    void authenticatePipelineCompleteCb(final AuthenticateResultEnum result) {
+        /*
+        ** Restore the previous pipeline now that this one is finished
+         */
+        pipelineManager = pipelineExecStack.pop();
+
+        /*
+         ** Update the Authentication status
+         */
+        authenticationCheckComplete.set(true);
+        authenticateResult = result;
+
+        LOG.info("WebServerConnState[" + connStateId + "] authenticatePipelineCompleteCb()");
+
+        addToWorkQueue(false);
+    }
+
+    AuthenticateResultEnum authenticationComplete() {
+        if (authenticationCheckComplete.get()) {
+            LOG.info("WebServerConnState[" + connStateId + "] authenticationComplete() " + authenticateResult);
+            return authenticateResult;
+        } else {
+            LOG.info("WebServerConnState[" + connStateId + "] authenticationComplete() - return INVALID_RESULT ");
+            return AuthenticateResultEnum.INVALID_RESULT;
+        }
     }
 
     /*
@@ -946,6 +1015,13 @@ public class WebServerConnState extends ConnectionState {
         resetResponses();
 
         responseChannelWriteDone.set(false);
+
+        /*
+         ** Authentication status
+         */
+        authenticationCheckComplete = new AtomicBoolean(false);
+        authenticateResult = AuthenticateResultEnum.INVALID_RESULT;
+
 
         /*
         ** For certain error cases (namely those where the connection is closed early due
