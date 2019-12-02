@@ -48,9 +48,10 @@ public enum ConnectionStateEnum {
     SSL_CONN_CLOSE(64),
     RELEASE_CONTENT_BUFFERS(100),
 
-    CHECK_EMBARGO(120),
-    AUTHENTICATE_REQUEST(121),
-    AUTHENTICATE_FINISHED(122);
+    RUN_AUTHENTICATION_PIPELINE(120),   // Used by HttpParsePipelineMgr and HttpsParsePipelineMgr
+    CHECK_EMBARGO(122),                 // This is used by the AuthenticatePipelineMgr
+    AUTHENTICATE_REQUEST(123),
+    AUTHENTICATE_FINISHED(124);
 
     private int value;
 

@@ -1,6 +1,7 @@
 package com.oracle.athena.webserver.connectionstate;
 
 import com.oracle.athena.webserver.http.parser.ByteBufferHttpParser;
+import com.oracle.athena.webserver.server.BlockingPipelineThreadPool;
 import com.oracle.athena.webserver.server.StatusWriteCompletion;
 import com.oracle.athena.webserver.server.WriteConnection;
 import com.oracle.pic.casper.webserver.server.WebServerAuths;
@@ -55,8 +56,9 @@ public class WebServerSSLConnState extends WebServerConnState {
 
     public WebServerSSLConnState(final WebServerFlavor flavor, final WebServerAuths auths,
                                  final ConnectionStatePool<WebServerSSLConnState> connectionStatePool,
+                                 final BlockingPipelineThreadPool blockingPipelineThreadPool,
                                  SSLContext sslContext, final int uniqueId) {
-        super(flavor, auths,null, uniqueId);
+        super(flavor, auths,null, blockingPipelineThreadPool, uniqueId);
         this.connectionStatePool = connectionStatePool;
         this.sslContext = sslContext;
         httpBufferReadsUnwrapNeeded = new AtomicInteger(0);

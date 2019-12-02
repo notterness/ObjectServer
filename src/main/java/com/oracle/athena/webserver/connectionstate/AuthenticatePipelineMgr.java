@@ -30,6 +30,15 @@ public class AuthenticatePipelineMgr extends ConnectionPipelineMgr {
         return StateQueueResult.STATE_RESULT_CONTINUE;
     };
 
+    private Function<WebServerConnState, StateQueueResult> authenticateComplete = wsConn -> {
+        wsConn.authenticatePipelineCompleteCb(AuthenticateResultEnum.AUTHENTICATE_PASSED);
+
+        /*
+        ** This pipeline is finished.
+         */
+        return StateQueueResult.STATE_RESULT_FREE;
+    };
+
     private Function<WebServerConnState, StateQueueResult> checkSlowChannel = wsConn -> {
         if (wsConn.checkSlowClientChannel()) {
             return StateQueueResult.STATE_RESULT_CONTINUE;
@@ -59,7 +68,7 @@ public class AuthenticatePipelineMgr extends ConnectionPipelineMgr {
         connectionStateMachine.addStateEntry(ConnectionStateEnum.AUTHENTICATE_REQUEST,
                 new StateEntry<>(wsConn -> authenticate()));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.AUTHENTICATE_FINISHED,
-                new StateEntry<>(wsConn -> StateQueueResult.STATE_RESULT_WAIT));
+                new StateEntry<>(authenticateComplete));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.SEND_FINAL_RESPONSE,
                 new StateEntry<>(wsConn -> {
                     connectionState.sendResponse(connectionState.getHttpParseStatus());
@@ -84,7 +93,10 @@ public class AuthenticatePipelineMgr extends ConnectionPipelineMgr {
         if (initialStage) {
             initialStage = false;
 
-            return ConnectionStateEnum.CHECK_EMBARGO;
+            //return ConnectionStateEnum.CHECK_EMBARGO;
+            authenticateCheckCompleted = true;
+
+            return ConnectionStateEnum.AUTHENTICATE_FINISHED;
         }
 
         if (!authenticateCheckCompleted) {
@@ -167,6 +179,6 @@ public class AuthenticatePipelineMgr extends ConnectionPipelineMgr {
      * TODO: Wire this through
      */
     private AuthenticateResultEnum getAuthenticateResult() {
-        return AuthenticateResultEnum.INVALID_RESULT;
+        return AuthenticateResultEnum.AUTHENTICATE_PASSED;
     }
 }

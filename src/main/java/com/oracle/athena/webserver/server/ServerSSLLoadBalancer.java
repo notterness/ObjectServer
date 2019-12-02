@@ -51,6 +51,7 @@ public class ServerSSLLoadBalancer extends ServerLoadBalancer {
 
         digestThreadPool.start();
         encryptThreadPool.start();
+        blockingThreadPool.start();
 
         for (int i = 0; i < numWorkerThreads; i++) {
             ServerWorkerThread worker = new ServerWorkerThread(maxQueueSize, memoryManager,
@@ -70,14 +71,16 @@ public class ServerSSLLoadBalancer extends ServerLoadBalancer {
          */
         WebServerSSLConnState conn;
         for (int i = 0; i < (numWorkerThreads * maxQueueSize); i++) {
-            conn = new WebServerSSLConnState(flavor, webServerAuths, connPool, sslContext, (serverBaseId + i + 1));
+            conn = new WebServerSSLConnState(flavor, webServerAuths, connPool, blockingThreadPool,
+                    sslContext, (serverBaseId + i + 1));
             conn.start();
             connPool.freeConnectionState(conn);
         }
         // also populate the reserved connection pool
         int startingId = serverBaseId + (numWorkerThreads * maxQueueSize) + 1;
         for (int i = 0; i < RESERVED_CONN_COUNT; i++) {
-            conn = new WebServerSSLConnState(flavor, webServerAuths, reservedBlockingConnPool, sslContext, (startingId + i));
+            conn = new WebServerSSLConnState(flavor, webServerAuths, reservedBlockingConnPool, blockingThreadPool,
+                    sslContext, (startingId + i));
             conn.start();
             reservedBlockingConnPool.freeConnectionState(conn);
         }
