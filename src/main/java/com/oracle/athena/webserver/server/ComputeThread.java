@@ -20,14 +20,14 @@ abstract class ComputeThread implements Runnable {
 
     private static final Logger LOG = LoggerFactory.getLogger(ServerDigestThread.class);
 
-    private final BlockingQueue<BufferState> digestWorkQ;
+    private final BlockingQueue<BufferState> workQ;
     private final int threadId;
 
     private volatile boolean running;
     private Thread computeThread;
 
-    public ComputeThread(final BlockingQueue<BufferState> workQueue, int threadId) {
-        this.digestWorkQ = workQueue;
+    public ComputeThread(final BlockingQueue<BufferState> workQueue, final int threadId) {
+        this.workQ = workQueue;
         this.threadId = threadId;
 
         running = true;
@@ -54,7 +54,7 @@ abstract class ComputeThread implements Runnable {
             BufferState bufferWork;
 
             try {
-                bufferWork = digestWorkQ.poll(100, TimeUnit.MILLISECONDS);
+                bufferWork = workQ.poll(100, TimeUnit.MILLISECONDS);
             } catch (InterruptedException int_ex) {
                 LOG.warn("ComputeThread[" + threadId + "] " + int_ex.getMessage());
                 bufferWork = null;

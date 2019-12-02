@@ -1,9 +1,6 @@
 package com.oracle.athena.webserver.server;
 
-import com.oracle.athena.webserver.connectionstate.BlockingConnectionStatePool;
-import com.oracle.athena.webserver.connectionstate.ConnectionState;
-import com.oracle.athena.webserver.connectionstate.ConnectionStatePool;
-import com.oracle.athena.webserver.connectionstate.WebServerConnState;
+import com.oracle.athena.webserver.connectionstate.*;
 import com.oracle.athena.webserver.memory.MemoryManager;
 
 import java.io.IOException;
@@ -27,6 +24,7 @@ public class ServerLoadBalancer {
     private final static int MAX_WORKER_THREADS = 100;
     private final static int DIGEST_THREAD_ID_OFFSET = 500;
     private final static int ENCRYPT_THREAD_ID_OFFSET = 550;
+    private final static int BLOCKING_THREAD_ID_OFFSET = 600;
 
     public final static int RESERVED_CONN_COUNT = 2;
     protected final static int NUMBER_COMPUTE_THREADS = 1;
@@ -41,6 +39,7 @@ public class ServerLoadBalancer {
     protected final int serverBaseId;
     protected final ServerDigestThreadPool digestThreadPool;
     protected final EncryptThreadPool encryptThreadPool;
+    protected final BlockingPipelineThreadPool blockingThreadPool;
 
     private ConnectionStatePool<WebServerConnState> connPool;
     private ConnectionStatePool<WebServerConnState> reservedBlockingConnPool;
@@ -74,8 +73,17 @@ public class ServerLoadBalancer {
      **         a buffer and place the encrypted data into the Chunk buffer that is used to write out to the
      **         StorageServer. Since the EncryptThread(s) are CPU intensive, there is a limited
      **         number that are shared between all connections.
+     **
+     **       BlockingPipelineThreadPool - This is a pool of BlockingWorkerThread(s) that are used to handle
+     **         pipelines that are accessing off box resources. Since the pipelines are accessing off box
+     **         resources, they are likely to take a while and potentially are blocking operations. Since there
+     **         is the possibility of one or more pipeline stages blocking (meaning the thread waits for a
+     **         completion) these pipelines cannot run on the ServerWorkerThread(s). The ServerWorkerThread(s)
+     **         expect operations to take a finite period of time so that the thread can perform the work
+     **         for multiple connections.
      */
-    public ServerLoadBalancer(final WebServerFlavor flavor, final WebServerAuths auths, final int queueSize, final int numWorkerThreads, MemoryManager memoryManager, int serverClientId) {
+    public ServerLoadBalancer(final WebServerFlavor flavor, final WebServerAuths auths, final int queueSize, final int numWorkerThreads,
+                              final MemoryManager memoryManager, final int serverClientId) {
 
         this.flavor = flavor;
         this.webServerAuths = auths;
@@ -86,7 +94,7 @@ public class ServerLoadBalancer {
         **   to run workloads on.
          */
         if (numWorkerThreads > MAX_WORKER_THREADS) {
-            LOG.info("ServerLoadBalancer[" + serverClientId + "] workerThreads apped at: " + MAX_WORKER_THREADS);
+            LOG.info("ServerLoadBalancer[" + serverClientId + "] workerThreads capped at: " + MAX_WORKER_THREADS);
             this.numWorkerThreads = MAX_WORKER_THREADS;
         } else {
             this.numWorkerThreads = numWorkerThreads;
@@ -101,9 +109,13 @@ public class ServerLoadBalancer {
         **   will start at +500 and +550 from the serverBaseId. There will never be more than
         **   100 ServerThreads as that is not a very efficient use of worker threads when each one
         **   is capable of handling hundreds of connections.
+        ** The BlockingThreadPool base thread Id will start at +600 from the serverBaseId.
          */
         this.digestThreadPool = new ServerDigestThreadPool(NUMBER_COMPUTE_THREADS, (this.serverBaseId + DIGEST_THREAD_ID_OFFSET));
         this.encryptThreadPool = new EncryptThreadPool(NUMBER_COMPUTE_THREADS, (this.serverBaseId + ENCRYPT_THREAD_ID_OFFSET));
+
+        this.blockingThreadPool = new BlockingPipelineThreadPool(this.flavor, this.maxQueueSize, this.numWorkerThreads,
+                (this.serverBaseId + BLOCKING_THREAD_ID_OFFSET));
 
         this.threadPool = new ServerWorkerThread[this.numWorkerThreads];
     }
@@ -112,6 +124,7 @@ public class ServerLoadBalancer {
 
         digestThreadPool.start();
         encryptThreadPool.start();
+        blockingThreadPool.start();
 
         for (int i = 0; i < numWorkerThreads; i++) {
             ServerWorkerThread worker = new ServerWorkerThread(maxQueueSize, memoryManager,
@@ -149,6 +162,7 @@ public class ServerLoadBalancer {
 
         digestThreadPool.stop();
         encryptThreadPool.stop();
+        blockingThreadPool.stop();
 
         for (int i = 0; i < numWorkerThreads; i++) {
             ServerWorkerThread worker = threadPool[i];
