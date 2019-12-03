@@ -243,7 +243,7 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
             /*
              ** Figure out how many buffers to read (meaning setup the ContentReadPipelineMgr)
              */
-            return ConnectionStateEnum.SETUP_NEXT_PIPELINE;
+        //    return ConnectionStateEnum.SETUP_NEXT_PIPELINE;
         }
 
         /*
@@ -255,7 +255,8 @@ class HttpParsePipelineMgr extends ConnectionPipelineMgr {
             /*
              ** Figure out how many buffers to read.
              */
-            return ConnectionStateEnum.RUN_AUTHENTICATION_PIPELINE;
+            //return ConnectionStateEnum.RUN_AUTHENTICATION_PIPELINE;
+            return ConnectionStateEnum.SETUP_NEXT_PIPELINE;
         }
 
         return ConnectionStateEnum.CHECK_SLOW_CHANNEL;

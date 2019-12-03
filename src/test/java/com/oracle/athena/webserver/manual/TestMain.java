@@ -30,8 +30,8 @@ public class TestMain {
         **   handle requests from an external tool or command line. It will remain stuck in the
         **   waitForTestsToComplete().
          */
-        threadCount.incrementAndGet();
-        //waitForTestsToComplete(threadCount);
+        //threadCount.incrementAndGet();
+        //waitForTestsToComplete(threadCount, client);
 
         ClientTest client_checkMd5 = new ClientTest_CheckMd5("CheckMd5", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_checkMd5.start();
