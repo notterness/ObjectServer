@@ -3,7 +3,6 @@ package com.oracle.athena.webserver.connectionstate;
 import com.google.common.hash.Hashing;
 import com.google.common.io.BaseEncoding;
 import com.oracle.pic.casper.common.exceptions.BadRequestException;
-import com.oracle.pic.casper.common.exceptions.ContentMD5UnmatchedException;
 import org.apache.commons.codec.binary.Hex;
 import org.eclipse.jetty.http.BadMessageException;
 import org.eclipse.jetty.http.HostPortHttpField;
