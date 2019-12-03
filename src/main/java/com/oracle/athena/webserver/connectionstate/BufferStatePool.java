@@ -106,6 +106,14 @@ public class BufferStatePool {
         inUseList.remove(bufferState);
     }
 
+    public void freeBuffer(BufferState bufferState) {
+        ByteBuffer buffer = bufferState.getBuffer();
+        if (buffer != null) {
+            memoryAllocator.poolMemFree(buffer);
+            bufferState.assignBuffer(null, BufferStateEnum.INVALID_STATE);
+        }
+    }
+
     public boolean showInUseBufferState(final int threadId) {
         boolean inUseBufferState = false;
         BufferState bufferState;

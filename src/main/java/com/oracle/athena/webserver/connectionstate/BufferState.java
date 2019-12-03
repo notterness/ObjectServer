@@ -120,26 +120,44 @@ public class BufferState {
     }
 
     /*
+     ** This will copy the contents of the srcBuffer into the dstBuffer.
+     */
+    public static void copy(ByteBuffer dstBuffer, ByteBuffer srcBuffer) {
+
+        int nBytesToCopy = Math.min(dstBuffer.remaining(), srcBuffer.remaining());
+        if (!dstBuffer.isDirect()) {
+            dstBuffer.put(srcBuffer.array(), srcBuffer.arrayOffset() + srcBuffer.position(), nBytesToCopy);
+        } else {
+            /*
+             ** Need to perform manual copy (Need to handle the allocate direct issue better)
+             */
+            for (int i = 0; i < nBytesToCopy; i++) {
+                dstBuffer.put(srcBuffer.get(srcBuffer.position() + i));
+            }
+
+            dstBuffer.limit(nBytesToCopy);
+            dstBuffer.position(0);
+        }
+    }
+
+    /*
     ** This will copy the contents of the newBuffer into the appBuffer associated with the BufferState.
      */
     public void copyByteBuffer(ByteBuffer srcBuffer) {
         LOG.info("copyByteBuffer() newBuffer remaining: " + srcBuffer.remaining() + " limit: " +
                 srcBuffer.limit() + " position: " + srcBuffer.position());
 
-        int nBytesToCopy = Math.min(appBuffer.remaining(), srcBuffer.remaining());
-        if (!appBuffer.isDirect()) {
-            appBuffer.put(srcBuffer.array(), srcBuffer.arrayOffset() + srcBuffer.position(), nBytesToCopy);
-        } else {
-            /*
-            ** Need to perform manual copy (Need to handle the allocate direct issue better)
-             */
-            for (int i = 0; i < nBytesToCopy; i++) {
-                appBuffer.put(srcBuffer.get(srcBuffer.position() + i));
-            }
+        copy(appBuffer, srcBuffer);
+    }
 
-            appBuffer.limit(nBytesToCopy);
-            appBuffer.position(0);
-        }
+    /*
+     ** This will copy the contents of the srcBuffer into the netBuffer associated with the BufferState.
+     */
+    public void copyNetBuffer(ByteBuffer srcBuffer) {
+        LOG.info("copyNetBuffer() srcBuffer remaining: " + srcBuffer.remaining() + " limit: " +
+                srcBuffer.limit() + " position: " + srcBuffer.position());
+
+        copy(netBuffer, srcBuffer);
     }
 
     /*
