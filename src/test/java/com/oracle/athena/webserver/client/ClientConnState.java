@@ -104,7 +104,7 @@ public class ClientConnState extends ConnectionState {
             /*
              ** TOTDO: Need to close out the channel and this connection
              */
-            System.out.printf("ClientConnState[" + getConnStateId() + "] connection timeout");
+            System.out.println("ClientConnState[" + getConnStateId() + "] connection timeout");
 
             closeChannel();
         } else {
