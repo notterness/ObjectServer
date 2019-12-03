@@ -60,12 +60,14 @@ public class SSLEngineMgr {
 
     public BufferState allocBufferState(WebServerSSLConnState connState, BufferStatePool bufferStatePool,
                                         BufferStateEnum state) {
-        int appBufferSize = engine.getSession().getApplicationBufferSize();
-        int netBufferSize = engine.getSession().getPacketBufferSize();
+        int appBufferSize = getAppBufferSize();
+        int netBufferSize = getNetBufferSize();
 
         BufferState bufferState = bufferStatePool.allocBufferState(connState, state, appBufferSize, netBufferSize);
-        bufferState.getBuffer().limit(appBufferSize);
-        bufferState.getNetBuffer().limit(netBufferSize);
+        if (bufferState != null) {
+            bufferState.getBuffer().limit(appBufferSize);
+            bufferState.getNetBuffer().limit(netBufferSize);
+        }
         return bufferState;
     }
 
@@ -136,11 +138,10 @@ public class SSLEngineMgr {
     public SSLEngineResult unwrap(BufferState bufferState) {
         ByteBuffer clientAppData = bufferState.getBuffer();
         ByteBuffer clientNetData = bufferState.getNetBuffer();
-        SSLEngineResult result = null;
+        SSLEngineResult result = new SSLEngineResult(SSLEngineResult.Status.OK,
+                SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING, 0, 0);
 
-        clientAppData.clear();
-        clientNetData.flip();
-        while (clientNetData.hasRemaining()) {
+        while (clientNetData.hasRemaining() && (result.getStatus() == SSLEngineResult.Status.OK)) {
 
             try {
                 result = engine.unwrap(clientNetData, clientAppData);
@@ -355,7 +356,7 @@ public class SSLEngineMgr {
         return Status.CONTINUE;
     }
 
-    //test code to figure out how the close pipeline should work
+
     public void sslClose(WebServerSSLConnState conn) {
         engine.closeOutbound();
         handshakeStatus = engine.getHandshakeStatus();

@@ -63,6 +63,14 @@ class HttpsParsePipelineMgr extends ConnectionPipelineMgr {
         return StateQueueResult.STATE_RESULT_WAIT;
     };
 
+    private Function<WebServerSSLConnState, StateQueueResult> httpsCleanupFreeHttpsBuffers = wsConn -> {
+        if (wsConn.cleanupFreeHttpsBuffers()) {
+            return StateQueueResult.STATE_RESULT_CONTINUE;
+        } else {
+            return StateQueueResult.STATE_RESULT_WAIT;
+        }
+    };
+
     private Function<WebServerSSLConnState, StateQueueResult> httpsParseSetupNextPipeline = wsConn -> {
         initialStage = true;
         wsConn.resetHttpReadValues();
@@ -115,6 +123,7 @@ class HttpsParsePipelineMgr extends ConnectionPipelineMgr {
         connectionStateMachine.addStateEntry(ConnectionStateEnum.SEND_FINAL_RESPONSE, new StateEntry(httpsParseSendXferResponse));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_READ_ERROR, new StateEntry(httpsParseProcessReadError));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.PROCESS_FINAL_RESPONSE_SEND, new StateEntry(httpsParseProcessFinalResponseSend));
+        connectionStateMachine.addStateEntry(ConnectionStateEnum.FREE_HTTP_BUFFERS, new StateEntry(httpsCleanupFreeHttpsBuffers));
 
    }
 
@@ -123,16 +132,6 @@ class HttpsParsePipelineMgr extends ConnectionPipelineMgr {
      */
     @Override
     public ConnectionStateEnum nextPipelineStage() {
-
-        /*
-        ** Perform the initial setup
-         */
-        if (initialStage) {
-            initialStage = false;
-
-            return ConnectionStateEnum.INITIAL_SETUP;
-        }
-
         /*
          ** Are there outstanding buffers to be allocated. If the code had attempted to allocate
          **   buffers and failed, check if there is other work to do. No point trying the buffer
@@ -144,17 +143,17 @@ class HttpsParsePipelineMgr extends ConnectionPipelineMgr {
         }
 
         /*
-         ** Are there buffers waiting to have a read performed?
-         */
-        if (connectionState.httpBuffersAllocated()) {
-            return ConnectionStateEnum.READ_HTTP_BUFFER;
-        }
-
-        /*
          ** Are there completed reads ready to unwrap
          */
         if (connectionState.httpBuffersReadyToUnwrap()) {
             return ConnectionStateEnum.UNWRAP_HTTP_BUFFER;
+        }
+
+        /*
+         ** Are there buffers waiting to have a read performed?
+         */
+        if (connectionState.httpBuffersAllocated()) {
+            return ConnectionStateEnum.READ_HTTP_BUFFER;
         }
 
         /*
@@ -202,6 +201,10 @@ class HttpsParsePipelineMgr extends ConnectionPipelineMgr {
          */
         if (connectionState.getHttpParseStatus() != HttpStatus.OK_200) {
             return ConnectionStateEnum.SEND_FINAL_RESPONSE;
+        }
+
+        if (connectionState.httpHeadersParsed() && connectionState.isHttpReadDoneBuffers()) {
+            return ConnectionStateEnum.FREE_HTTP_BUFFERS;
         }
 
         /*

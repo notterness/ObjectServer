@@ -16,6 +16,7 @@ import javax.net.ssl.SSLException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
+import java.util.ListIterator;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -73,6 +74,12 @@ public class WebServerSSLConnState extends WebServerConnState {
         setSSLBuffersNeeded(true);
     }
 
+    public void setupReadContent() {
+        setSSLHandshakeRequired(false);
+        setSSLHandshakeSuccess(false);
+        setSSLBuffersNeeded(false);
+    }
+
     @Override
     public void start() {
         super.start();
@@ -93,10 +100,6 @@ public class WebServerSSLConnState extends WebServerConnState {
 
     @Override
     public boolean isSSL() {return true;}
-
-    protected int defaultContentBufferSize() {
-        return sslEngineMgr.getNetBufferSize();
-    }
 
     /*
      ** Allocate a buffers for SSL handshaking.
@@ -202,8 +205,139 @@ public class WebServerSSLConnState extends WebServerConnState {
     }
 
     @Override
+    protected int contentBufferSize() {
+        return sslEngineMgr.getNetBufferSize();
+    }
+
+    @Override
     BufferState allocBufferState(BufferStateEnum state) {
         return sslEngineMgr.allocBufferState(this, bufferStatePool, state);
+    }
+
+    /*
+     ** Allocate a buffer to read HTTP header information into and associate it with this ConnectionState
+     **
+     ** The requestedHttpBuffers is not passed in since it is used to keep track of the number of buffers
+     **   needed by this connection to perform another piece of work. The idea is that there may not be
+     **   sufficient buffers available to allocate all that are requested, so there will be a wakeup call
+     **   when buffers are available and then the connection will go back and try the allocation again.
+     */
+    @Override
+    int allocHttpBuffer() {
+
+        while (requestedHttpBuffers > 0) {
+            BufferState bufferState = allocBufferState(BufferStateEnum.READ_HTTP_FROM_CHAN);
+
+            if (bufferState != null) {
+                /* Check if any used buffers exist */
+                Iterator<BufferState> iter = httpReadDoneQueue.iterator();
+
+                if (iter.hasNext()) {
+                    BufferState usedBufferState = iter.next();
+                    iter.remove();
+                    ByteBuffer usedNetBuffer = usedBufferState.getNetBuffer();
+                    int netLimit = bufferState.getNetBuffer().limit();
+
+                    /* check for underflow condition */
+                    if (usedNetBuffer.hasRemaining()) {
+                        bufferState.copyNetBuffer(usedNetBuffer);
+                        /* adjust pointers */
+                        ByteBuffer newNetBuffer = bufferState.getNetBuffer();
+                        newNetBuffer.position(newNetBuffer.limit());
+                        newNetBuffer.limit(netLimit);
+                    }
+                    bufferStatePool.freeBufferState(usedBufferState);
+                }
+
+                allocatedHttpBufferQueue.add(bufferState);
+
+                allocatedHttpBufferCount++;
+                requestedHttpBuffers--;
+            } else {
+                /*
+                 ** Unable to allocate memory, come back later
+                 */
+                bufferAllocationFailed.set(true);
+                break;
+            }
+        }
+
+        return allocatedHttpBufferCount;
+    }
+
+    /* Returns TRUE if successfully cleaned up, FALSE if a buffer still needs
+       allocation
+     */
+    boolean cleanupFreeHttpsBuffers() {
+        Iterator<BufferState> iter = httpReadDoneQueue.iterator();
+
+        if (iter.hasNext()) {
+            BufferState usedBufferState = iter.next();
+            ByteBuffer usedNetBuffer = usedBufferState.getNetBuffer();
+
+            /* check for underflow condition */
+            if (usedNetBuffer.hasRemaining()) {
+                /* Allocate a data buffer */
+                BufferState dataBufferState = allocateContentDataBuffers();
+                if (dataBufferState != null) {
+
+                    /* this should be in common allocator */
+                    int bufferSize = dataBufferState.getBuffer().limit();
+                    contentBytesAllocated.addAndGet(bufferSize);
+
+
+                    ByteBuffer dataNetBuffer = dataBufferState.getNetBuffer();
+                    int netLimit = dataNetBuffer.limit();
+
+                    /* copy remaining contents of net buffer into data buffer */
+                    dataBufferState.copyNetBuffer(usedNetBuffer);
+
+                    /* adjust pointers */
+                    dataNetBuffer.position(dataNetBuffer.limit());
+                    dataNetBuffer.limit(netLimit);
+
+                    allocatedDataBuffers += dataBufferState.count();
+                    allocatedDataBufferQueue.add(dataBufferState);
+
+                    LOG.info("WebServerSLLConnState[" + connStateId + "] allocContentReadBuffers(2) allocatedDataBuffers: " + allocatedDataBuffers);
+
+                    iter.remove();
+                    bufferStatePool.freeBufferState(usedBufferState);
+                    return true;
+                }
+                /* This routine will be retried by the pipeline until the httpReadDoneQueue is cleared */
+            } else {
+                //No unused packet data.  Remove from queue and free.
+                iter.remove();
+                bufferStatePool.freeBufferState(usedBufferState);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /*
+     ** This is used to start reads into one or more buffers. It looks for BufferState objects that have
+     **   their state set to READ_FROM_CHAN. It then sends those buffers off to perform asynchronous reads.
+     */
+    void readIntoHttpBuffers() {
+        BufferState bufferState;
+
+        /*
+         ** Only setup reads for allocated buffers
+         */
+        if (allocatedHttpBufferCount > 0) {
+            ListIterator<BufferState> iter = allocatedHttpBufferQueue.listIterator(0);
+            if (iter.hasNext()) {
+                bufferState = iter.next();
+                iter.remove();
+
+                allocatedHttpBufferCount--;
+
+                outstandingHttpReadCount++;
+                readFromChannel(bufferState);
+            }
+        }
     }
 
     boolean httpBuffersReadyToUnwrap() {
@@ -216,8 +350,15 @@ public class WebServerSSLConnState extends WebServerConnState {
         if (bufferReadsDone > 0) {
             for (BufferState bufferState : httpReadDoneQueue) {
 
+                ByteBuffer netBuffer = bufferState.getNetBuffer();
+                int bytesRead = netBuffer.position();
+                int netRemaining = netBuffer.remaining();
+                int netLimit = netBuffer.limit();
+
                 outstandingHttpReadCount--;
 
+                bufferState.getBuffer().clear();
+                bufferState.getNetBuffer().flip();
                 result = sslEngineMgr.unwrap(bufferState);
                 if (result == null) {
                     //TODO: if not able to unwrap
@@ -229,10 +370,24 @@ public class WebServerSSLConnState extends WebServerConnState {
                         httpBufferReadsCompleted.incrementAndGet();
                         break;
                     case BUFFER_OVERFLOW:
-                        //TODO: handle
                         break;
                     case BUFFER_UNDERFLOW:
-                        //TODO: hnandle
+                        /* if have not received a full packet, go back and get more */
+                        if (netRemaining > 0) {
+                            //Get more data to complete the TLS packet
+                            outstandingDataReadCount.incrementAndGet();
+                            bufferState.setBufferState(BufferStateEnum.READ_HTTP_FROM_CHAN);
+                            //restore original limit
+                            httpBufferReadsUnwrapNeeded.decrementAndGet();
+                            netBuffer.limit(netLimit);
+                            readFromChannel(bufferState);
+                        } else {
+                            //This case should have content.
+                            assert bufferState.getBuffer().position() > 0;
+                            //First go ahead and parse what we have
+                            httpBufferReadsUnwrapNeeded.decrementAndGet();
+                            httpBufferReadsCompleted.incrementAndGet();
+                        }
                         break;
                     case CLOSED:
                         //("Client wants to close connection...");
@@ -255,7 +410,31 @@ public class WebServerSSLConnState extends WebServerConnState {
 
         while (iter.hasNext()) {
             bufferState = iter.next();
-            int bytesRead = bufferState.getNetBuffer().position();
+
+            // check for buffer overflow processing
+            if (bufferState.getBuffer() == null) {
+                // get actual buffer size
+                int bufferSize = MemoryManager.allocatedBufferCapacity(sslEngineMgr.getAppBufferSize());
+                BufferState newBufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_DONE, bufferSize + 1);
+                if (newBufferState != null){
+                    bufferState.assignBuffer(newBufferState.getBuffer(), BufferStateEnum.READ_DONE);
+                } else {
+                    // try again later
+                    return;
+                }
+            }
+            ByteBuffer netBuffer = bufferState.getNetBuffer();
+            ByteBuffer appBuffer = bufferState.getBuffer();
+            int netRemaining = 0;
+            int netLimit = netBuffer.limit();
+
+            //Check for underflow processing
+            if (bufferState.getBufferState() != BufferStateEnum.UNWRAP_UNDERFLOW) {
+                netRemaining = netBuffer.remaining();
+                appBuffer.clear();
+                netBuffer.flip();
+            }
+
             result = sslEngineMgr.unwrap(bufferState);
             if (result == null) {
                 //TODO: if not able to unwrap
@@ -264,13 +443,67 @@ public class WebServerSSLConnState extends WebServerConnState {
             switch (result.getStatus()) {
                 case OK:
                     iter.remove();
-                    addDataBuffer(bufferState, bytesRead);
+                    outstandingDataReadCount.decrementAndGet();
+
+                    addDataBuffer(bufferState, appBuffer.position());
                     break;
                 case BUFFER_OVERFLOW:
-                    //TODO
+                    //TODO: free app buffer, attempt to allocate another.
+                    int bufferSize = MemoryManager.allocatedBufferCapacity(sslEngineMgr.getAppBufferSize());
+                    BufferState ovBufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_DONE, bufferSize + 1);
+                    if (ovBufferState != null){
+                        bufferStatePool.freeBuffer(bufferState);
+                        bufferState.assignBuffer(ovBufferState.getBuffer(), BufferStateEnum.READ_DONE);
+                    }
                     break;
                 case BUFFER_UNDERFLOW:
-                    //TODO
+                    /* if have not received a full packet, go back and get more */
+                    bufferState.setBufferState(BufferStateEnum.UNWRAP_UNDERFLOW);
+                    if (netRemaining > 0) {
+                        //Remove buffer from dataReadDoneUnwrap
+                        iter.remove();
+
+                        //Get more data to complete the TLS packet
+                        //restore original limit
+                        netBuffer.limit(netLimit);
+                        //read from channel
+                        bufferState.setBufferState(BufferStateEnum.READ_DATA_FROM_CHAN);
+                        readFromChannel(bufferState);
+                    } else {
+                        /* Received full buffer, but have an incomplete TLS packet.
+                           copy remaining to next buffer.
+                         */
+                        ListIterator<BufferState> queueIter = allocatedDataBufferQueue.listIterator(0);
+                        if (queueIter.hasNext()) {
+                            BufferState nextBufferState = queueIter.next();
+                            ByteBuffer nextNetBuffer = nextBufferState.getNetBuffer();
+
+                            //Transfer remaining packet bytes to next netbuffer
+                            nextBufferState.copyNetBuffer(bufferState.getNetBuffer());
+
+                            //Adjust position and limit
+                            nextNetBuffer.position(nextNetBuffer.limit());
+                            /** TODO: adjust limit of all allocated buffers to get
+                             ** optimal packet size to prevent underflow conditions.
+                             */
+                            nextNetBuffer.limit(netLimit);
+
+                            //This case should have content.
+                            assert bufferState.getBuffer().position() > 0;
+                            //Add this buffer to data buffer queue
+                            iter.remove();
+                            outstandingDataReadCount.decrementAndGet();
+                            addDataBuffer(bufferState, appBuffer.position());
+                        } else {
+                            /*
+                                Need to allocate a buffer.  After the buffer is allocated, the unwrap
+                                case will be repeated with this bufferState still on the unwrap queue.
+                                and this underflow case will be repeated with buffer on the allocated
+                                queue.
+                             */
+                            addRequestedDataBuffer();
+                        }
+                    }
                     break;
                 case CLOSED:
                     //TODO
@@ -315,11 +548,83 @@ public class WebServerSSLConnState extends WebServerConnState {
     }
 
     /*
+     ** This function walks through all the buffers that have reads completed and pushes
+     **   then through the HTTP Parser.
+     ** Once the header buffers have been parsed, they can be released. The goal is to not
+     **   recycle the data buffers, so those may not need to be sent through the HTTP Parser'
+     **   and instead should be handled directly.
+     */
+    @Override
+    void parseHttpBuffers() {
+        BufferState bufferState;
+        ByteBuffer buffer;
+        Iterator<BufferState> iter;
+
+        int bufferReadsDone = httpBufferReadsCompleted.get();
+        if (bufferReadsDone > 0) {
+            iter = httpReadDoneQueue.iterator();
+
+            if (iter.hasNext()) {
+                bufferState = iter.next();
+
+                outstandingHttpReadCount--;
+
+                // TODO: Assert (bufferState.getState() == READ_HTTP_DONE)
+                httpBufferReadsCompleted.decrementAndGet();
+
+                buffer = bufferState.getBuffer();
+                buffer.flip();
+
+                //displayBuffer(bufferState);
+                ByteBuffer remainingBuffer;
+
+                remainingBuffer = httpParser.parseHttpData(buffer, initialHttpBuffer);
+                if (remainingBuffer != null) {
+                    /*
+                     ** Allocate a new BufferState to hold the remaining data
+                     */
+                    BufferState newBufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_DONE, remainingBuffer.limit());
+                    newBufferState.copyByteBuffer(remainingBuffer);
+
+                    int bytesRead = remainingBuffer.limit();
+                    addDataBuffer(newBufferState, bytesRead);
+                }
+
+                /*
+                 ** Set the BufferState to PARSE_DONE.
+                 */
+                bufferState.setBufferHttpParseDone();
+
+                initialHttpBuffer = false;
+            }
+
+            /*
+             ** Check if there needs to be another read to bring in more of the HTTP header
+             */
+            boolean headerParsed = httpHeaderParsed.get();
+            if (!headerParsed) {
+                /*
+                 ** Allocate another buffer and read in more data. But, do not
+                 **   allocate if there was a parsing error.
+                 */
+                if (!httpParsingError.get()) {
+                    requestedHttpBuffers++;
+                } else {
+                    LOG.info("WebServerSSLConnState[" + connStateId + "] parsing error, no allocation");
+                }
+            } else {
+                LOG.info("WebServerSSLConnState[" + connStateId + "] header was parsed");
+            }
+        }
+    }
+
+    boolean isHttpReadDoneBuffers() { return (httpReadDoneQueue.size() > 0); }
+
+    /*
         Mark that the read is done and ready for unwrap.  On the NIO completion thread.
      */
     @Override
     public void dataReadCompleted(final BufferState bufferState) {
-        int readCount = outstandingDataReadCount.decrementAndGet();
 
         try {
             dataReadDoneUnwrap.put(bufferState);
@@ -335,7 +640,7 @@ public class WebServerSSLConnState extends WebServerConnState {
          */
         timeoutChecker.updateTime();
 
-        LOG.info("WebServerSSLConnState[" + connStateId + "] dataReadCompleted() outstandingReadCount: " + readCount);
+        LOG.info("WebServerSSLConnState[" + connStateId + "] dataReadCompleted(), unwrap ready");
 
     }
 

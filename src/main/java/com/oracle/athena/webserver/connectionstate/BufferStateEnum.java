@@ -21,7 +21,8 @@ public enum BufferStateEnum {
     SEND_GET_DATA_RESPONSE(50),
     SEND_FINAL_RESPONSE(60),
     SSL_HANDSHAKE_APP_BUFFER(70),
-    SSL_HANDSHAKE_NET_BUFFER(71);
+    SSL_HANDSHAKE_NET_BUFFER(71),
+    UNWRAP_UNDERFLOW(72);
 
     private int value;
 

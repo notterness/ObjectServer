@@ -46,8 +46,7 @@ public enum ConnectionStateEnum {
     UNWRAP_HTTP_BUFFER(62),
     UNWRAP_DATA_BUFFER(63),
     SSL_CONN_CLOSE(64),
-    RELEASE_CONTENT_BUFFERS(100),
-
+    FREE_HTTP_BUFFERS(65),
     RUN_AUTHENTICATION_PIPELINE(120),   // Used by HttpParsePipelineMgr and HttpsParsePipelineMgr
     CHECK_EMBARGO(122),                 // This is used by the AuthenticatePipelineMgr
     AUTHENTICATE_REQUEST(123),

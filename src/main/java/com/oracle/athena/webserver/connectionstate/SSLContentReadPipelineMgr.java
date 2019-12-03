@@ -17,6 +17,7 @@ public class SSLContentReadPipelineMgr extends ConnectionPipelineMgr {
     private boolean initialStage;
 
     private Function<WebServerSSLConnState, StateQueueResult> contentReadSetup = wsConn -> {
+        wsConn.setupReadContent();
         wsConn.determineNextContentRead();
         return StateQueueResult.STATE_RESULT_CONTINUE;
     };
@@ -55,6 +56,7 @@ public class SSLContentReadPipelineMgr extends ConnectionPipelineMgr {
     private Function<WebServerSSLConnState, StateQueueResult> contentReadCloseConn = wsConn ->{
         wsConn.releaseContentBuffers();
         wsConn.startSSLClose();
+        wsConn.setSSLBuffersNeeded(true);
         return StateQueueResult.STATE_RESULT_CONTINUE;
     };
 
@@ -182,16 +184,20 @@ public class SSLContentReadPipelineMgr extends ConnectionPipelineMgr {
         }
 
         /*
+         ** Check for any buffers needing an unwrap before checking for outstanding reads.
+         */
+        if (connectionState.getDataBuffersUnwrapRequired() > 0) {
+            LOG.info("UNWRAP_DATA_BUFFER");
+            return ConnectionStateEnum.UNWRAP_DATA_BUFFER;
+        }
+
+        /*
          ** The NIO.2 AsynchronousChannelRead can only have a single outstanding read at at time.
          **
          ** TODO: Support the NIO.2 read that can be passed in an array of ByteBuffers
          */
         if (connectionState.dataBuffersWaitingForRead()) {
             return ConnectionStateEnum.READ_CONTENT_DATA;
-        }
-
-        if (connectionState.getDataBuffersUnwrapRequired() > 0) {
-            return ConnectionStateEnum.UNWRAP_DATA_BUFFER;
         }
 
         if (connectionState.getResponseChannelWriteDone()) {
@@ -210,9 +216,8 @@ public class SSLContentReadPipelineMgr extends ConnectionPipelineMgr {
          **   reads. The channel failure will be set in the PROCESS_READ_ERROR state.
          */
         if (connectionState.hasChannelFailed() && connectionState.getDataBufferDigestSent() == 0) {
-            return ConnectionStateEnum.SSL_CONN_CLOSE;
+            return ConnectionStateEnum.CONN_FINISHED;
         }
-
 
         if (connectionState.getDataBufferReadsCompleted() > 0) {
             return ConnectionStateEnum.MD5_CALCULATE;
@@ -259,18 +264,6 @@ public class SSLContentReadPipelineMgr extends ConnectionPipelineMgr {
 
         if (connectionState.isSSLHandshakeRequired()){
             return ConnectionStateEnum.SSL_HANDSHAKE;
-        }
-
-
-        /*
-         ** First setup to perform the content reads. This is required since the buffer used to read in the
-         **   HTTP headers may have also had data for the content at the end of it.
-         ** The is the last thing to check prior to having the channel wait as it should only happen once.
-         */
-        if (initialStage) {
-            initialStage = false;
-
-            return ConnectionStateEnum.SETUP_CONTENT_READ;
         }
 
         return ConnectionStateEnum.CHECK_SLOW_CHANNEL;

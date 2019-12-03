@@ -112,7 +112,7 @@ abstract public class ConnectionState {
      */
     protected AtomicInteger outstandingDataReadCount;
     private int requestedDataBuffers;
-    private int allocatedDataBuffers;
+    protected int allocatedDataBuffers;
     protected AtomicInteger dataBufferReadsCompleted;
     private AtomicBoolean contentAllRead;
     protected AtomicInteger dataBufferDigestCompleted;
@@ -135,7 +135,7 @@ abstract public class ConnectionState {
     ** The following are used to keep track of the content being read in.
      */
     AtomicLong contentBytesToRead;
-    private AtomicLong contentBytesAllocated;
+    protected AtomicLong contentBytesAllocated;
     private AtomicLong contentBytesRead;
 
     /*
@@ -161,7 +161,7 @@ abstract public class ConnectionState {
     ** The following queue is used to hold allocated BufferStates and it is only accessed from the main
     **   work thread so it does not need to be thread safe.
      */
-    private LinkedList<BufferState> allocatedDataBufferQueue;
+    protected LinkedList<BufferState> allocatedDataBufferQueue;
 
     /*
     ** The following queue is used to keep track of the BufferState that had a failed read. Items are placed
@@ -408,7 +408,7 @@ abstract public class ConnectionState {
     ** Returns if there are outstanding requests for data buffers
      */
     public boolean needsMoreContentBuffers() {
-        return (requestedDataBuffers > 0);
+        return (requestedDataBuffers > 0) && (allocatedDataBuffers < MAX_OUTSTANDING_BUFFERS);
     }
 
     public void resetRequestedDataBuffers() {
@@ -499,8 +499,8 @@ abstract public class ConnectionState {
             iter.remove();
             LOG.info("ConnectionState[" + connStateId + "] releaseBufferState() release data buffer");
 
+            allocatedDataBuffers-=bufferState.count();
             bufferStatePool.freeBufferState(bufferState);
-            allocatedDataBuffers--;
         }
     }
 
@@ -539,7 +539,7 @@ abstract public class ConnectionState {
                 bufferState = iter.next();
                 iter.remove();
 
-                allocatedDataBuffers--;
+                allocatedDataBuffers-=bufferState.count();
 
                 outstandingDataReadCount.incrementAndGet();
                 readFromChannel(bufferState);
@@ -762,6 +762,10 @@ abstract public class ConnectionState {
         return dataBufferDigestSent.get();
     }
 
+    protected int contentBufferSize() {
+        return MemoryManager.MEDIUM_BUFFER_SIZE;
+    }
+
     /*
     ** This method determines what to do next with content buffers. It determines how much of the
     **   data being sent has aleady been read in and determines how many buffers (if any) are needed
@@ -778,7 +782,7 @@ abstract public class ConnectionState {
          */
         long bytesToRead = contentBytesToRead.get();
         long bytesAllocated = contentBytesAllocated.get();
-        int buffersNeeded = (int) ((bytesToRead - bytesAllocated) / MemoryManager.MEDIUM_BUFFER_SIZE);
+        int buffersNeeded = (int) (((bytesToRead + contentBufferSize() - 1) - bytesAllocated) / contentBufferSize());
         int maxBuffersToAllocate = MAX_OUTSTANDING_BUFFERS - (allocatedDataBuffers + requestedDataBuffers);
         if (buffersNeeded > maxBuffersToAllocate) {
             buffersNeeded = maxBuffersToAllocate;
@@ -831,8 +835,8 @@ abstract public class ConnectionState {
                      ** This is the case where the buffer reads are partial reads (i.e. the read request 1k, but only
                      **   500 bytes were read in). So, this means that more buffers are required.
                      */
-                    buffersNeeded = (int) (remainingToRead / MemoryManager.MEDIUM_BUFFER_SIZE);
-                    if ((remainingToRead % MemoryManager.MEDIUM_BUFFER_SIZE) != 0) {
+                    buffersNeeded = (int) (remainingToRead / contentBufferSize());
+                    if ((remainingToRead % contentBufferSize()) != 0) {
                         buffersNeeded++;
                     }
                     if (buffersNeeded > MAX_OUTSTANDING_BUFFERS) {

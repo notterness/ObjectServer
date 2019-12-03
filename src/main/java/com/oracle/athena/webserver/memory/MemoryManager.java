@@ -40,9 +40,17 @@ public class MemoryManager {
 
     private static final int INTEGRATION_SMALL_BUFFER_COUNT = 1000;
     private static final int INTEGRATION_MEDIUM_BUFFER_COUNT = 100;
-    private static final int INTEGRATION_XFER_BUFFER_COUNT = 10;
+    private static final int INTEGRATION_XFER_BUFFER_COUNT = 100;
     private static final int INTEGRATION_LARGE_BUFFER_COUNT =  10;
     private static final int INTEGRATION_CHUNK_BUFFER_COUNT =    1;  // If this is more than 2, get OOM in unit test.
+    /* In sorted order */
+    private static final int[] poolBufferSizes = {
+        SMALL_BUFFER_SIZE,
+        MEDIUM_BUFFER_SIZE,
+        XFER_BUFFER_SIZE,
+        LARGE_BUFFER_SIZE,
+        CHUNK_BUFFER_SIZE,
+    };
 
     /*
     ** TODO: This should be the number of ConnectionState objects
@@ -161,6 +169,15 @@ public class MemoryManager {
         }
 
         return memoryPoolsOkay;
+    }
+
+    static public int allocatedBufferCapacity(int requestedSize) {
+        for(int i=0; i < poolBufferSizes.length; i++) {
+            if (requestedSize <= poolBufferSizes[i])
+                return poolBufferSizes[i];
+        }
+
+        return poolBufferSizes[poolBufferSizes.length - 1];
     }
 }
 

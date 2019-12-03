@@ -47,6 +47,7 @@ class SSLHandshakePipelineMgr extends ConnectionPipelineMgr {
     private Function<WebServerSSLConnState, StateQueueResult> sslHandshakeNextPipeline = wsConn -> {
         initialStage = true;
         wsConn.freeSSLHandshakeBuffers();
+        wsConn.setSSLHandshakeSuccess(false);
         wsConn.setupNextPipeline();
         return StateQueueResult.STATE_RESULT_COMPLETE;
     };
