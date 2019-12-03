@@ -109,18 +109,17 @@ public class SSLContentReadPipelineMgr extends ConnectionPipelineMgr {
     };
 
     private Function<WebServerSSLConnState, StateQueueResult> contentCalculateMd5 = wsConn -> {
-        /*
-        **  the MD5 threads are busy - requeue
-        if (wsConn.sendBuffersToMd5Worker() == 0) {
-            return StateQueueResult.STATE_RESULT_REQUEUE;
-        }
-        */
         wsConn.sendBuffersToMd5Worker();
-        return StateQueueResult.STATE_RESULT_WAIT;
+        return StateQueueResult.STATE_RESULT_CONTINUE;
     };
 
     private Function<WebServerSSLConnState, StateQueueResult> contentMd5Complete = wsConn -> {
         wsConn.md5CalculateComplete();
+        return StateQueueResult.STATE_RESULT_CONTINUE;
+    };
+
+    private Function<WebServerConnState, StateQueueResult> contentMd5BufferDone = wsConn -> {
+        wsConn.md5BufferWorkComplete();
         return StateQueueResult.STATE_RESULT_CONTINUE;
     };
 
@@ -150,6 +149,7 @@ public class SSLContentReadPipelineMgr extends ConnectionPipelineMgr {
         connectionStateMachine.addStateEntry(ConnectionStateEnum.RELEASE_CONTENT_BUFFERS, new StateEntry<>(contentReadReleaseBuffers));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.MD5_CALCULATE, new StateEntry<>(contentCalculateMd5));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.MD5_CALCULATE_COMPLETE, new StateEntry<>(contentMd5Complete));
+		connectionStateMachine.addStateEntry(ConnectionStateEnum.MD5_BUFFER_DONE, new StateEntry<>(contentMd5BufferDone));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.UNWRAP_DATA_BUFFER, new StateEntry<>(contentReadUnwrap));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.SSL_CONN_CLOSE, new StateEntry<>(contentReadCloseConn));
         connectionStateMachine.addStateEntry(ConnectionStateEnum.SSL_ALLOC_BUFFERS, new StateEntry<>(sslHandshakeAllocBuffers));
@@ -219,21 +219,24 @@ public class SSLContentReadPipelineMgr extends ConnectionPipelineMgr {
             return ConnectionStateEnum.CONN_FINISHED;
         }
 
+        if (connectionState.hasMd5CompleteBuffers()) {
+            return ConnectionStateEnum.MD5_BUFFER_DONE;
+        }
+
         if (connectionState.getDataBufferReadsCompleted() > 0) {
             return ConnectionStateEnum.MD5_CALCULATE;
         }
 
-        if (connectionState.hasAllContentBeenRead() && !connectionState.getDigestComplete() &&
-                connectionState.getDataBufferReadsCompleted() == 0 &&
-                connectionState.getDataBufferDigestSent() == 0) {
+        if (connectionState.getDataBufferDigestCompleted()) {
             return ConnectionStateEnum.MD5_CALCULATE_COMPLETE;
         }
+
         /*
          ** This is where the processing of the content data buffers will start. For now, this just
          **   goes directly to the release content buffers stage, which only releases the buffers back to the free
          **   pool.
          */
-        if (connectionState.getDataBufferReadsCompleted() > 0) {
+        if (connectionState.buffersOnEncryptQueue() > 0) {
             return ConnectionStateEnum.RELEASE_CONTENT_BUFFERS;
         }
 
@@ -242,7 +245,7 @@ public class SSLContentReadPipelineMgr extends ConnectionPipelineMgr {
          **
          ** TODO: Start adding in the steps to process the content data instead of just sending status
          */
-        if (connectionState.hasAllContentBeenRead() && !connectionState.hasFinalResponseBeenSent()) {
+        if (connectionState.hasAllConnectionProcessingCompleted() && !connectionState.hasFinalResponseBeenSent()) {
             return ConnectionStateEnum.SEND_FINAL_RESPONSE;
         }
 
