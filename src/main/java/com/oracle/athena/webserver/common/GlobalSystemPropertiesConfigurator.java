@@ -6,6 +6,9 @@ import org.slf4j.LoggerFactory;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
+/*
+    FIXME: I don't believe this is necessary, but will require further analysis to confirm.
+ */
 public class GlobalSystemPropertiesConfigurator {
     private static final Logger logger = LoggerFactory.getLogger(GlobalSystemPropertiesConfigurator.class);
     private static volatile boolean configured = false;

@@ -3,20 +3,19 @@ package com.oracle.athena.webserver.connectionstate;
 import com.google.common.hash.Hashing;
 import com.google.common.io.BaseEncoding;
 import com.oracle.pic.casper.common.exceptions.BadRequestException;
-import com.oracle.pic.casper.common.exceptions.ContentMD5UnmatchedException;
 import org.apache.commons.codec.binary.Hex;
 import org.eclipse.jetty.http.BadMessageException;
 import org.eclipse.jetty.http.HostPortHttpField;
 import org.eclipse.jetty.http.HttpField;
 import org.eclipse.jetty.http.HttpStatus;
-
-import java.util.*;
-
-import org.glassfish.jersey.internal.util.collection.StringKeyIgnoreCaseMultivaluedMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.core.MultivaluedMap;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 public class CasperHttpInfo {
 
@@ -226,7 +225,7 @@ public class CasperHttpInfo {
     /*
      ** Used to keep track of the Header fields in a generic manner
      */
-    private final MultivaluedMap<String, String> headers;
+    private final Map<String, List<String>> headers;
 
 
     /*
@@ -239,12 +238,10 @@ public class CasperHttpInfo {
         contentComplete = false;
         messageComplete = false;
         earlyEof = false;
-
-        headers = new StringKeyIgnoreCaseMultivaluedMap();
-
         parseFailureCode = 0;
         parseFailureReason = null;
         contentLengthReceived = false;
+        headers = new HashMap<>();
 
         /*
          ** Need the ConnectionState to know who to inform when the different
@@ -366,7 +363,10 @@ public class CasperHttpInfo {
      **   _fields + _hdr + _val fields?
      */
     public void addHeaderValue(HttpField field) {
-        headers.add(field.getName(), field.getValue());
+        if (!headers.containsKey(field.getName())) {
+            headers.put(field.getName(), new ArrayList<>());
+        }
+        headers.get(field.getName()).add(field.getValue());
 
         LOG.info("addHeaderValue() header.name" +  field.getName() +
                 " value: " + field.getValue());
@@ -604,7 +604,7 @@ public class CasperHttpInfo {
     **   string.
      */
     private String getHeaderString(String name) {
-        List<String> values = (List)this.headers.get(name);
+        List<String> values = headers.get(name);
         if (values == null) {
             return null;
         } else if (values.isEmpty()) {
