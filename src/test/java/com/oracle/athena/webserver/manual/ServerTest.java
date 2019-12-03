@@ -1,7 +1,11 @@
 package com.oracle.athena.webserver.manual;
 
+import com.oracle.athena.webserver.common.GlobalSystemPropertiesConfigurator;
 import com.oracle.athena.webserver.server.ServerChannelLayer;
 import com.oracle.athena.webserver.server.WebServer;
+import com.oracle.pic.casper.common.config.ConfigAvailabilityDomain;
+import com.oracle.pic.casper.common.config.ConfigRegion;
+import com.oracle.pic.casper.common.config.v2.CasperConfig;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -46,7 +50,12 @@ public class ServerTest implements Runnable {
 
         System.out.println("ServerTest[" + serverConnId + "] thread start");
 
-        WebServer server = new WebServer(WebServerFlavor.INTEGRATION_TESTS, tcpPort, serverConnId);
+        GlobalSystemPropertiesConfigurator.configure();
+        final ConfigAvailabilityDomain ad =
+                ConfigAvailabilityDomain.tryFromSystemProperty().orElse(ConfigAvailabilityDomain.GLOBAL);
+
+        WebServer server = new WebServer(
+                WebServerFlavor.INTEGRATION_TESTS, tcpPort, serverConnId, CasperConfig.create(ConfigRegion.LOCAL, ad));
         server.start();
 
         while (!exitThread) {

@@ -90,11 +90,6 @@
             <groupId>org.glassfish.jersey.core</groupId>
             <artifactId>jersey-client</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.glassfish.jersey.inject</groupId>
-            <artifactId>jersey-hk2</artifactId>
-            <version>${jersey-version}</version>
-        </dependency>
         <!-- logging dependencies -->
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
@@ -337,6 +332,10 @@
             <artifactId>casper-web-server-v2-client-helper</artifactId>
             <version>1.0.6036</version>
         </dependency>
+        <dependency>
+            <groupId>com.oracle.pic.casper</groupId>
+            <artifactId>casper-config</artifactId>
+            <version>1.0.6036</version>
+        </dependency>
     </dependencies>
-
 </project>

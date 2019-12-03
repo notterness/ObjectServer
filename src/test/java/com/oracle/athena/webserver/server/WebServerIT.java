@@ -1,6 +1,10 @@
 package com.oracle.athena.webserver.server;
 
 
+import com.oracle.athena.webserver.common.GlobalSystemPropertiesConfigurator;
+import com.oracle.pic.casper.common.config.ConfigAvailabilityDomain;
+import com.oracle.pic.casper.common.config.ConfigRegion;
+import com.oracle.pic.casper.common.config.v2.CasperConfig;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
@@ -56,7 +60,11 @@ class WebServerIT {
 
             Load tests should be handled in a separate test area similar to how the "manual" ones are handled today.
          */
-        server = new WebServer(WebServerFlavor.INTEGRATION_TESTS, 1);
+        GlobalSystemPropertiesConfigurator.configure();
+        final ConfigAvailabilityDomain ad =
+                ConfigAvailabilityDomain.tryFromSystemProperty().orElse(ConfigAvailabilityDomain.GLOBAL);
+
+        server = new WebServer(WebServerFlavor.INTEGRATION_TESTS, CasperConfig.create(ConfigRegion.LOCAL, ad));
         server.start();
         client = new HttpClient();
         // in async mode, force this particular client to send all events in order
