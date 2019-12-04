@@ -599,24 +599,31 @@ public class CasperHttpInfo {
     }
 
     /*
-    ** Return "namespace" from the PathParam
+     ** Return "namespace" from the PathParam
      */
     public String getNamespace() {
         return null;
     }
 
     /*
-    ** Return the "bucket" from the PathParam
+     ** Return the "tenancy" (TENANCY_NAME) that was parsed from the HTTP uri
      */
-    public String getBucket() {
-        return null;
+    public String getTenancy() {
+        return tenancyName;
     }
 
     /*
-    ** Return the "object" from the PathParam
+     ** Return the "bucket" (BUCKET_NAME) that was parsed from the HTTP uri
+     */
+    public String getBucket() {
+        return bucketName;
+    }
+
+    /*
+     ** Return the "object" (OBJECT_NAME) that was parsed from the HTTP uri
      */
     public String getObject() {
-        return null;
+        return objectName;
     }
 
     /**
