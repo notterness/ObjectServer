@@ -241,8 +241,21 @@ public class CasperHttpInfo {
         parseFailureCode = 0;
         parseFailureReason = null;
         contentLengthReceived = false;
-        headers = new HashMap<>();
-
+        // provide case-insensitive key management for the headers map using get(), containsKey(), and put()
+        headers = new HashMap<String, List<String>>() {
+            @Override
+            public List<String> get(Object key) {
+                return super.get(key.toString().toLowerCase());
+            }
+            @Override
+            public boolean containsKey(Object key) {
+                return super.containsKey(key.toString().toLowerCase());
+            }
+            @Override
+            public List<String> put(String key, List<String> value) {
+                return super.put(key.toLowerCase(), value);
+            }
+        };
         /*
          ** Need the ConnectionState to know who to inform when the different
          **   HTTP parsing phases complete.
@@ -363,13 +376,13 @@ public class CasperHttpInfo {
      **   _fields + _hdr + _val fields?
      */
     public void addHeaderValue(HttpField field) {
-        if (!headers.containsKey(field.getName())) {
-            headers.put(field.getName(), new ArrayList<>());
+        final String fieldName = field.getName().toLowerCase();
+        if (!headers.containsKey(fieldName)) {
+            headers.put(fieldName, new ArrayList<>());
         }
-        headers.get(field.getName()).add(field.getValue());
+        headers.get(fieldName).add(field.getValue());
 
-        LOG.info("addHeaderValue() header.name" +  field.getName() +
-                " value: " + field.getValue());
+        LOG.info("addHeaderValue() header.name" +  fieldName + " value: " + field.getValue());
 
         if (field instanceof HostPortHttpField) {
             HostPortHttpField hpfield = (HostPortHttpField) field;
@@ -384,7 +397,7 @@ public class CasperHttpInfo {
         ** The CONTENT_LENGTH is parsed out early as it is used in the headers parsed callback to
         **   setup the next stage of the connection pipeline.
          */
-        int result = field.getName().indexOf(CONTENT_LENGTH);
+        int result = fieldName.indexOf(CONTENT_LENGTH.toLowerCase());
         if (result != -1) {
             try {
                 contentLengthReceived = true;
@@ -611,10 +624,10 @@ public class CasperHttpInfo {
             return "";
         } else {
             Iterator<String> valuesIterator = values.iterator();
-            StringBuilder buffer = new StringBuilder((String)valuesIterator.next());
+            StringBuilder buffer = new StringBuilder(valuesIterator.next());
 
             while(valuesIterator.hasNext()) {
-                buffer.append(',').append((String)valuesIterator.next());
+                buffer.append(',').append(valuesIterator.next());
             }
 
             return buffer.toString();
