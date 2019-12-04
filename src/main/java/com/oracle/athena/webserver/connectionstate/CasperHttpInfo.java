@@ -36,6 +36,9 @@ public class CasperHttpInfo {
     private static final String X_VCN_ID = "x-vcn-id";
     private static final String VCN_ID_CASPER_DEBUG_HEADER = "x-vcn-id-casper";
 
+    private static final String OBJECT_NAME = "/o/";
+    private static final String TENANCY_NAME = "/n/";
+    private static final String BUCKET_NAME = "/b/";
 
 
     /*
@@ -222,10 +225,16 @@ public class CasperHttpInfo {
      */
     private String vcnDebugId;
 
+    private String objectName;
+    private String tenancyName;
+    private String bucketName;
+
     /*
      ** Used to keep track of the Header fields in a generic manner
      */
     private final Map<String, List<String>> headers;
+
+    private String[] uriFields = {OBJECT_NAME, BUCKET_NAME, TENANCY_NAME};
 
 
     /*
@@ -265,6 +274,10 @@ public class CasperHttpInfo {
         httpMethod = HttpMethodEnum.INVALID_METHOD;
         expectedMD5 = null;
         md5parsed = false;
+
+        objectName = null;
+        tenancyName = null;
+        bucketName = null;
 
         /*
         ** Create a map of the HTTP methods to make the parsing easier
@@ -343,6 +356,10 @@ public class CasperHttpInfo {
         createdBy = null;
         timeCreated = null;
         lastModified = null;
+
+        objectName = null;
+        tenancyName = null;
+        bucketName = null;
     }
 
     public void setHttpMethodAndVersion(String methodString, String httpParsedVersion) {
@@ -367,6 +384,50 @@ public class CasperHttpInfo {
 
     public void setHostAndPort(final String host, final int port) {
         httpHost = host;
+    }
+
+    /*
+     ** The uri for the request. This is where the object name, tenancy and bucket name come from
+     */
+    public void setHttpUri(final String uri) {
+
+        /*
+         ** Find the object name
+         */
+        System.out.println("setHttpUri() uri: " + uri);
+        for (int i = 0; i < uriFields.length; i++) {
+            String tmp = null;
+            int startingIndex = uri.indexOf(uriFields[i]);
+            if (startingIndex != -1) {
+                startingIndex += uriFields[i].length();
+                int endingIndex = uri.indexOf(' ', startingIndex);
+                if ((endingIndex = uri.indexOf(' ', startingIndex)) == -1) {
+                    if ((endingIndex = uri.indexOf('/', startingIndex)) == -1) {
+                        endingIndex = uri.length();
+                    }
+                }
+
+                if (endingIndex != -1) {
+                    try {
+                        tmp = uri.substring(startingIndex, endingIndex);
+                        System.out.println("setHttpUri() name: " + uriFields[i] + " name: " + tmp);
+                    } catch (IndexOutOfBoundsException ex) {
+                        System.out.println("setHttpUri() name:" + uriFields[i] + " startingIndex: " + startingIndex + " endingIndex: " + endingIndex);
+                    }
+                }
+            } else {
+                LOG.warn("setHttpUri() name: " + uriFields[i] + " is null");
+            }
+
+            // TODO: Fix this so it is not a lookup
+            if (i == 0) {
+                objectName = tmp;
+            } else if (i == 1) {
+                bucketName = tmp;
+            } else {
+                tenancyName = tmp;
+            }
+        }
     }
 
     /*
@@ -538,24 +599,31 @@ public class CasperHttpInfo {
     }
 
     /*
-    ** Return "namespace" from the PathParam
+     ** Return "namespace" from the PathParam
      */
     public String getNamespace() {
         return null;
     }
 
     /*
-    ** Return the "bucket" from the PathParam
+     ** Return the "tenancy" (TENANCY_NAME) that was parsed from the HTTP uri
      */
-    public String getBucket() {
-        return null;
+    public String getTenancy() {
+        return tenancyName;
     }
 
     /*
-    ** Return the "object" from the PathParam
+     ** Return the "bucket" (BUCKET_NAME) that was parsed from the HTTP uri
+     */
+    public String getBucket() {
+        return bucketName;
+    }
+
+    /*
+     ** Return the "object" (OBJECT_NAME) that was parsed from the HTTP uri
      */
     public String getObject() {
-        return null;
+        return objectName;
     }
 
     /**
