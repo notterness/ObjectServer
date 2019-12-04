@@ -230,12 +230,12 @@ public class ContentReadPipelineMgr extends ConnectionPipelineMgr {
             return ConnectionStateEnum.CONN_FINISHED;
         }
 
-        if (connectionState.getDataBufferReadsCompleted() > 0) {
-            return ConnectionStateEnum.MD5_CALCULATE;
-        }
-
         if (connectionState.hasMd5CompleteBuffers()) {
             return ConnectionStateEnum.MD5_BUFFER_DONE;
+        }
+
+        if (connectionState.getDataBufferReadsCompleted() > 0) {
+            return ConnectionStateEnum.MD5_CALCULATE;
         }
 
         if (connectionState.getDataBufferDigestCompleted()) {

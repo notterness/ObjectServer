@@ -639,6 +639,7 @@ public class WebServerConnState extends ConnectionState {
                     newBufferState.copyByteBuffer(remainingBuffer);
 
                     int bytesRead = remainingBuffer.limit();
+                    contentBytesAllocated.addAndGet(bytesRead);
                     addDataBuffer(newBufferState, bytesRead);
                 }
 

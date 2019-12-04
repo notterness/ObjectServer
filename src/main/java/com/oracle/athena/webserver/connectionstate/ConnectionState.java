@@ -783,6 +783,7 @@ abstract public class ConnectionState {
         long bytesToRead = contentBytesToRead.get();
         long bytesAllocated = contentBytesAllocated.get();
         int buffersNeeded = (int) (((bytesToRead + contentBufferSize() - 1) - bytesAllocated) / contentBufferSize());
+//        int buffersNeeded = (int) ((bytesToRead - bytesAllocated) / contentBufferSize());  <== old
         int maxBuffersToAllocate = MAX_OUTSTANDING_BUFFERS - (allocatedDataBuffers + requestedDataBuffers);
         if (buffersNeeded > maxBuffersToAllocate) {
             buffersNeeded = maxBuffersToAllocate;
