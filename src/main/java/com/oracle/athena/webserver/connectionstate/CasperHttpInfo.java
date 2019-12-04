@@ -242,6 +242,12 @@ public class CasperHttpInfo {
      */
     private Map<HttpMethodEnum, String> httpMethodMap;
 
+    /*
+    ** This map is used to hold the Object Name, Bucket Name and Tenancy Name for the created objected
+     */
+    private Map<String, String> putObjectInfoMap;
+
+
     CasperHttpInfo(final WebServerConnState connState) {
         headerComplete = false;
         contentComplete = false;
@@ -275,16 +281,14 @@ public class CasperHttpInfo {
         expectedMD5 = null;
         md5parsed = false;
 
-        objectName = null;
-        tenancyName = null;
-        bucketName = null;
-
         /*
         ** Create a map of the HTTP methods to make the parsing easier
          */
         httpMethodMap = new HashMap<>(2);
         httpMethodMap.put(HttpMethodEnum.PUT_METHOD, "PUT");
         httpMethodMap.put(HttpMethodEnum.POST_METHOD, "POST");
+
+        putObjectInfoMap = new HashMap<>(3);
     }
 
 
@@ -357,9 +361,12 @@ public class CasperHttpInfo {
         timeCreated = null;
         lastModified = null;
 
-        objectName = null;
-        tenancyName = null;
-        bucketName = null;
+        /*
+        ** Clear out the object information map
+         */
+        for (int i = 0; i < uriFields.length; i++) {
+            putObjectInfoMap.remove(uriFields[i]);
+        }
     }
 
     public void setHttpMethodAndVersion(String methodString, String httpParsedVersion) {
@@ -392,16 +399,15 @@ public class CasperHttpInfo {
     public void setHttpUri(final String uri) {
 
         /*
-         ** Find the object name
+         ** Find the information about this object from the HTTP URI
          */
-        System.out.println("setHttpUri() uri: " + uri);
         for (int i = 0; i < uriFields.length; i++) {
             String tmp = null;
             int startingIndex = uri.indexOf(uriFields[i]);
             if (startingIndex != -1) {
                 startingIndex += uriFields[i].length();
                 int endingIndex = uri.indexOf(' ', startingIndex);
-                if ((endingIndex = uri.indexOf(' ', startingIndex)) == -1) {
+                if (endingIndex == -1) {
                     if ((endingIndex = uri.indexOf('/', startingIndex)) == -1) {
                         endingIndex = uri.length();
                     }
@@ -410,23 +416,16 @@ public class CasperHttpInfo {
                 if (endingIndex != -1) {
                     try {
                         tmp = uri.substring(startingIndex, endingIndex);
-                        System.out.println("setHttpUri() name: " + uriFields[i] + " name: " + tmp);
+                        LOG.info("setHttpUri() [" + connectionState.getConnStateId() +  "] name: " + uriFields[i] + " name: " + tmp);
                     } catch (IndexOutOfBoundsException ex) {
-                        System.out.println("setHttpUri() name:" + uriFields[i] + " startingIndex: " + startingIndex + " endingIndex: " + endingIndex);
+                        LOG.warn("setHttpUri() [" + connectionState.getConnStateId() +  "] name:" + uriFields[i] + " startingIndex: " + startingIndex + " endingIndex: " + endingIndex);
                     }
                 }
             } else {
-                LOG.warn("setHttpUri() name: " + uriFields[i] + " is null");
+                LOG.warn("setHttpUri() [" + connectionState.getConnStateId() +  "] name: " + uriFields[i] + " is null");
             }
 
-            // TODO: Fix this so it is not a lookup
-            if (i == 0) {
-                objectName = tmp;
-            } else if (i == 1) {
-                bucketName = tmp;
-            } else {
-                tenancyName = tmp;
-            }
+            putObjectInfoMap.put(uriFields[i], tmp);
         }
     }
 
@@ -495,7 +494,20 @@ public class CasperHttpInfo {
             parseFailureCode = HttpStatus.NO_CONTENT_204;
             parseFailureReason = HttpStatus.getMessage(parseFailureCode);
 
-            LOG.info("No Content-Length [" + connectionState.getConnStateId() +  "] code: " +
+            LOG.warn("No Content-Length [" + connectionState.getConnStateId() +  "] code: " +
+                    parseFailureCode + " reason: " + parseFailureReason);
+
+            connectionState.setHttpParsingError();
+        }
+
+        /*
+        ** Verify that there was an Object Name, Bucket Name and Tenant Name passed in
+         */
+        if ((getObject() == null) || (getBucket() == null) || (getTenancy() == null)) {
+            parseFailureCode = HttpStatus.BAD_REQUEST_400;
+            parseFailureReason = HttpStatus.getMessage(parseFailureCode);
+
+            LOG.warn("Missing Critical Object Info [" + connectionState.getConnStateId() +  "] code: " +
                     parseFailureCode + " reason: " + parseFailureReason);
 
             connectionState.setHttpParsingError();
@@ -609,21 +621,21 @@ public class CasperHttpInfo {
      ** Return the "tenancy" (TENANCY_NAME) that was parsed from the HTTP uri
      */
     public String getTenancy() {
-        return tenancyName;
+        return putObjectInfoMap.get(TENANCY_NAME);
     }
 
     /*
      ** Return the "bucket" (BUCKET_NAME) that was parsed from the HTTP uri
      */
     public String getBucket() {
-        return bucketName;
+        return putObjectInfoMap.get(BUCKET_NAME);
     }
 
     /*
      ** Return the "object" (OBJECT_NAME) that was parsed from the HTTP uri
      */
     public String getObject() {
-        return objectName;
+        return putObjectInfoMap.get(OBJECT_NAME);
     }
 
     /**

@@ -428,7 +428,7 @@ abstract public class ConnectionState {
     **   now ready to have data read into them.
      */
     public int allocContentReadBuffers() {
-        LOG.info("ServerWorkerThread[" + connStateId + "] allocC:qontentReadBuffers() requestedBuffers: " +
+        LOG.info("ServerWorkerThread[" + connStateId + "] allocContentReadBuffers() requestedBuffers: " +
                 requestedDataBuffers);
 
         while (requestedDataBuffers > 0) {
