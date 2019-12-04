@@ -28,7 +28,6 @@ public class HttpParserListener implements HttpParser.RequestHandler {
     private String _bad;
     private String _content;
     private String _methodOrVersion;
-    private String _uriOrStatus;
     private String _versionOrReason;
     private List<HttpField> _trailers = new ArrayList<>();
     private boolean _early;
@@ -58,7 +57,6 @@ public class HttpParserListener implements HttpParser.RequestHandler {
     @Override
     public boolean startRequest(String method, String uri, HttpVersion version) {
         _methodOrVersion = method;
-        _uriOrStatus = uri;
         _versionOrReason = version == null ? null : version.asString();
         _messageCompleted = false;
         _headerCompleted = false;
@@ -73,6 +71,8 @@ public class HttpParserListener implements HttpParser.RequestHandler {
             LOG.info("StartRequest() method: " + method + " uri: " + uri +
                     " version: null");
         }
+
+        casperHttpInfo.setHttpUri(uri);
 
         return false;
     }
