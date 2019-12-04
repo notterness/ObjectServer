@@ -46,6 +46,7 @@ public class ClientWriteCompletion extends WriteCompletion {
             // Write failed and will never be completed. In addition, the
             // transaction has failed and it is closed. Need to tear down the
             // WriteConnection.
+            clientTest.writeCompleted(-1, buffer);
         }
     }
 }

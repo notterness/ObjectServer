@@ -257,7 +257,7 @@ public class WriteConnection implements Closeable {
 
             @Override
             public void failed(final Throwable exc, final WriteCompletion completion) {
-                LOG.info("WriteConnection[" + connTransactionId + "] readFromChannel() bytesXfr: " + exc.getMessage());
+                LOG.info("WriteConnection[" + connTransactionId + "] failed(): " + exc.getMessage());
                 closeChannel();
 
                 completion.writeCompleted(-1, connTransactionId);

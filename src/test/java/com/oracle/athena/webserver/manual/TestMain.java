@@ -36,21 +36,25 @@ public class TestMain {
         ClientTest client_checkMd5 = new ClientTest_CheckMd5("CheckMd5", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
         client_checkMd5.start();
 
-        //ClientTest client_badMd5 = new ClientTest_BadMd5("BadMd5", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
-        //client_badMd5.start();
+        ClientTest client_badMd5 = new ClientTest_BadMd5("BadMd5", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        client_badMd5.start();
 
         String failedTestName = waitForTestsToComplete(threadCount, client);
 
         client_checkMd5.stop();
-        //client_badMd5.stop();
+        client_badMd5.stop();
 
         if (failedTestName == null) {
-            ClientTest client_invalidMd5 = new ClientTest_InvalidMd5Header("InvalidMd5Header", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
-            client_invalidMd5.start();
+            //ClientTest client_invalidMd5 = new ClientTest_InvalidMd5Header("InvalidMd5Header", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            //client_invalidMd5.start();
+
+            ClientTest client_missingObjectName = new ClientTest_MissingObjectName("MissingObjectName", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            client_missingObjectName.start();
 
             failedTestName = waitForTestsToComplete(threadCount, client);
 
-            client_invalidMd5.stop();
+            //client_invalidMd5.stop();
+            client_missingObjectName.stop();
         }
 
         if (failedTestName == null) {

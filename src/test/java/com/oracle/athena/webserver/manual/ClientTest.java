@@ -163,7 +163,7 @@ public abstract class ClientTest implements Runnable {
 
     private void userWriteCompleted(int result) {
 
-        System.out.println("ClientTest[" + writeConn.getTransactionId() + "]userWriteComp(): " + result);
+        System.out.println("ClientTest[" + writeConn.getTransactionId() + "] userWriteComp(): " + result);
 
         synchronized (writeDone) {
             writeSignalSent = true;
