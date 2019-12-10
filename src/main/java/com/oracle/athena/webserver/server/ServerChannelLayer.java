@@ -89,6 +89,8 @@ public class ServerChannelLayer implements Runnable {
 
         System.out.println("ServerChannelLayer[" + (serverClientId * 100) + "] stop()");
 
+        exitThreads = true;
+
         serverWorkHandler.stop();
 
         /*
