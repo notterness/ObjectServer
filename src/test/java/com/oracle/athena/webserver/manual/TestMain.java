@@ -45,15 +45,15 @@ public class TestMain {
         client_badMd5.stop();
 
         if (failedTestName == null) {
-            //ClientTest client_invalidMd5 = new ClientTest_InvalidMd5Header("InvalidMd5Header", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
-            //client_invalidMd5.start();
+            ClientTest client_invalidMd5 = new ClientTest_InvalidMd5Header("InvalidMd5Header", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            client_invalidMd5.start();
 
             ClientTest client_missingObjectName = new ClientTest_MissingObjectName("MissingObjectName", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
             client_missingObjectName.start();
 
             failedTestName = waitForTestsToComplete(threadCount, client);
 
-            //client_invalidMd5.stop();
+            client_invalidMd5.stop();
             client_missingObjectName.stop();
         }
 
