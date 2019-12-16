@@ -81,8 +81,14 @@ public class BufferManagerPointer {
     /*
     ** This updates the producers writeIndex after data has been placed into the BufferState
     **   and it returns the location to place the next data write.
+    **
+    ** This will also call all the Operations eventHandlers that are registered as
+    **   depending upon this producer.
      */
     int updateWriteIndex() {
+
+        generateDependsOnEvents();
+
         bufferIndex++;
         if (bufferIndex == bufferArraySize) {
             bufferIndex = 0;
