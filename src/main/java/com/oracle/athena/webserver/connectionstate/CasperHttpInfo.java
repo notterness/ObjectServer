@@ -2,6 +2,7 @@ package com.oracle.athena.webserver.connectionstate;
 
 import com.google.common.hash.Hashing;
 import com.google.common.io.BaseEncoding;
+import com.oracle.athena.webserver.requestcontext.RequestContext;
 import com.oracle.pic.casper.common.exceptions.BadRequestException;
 import org.apache.commons.codec.binary.Hex;
 import org.eclipse.jetty.http.BadMessageException;
@@ -44,7 +45,7 @@ public class CasperHttpInfo {
     /*
      ** The connection this HTTP information is associated with
      */
-    private WebServerConnState connectionState;
+    private RequestContext requestContext;
 
     private boolean headerComplete;
     private boolean contentComplete;
@@ -248,7 +249,7 @@ public class CasperHttpInfo {
     private Map<String, String> putObjectInfoMap;
 
 
-    CasperHttpInfo(final WebServerConnState connState) {
+    public CasperHttpInfo(final RequestContext requestContext) {
         headerComplete = false;
         contentComplete = false;
         messageComplete = false;
@@ -275,7 +276,7 @@ public class CasperHttpInfo {
          ** Need the ConnectionState to know who to inform when the different
          **   HTTP parsing phases complete.
          */
-        connectionState = connState;
+        this.requestContext = requestContext;
 
         httpMethod = HttpMethodEnum.INVALID_METHOD;
         expectedMD5 = null;
@@ -416,13 +417,13 @@ public class CasperHttpInfo {
                 if (endingIndex != -1) {
                     try {
                         tmp = uri.substring(startingIndex, endingIndex);
-                        LOG.info("setHttpUri() [" + connectionState.getConnStateId() +  "] name: " + uriFields[i] + " name: " + tmp);
+                        LOG.info("setHttpUri() [" + requestContext.getRequestId() +  "] name: " + uriFields[i] + " name: " + tmp);
                     } catch (IndexOutOfBoundsException ex) {
-                        LOG.warn("setHttpUri() [" + connectionState.getConnStateId() +  "] name:" + uriFields[i] + " startingIndex: " + startingIndex + " endingIndex: " + endingIndex);
+                        LOG.warn("setHttpUri() [" + requestContext.getRequestId() +  "] name:" + uriFields[i] + " startingIndex: " + startingIndex + " endingIndex: " + endingIndex);
                     }
                 }
             } else {
-                LOG.warn("setHttpUri() [" + connectionState.getConnStateId() +  "] name: " + uriFields[i] + " is null");
+                LOG.warn("setHttpUri() [" + requestContext.getRequestId() +  "] name: " + uriFields[i] + " is null");
             }
 
             putObjectInfoMap.put(uriFields[i], tmp);
@@ -471,10 +472,10 @@ public class CasperHttpInfo {
                     parseFailureCode = HttpStatus.RANGE_NOT_SATISFIABLE_416;
                     parseFailureReason = HttpStatus.getMessage(parseFailureCode);
 
-                    LOG.info("Invalid Content-Length [" + connectionState.getConnStateId() +  "] code: " +
+                    LOG.info("Invalid Content-Length [" + requestContext.getRequestId() +  "] code: " +
                             parseFailureCode + " reason: " + parseFailureReason);
 
-                    connectionState.setHttpParsingError();
+                    requestContext.setHttpParsingError();
                 }
             } catch (NumberFormatException num_ex) {
                 LOG.info("addHeaderValue() " + field.getName() + " " + num_ex.getMessage());
@@ -494,10 +495,10 @@ public class CasperHttpInfo {
             parseFailureCode = HttpStatus.NO_CONTENT_204;
             parseFailureReason = HttpStatus.getMessage(parseFailureCode);
 
-            LOG.warn("No Content-Length [" + connectionState.getConnStateId() +  "] code: " +
+            LOG.warn("No Content-Length [" + requestContext.getRequestId() +  "] code: " +
                     parseFailureCode + " reason: " + parseFailureReason);
 
-            connectionState.setHttpParsingError();
+            requestContext.setHttpParsingError();
         }
 
         /*
@@ -507,15 +508,15 @@ public class CasperHttpInfo {
             parseFailureCode = HttpStatus.BAD_REQUEST_400;
             parseFailureReason = HttpStatus.getMessage(parseFailureCode);
 
-            LOG.warn("Missing Critical Object Info [" + connectionState.getConnStateId() +  "] code: " +
+            LOG.warn("Missing Critical Object Info [" + requestContext.getRequestId() +  "] code: " +
                     parseFailureCode + " reason: " + parseFailureReason);
 
-            connectionState.setHttpParsingError();
+            requestContext.setHttpParsingError();
         }
 
         headerComplete = true;
 
-        connectionState.httpHeaderParseComplete(contentLength);
+        requestContext.httpHeaderParseComplete(contentLength);
     }
 
     public boolean getHeaderComplete() {
@@ -538,10 +539,10 @@ public class CasperHttpInfo {
 
         parseFailureCode = failure.getCode();
         parseFailureReason = (reason == null) ? String.valueOf(failure.getCode()) : reason;
-        LOG.info("badMessage() [" + connectionState.getConnStateId() + "] code: " +
+        LOG.info("badMessage() [" + requestContext.getRequestId() + "] code: " +
                 parseFailureCode + " reason: " + parseFailureReason);
 
-        connectionState.setHttpParsingError();
+        requestContext.setHttpParsingError();
     }
 
     public int getParseFailureCode() {
@@ -656,31 +657,31 @@ public class CasperHttpInfo {
     public boolean checkContentMD5(String computedMd5) {
         if ((md5parsed == false) || (md5Override != null))
         {
-            LOG.warn("checkContentMd5() [" + connectionState.getConnStateId() + "] md5parsed: " + md5parsed +
+            LOG.warn("checkContentMd5() [" + requestContext.getRequestId() + "] md5parsed: " + md5parsed +
                     " md5Override: " + md5Override);
             return true;
         }
 
         if (expectedMD5 != null) {
             if (!expectedMD5.equals(computedMd5)) {
-                LOG.warn("Content-MD5 [" + connectionState.getConnStateId() +  "] did not match computed. expected: " +
+                LOG.warn("Content-MD5 [" + requestContext.getRequestId() +  "] did not match computed. expected: " +
                         expectedMD5 + " computed: " + computedMd5);
 
                 parseFailureCode = HttpStatus.UNPROCESSABLE_ENTITY_422;
                 parseFailureReason = HttpStatus.getMessage(parseFailureCode);
-                connectionState.setHttpParsingError();
+                requestContext.setHttpParsingError();
                 return false;
             }
         } else {
-            LOG.warn("Content-MD5 [" + connectionState.getConnStateId() +  "] passed in was invalid. computed: " +
+            LOG.warn("Content-MD5 [" + requestContext.getRequestId() +  "] passed in was invalid. computed: " +
                     computedMd5);
             parseFailureCode = HttpStatus.BAD_REQUEST_400;
             parseFailureReason = HttpStatus.getMessage(parseFailureCode);
-            connectionState.setHttpParsingError();
+            requestContext.setHttpParsingError();
             return false;
         }
 
-        LOG.warn("checkContentMd5() [" + connectionState.getConnStateId() +  "] passed");
+        LOG.warn("checkContentMd5() [" + requestContext.getRequestId() +  "] passed");
         return true;
     }
 

@@ -1,40 +1,67 @@
 package com.oracle.athena.webserver.buffermgr;
 
-import com.oracle.athena.webserver.connectionstate.BufferState;
 import com.oracle.athena.webserver.operations.Operation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.nio.ByteBuffer;
 
 public class BufferManager {
 
-    private BufferState[] bufferStateArray;
+    private static final Logger LOG = LoggerFactory.getLogger(BufferManager.class);
+
+    /*
+    ** The BufferManager uses an array of ByteBuffer(s) to implement a ring buffer that can have multiple
+    **   producers and multiple consumers. The consumers are tied (dependency) to the producer they are interesting
+    **   in. When the producer updates their pointer into the ring, that will cause all of the consumers
+    **   to be event(ed) which will allow them to run.
+     */
+    private ByteBuffer[] bufferArray;
     private final int bufferArraySize;
 
-    BufferManager(final int bufferCount) {
+    public BufferManager(final int bufferCount) {
         this.bufferArraySize = bufferCount;
 
-        bufferStateArray = new BufferState[this.bufferArraySize];
+        bufferArray = new ByteBuffer[this.bufferArraySize];
     }
 
-    BufferManagerPointer register(final Operation operation) {
+    public BufferManagerPointer register(final Operation operation) {
         BufferManagerPointer pointer = new BufferManagerPointer(operation, bufferArraySize);
 
         return pointer;
     }
 
-    BufferManagerPointer register(final Operation operation, final BufferManagerPointer dependsOn) {
+    public BufferManagerPointer register(final Operation operation, final BufferManagerPointer dependsOn) {
         BufferManagerPointer pointer = new BufferManagerPointer(operation, dependsOn, bufferArraySize);
         dependsOn.addDependsOn(operation);
 
         return pointer;
     }
 
-    void unregister(final BufferManagerPointer pointer) {
+    public void unregister(final BufferManagerPointer pointer) {
         pointer.terminate();
     }
 
     /*
     ** This is used to allocate BufferState to the BufferManager.
      */
-    void offer(final BufferManagerPointer pointer, final BufferState bufferState) {
+    public void offer(final BufferManagerPointer pointer, final ByteBuffer buffer) {
+        int writeIndex = pointer.getWriteIndex();
+
+        /*
+        ** If a ByteBuffer is being added to the BufferManager, make sure that the current
+        **   array location does not have one already assigned.
+         */
+        if (bufferArray[writeIndex] != null) {
+
+        }
+
+        bufferArray[writeIndex] = buffer;
+
+        /*
+        ** Now the pointer can be advanced to allow anything waiting on this to be evented.
+         */
+        pointer.updateWriteIndex();
     }
 
     /*
@@ -43,7 +70,7 @@ public class BufferManager {
     ** This returns the next location to write data into.
      */
     int updateProducerWritePointer(final BufferManagerPointer pointer) {
-        return pointer.updateWriteIndex()
+        return pointer.updateWriteIndex();
     }
 
     /*
@@ -52,9 +79,10 @@ public class BufferManager {
     **   upon).
     ** It will update the readIndex if there is a BufferState ready
      */
-    BufferState poll(final BufferManagerPointer pointer) {
-        if (int readIndex = pointer.getReadIndex(true) != -1) {
-            return bufferStateArray[readIndex];
+    public ByteBuffer poll(final BufferManagerPointer pointer) {
+        int readIndex = pointer.getReadIndex(true);
+        if (readIndex != -1) {
+            return bufferArray[readIndex];
         }
 
         return null;
@@ -69,17 +97,33 @@ public class BufferManager {
      **   needs to operate on it again (i.e. the write could not empty the BufferState
      **   so another write attempt needs to be made at a later point in time).
      */
-    BufferState peek(final BufferManagerPointer pointer) {
-        if (int readIndex = pointer.getReadIndex(false) != -1) {
-            return bufferStateArray[readIndex];
+    public ByteBuffer peek(final BufferManagerPointer pointer) {
+        int readIndex = pointer.getReadIndex(false);
+        if (readIndex != -1) {
+            return bufferArray[readIndex];
         }
 
         return null;
     }
 
+    /*
+    ** This is used to add a new pointer to within the BufferManager to allow multiple
+    **   streams to consume data from different places within the buffer ring.
+     */
     BufferManagerPointer bookmark(final BufferManagerPointer pointer) {
 
+        return null;
     }
+
+    /*
+     ** Reset the BufferManager back to its pristine state. That means that there are no
+     **   registered BufferManagerPointers or dependencies remaining associated with the
+     **   BufferManager.
+     */
+    public void reset() {
+
+    }
+
 
     /*
     ** This is used to convert a single BufferState into two BufferState and can be used
