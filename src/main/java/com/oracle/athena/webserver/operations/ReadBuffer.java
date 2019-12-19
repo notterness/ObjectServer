@@ -2,8 +2,6 @@ package com.oracle.athena.webserver.operations;
 
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
-import com.oracle.athena.webserver.connectionstate.CasperHttpInfo;
-import com.oracle.athena.webserver.http.parser.ByteBufferHttpParser;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,11 +23,11 @@ public class ReadBuffer implements Operation {
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
-     **   if there is a choice between being on the timed wait queue (connOnDelayedQueue) or the normal
-     **   execution queue (connOnExecutionQueue) is will always go on the execution queue.
+     **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
+     **   execution queue (onExecutionQueue) is will always go on the execution queue.
      */
-    private boolean connOnDelayedQueue;
-    private boolean connOnExecutionQueue;
+    private boolean onDelayedQueue;
+    private boolean onExecutionQueue;
     private long nextExecuteTime;
 
     public ReadBuffer(final RequestContext requestContext, final BufferManagerPointer meterBufferPtr) {
@@ -42,8 +40,8 @@ public class ReadBuffer implements Operation {
         /*
          ** This starts out not being on any queue
          */
-        connOnDelayedQueue = false;
-        connOnExecutionQueue = false;
+        onDelayedQueue = false;
+        onExecutionQueue = false;
         nextExecuteTime = 0;
     }
 
@@ -78,51 +76,52 @@ public class ReadBuffer implements Operation {
      **   execution queue.
      **
      ** The following methods are called by the event thread under a queue mutex.
-     **   markRemoveFromQueue - This method is used by the ServerWorkerThread to update the queue
-     **     the connection is on when the connection is removed from the queue.
-     **   markAddedToQueue - This method is used when a connection is added to a queue to mark
+     **   markRemoveFromQueue - This method is used by the event thread to update the queue
+     **     the Operation is on when the operation is removed from the queue.
+     **   markAddedToQueue - This method is used when a operation is added to a queue to mark
      **     which queue it is on.
      **   isOnWorkQueue - Accessor method
      **   isOnTimedWaitQueue - Accessor method
+     **   hasWaitTimeElapsed - Is this Operation ready to run again to check some timeout condition
      **
      ** TODO: Might want to switch to using an enum instead of two different booleans to keep track
      **   of which queue the connection is on. It will probably clean up the code some.
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("ConnectionState[" + connStateId + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
-        if (connOnDelayedQueue) {
+        //LOG.info("ReadBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        if (onDelayedQueue) {
             if (!delayedExecutionQueue) {
-                LOG.warn("CloseOutRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
+                LOG.warn("ReadBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
             }
 
-            connOnDelayedQueue = false;
+            onDelayedQueue = false;
             nextExecuteTime = 0;
-        } else if (connOnExecutionQueue){
+        } else if (onExecutionQueue){
             if (delayedExecutionQueue) {
-                LOG.warn("CloseOutRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
+                LOG.warn("ReadBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
             }
 
-            connOnExecutionQueue = false;
+            onExecutionQueue = false;
         } else {
-            LOG.warn("CloseOutRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
+            LOG.warn("ReadBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
             nextExecuteTime = System.currentTimeMillis() + TIME_TILL_NEXT_TIMEOUT_CHECK;
-            connOnDelayedQueue = true;
+            onDelayedQueue = true;
         } else {
-            connOnExecutionQueue = true;
+            onExecutionQueue = true;
         }
     }
 
     public boolean isOnWorkQueue() {
-        return connOnExecutionQueue;
+        return onExecutionQueue;
     }
 
     public boolean isOnTimedWaitQueue() {
-        return connOnDelayedQueue;
+        return onDelayedQueue;
     }
 
     public boolean hasWaitTimeElapsed() {
@@ -132,7 +131,7 @@ public class ReadBuffer implements Operation {
             return false;
         }
 
-        //LOG.info("CloseOutRequest[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
+        //LOG.info("ReadBuffer[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
         return true;
     }
 

@@ -23,8 +23,11 @@ public enum OperationTypeEnum {
     CHECK_EMBARGO(122),                 // This is used by the AuthenticatePipelineMgr
     AUTHENTICATE_REQUEST(123),
     AUTHENTICATE_FINISHED(124),
-    SEND_FINAL_STATUS(200),
-    REQUEST_FINISHED(201);
+    ENCRYPT_BUFFER(130),
+    SETUP_CHUNK_WRITE(150),
+    WRITE_TO_STORAGE_SERVER(200),
+    SEND_FINAL_STATUS(300),
+    REQUEST_FINISHED(301);
 
     private int value;
 
