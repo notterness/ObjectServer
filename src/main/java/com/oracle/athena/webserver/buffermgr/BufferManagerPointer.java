@@ -106,6 +106,18 @@ public class BufferManagerPointer {
         return bufferIndex;
     }
 
+    /*
+    ** This updates where the next read will take place for a consumer
+     */
+    int updateReadIndex() {
+
+        bufferIndex++;
+        if (bufferIndex == bufferArraySize) {
+            bufferIndex = 0;
+        }
+
+        return bufferIndex;
+    }
 
     void addDependsOn(final Operation operation) {
         if (ptrWhoDependOnThisList.contains(operation) == false) {

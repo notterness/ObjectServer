@@ -9,14 +9,17 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
-public class CloseOutRequest implements Operation {
+public class WriteToStorageServer implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(CloseOutRequest.class);
+    private static final Logger LOG = LoggerFactory.getLogger(WriteToStorageServer.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
+     **
+     ** TODO: This is going to need to be something more elaborate since there will be multiple
+     **   writes to Storage Servers going on at the same time.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.REQUEST_FINISHED;
+    public final OperationTypeEnum operationType = OperationTypeEnum.WRITE_TO_STORAGE_SERVER;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -44,8 +47,8 @@ public class CloseOutRequest implements Operation {
     private BufferManagerPointer writeDonePtr;
 
 
-    public CloseOutRequest(final RequestContext requestContext, final MemoryManager memoryManager,
-                           final BufferManagerPointer writePointer) {
+    public WriteToStorageServer(final RequestContext requestContext, final MemoryManager memoryManager,
+                                final BufferManagerPointer writePointer) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
@@ -60,7 +63,7 @@ public class CloseOutRequest implements Operation {
         this.writeDonePtr = this.clientWriteBufferMgr.register(this, writeStatusPtr);
 
         /*
-        ** This starts out not being on any queue
+         ** This starts out not being on any queue
          */
         onDelayedQueue = false;
         onExecutionQueue = false;
@@ -101,14 +104,14 @@ public class CloseOutRequest implements Operation {
         }
 
         /*
-        ** Close out the connection and place the RequestContext back on the "free" list
+         ** Close out the connection and place the RequestContext back on the "free" list
          */
         requestContext.cleanupRequest();
     }
 
     /*
-    ** This will never be called for the CloseOutRequest. When the execute() method completes, the
-    **   RequestContext is no longer "running".
+     ** This will never be called for the CloseOutRequest. When the execute() method completes, the
+     **   RequestContext is no longer "running".
      */
     public void complete() {
 
@@ -132,22 +135,22 @@ public class CloseOutRequest implements Operation {
      **   of which queue the connection is on. It will probably clean up the code some.
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("CloseOutRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("WriteToStorageServer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (onDelayedQueue) {
             if (!delayedExecutionQueue) {
-                LOG.warn("CloseOutRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
+                LOG.warn("WriteToStorageServer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
             }
 
             onDelayedQueue = false;
             nextExecuteTime = 0;
         } else if (onExecutionQueue){
             if (delayedExecutionQueue) {
-                LOG.warn("CloseOutRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
+                LOG.warn("WriteToStorageServer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
             }
 
             onExecutionQueue = false;
         } else {
-            LOG.warn("CloseOutRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
+            LOG.warn("WriteToStorageServer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
         }
     }
 
@@ -175,8 +178,9 @@ public class CloseOutRequest implements Operation {
             return false;
         }
 
-        //LOG.info("CloseOutRequest[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
+        //LOG.info("WriteToStorageServer[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
         return true;
     }
+
 
 }

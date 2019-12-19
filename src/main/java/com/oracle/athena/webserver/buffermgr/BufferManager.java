@@ -69,8 +69,15 @@ public class BufferManager {
     **
     ** This returns the next location to write data into.
      */
-    int updateProducerWritePointer(final BufferManagerPointer pointer) {
+    public int updateProducerWritePointer(final BufferManagerPointer pointer) {
         return pointer.updateWriteIndex();
+    }
+
+    /*
+    ** Update the read index for this consumer
+     */
+    public int updateConsumerReadPointer(final BufferManagerPointer pointer) {
+        return pointer.updateReadIndex();
     }
 
     /*

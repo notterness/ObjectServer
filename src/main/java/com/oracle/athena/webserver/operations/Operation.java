@@ -10,7 +10,10 @@ public interface Operation {
      */
     static final long TIME_TILL_NEXT_TIMEOUT_CHECK = 500;
 
-
+    /*
+    ** A simple way to obtain a identifier for the Operation when it is added to a list of
+    **   operations that are being used to complete a request.
+     */
     OperationTypeEnum getOperationType();
 
     /*
@@ -32,11 +35,12 @@ public interface Operation {
      **
      ** The following methods are called by the event thread under a queue mutex.
      **   markRemoveFromQueue - This method is used by the event thread to update the queue
-     **     the connection is on when the connection is removed from the queue.
+     **     the Operation is on when the connection is removed from the queue.
      **   markAddedToQueue - This method is used when an Operation is added to a queue to mark
      **     which queue it is on.
      **   isOnWorkQueue - Accessor method
      **   isOnTimedWaitQueue - Accessor method
+     **   hasWaitTimeElapsed - Is this Operation ready to run again to check some timeout condition
      **
      ** TODO: Might want to switch to using an enum instead of two different booleans to keep track
      **   of which queue the connection is on. It will probably clean up the code some.

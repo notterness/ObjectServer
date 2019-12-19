@@ -9,14 +9,14 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
-public class CloseOutRequest implements Operation {
+public class SetupChunkWrite implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(CloseOutRequest.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SetupChunkWrite.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.REQUEST_FINISHED;
+    public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_CHUNK_WRITE;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -43,8 +43,11 @@ public class CloseOutRequest implements Operation {
 
     private BufferManagerPointer writeDonePtr;
 
-
-    public CloseOutRequest(final RequestContext requestContext, final MemoryManager memoryManager,
+    /*
+    ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
+    **   up the calls to obtain the VON information and the meta-data write to the database.
+     */
+    public SetupChunkWrite(final RequestContext requestContext, final MemoryManager memoryManager,
                            final BufferManagerPointer writePointer) {
 
         this.requestContext = requestContext;
@@ -60,7 +63,7 @@ public class CloseOutRequest implements Operation {
         this.writeDonePtr = this.clientWriteBufferMgr.register(this, writeStatusPtr);
 
         /*
-        ** This starts out not being on any queue
+         ** This starts out not being on any queue
          */
         onDelayedQueue = false;
         onExecutionQueue = false;
@@ -101,14 +104,14 @@ public class CloseOutRequest implements Operation {
         }
 
         /*
-        ** Close out the connection and place the RequestContext back on the "free" list
+         ** Close out the connection and place the RequestContext back on the "free" list
          */
         requestContext.cleanupRequest();
     }
 
     /*
-    ** This will never be called for the CloseOutRequest. When the execute() method completes, the
-    **   RequestContext is no longer "running".
+     ** This will never be called for the CloseOutRequest. When the execute() method completes, the
+     **   RequestContext is no longer "running".
      */
     public void complete() {
 
@@ -122,7 +125,7 @@ public class CloseOutRequest implements Operation {
      ** The following methods are called by the event thread under a queue mutex.
      **   markRemoveFromQueue - This method is used by the event thread to update the queue
      **     the Operation is on when the operation is removed from the queue.
-     **   markAddedToQueue - This method is used when an Operation is added to a queue to mark
+     **   markAddedToQueue - This method is used when an operation is added to a queue to mark
      **     which queue it is on.
      **   isOnWorkQueue - Accessor method
      **   isOnTimedWaitQueue - Accessor method
@@ -132,22 +135,22 @@ public class CloseOutRequest implements Operation {
      **   of which queue the connection is on. It will probably clean up the code some.
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("CloseOutRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (onDelayedQueue) {
             if (!delayedExecutionQueue) {
-                LOG.warn("CloseOutRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
+                LOG.warn("SetupChunkWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
             }
 
             onDelayedQueue = false;
             nextExecuteTime = 0;
         } else if (onExecutionQueue){
             if (delayedExecutionQueue) {
-                LOG.warn("CloseOutRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
+                LOG.warn("SetupChunkWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
             }
 
             onExecutionQueue = false;
         } else {
-            LOG.warn("CloseOutRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
+            LOG.warn("SetupChunkWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
         }
     }
 
@@ -175,8 +178,9 @@ public class CloseOutRequest implements Operation {
             return false;
         }
 
-        //LOG.info("CloseOutRequest[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
+        //LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
         return true;
     }
+
 
 }
