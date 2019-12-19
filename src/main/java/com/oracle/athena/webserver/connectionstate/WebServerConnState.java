@@ -204,7 +204,7 @@ public class WebServerConnState extends ConnectionState {
          ** The CasperHttpInfo keeps track of the details of a particular
          **   HTTP transfer and the parsed information.
          */
-        casperHttpInfo = new CasperHttpInfo(this);
+        //casperHttpInfo = new CasperHttpInfo(this);
 
         httpParser = new ByteBufferHttpParser(casperHttpInfo);
 

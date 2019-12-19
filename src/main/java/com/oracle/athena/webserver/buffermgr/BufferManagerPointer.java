@@ -79,6 +79,15 @@ public class BufferManagerPointer {
     }
 
     /*
+    ** This returns the current write index, but does not change it. This is used to add a ByteBuffer
+    **   to the BufferManager and after the buffer is added, then updateWriteIndex() should be called
+    **   if the buffer is actually to be made available to the writer.
+     */
+    int getWriteIndex() {
+        return bufferIndex;
+    }
+
+    /*
     ** This updates the producers writeIndex after data has been placed into the BufferState
     **   and it returns the location to place the next data write.
     **

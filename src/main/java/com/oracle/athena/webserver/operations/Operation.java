@@ -1,11 +1,49 @@
 package com.oracle.athena.webserver.operations;
 
-public interface Operation {
-    void initialize();
+import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 
-    void eventHandler();
+public interface Operation {
+
+    /*
+     ** This is how long the Operation should wait until if goes back through the
+     **   CHECK_SLOW_CHANNEL state if no other activity is taking place.
+     */
+    static final long TIME_TILL_NEXT_TIMEOUT_CHECK = 500;
+
+
+    OperationTypeEnum getOperationType();
+
+    /*
+    ** This returns the BufferManagerPointer obtained by this operation, if there is one. If this operation
+    **   does not use a BufferManagerPointer, it will return null.
+     */
+    BufferManagerPointer initialize();
+
+    void event();
 
     void execute();
 
     void complete();
+
+    /*
+     ** This is used to add the Operation to the event thread's execute queue. The
+     **   Operation can be added to the immediate execution queue or the delayed
+     **   execution queue.
+     **
+     ** The following methods are called by the event thread under a queue mutex.
+     **   markRemoveFromQueue - This method is used by the event thread to update the queue
+     **     the connection is on when the connection is removed from the queue.
+     **   markAddedToQueue - This method is used when an Operation is added to a queue to mark
+     **     which queue it is on.
+     **   isOnWorkQueue - Accessor method
+     **   isOnTimedWaitQueue - Accessor method
+     **
+     ** TODO: Might want to switch to using an enum instead of two different booleans to keep track
+     **   of which queue the connection is on. It will probably clean up the code some.
+     */
+    boolean isOnWorkQueue();
+    boolean isOnTimedWaitQueue();
+    void markAddedToQueue(final boolean delayedExecutionQueue);
+    void markRemovedFromQueue(final boolean delayedExecutionQueue);
+    boolean hasWaitTimeElapsed();
 }

@@ -1,6 +1,5 @@
 package com.oracle.athena.webserver.http;
 
-import com.oracle.athena.webserver.connectionstate.BufferState;
 import org.eclipse.jetty.http.HttpStatus;
 
 import java.nio.ByteBuffer;
@@ -17,9 +16,8 @@ public class BuildHttpResult {
         httpStatus = new HttpStatus();
     }
 
-    public ByteBuffer buildResponse(final BufferState respBufferState, int resultCode, boolean addContext, boolean close) {
+    public void buildResponse(final ByteBuffer respBuffer, int resultCode, boolean addContext, boolean close) {
 
-        ByteBuffer respBuffer = respBufferState.getBuffer();
         String tmpStr;
         String content;
         int contentLength;
@@ -90,7 +88,6 @@ public class BuildHttpResult {
         }
 
         str_to_bb(respBuffer, tmpStr);
-        return respBuffer;
     }
 
     private void str_to_bb(ByteBuffer out, String in) {
