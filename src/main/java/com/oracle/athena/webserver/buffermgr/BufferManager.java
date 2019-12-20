@@ -19,20 +19,31 @@ public class BufferManager {
     private ByteBuffer[] bufferArray;
     private final int bufferArraySize;
 
+    private int identifier;
+
     public BufferManager(final int bufferCount) {
         this.bufferArraySize = bufferCount;
 
-        bufferArray = new ByteBuffer[this.bufferArraySize];
+        this.bufferArray = new ByteBuffer[this.bufferArraySize];
+
+        this.identifier = 1;
     }
 
     public BufferManagerPointer register(final Operation operation) {
-        BufferManagerPointer pointer = new BufferManagerPointer(operation, bufferArraySize);
+
+        LOG.info("BufferManager register("  + identifier + ":" + operation.getOperationType() + ")");
+        BufferManagerPointer pointer = new BufferManagerPointer(operation, bufferArraySize, identifier);
+        identifier++;
 
         return pointer;
     }
 
     public BufferManagerPointer register(final Operation operation, final BufferManagerPointer dependsOn) {
-        BufferManagerPointer pointer = new BufferManagerPointer(operation, dependsOn, bufferArraySize);
+        LOG.info("BufferManager register(" + identifier + ":" + operation.getOperationType() + ") depends on: " +
+                + dependsOn.getIdentifier() + ":" + dependsOn.getOperationType());
+
+        BufferManagerPointer pointer = new BufferManagerPointer(operation, dependsOn, bufferArraySize, identifier);
+        identifier++;
         dependsOn.addDependsOn(operation);
 
         return pointer;
@@ -47,6 +58,8 @@ public class BufferManager {
      */
     public void offer(final BufferManagerPointer pointer, final ByteBuffer buffer) {
         int writeIndex = pointer.getWriteIndex();
+
+        //LOG.info("BufferManager offer(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") writeIndex: " + writeIndex);
 
         /*
         ** If a ByteBuffer is being added to the BufferManager, make sure that the current
@@ -70,14 +83,23 @@ public class BufferManager {
     ** This returns the next location to write data into.
      */
     public int updateProducerWritePointer(final BufferManagerPointer pointer) {
-        return pointer.updateWriteIndex();
+
+        int writeIndex = pointer.updateWriteIndex();
+
+        //LOG.info("BufferManager updateProducerWritePointer(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") writeIndex: " + writeIndex);
+
+        return writeIndex;
     }
 
     /*
     ** Update the read index for this consumer
      */
     public int updateConsumerReadPointer(final BufferManagerPointer pointer) {
-        return pointer.updateReadIndex();
+
+        int readIndex = pointer.updateReadIndex();
+        //LOG.info("BufferManager updateConsumerReadPointer(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
+
+        return readIndex;
     }
 
     /*
@@ -88,6 +110,9 @@ public class BufferManager {
      */
     public ByteBuffer poll(final BufferManagerPointer pointer) {
         int readIndex = pointer.getReadIndex(true);
+
+        //LOG.info("BufferManager poll(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
+
         if (readIndex != -1) {
             return bufferArray[readIndex];
         }
@@ -106,6 +131,9 @@ public class BufferManager {
      */
     public ByteBuffer peek(final BufferManagerPointer pointer) {
         int readIndex = pointer.getReadIndex(false);
+
+        //LOG.info("BufferManager peek(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
+
         if (readIndex != -1) {
             return bufferArray[readIndex];
         }

@@ -1,14 +1,21 @@
 package com.oracle.athena.webserver.buffermgr;
 
 import com.oracle.athena.webserver.operations.Operation;
+import com.oracle.athena.webserver.operations.OperationTypeEnum;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.LinkedList;
 import java.util.ListIterator;
 
 public class BufferManagerPointer {
 
+    private static final Logger LOG = LoggerFactory.getLogger(BufferManager.class);
+
     private final Operation operation;
     private final int bufferArraySize;
+
+    private final int identifier;
 
     /*
     ** Buffer index is either the readIndex for consumers or the
@@ -25,10 +32,11 @@ public class BufferManagerPointer {
 
     LinkedList<Operation> ptrWhoDependOnThisList;
 
-    BufferManagerPointer(final Operation operation, final int bufferArraySize) {
+    BufferManagerPointer(final Operation operation, final int bufferArraySize, final int identifier) {
 
         this.operation = operation;
         this.bufferArraySize = bufferArraySize;
+        this.identifier = identifier;
 
         ptrWhoDependOnThisList = new LinkedList<>();
 
@@ -37,15 +45,30 @@ public class BufferManagerPointer {
     }
 
     BufferManagerPointer(final Operation operation, final BufferManagerPointer dependsOnPointer,
-                         final int bufferArraySize) {
+                         final int bufferArraySize, final int identifier) {
 
         this.operation = operation;
         this.bufferArraySize = bufferArraySize;
         this.ptrWhoDependOnThisList = new LinkedList<>();
+        this.identifier = identifier;
 
         this.ptrThisDependsOn = dependsOnPointer;
 
         this.bufferIndex = this.ptrThisDependsOn.getCurrIndex();
+    }
+
+    /*
+    ** A useful debug routine to show dependency trees
+     */
+    OperationTypeEnum getOperationType() {
+        return operation.getOperationType();
+    }
+
+    /*
+    **
+     */
+    int getIdentifier() {
+        return identifier;
     }
 
     /*
@@ -72,7 +95,13 @@ public class BufferManagerPointer {
                 }
 
                 return readIndex;
+            } else {
+                LOG.error("Consumer(" + identifier + ":" + getOperationType() + ") bufferIndex: " + bufferIndex +
+                        " producer(" + ptrThisDependsOn.getIdentifier() + ":" + ptrThisDependsOn.getOperationType() + ") writeIndex: " +
+                        ptrThisDependsOn.getCurrIndex());
             }
+        } else {
+            LOG.error("Consumer("  + identifier + ":" + getOperationType() + ") must have a depends on relationship");
         }
 
         return -1;
@@ -103,6 +132,8 @@ public class BufferManagerPointer {
             bufferIndex = 0;
         }
 
+        //LOG.info("Producer("  + identifier + ":" + getOperationType() + ") writeIndex: " + bufferIndex);
+
         return bufferIndex;
     }
 
@@ -129,7 +160,7 @@ public class BufferManagerPointer {
         ListIterator<Operation> iter = ptrWhoDependOnThisList.listIterator(0);
 
         while (iter.hasNext()) {
-            iter.next().execute();
+            iter.next().event();
         }
     }
 

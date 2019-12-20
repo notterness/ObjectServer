@@ -44,11 +44,16 @@ public class EncryptBuffer implements Operation {
     private BufferManagerPointer clientReadPtr;
     private BufferManagerPointer storageServerWritePtr;
 
+    private int savedSrcPosition;
+
     /*
      ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
      **   up the calls to obtain the VON information and the meta-data write to the database.
      */
     public EncryptBuffer(final RequestContext requestContext, final BufferManagerPointer clientReadPointer) {
+
+        LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] start");
+        System.out.println("EncryptBuffer[" + requestContext.getRequestId() + "] start");
 
         this.requestContext = requestContext;
         this.clientReadBufferMgr = this.requestContext.getClientReadBufferManager();
@@ -62,6 +67,11 @@ public class EncryptBuffer implements Operation {
         onDelayedQueue = false;
         onExecutionQueue = false;
         nextExecuteTime = 0;
+
+        /*
+        **
+         */
+        savedSrcPosition = 0;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -99,6 +109,8 @@ public class EncryptBuffer implements Operation {
      */
     public void event() {
 
+        LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] event()");
+
         /*
          ** Add this to the execute queue if it is not already on it.
          */
@@ -124,14 +136,16 @@ public class EncryptBuffer implements Operation {
         while (!outOfBuffers) {
             if ((readBuffer = clientReadBufferMgr.peek(clientReadPtr)) != null) {
                 /*
+                 ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
+                 **  affecting the position() and limit() indexes
+                 */
+                ByteBuffer srcBuffer = readBuffer.duplicate();
+                srcBuffer.position(savedSrcPosition);
+
+                /*
                  ** Is there an available buffer in the storageServerWriteBufferMgr
                  */
                 if ((encryptedBuffer = storageServerWriteBufferMgr.peek(storageServerWritePtr)) != null) {
-                    /*
-                    ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
-                    **  affecting the position() and limit() indexes
-                     */
-                    ByteBuffer srcBuffer = readBuffer.duplicate();
 
                     /*
                      ** Encrypt the buffers and place them into the storageServerWriteBufferMgr
@@ -254,6 +268,7 @@ public class EncryptBuffer implements Operation {
             **   for the BufferManager so the next time through the loop, a new readBuffer will be
             **   obtained.
              */
+            savedSrcPosition = 0;
             clientReadBufferMgr.updateConsumerReadPointer(clientReadPtr);
 
         } else {
@@ -262,6 +277,12 @@ public class EncryptBuffer implements Operation {
              ** This is the case where the srcBuffer has more data to encrypt than the tgtBuffer can accept.
              */
             tgtBuffer.put(srcBuffer.array(), srcBuffer.position(), bytesInTgtBuffer);
+
+            /*
+            ** The call to put() which uses a starting position and a count does not update the position()
+            **   for the source of the data.
+             */
+            savedSrcPosition = srcBuffer.position() + bytesInTgtBuffer;
 
             /*
             ** The tgtBuffer is now full.
@@ -291,6 +312,8 @@ public class EncryptBuffer implements Operation {
                 {2048, 512},
         };
 
+        LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] testEncryption() start");
+
         /*
          ** Create two BufferManagerPointers to add buffers to the two BufferManagers that will
          **   be used to perform the encryption. The buffers added to the clientReadBufferMgr are
@@ -299,6 +322,25 @@ public class EncryptBuffer implements Operation {
         BufferManagerPointer readFillPtr = clientReadBufferMgr.register(this);
         BufferManagerPointer writeFillPtr = storageServerWriteBufferMgr.register(this);
 
+        /*
+         ** Create the two dependent pointers to read the ByteBuffers from one BufferManager, encrypt the buffer, and
+         **   then add it to the StorageServerWriteBufferManager.
+         **
+         ** NOTE: This needs to be done prior to adding buffers to the BufferManager as the dependent
+         **   BufferManagerPointer picks up the producers current write index as its starting read index.
+         */
+        clientReadPtr = clientReadBufferMgr.register(this, readFillPtr);
+        storageServerWritePtr = storageServerWriteBufferMgr.register(this, writeFillPtr);
+
+        /*
+         ** Now create one more dependent BufferManagerPointer on the storageServerWritePtr to read all of
+         **   the encrypted data back to insure it matches what is expected.
+         */
+        BufferManagerPointer validatePtr = storageServerWriteBufferMgr.register(this, storageServerWritePtr);
+
+        /*
+        ** Now add buffers the the two BufferManagers
+         */
         ByteBuffer buffer;
         int fillValue = 0;
         for (int i = 0; i < allocations.length; i++) {
@@ -310,6 +352,7 @@ public class EncryptBuffer implements Operation {
                 fillValue++;
             }
 
+            buffer.flip();
             clientReadBufferMgr.offer(readFillPtr, buffer);
 
             /*
@@ -321,22 +364,9 @@ public class EncryptBuffer implements Operation {
         }
 
         /*
-         ** Create the two dependent pointers to read the ByteBuffers from one BufferManager, encrypt the buffer, and
-         **   then add it to the StorageServerWriteBufferManager.
-         */
-        clientReadPtr = clientReadBufferMgr.register(this, readFillPtr);
-        storageServerWritePtr = storageServerWriteBufferMgr.register(this, writeFillPtr);
-
-        /*
          ** Run the encryption routine to process all of the buffers
          */
         execute();
-
-        /*
-         ** Now create one more dependent BufferManagerPointer on the storageServerWritePtr to read all of
-         **   the encrypted data back to insure it matches what is expected.
-         */
-        BufferManagerPointer validatePtr = storageServerWriteBufferMgr.register(this, storageServerWritePtr);
 
         /*
          ** Now read in the buffers from the StorageServerWriteBufferMgr and validate the data within the buffer
@@ -358,5 +388,7 @@ public class EncryptBuffer implements Operation {
 
             tgtBuffer++;
         }
+
+        LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] compare complete buffers: " + tgtBuffer);
     }
 }
