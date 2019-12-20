@@ -23,6 +23,7 @@ public class BufferManagerPointer {
      */
     private int bufferIndex;
 
+    private int bookmark;
 
     /*
     ** Back link used to clean up any dependencies this might have on other
@@ -39,6 +40,7 @@ public class BufferManagerPointer {
 
         ptrWhoDependOnThisList = new LinkedList<>();
 
+        this.bookmark = -1;
         this.ptrThisDependsOn = null;
         this.bufferIndex = 0;
     }
@@ -51,9 +53,24 @@ public class BufferManagerPointer {
         this.ptrWhoDependOnThisList = new LinkedList<>();
         this.identifier = identifier;
 
+        this.bookmark = -1;
         this.ptrThisDependsOn = dependsOnPointer;
 
-        this.bufferIndex = this.ptrThisDependsOn.getCurrIndex();
+        int dependsOnBookmark = this.ptrThisDependsOn.getBookmark();
+        if (dependsOnBookmark == -1) {
+            this.bufferIndex = this.ptrThisDependsOn.getCurrIndex();
+        } else {
+            this.bufferIndex = dependsOnBookmark;
+
+            /*
+             ** Since this registration has a dependency, check if the event() for the operation should be
+             **   called.
+             */
+            if (this.bufferIndex != this.ptrThisDependsOn.getCurrIndex()) {
+                operation.event();
+            }
+        }
+
     }
 
     /*
@@ -82,6 +99,37 @@ public class BufferManagerPointer {
     }
 
     /*
+    **
+     */
+    int getBookmark() {
+        if (bookmark == -1) {
+            LOG.error("Producer("  + identifier + ":" + getOperationType() + ") getBookmark: -1, will use: " + bufferIndex);
+
+        } else {
+            LOG.error("Producer("  + identifier + ":" + getOperationType() + ") getBookmark: " + bookmark);
+        }
+
+        return bookmark;
+    }
+
+    /*
+    ** The setBookmark() with no parameters is only used for Consumer to indicate where they left off so that the
+    **   next (could be more than one) Consumer who registers with the same Producer will pick up where this
+    **   Consumer left off.
+     */
+    void setBookmark() {
+        LOG.error("Consumer("  + identifier + ":" + getOperationType() + ") setBookmark: " + bufferIndex + " on Producer(" +
+                  ptrThisDependsOn.getIdentifier() + ":" + ptrThisDependsOn.getOperationType() + ")");
+
+        ptrThisDependsOn.setBookmark(bufferIndex);
+    }
+
+    void setBookmark(final int consumerBookmarkValue) {
+        LOG.error("Producer("  + identifier + ":" + getOperationType() + ") setBookmark: " + consumerBookmarkValue);
+        bookmark = consumerBookmarkValue;
+    }
+
+    /*
     ** This checks if the consumer has buffers available to return. The consumer must have a producer
     **   that it depends on. If the consumer's read index matches the producer's write index, then
     **   there are no buffers available.
@@ -106,7 +154,7 @@ public class BufferManagerPointer {
                  */
                 /*
                 LOG.error("Consumer(" + identifier + ":" + getOperationType() + ") bufferIndex: " + bufferIndex +
-                        " producer(" + ptrThisDependsOn.getIdentifier() + ":" + ptrThisDependsOn.getOperationType() + ") writeIndex: " +
+                        " Producer(" + ptrThisDependsOn.getIdentifier() + ":" + ptrThisDependsOn.getOperationType() + ") writeIndex: " +
                         ptrThisDependsOn.getCurrIndex());
                  */
             }

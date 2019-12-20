@@ -117,6 +117,12 @@ public class RequestContext {
     private BufferManagerPointer readPtr;
 
     /*
+    ** The clientReadDataPtr is where in the data stream consumers are accessing the data. Initially, this is
+    **   where the HTTP Parser is accessing buffers.
+     */
+    private BufferManagerPointer clientDataReadPtr;
+
+    /*
     **
      */
     private BufferManagerPointer clientWritePtr;
@@ -256,7 +262,7 @@ public class RequestContext {
 
         ParseHttpRequest httpParser = new ParseHttpRequest(this, readPtr, metering, determineRequestType);
         requestHandlerOperations.put(httpParser.getOperationType(), httpParser);
-        httpParser.initialize();
+        clientDataReadPtr = httpParser.initialize();
     }
 
     /*
@@ -528,6 +534,10 @@ public class RequestContext {
      */
     public BufferManagerPointer getReadBufferPointer() {
         return readPtr;
+    }
+
+    public BufferManagerPointer getClientDataReadPtr() {
+        return clientDataReadPtr;
     }
 
     public BufferManagerPointer getMeteringPtr() {

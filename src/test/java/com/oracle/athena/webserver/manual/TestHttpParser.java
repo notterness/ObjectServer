@@ -76,55 +76,70 @@ public class TestHttpParser {
         **   advance the pointer, but in this test case, it doesn't matter since the http.execute() is called once
         **   at the end.
          */
-        ByteBuffer headerBuffer = clientReadBufferMgr.poll(readPointer);
+        ByteBuffer headerBuffer = clientReadBufferMgr.peek(readPointer);
         if (headerBuffer != null) {
 
+            ByteBuffer tempContentBuffer = ByteBuffer.allocate(MemoryManager.MEDIUM_BUFFER_SIZE);
+            String md5Digest = buildBufferAndComputeMd5(tempContentBuffer);
+
+            String request = buildRequestString(md5Digest, MemoryManager.MEDIUM_BUFFER_SIZE);
+            str_to_bb(headerBuffer, request);
+
             /*
-            ** Meter out another buffer for the content
+             ** Now that the HTTP Request is in the buffer, update the read pointer
+             */
+            clientReadBufferMgr.updateProducerWritePointer(readPointer);
+
+
+            /*
+             ** The HTTP Parser will already have been added to the execute queue in response to the
+             **   clientReadBufferMgr.poll(readPointer) operations. Since there was two poll() calls, there
+             **   will be two event calls, but it will only be added once.
+             **
+             ** Run the RequestContext Operation work execute handler. This will cause the work in the HTTP Parser
+             **   to actually be done.
+             */
+            if (requestContext.validateOperationOnQueue(OperationTypeEnum.PARSE_HTTP_BUFFER)) {
+                requestContext.performOperationWork();
+            }
+
+            /*
+             ** Kick the metering task to allow a buffer to be made
              */
             metering.execute();
 
-            ByteBuffer contentBuffer = clientReadBufferMgr.poll(readPointer);
+            ByteBuffer contentBuffer = clientReadBufferMgr.peek(readPointer);
             if (contentBuffer != null) {
-                String md5Digest = buildBufferAndComputeMd5(contentBuffer);
-
-                String request = buildRequestString(md5Digest, MemoryManager.MEDIUM_BUFFER_SIZE);
-                str_to_bb(headerBuffer, request);
-
-                /*
-                ** Now bump the read pointer twice, once for the request and once for the content
-                 */
-                clientReadBufferMgr.updateProducerWritePointer(readPointer);
-                clientReadBufferMgr.updateProducerWritePointer(readPointer);
-
-                /*
-                ** The HTTP Parser will already have been added to the execute queue in response to the
-                **   clientReadBufferMgr.poll(readPointer) operations. Since there was two poll() calls, there
-                **   will be two event calls, but it will only be added once.
-                **
-                ** Run the RequestContext Operation work execute handler. This will cause the work in the HTTP Parser
-                **   to actually be done.
-                 */
-                if (requestContext.validateOperationOnQueue(OperationTypeEnum.PARSE_HTTP_BUFFER)) {
-                    requestContext.performOperationWork();
-                }
+                contentBuffer.put(tempContentBuffer.array(), 0, MemoryManager.MEDIUM_BUFFER_SIZE);
 
                 /*
                 ** When the HTTP Parsing is complete, the DetermineRequestType operation should be on the execute
                 **   queue, so run the performOperationWork() again.
                  */
-                if (requestContext.validateOperationOnQueue(OperationTypeEnum.DETERMINE_REQUEST_TYPE) == true) {
+                if (requestContext.validateOperationOnQueue(OperationTypeEnum.DETERMINE_REQUEST_TYPE)) {
                     requestContext.performOperationWork();
                 }
 
                 /*
                 ** Following the DetermineRequestType, the SetupV2Put operation should be on the queue.
                  */
-                if (requestContext.validateOperationOnQueue(OperationTypeEnum.SETUP_V2_PUT) == true) {
+                if (requestContext.validateOperationOnQueue(OperationTypeEnum.SETUP_V2_PUT)) {
                     requestContext.performOperationWork();
 
                     testSucceeded = true;
                 }
+
+                /*
+                 ** Now that the content data is in the buffer, update the read pointer
+                 */
+                clientReadBufferMgr.updateProducerWritePointer(readPointer);
+
+                /*
+                ** At this point there should be EncryptBuffer on the queue
+                 */
+                requestContext.validateOperationOnQueue(OperationTypeEnum.ENCRYPT_BUFFER);
+            } else {
+                System.out.println("Unable to allocate content buffer");
             }
         }
 
