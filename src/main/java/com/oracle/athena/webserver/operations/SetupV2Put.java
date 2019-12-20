@@ -82,6 +82,11 @@ public class SetupV2Put implements Operation {
     public BufferManagerPointer initialize() {
         clientReadPtr = requestContext.getReadBufferPointer();
 
+        /*
+        ** Need to create two pointer here that are clones of the clientReadPtr, one will be used by the
+        **   Md5 Digest operation and the other will be used by the EncryptBuffer operation
+         */
+
         return null;
     }
 

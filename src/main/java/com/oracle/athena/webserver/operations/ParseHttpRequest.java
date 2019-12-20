@@ -106,10 +106,16 @@ public class ParseHttpRequest implements Operation {
         requestContext.addToWorkQueue(this);
     }
 
+    /*
+    ** The parse HTTP Request assumes that there is only a single buffer available at any time.
+    **
+    ** TODO: To remove the requirement that buffers are handled one at a time, the while() loop
+    **   would need to check for the header parsed boolean.
+     */
     public void execute() {
         ByteBuffer httpBuffer;
 
-        while ((httpBuffer = clientReadBufferMgr.poll(httpBufferPointer)) != null) {
+        while ((httpBuffer = clientReadBufferMgr.peek(httpBufferPointer)) != null) {
             /*
             ** Now run the Buffer State through the Http Parser
              */
@@ -121,14 +127,13 @@ public class ParseHttpRequest implements Operation {
             remainingBuffer = httpParser.parseHttpData(httpBuffer, initialHttpBuffer);
             if (remainingBuffer != null) {
                 /*
-                 ** Allocate a new BufferState to hold the remaining data
+                ** Leave the pointer in the same place since there is data remaining in the buffer
                  */
+            } else {
                 /*
-                BufferState newBufferState = bufferStatePool.allocBufferState(this, BufferStateEnum.READ_DONE, remainingBuffer.limit());
-                newBufferState.copyByteBuffer(remainingBuffer);
-
-                int bytesRead = remainingBuffer.limit();
+                ** Only update the pointer if the data in the buffer was all consumed.
                  */
+                clientReadBufferMgr.updateConsumerReadPointer(httpBufferPointer);
             }
 
             initialHttpBuffer = false;
@@ -165,6 +170,11 @@ public class ParseHttpRequest implements Operation {
             }
         } else {
             LOG.info("ParseHttpRequest[" + requestContext.getRequestId() + "] header was parsed");
+
+            /*
+            ** Create a book mark for the next set of readers to register against.
+             */
+            clientReadBufferMgr.bookmark(httpBufferPointer);
             casperHttpInfo.parseHeaders();
 
             /*

@@ -52,9 +52,6 @@ public class EncryptBuffer implements Operation {
      */
     public EncryptBuffer(final RequestContext requestContext, final BufferManagerPointer clientReadPointer) {
 
-        LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] start");
-        System.out.println("EncryptBuffer[" + requestContext.getRequestId() + "] start");
-
         this.requestContext = requestContext;
         this.clientReadBufferMgr = this.requestContext.getClientReadBufferManager();
         this.storageServerWriteBufferMgr = this.requestContext.getStorageServerWriteBufferManager();

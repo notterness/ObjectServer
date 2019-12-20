@@ -39,8 +39,8 @@ public class BufferManager {
     }
 
     public BufferManagerPointer register(final Operation operation, final BufferManagerPointer dependsOn) {
-        LOG.info("BufferManager register(" + identifier + ":" + operation.getOperationType() + ") depends on: " +
-                + dependsOn.getIdentifier() + ":" + dependsOn.getOperationType());
+        LOG.info("BufferManager register(" + identifier + ":" + operation.getOperationType() + ") depends on (" +
+                + dependsOn.getIdentifier() + ":" + dependsOn.getOperationType() + ")");
 
         BufferManagerPointer pointer = new BufferManagerPointer(operation, dependsOn, bufferArraySize, identifier);
         identifier++;
@@ -170,9 +170,9 @@ public class BufferManager {
     ** This is used to add a new pointer to within the BufferManager to allow multiple
     **   streams to consume data from different places within the buffer ring.
      */
-    BufferManagerPointer bookmark(final BufferManagerPointer pointer) {
+    public void bookmark(final BufferManagerPointer pointer) {
 
-        return null;
+        pointer.setBookmark();
     }
 
     /*
