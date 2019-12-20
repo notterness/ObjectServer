@@ -793,16 +793,6 @@ public class WebServerConnState extends ConnectionState {
         if (buffState != null) {
             finalResponseSent.set(true);
 
-            ByteBuffer respBuffer = resultBuilder.buildResponse(buffState, resultCode, true, true);
-
-            int bytesToWrite = respBuffer.position();
-            respBuffer.flip();
-
-            WriteConnection writeConn = getWriteConnection();
-            StatusWriteCompletion statusComp = new StatusWriteCompletion(this, writeConn, respBuffer,
-                    getConnStateId(), bytesToWrite, 0);
-            writeThread.writeData(writeConn, statusComp);
-
             HttpStatus.Code result = HttpStatus.getCode(resultCode);
             if (result != null) {
                 LOG.info("WebServerConnState[" + connStateId + "] sendResponse() resultCode: " + result.getCode() + " " + result.getMessage());
@@ -1000,7 +990,7 @@ public class WebServerConnState extends ConnectionState {
         ** Setup the HTTP parser for a new ByteBuffer stream
          */
         casperHttpInfo = null;
-        casperHttpInfo = new CasperHttpInfo(this);
+        //casperHttpInfo = new CasperHttpInfo(this);
 
         initialHttpBuffer = true;
 

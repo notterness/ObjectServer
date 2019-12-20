@@ -152,8 +152,8 @@
             <DefaultRolloverStrategy max="20"/>
         </RollingRandomAccessFile>
         <!-- See https://confluence.oci.oraclecorp.com/pages/viewpage.action?pageId=109221866 -->
-        <RollingRandomAccessFile name="audit_log" fileName="/data/audit2/muxed.audit"
-                                 filePattern="/data/audit2/muxed-%d{yyyy-MM-dd_HH}.audit">
+        <RollingRandomAccessFile name="audit_log" fileName="~/data/audit2/muxed.audit"
+                                 filePattern="~/data/audit2/muxed-%d{yyyy-MM-dd_HH}.audit">
             <PatternLayout>
                 <Pattern>%m%n</Pattern>
             </PatternLayout>

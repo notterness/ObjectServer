@@ -161,7 +161,7 @@ public class RequestContext {
     private BlockingQueue<Operation> timedWaitQueue;
 
 
-    RequestContext(final int requestId, final MemoryManager memoryManager) {
+    public RequestContext(final int requestId, final MemoryManager memoryManager) {
 
         this.connectionRequestId = requestId;
         this.memoryManager = memoryManager;

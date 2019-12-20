@@ -660,27 +660,6 @@ public class WebServerSSLConnState extends WebServerConnState {
             responseBuffer = buffState;
             finalResponseSent.set(true);
 
-            resultBuilder.buildResponse(buffState, resultCode, true, false);
-            buffState.getBuffer().flip();
-
-            try {
-                sslEngineMgr.wrap(buffState);
-            } catch (IOException e) {
-                //FIXME: Any SSLEngine problems, drop connection, give up
-                LOG.info("WebServerSSLConnState[" + connStateId + "] SSLEngine threw " + e.toString());
-                e.printStackTrace();
-            }
-
-            ByteBuffer respBuffer = buffState.getNetBuffer();
-
-            int bytesToWrite = respBuffer.position();
-            respBuffer.flip();
-
-            WriteConnection writeConn = getWriteConnection();
-            StatusWriteCompletion statusComp = new StatusWriteCompletion(this, writeConn, respBuffer,
-                    getConnStateId(), bytesToWrite, 0);
-            writeThread.writeData(writeConn, statusComp);
-
             HttpStatus.Code result = HttpStatus.getCode(resultCode);
             if (result != null) {
                 LOG.info("WebServerSSLConnState[" + connStateId + "] sendResponse() resultCode: " + result.getCode() + " " + result.getMessage());
@@ -730,7 +709,7 @@ public class WebServerSSLConnState extends WebServerConnState {
          ** Setup the HTTP parser for a new ByteBuffer stream
          */
         casperHttpInfo = null;
-        casperHttpInfo = new CasperHttpInfo(this);
+        //casperHttpInfo = new CasperHttpInfo(this);
 
         initialHttpBuffer = true;
 

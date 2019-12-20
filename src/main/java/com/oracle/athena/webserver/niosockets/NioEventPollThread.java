@@ -52,7 +52,7 @@ public class NioEventPollThread implements Runnable {
     boolean registerClientSocket(final SocketChannel clientChannel) {
         boolean success = true;
         try {
-            SelectionKey = clientChannel.register(clientSocketSelector, SelectionKey.OP_READ);
+            clientChannel.register(clientSocketSelector, SelectionKey.OP_READ);
         } catch (ClosedChannelException | ClosedSelectorException | IllegalSelectorException ex) {
             LOG.error("registerClientSocket[" + eventPollThreadBaseId + "] failed: " + ex.getMessage());
 
