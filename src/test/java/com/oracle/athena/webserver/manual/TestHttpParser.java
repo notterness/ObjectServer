@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 
 public class TestHttpParser {
 
+
     private final RequestContext requestContext;
     private final MemoryManager memoryManager;
 
@@ -40,7 +41,9 @@ public class TestHttpParser {
         parser = new ByteBufferHttpParser(casperHttpInfo);
     }
 
-    void execute() {
+    boolean execute() {
+        boolean testSucceeded = false;
+
         /*
         ** Need to obtain the ClientReadBufferManager and the meter pointer (to obtain a buffers to put the
         **   request and the payload into) and the read pointer to update that data is present to be
@@ -95,13 +98,37 @@ public class TestHttpParser {
                 clientReadBufferMgr.updateProducerWritePointer(readPointer);
 
                 /*
-                ** Now call the execute method for the HTTP Parser
+                ** The HTTP Parser will already have been added to the execute queue in response to the
+                **   clientReadBufferMgr.poll(readPointer) operations. Since there was two poll() calls, there
+                **   will be two event calls, but it will only be added once.
+                **
+                ** Run the RequestContext Operation work execute handler. This will cause the work in the HTTP Parser
+                **   to actually be done.
                  */
-                Operation httpParser = requestContext.getOperation(OperationTypeEnum.PARSE_HTTP_BUFFER);
+                if (requestContext.validateOperationOnQueue(OperationTypeEnum.PARSE_HTTP_BUFFER)) {
+                    requestContext.performOperationWork();
+                }
 
-                httpParser.execute();
+                /*
+                ** When the HTTP Parsing is complete, the DetermineRequestType operation should be on the execute
+                **   queue, so run the performOperationWork() again.
+                 */
+                if (requestContext.validateOperationOnQueue(OperationTypeEnum.DETERMINE_REQUEST_TYPE) == true) {
+                    requestContext.performOperationWork();
+                }
+
+                /*
+                ** Following the DetermineRequestType, the SetupV2Put operation should be on the queue.
+                 */
+                if (requestContext.validateOperationOnQueue(OperationTypeEnum.SETUP_V2_PUT) == true) {
+                    requestContext.performOperationWork();
+
+                    testSucceeded = true;
+                }
             }
         }
+
+        return testSucceeded;
     }
 
     private String buildBufferAndComputeMd5(final ByteBuffer contentBuffer) {

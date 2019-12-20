@@ -108,9 +108,6 @@ public class EncryptBuffer implements Operation {
     **   the ClientReadBufferManager.
      */
     public void event() {
-
-        LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] event()");
-
         /*
          ** Add this to the execute queue if it is not already on it.
          */

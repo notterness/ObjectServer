@@ -68,6 +68,10 @@ public class DetermineRequestType implements Operation {
 
     public void event() {
 
+        /*
+         ** Add this to the execute queue if it is not already on it.
+         */
+        requestContext.addToWorkQueue(this);
     }
 
     public void execute() {
@@ -85,7 +89,7 @@ public class DetermineRequestType implements Operation {
             Operation httpRequestSetup = supportedHttpRequests.get(method);
             if (httpRequestSetup != null) {
                 LOG.info("DetermineRequestType[" + requestContext.getRequestId() + "] execute() " + method.toString());
-
+                httpRequestSetup.initialize();
                 httpRequestSetup.event();
             } else {
                 LOG.info("DetermineRequestType[" + requestContext.getRequestId() + "] execute() unsupported request " + method.toString());

@@ -2,9 +2,13 @@ package com.oracle.athena.webserver.operations;
 
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
+import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class SetupV2Put implements Operation {
 
@@ -17,7 +21,13 @@ public class SetupV2Put implements Operation {
 
     private final RequestContext requestContext;
 
+    private final MemoryManager memoryManager;
+
+    private final BufferManager clientReadBufferMgr;
     private final BufferManager storageServerWriteBufferMgr;
+
+    private BufferManagerPointer clientReadPtr;
+
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -29,13 +39,29 @@ public class SetupV2Put implements Operation {
     private long nextExecuteTime;
 
     /*
+    ** There are two operations required to read data out of the clientReadBufferMgr and process it
+    **   The Md5 Digest and the Encryption operations.
+    **
+    ** The following is a map of all of the created Operations to handle this request.
+     */
+    private Map<OperationTypeEnum, Operation> v2PutHandlerOperations;
+
+    /*
     ** This is used to setup the initial Operation dependencies required to handle the V2 PUT
     **   request.
      */
-    public SetupV2Put(final RequestContext requestContext) {
+    public SetupV2Put(final RequestContext requestContext, final MemoryManager memoryManager) {
 
         this.requestContext = requestContext;
+        this.memoryManager = memoryManager;
+
+        this.clientReadBufferMgr = this.requestContext.getClientReadBufferManager();
         this.storageServerWriteBufferMgr = this.requestContext.getStorageServerWriteBufferManager();
+
+        /*
+         ** Setup the list of Operations currently used to handle the V2 PUT
+         */
+        v2PutHandlerOperations = new HashMap<OperationTypeEnum, Operation>();
 
         /*
          ** This starts out not being on any queue
@@ -54,6 +80,8 @@ public class SetupV2Put implements Operation {
      **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
+        clientReadPtr = requestContext.getReadBufferPointer();
+
         return null;
     }
 
@@ -66,7 +94,19 @@ public class SetupV2Put implements Operation {
     }
 
     public void execute() {
+        /*
+        ** Add compute MD5 and encrypt to the dependency on the ClientReadBufferManager read pointer.
+         */
+        EncryptBuffer encryptBuffer = new EncryptBuffer(requestContext, clientReadPtr);
+        v2PutHandlerOperations.put(encryptBuffer.getOperationType(), encryptBuffer);
+        BufferManagerPointer encryptWritePtr = encryptBuffer.initialize();
 
+        /*
+        ** Add the WriteToStorageServer as a dependency on the encryptWritePtr
+         */
+        WriteToStorageServer writeToStorageServer = new WriteToStorageServer(requestContext, memoryManager, encryptWritePtr);
+        v2PutHandlerOperations.put(writeToStorageServer.getOperationType(), writeToStorageServer);
+        BufferManagerPointer storageServerWriteDonePtr = writeToStorageServer.initialize();
     }
 
     public void complete() {
