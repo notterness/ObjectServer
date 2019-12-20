@@ -183,7 +183,7 @@ public class RequestContext {
          */
         this.supportedHttpRequests = new HashMap<HttpMethodEnum, Operation>();
 
-        SetupV2Put v2PutHandler = new SetupV2Put(this);
+        SetupV2Put v2PutHandler = new SetupV2Put(this, memoryManager);
         this.supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, v2PutHandler);
 
         /*
@@ -268,10 +268,6 @@ public class RequestContext {
         operation = requestHandlerOperations.get(OperationTypeEnum.PARSE_HTTP_BUFFER);
         operation.complete();
         requestHandlerOperations.remove(OperationTypeEnum.PARSE_HTTP_BUFFER);
-
-        operation = requestHandlerOperations.get(OperationTypeEnum.DETERMINE_REQUEST_TYPE);
-        operation.complete();
-        requestHandlerOperations.remove(OperationTypeEnum.DETERMINE_REQUEST_TYPE);
     }
 
     /*
@@ -305,7 +301,7 @@ public class RequestContext {
     **   placed in the "ready to run" state as the result of their "event" being triggered.
     ** This is the method that is called by the Event Thread responsible for this request.
      */
-    public void performWork() {
+    public void performOperationWork() {
         List<Operation> operationsToRun = new ArrayList<>();
 
         try {
@@ -314,7 +310,6 @@ public class RequestContext {
                 if (workQueued || queueSignal.await(100, TimeUnit.MILLISECONDS)) {
                     int drainedCount = workQueue.drainTo(operationsToRun, MAX_EXEC_WORK_LOOP_COUNT);
                     for (Operation operation : operationsToRun) {
-                        //LOG.info("ConnectionState[" + connState.getConnStateId() + "] pulled from workQueue");
                         operation.markRemovedFromQueue(false);
                     }
 
@@ -331,6 +326,7 @@ public class RequestContext {
             }
 
             for (Operation operation : operationsToRun) {
+                LOG.info("requestId[" + connectionRequestId + "] operation(" + operation.getOperationType() + ") execute");
                 operation.execute();
             }
 
@@ -357,6 +353,8 @@ public class RequestContext {
                 }
 
                 if (operation != null) {
+                    LOG.info("requestId[" + connectionRequestId + "] operation(" + operation.getOperationType() + ") timed execute");
+
                     operation.execute();
                 }
             } while (operation != null);
@@ -375,20 +373,20 @@ public class RequestContext {
     public void addToWorkQueue(final Operation operation) {
         queueMutex.lock();
         try {
-            //LOG.info("RequestContext[" + connectionRequestId + "] addToWorkQueue() onExecutionQueue: " + work.isOnWorkQueue() +
-            //        " onTimedWaitQueue: " + work.isOnTimedWaitQueue());
+            LOG.info("requestId[" + connectionRequestId + "] addToWorkQueue() operation(" + operation.getOperationType() + ") onExecutionQueue: " +
+                     operation.isOnWorkQueue() + " onTimedWaitQueue: " + operation.isOnTimedWaitQueue());
 
             if (!operation.isOnWorkQueue()) {
                 if (operation.isOnTimedWaitQueue()) {
                     if (timedWaitQueue.remove(operation)) {
                         operation.markRemovedFromQueue(true);
                     } else {
-                        LOG.error("RequestContext[" + connectionRequestId + "] addToWorkQueue() not on timedWaitQueue");
+                        LOG.error("requestId[" + connectionRequestId + "] addToWorkQueue() not on timedWaitQueue");
                     }
                 }
 
                 if (!workQueue.offer(operation)) {
-                    LOG.error("RequestContext[" + connectionRequestId + "] addToWorkQueue() unable to add");
+                    LOG.error("requestId[" + connectionRequestId + "] addToWorkQueue() unable to add");
                 } else {
                     operation.markAddedToQueue(false);
                     queueSignal.signal();
@@ -404,12 +402,12 @@ public class RequestContext {
     public void addToDelayedQueue(final Operation operation) {
         queueMutex.lock();
         try {
-            //LOG.info("RequestContext[" + connectionRequestId + "] addToDelayedQueue() onExecutionQueue: " + operation.isOnWorkQueue() +
+            //LOG.info("requestId[" + connectionRequestId + "] addToDelayedQueue() onExecutionQueue: " + operation.isOnWorkQueue() +
             //        " onTimedWaitQueue: " + operation.isOnTimedWaitQueue());
 
             if (!operation.isOnWorkQueue() && !operation.isOnTimedWaitQueue()) {
                 if (!timedWaitQueue.offer(operation)) {
-                    LOG.error("RequestContext[" + connectionRequestId + "] addToWorkQueue() unable to add");
+                    LOG.error("requestId[" + connectionRequestId + "] addToWorkQueue() unable to add");
                 } else {
                     operation.markAddedToQueue(true);
                 }
@@ -427,17 +425,49 @@ public class RequestContext {
         queueMutex.lock();
         try {
             if (workQueue.remove(operation)) {
-                //LOG.info("RequestContext[" + connectionRequestId + "] removeFromQueue() workQueue");
+                //LOG.info("requestId[" + connectionRequestId + "] removeFromQueue() workQueue");
                 operation.markRemovedFromQueue(false);
             } else if (timedWaitQueue.remove(operation)) {
-                //LOG.info("RequestContext[" + connectionRequestId + "] removeFromQueue() timeWaitQueue");
+                //LOG.info("requestId[" + connectionRequestId + "] removeFromQueue() timeWaitQueue");
                 operation.markRemovedFromQueue(true);
             } else {
-                LOG.warn("RequestContext[" + connectionRequestId + "] removeFromQueue() not on any queue");
+                LOG.warn("requestId[" + connectionRequestId + "] removeFromQueue() not on any queue");
             }
         } finally {
             queueMutex.unlock();
         }
+    }
+
+    /*
+    ** This is a test function to validate a certain Operation is on the execute queue.
+    **
+    ** NOTE: This uses iterator() so that the contents of the workQueue or not modified.
+     */
+    public boolean validateOperationOnQueue(final OperationTypeEnum operationType) {
+        boolean found = false;
+        int operationsCount = 0;
+
+        queueMutex.lock();
+        try {
+            Iterator<Operation> operationsToRun = workQueue.iterator();
+
+            while (operationsToRun.hasNext()) {
+                if (operationsToRun.next().getOperationType() == operationType) {
+                    found = true;
+                    break;
+                }
+                operationsCount++;
+            }
+        } finally {
+            queueMutex.unlock();
+        }
+
+        if (!found) {
+            LOG.warn("requestId[" + connectionRequestId + "] Operation(" + operationType + ") not found. drainedCount: " +
+                    operationsCount);
+        }
+
+        return found;
     }
 
     /*
@@ -479,7 +509,10 @@ public class RequestContext {
 
 
     public void httpHeaderParseComplete(final long contentLength) {
+        LOG.info("requestId[" + connectionRequestId + "] httpHeaderParseComplete() contentLength: " + contentLength);
+
         requestContentLength = contentLength;
+        httpRequestParsed = true;
     }
 
     public boolean isHttpRequestParsed() {
