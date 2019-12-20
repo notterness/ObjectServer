@@ -3,11 +3,10 @@ package com.oracle.athena.webserver.requestcontext;
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.connectionstate.CasperHttpInfo;
-import com.oracle.athena.webserver.connectionstate.ConnectionState;
 import com.oracle.athena.webserver.connectionstate.HttpMethodEnum;
 import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.operations.*;
-import com.oracle.athena.webserver.server.ServerLoadBalancer;
+import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +38,11 @@ public class RequestContext {
     **    GET, GET, GET
      */
     private final int connectionRequestId;
+
+    /*
+    ** The WebServerFlavor is used to provide different limits and behavior for the Web Server
+     */
+    private final WebServerFlavor webServerFlavor;
 
     /*
     ** The memory manager used to populate the various BufferManagers
@@ -161,8 +165,9 @@ public class RequestContext {
     private BlockingQueue<Operation> timedWaitQueue;
 
 
-    public RequestContext(final int requestId, final MemoryManager memoryManager) {
+    public RequestContext(final WebServerFlavor flavor, final int requestId, final MemoryManager memoryManager) {
 
+        this.webServerFlavor = flavor;
         this.connectionRequestId = requestId;
         this.memoryManager = memoryManager;
 
@@ -197,7 +202,7 @@ public class RequestContext {
          ** Setup the Metering and Read pointers since they are required for the HTTP Parser and for most
          **   HTTP Request handlers.
          */
-        metering = new BufferReadMetering(this);
+        metering = new BufferReadMetering(webServerFlavor, this);
         requestHandlerOperations.put(metering.getOperationType(), metering);
         meteringPtr = metering.initialize();
 
@@ -483,5 +488,20 @@ public class RequestContext {
 
     public boolean getHttpParseError() {
         return httpParseError;
+    }
+
+    /*
+    ** The following are getters for test specific code.
+     */
+    public BufferManagerPointer getReadBufferPointer() {
+        return readPtr;
+    }
+
+    public BufferManagerPointer getMeteringPtr() {
+        return meteringPtr;
+    }
+
+    public Operation getOperation(final OperationTypeEnum operationType) {
+        return requestHandlerOperations.get(operationType);
     }
 }

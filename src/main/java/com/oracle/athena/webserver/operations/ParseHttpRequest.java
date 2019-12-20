@@ -259,4 +259,11 @@ public class ParseHttpRequest implements Operation {
         return true;
     }
 
+    /*
+    ** This will feed an HTTP request (via a ByteBuffer) into the ClientReadBufferManager and validate that the behavior is
+    **   correct.
+     */
+    void testHttpParser() {
+
+    }
 }

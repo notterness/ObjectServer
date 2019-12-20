@@ -50,11 +50,14 @@ public class BufferManager {
     }
 
     public void unregister(final BufferManagerPointer pointer) {
+        LOG.info("BufferManager unregister(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ")" );
+
         pointer.terminate();
     }
 
     /*
-    ** This is used to allocate BufferState to the BufferManager.
+    ** This is used to allocate BufferState to the BufferManager. It adds a ByteBuffer and then
+    **   increments the pointer for the available buffers.
      */
     public void offer(final BufferManagerPointer pointer, final ByteBuffer buffer) {
         int writeIndex = pointer.getWriteIndex();
@@ -103,10 +106,10 @@ public class BufferManager {
     }
 
     /*
-    ** This returns a BufferState if the readIndex for the consumer is not the
-    **   same as the writeIndex for the producer (who the consumer is dependent
-    **   upon).
-    ** It will update the readIndex if there is a BufferState ready
+     ** This returns a BufferState if the readIndex for the consumer is not the
+     **   same as the writeIndex for the producer (who the consumer is dependent
+     **   upon).
+     ** It will update the readIndex if there is a BufferState ready
      */
     public ByteBuffer poll(final BufferManagerPointer pointer) {
         int readIndex = pointer.getReadIndex(true);
@@ -115,6 +118,28 @@ public class BufferManager {
 
         if (readIndex != -1) {
             return bufferArray[readIndex];
+        }
+
+        return null;
+    }
+
+    /*
+     ** This returns a BufferState if the readIndex for the consumer is not the
+     **   same as the writeIndex for the producer (who the consumer is dependent
+     **   upon).
+     ** It will update the readIndex if there is a BufferState ready and will remove the reference to
+     **   the ByteBuffer from the BufferManager.
+     */
+    public ByteBuffer getAndRemove(final BufferManagerPointer pointer) {
+        int readIndex = pointer.getReadIndex(true);
+
+        //LOG.info("BufferManager poll(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
+
+        if (readIndex != -1) {
+            ByteBuffer buffer = bufferArray[readIndex];
+            bufferArray[readIndex] = null;
+
+            return buffer;
         }
 
         return null;
@@ -157,6 +182,11 @@ public class BufferManager {
      */
     public void reset() {
 
+    }
+
+
+    public int reset(final BufferManagerPointer pointer) {
+        return pointer.reset();
     }
 
 

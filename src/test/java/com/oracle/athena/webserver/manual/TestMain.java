@@ -12,7 +12,10 @@ public class TestMain {
         AtomicInteger threadCount = new AtomicInteger(0);
 
         TestEncryptBuffer testEncryptBuffer = new TestEncryptBuffer();
-        testEncryptBuffer.runTest();
+        testEncryptBuffer.execute();
+
+        TestHttpParser testHttpParser = new TestHttpParser();
+        testHttpParser.execute();
 
         /*
         ** Uncomment out the following two lines to let TestMain just act as a server. It can then be used to
