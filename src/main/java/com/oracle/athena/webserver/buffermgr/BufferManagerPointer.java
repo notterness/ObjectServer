@@ -29,7 +29,6 @@ public class BufferManagerPointer {
     **   BufferManagerPointer(s)
      */
     BufferManagerPointer ptrThisDependsOn;
-
     LinkedList<Operation> ptrWhoDependOnThisList;
 
     BufferManagerPointer(final Operation operation, final int bufferArraySize, final int identifier) {
@@ -82,6 +81,11 @@ public class BufferManagerPointer {
         return bufferIndex;
     }
 
+    /*
+    ** This checks if the consumer has buffers available to return. The consumer must have a producer
+    **   that it depends on. If the consumer's read index matches the producer's write index, then
+    **   there are no buffers available.
+     */
     int getReadIndex(final boolean updatePointer) {
         if (ptrThisDependsOn != null) {
             if (bufferIndex != ptrThisDependsOn.getCurrIndex()) {
@@ -96,9 +100,15 @@ public class BufferManagerPointer {
 
                 return readIndex;
             } else {
+                /*
+                ** This is the normal case when the consumer has caught up to the producer so there
+                **   are no more buffers to consume at this moment.
+                 */
+                /*
                 LOG.error("Consumer(" + identifier + ":" + getOperationType() + ") bufferIndex: " + bufferIndex +
                         " producer(" + ptrThisDependsOn.getIdentifier() + ":" + ptrThisDependsOn.getOperationType() + ") writeIndex: " +
                         ptrThisDependsOn.getCurrIndex());
+                 */
             }
         } else {
             LOG.error("Consumer("  + identifier + ":" + getOperationType() + ") must have a depends on relationship");
@@ -114,6 +124,15 @@ public class BufferManagerPointer {
      */
     int getWriteIndex() {
         return bufferIndex;
+    }
+
+    int reset() {
+        int tempIndex = bufferIndex;
+
+        LOG.info("reset() Producer("  + identifier + ":" + getOperationType() + ") writeIndex: " + bufferIndex);
+        bufferIndex = 0;
+
+        return tempIndex;
     }
 
     /*
@@ -165,12 +184,29 @@ public class BufferManagerPointer {
     }
 
     void removeDependency(final Operation dependsOnOperation) {
+        LOG.info("removeDependency() Producer(" + identifier + ":" + getOperationType() + ") operation: " +
+                dependsOnOperation.getOperationType());
+
         ptrWhoDependOnThisList.remove(dependsOnOperation);
     }
 
     void terminate() {
         if (ptrThisDependsOn != null) {
+            LOG.info("terminate() Consumer(" + identifier + ":" + getOperationType() + ")" +
+                    " Producer(" + ptrThisDependsOn.getIdentifier() + ":" + ptrThisDependsOn.getOperationType() + ")" );
+
             ptrThisDependsOn.removeDependency(operation);
+            ptrThisDependsOn = null;
         }
+
+        /*
+        ** This must not have any dependencies when this is being terminated
+         */
+        ListIterator<Operation> iter = ptrWhoDependOnThisList.listIterator(0);
+        while (iter.hasNext()) {
+            LOG.info("  Producer(" + identifier + ":" + getOperationType() + ") operation: " +  iter.next().getOperationType());
+            iter.remove();
+        }
+        ptrWhoDependOnThisList = null;
     }
 }

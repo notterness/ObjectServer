@@ -375,7 +375,7 @@ public class EncryptBuffer implements Operation {
         int encryptedValue;
         int tgtBuffer = 0;
         fillValue = 0;
-        while ((readBuffer = storageServerWriteBufferMgr.poll(validatePtr)) != null) {
+        while ((readBuffer = storageServerWriteBufferMgr.getAndRemove(validatePtr)) != null) {
             for (int j = 0; j < readBuffer.limit(); j = j + 4) {
                 encryptedValue = readBuffer.getInt();
                 if (encryptedValue != fillValue) {
@@ -390,5 +390,17 @@ public class EncryptBuffer implements Operation {
         }
 
         LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] compare complete buffers: " + tgtBuffer);
+
+        /*
+        ** Cleanup the test. Start by removing all the BufferManagerPointer(s) from the BufferManager(s)
+         */
+        storageServerWriteBufferMgr.unregister(validatePtr);
+
+        clientReadBufferMgr.unregister(clientReadPtr);
+        storageServerWriteBufferMgr.unregister(storageServerWritePtr);
+
+        clientReadBufferMgr.unregister(readFillPtr);
+        storageServerWriteBufferMgr.unregister(writeFillPtr);
+
     }
 }

@@ -47,6 +47,9 @@ public class NioEventPollThread implements Runnable {
     }
 
     /*
+    ** This is where a RequestContext is aquired for a connection and the association between the connection and
+    **   the SocketChannel is made. This is how the NIO layer is linked into the actual RequestContext and its
+    **   associated BufferManagers.
     ** Add a client SocketChannel to the Selector
      */
     boolean registerClientSocket(final SocketChannel clientChannel) {

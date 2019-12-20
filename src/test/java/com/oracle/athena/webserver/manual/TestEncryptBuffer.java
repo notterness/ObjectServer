@@ -19,7 +19,7 @@ public class TestEncryptBuffer {
     TestEncryptBuffer() {
 
         memoryManager = new MemoryManager(WebServerFlavor.INTEGRATION_TESTS);
-        requestContext = new RequestContext(55, memoryManager);
+        requestContext = new RequestContext(WebServerFlavor.INTEGRATION_TESTS, 55, memoryManager);
 
         CasperHttpInfo casperHttpInfo = new CasperHttpInfo(requestContext);
 
@@ -28,7 +28,8 @@ public class TestEncryptBuffer {
         encryptBuffer = new EncryptBuffer(requestContext, null);
     }
 
-    void runTest() {
+    void execute() {
         encryptBuffer.testEncryption();
+
     }
 }

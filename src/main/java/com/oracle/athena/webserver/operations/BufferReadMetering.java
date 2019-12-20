@@ -3,12 +3,17 @@ package com.oracle.athena.webserver.operations;
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.nio.ByteBuffer;
 
 public class BufferReadMetering implements Operation {
 
     private static final Logger LOG = LoggerFactory.getLogger(BufferReadMetering.class);
+
+    private final int INITIAL_INTEGRATION_BUFFER_ALLOC = 10;
 
     /*
     ** A unique identifier for this Operation so it can be tracked.
@@ -16,6 +21,12 @@ public class BufferReadMetering implements Operation {
     public final OperationTypeEnum operationType = OperationTypeEnum.METER_BUFFERS;
 
     private final RequestContext requestContext;
+
+    /*
+    ** This is used to determine how many buffers to allocate in the ClientReadBufferManager up
+    **   front
+     */
+    private final WebServerFlavor webServerFlavor;
 
     private BufferManager clientReadBufferMgr;
     private BufferManagerPointer bufferMeteringPointer;
@@ -29,15 +40,16 @@ public class BufferReadMetering implements Operation {
     private boolean onExecutionQueue;
     private long nextExecuteTime;
 
-    public BufferReadMetering(final RequestContext requestContext) {
+    /*
+    ** The index of the last ByteBuffer allocated
+     */
+    private int lastAddIndex;
 
+    public BufferReadMetering(final WebServerFlavor flavor, final RequestContext requestContext) {
+
+        this.webServerFlavor = flavor;
         this.requestContext = requestContext;
         this.clientReadBufferMgr = requestContext.getClientReadBufferManager();
-
-        /*
-         ** Obtain the pointer used to meter out buffers to the read operation
-         */
-        this.bufferMeteringPointer = this.clientReadBufferMgr.register(this);
 
         /*
          ** This starts out not being on any queue
@@ -45,6 +57,8 @@ public class BufferReadMetering implements Operation {
         onDelayedQueue = false;
         onExecutionQueue = false;
         nextExecuteTime = 0;
+
+        lastAddIndex = 0;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -52,6 +66,35 @@ public class BufferReadMetering implements Operation {
     }
 
     public BufferManagerPointer initialize() {
+        /*
+         ** Obtain the pointer used to meter out buffers to the read operation
+         */
+        bufferMeteringPointer = this.clientReadBufferMgr.register(this);
+
+        /*
+        ** If this is the WebServerFlavor.INTEGRATION_TESTS then allocate a limited
+        **   number of ByteBuffer(s) up front and then reset the metering
+        **   pointer.
+         */
+        if (webServerFlavor == WebServerFlavor.INTEGRATION_TESTS) {
+            ByteBuffer buffer;
+
+            for (int i = 0; i < INITIAL_INTEGRATION_BUFFER_ALLOC; i++) {
+                buffer = ByteBuffer.allocate(1024);
+
+                clientReadBufferMgr.offer(bufferMeteringPointer, buffer);
+            }
+
+            /*
+            ** Set the pointer back to the beginning of the BufferManager
+             */
+            lastAddIndex = clientReadBufferMgr.reset(bufferMeteringPointer);
+        } else {
+            /*
+            ** Fill in the entire ClientReadBufferManager and StorageServerWriteBufferManager
+            **   with ByteBuffers.
+             */
+        }
 
         return bufferMeteringPointer;
     }
@@ -64,8 +107,22 @@ public class BufferReadMetering implements Operation {
         requestContext.addToWorkQueue(this);
     }
 
+    /*
+    ** For the metering, this is where the pointer for buffers that are available are metered out according to
+    **   customer requirements and limitations. The buffers can be preallocated on the BufferManager and only
+    **   passed out as needed or as requested.
+     */
     public void execute() {
 
+        /*
+        ** Add a free buffer to the ClientReadBufferManager
+         */
+        int nextLocation = clientReadBufferMgr.updateProducerWritePointer(bufferMeteringPointer);
+        if (nextLocation == lastAddIndex) {
+            /*
+            ** Need to add another buffer
+             */
+        }
     }
 
     public void complete() {
