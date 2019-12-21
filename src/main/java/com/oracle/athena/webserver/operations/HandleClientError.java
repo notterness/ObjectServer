@@ -1,45 +1,26 @@
 package com.oracle.athena.webserver.operations;
 
-import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
-import com.oracle.athena.webserver.http.BuildHttpResult;
-import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
-import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.ByteBuffer;
-
 /*
-** This is used to send the final status to the client.
+** This is the handler for any errors that occur on the Client SocketChannel.
  */
-public class SendFinalStatus implements Operation {
+public class HandleClientError implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(SendFinalStatus.class);
+    private static final Logger LOG = LoggerFactory.getLogger(HandleClientError.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.SEND_FINAL_STATUS;
+    public final OperationTypeEnum operationType = OperationTypeEnum.HANDLE_CLIENT_ERROR;
 
     /*
-    ** The RequestContext is used to keep the overall state and various data used to track this Request.
+     ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
     private final RequestContext requestContext;
-
-    /*
-    ** The MemoryManager is used to allocate a very small number of buffers used to send out the
-    **   final status
-     */
-    private final MemoryManager memoryManager;
-
-    /*
-    ** The clientWriteBufferMgr is used to queue up writes back to the client. In this case, the
-    **   writes are to send the final request status.
-     */
-    private BufferManager clientWriteBufferMgr;
-    private BufferManagerPointer writeStatusBufferPtr;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -50,29 +31,8 @@ public class SendFinalStatus implements Operation {
     private boolean onExecutionQueue;
     private long nextExecuteTime;
 
-    /*
-    ** This is used to construct the final response to send to the client.
-     */
-    private BuildHttpResult resultBuilder;
-
-
-    public SendFinalStatus(final RequestContext requestContext, final MemoryManager memoryManager) {
-
+    HandleClientError(final RequestContext requestContext) {
         this.requestContext = requestContext;
-        this.memoryManager = memoryManager;
-
-        this.clientWriteBufferMgr = this.requestContext.getClientWriteBufferManager();
-
-        this.resultBuilder = new BuildHttpResult();
-
-        this.writeStatusBufferPtr = this.clientWriteBufferMgr.register(this);
-
-        /*
-         ** This starts out not being on any queue
-         */
-        onDelayedQueue = false;
-        onExecutionQueue = false;
-        nextExecuteTime = 0;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -84,8 +44,7 @@ public class SendFinalStatus implements Operation {
      **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
-
-        return writeStatusBufferPtr;
+        return null;
     }
 
     public void event() {
@@ -97,53 +56,17 @@ public class SendFinalStatus implements Operation {
     }
 
     /*
-    ** This will attempt to allocate a ByteBuffer from the free pool and then fill it in with the
-    **   response data.
-    ** Assuming the B
+     **
      */
     public void execute() {
-
-        int resultCode = requestContext.getHttpParseStatus();
-
-        ByteBuffer respBuffer = memoryManager.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE, null);
-        if (respBuffer != null) {
-            resultBuilder.buildResponse(respBuffer, resultCode, true, true);
-
-            respBuffer.flip();
-
-            HttpStatus.Code result = HttpStatus.getCode(resultCode);
-            if (result != null) {
-                LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] resultCode: " + result.getCode() + " " + result.getMessage());
-            } else {
-                LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] resultCode: " + result.getCode());
-            }
-
-            /*
-            ** Add the ByteBuffer to the clientWriteBufferMgr to kick off the write of the response to the client
-             */
-            clientWriteBufferMgr.offer(writeStatusBufferPtr, respBuffer);
-        } else {
-            /*
-             ** If we are out of memory to allocate a response, might as well close out the connection and give up.
-             */
-            LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] unable to allocate response buffer");
-
-            /*
-            ** Go right to the CloseOutRequest operation. That will close out the connection.
-             */
-
-        }
     }
 
     /*
-    ** This removes any dependencies that are put upon the BufferManager
+     ** This will never be called for the ???. When the execute() method completes, the
+     **   RequestContext is no longer "running".
      */
     public void complete() {
 
-        clientWriteBufferMgr.unregister(writeStatusBufferPtr);
-        writeStatusBufferPtr = null;
-
-        clientWriteBufferMgr = null;
     }
 
     /*

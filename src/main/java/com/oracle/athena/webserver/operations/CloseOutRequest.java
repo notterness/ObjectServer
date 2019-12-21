@@ -54,12 +54,6 @@ public class CloseOutRequest implements Operation {
         this.writeStatusPtr = writePointer;
 
         /*
-         ** Register this with the Buffer Manager to allow it to be evented when
-         **   buffers are added by the read producer
-         */
-        this.writeDonePtr = this.clientWriteBufferMgr.register(this, writeStatusPtr);
-
-        /*
         ** This starts out not being on any queue
          */
         onDelayedQueue = false;
@@ -76,6 +70,12 @@ public class CloseOutRequest implements Operation {
      **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
+        /*
+         ** Register this with the Buffer Manager to allow it to be evented when
+         **   buffers are added by the read producer
+         */
+        writeDonePtr = clientWriteBufferMgr.register(this, writeStatusPtr);
+
         return writeDonePtr;
     }
 
@@ -177,6 +177,16 @@ public class CloseOutRequest implements Operation {
 
         //LOG.info("CloseOutRequest[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
         return true;
+    }
+
+    /*
+     ** Display what this has created and any BufferManager(s) and BufferManagerPointer(s)
+     */
+    public void dumpCreatedOperations() {
+        LOG.info(" ------------------");
+        LOG.info("requestId[" + requestContext.getRequestId() + "] type: " + operationType);
+        writeDonePtr.dumpPointerInfo();
+        LOG.info(" ------------------");
     }
 
 }

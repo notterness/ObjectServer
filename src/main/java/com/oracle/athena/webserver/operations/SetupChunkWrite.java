@@ -3,11 +3,16 @@ package com.oracle.athena.webserver.operations;
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.memory.MemoryManager;
+import com.oracle.athena.webserver.niosockets.NioSocket;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 
 public class SetupChunkWrite implements Operation {
 
@@ -32,35 +37,24 @@ public class SetupChunkWrite implements Operation {
     private boolean onExecutionQueue;
     private long nextExecuteTime;
 
-    /*
-     ** The MemoryManager is used to allocate a very small number of buffers used to send out the
-     **   final status
-     */
-    private final MemoryManager memoryManager;
-
     private final BufferManager clientWriteBufferMgr;
-    private BufferManagerPointer writeStatusPtr;
+    private final BufferManagerPointer encryptedBufferPtr;
 
-    private BufferManagerPointer writeDonePtr;
+    /*
+     ** The following is a map of all of the created Operations to handle this request.
+     */
+    private final Map<OperationTypeEnum, Operation> requestHandlerOperations;
 
     /*
     ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
     **   up the calls to obtain the VON information and the meta-data write to the database.
      */
-    public SetupChunkWrite(final RequestContext requestContext, final MemoryManager memoryManager,
-                           final BufferManagerPointer writePointer) {
+    public SetupChunkWrite(final RequestContext requestContext, final BufferManagerPointer encryptedBufferPtr) {
 
         this.requestContext = requestContext;
-        this.memoryManager = memoryManager;
         this.clientWriteBufferMgr = this.requestContext.getClientWriteBufferManager();
 
-        this.writeStatusPtr = writePointer;
-
-        /*
-         ** Register this with the Buffer Manager to allow it to be evented when
-         **   buffers are added by the read producer
-         */
-        this.writeDonePtr = this.clientWriteBufferMgr.register(this, writeStatusPtr);
+        this.encryptedBufferPtr = encryptedBufferPtr;
 
         /*
          ** This starts out not being on any queue
@@ -68,6 +62,11 @@ public class SetupChunkWrite implements Operation {
         onDelayedQueue = false;
         onExecutionQueue = false;
         nextExecuteTime = 0;
+
+        /*
+         ** Setup this RequestContext to be able to read in and parse the HTTP Request(s)
+         */
+        requestHandlerOperations = new HashMap<OperationTypeEnum, Operation>();
     }
 
     public OperationTypeEnum getOperationType() {
@@ -79,7 +78,7 @@ public class SetupChunkWrite implements Operation {
      **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
-        return writeDonePtr;
+        return null;
     }
 
     public void event() {
@@ -94,24 +93,34 @@ public class SetupChunkWrite implements Operation {
      **
      */
     public void execute() {
-        ByteBuffer respBuffer;
-
-        while ((respBuffer = clientWriteBufferMgr.poll(writeDonePtr)) != null) {
-            /*
-             ** Release the Buffers back to the free pool
-             */
-            memoryManager.poolMemFree(respBuffer);
-        }
 
         /*
-         ** Close out the connection and place the RequestContext back on the "free" list
+        ** First determine the VON information for the various Storage Servers that need to be written to.
          */
-        requestContext.cleanupRequest();
+
+        /*
+        ** For each Storage Server, setup a HandleStorageServerError operation that is used when there
+        **   is an error communicating with the StorageServer.
+         */
+        HandleStorageServerError errorHandler = new HandleStorageServerError(requestContext);
+        requestHandlerOperations.put(errorHandler.getOperationType(), errorHandler);
+
+
+        /*
+        ** For each Storage Server, create the connection used to communicate with it.
+         */
+        NioSocket connection = requestContext.allocateConnection(this);
+
+        /*
+        ** For each Storage Server, create a WriteToStorageServer operation that will handle writing the data out
+        **   to the Storage Server. The WriteToStorageServer will use the bookmark created in the
+        **   EncryptBuffer operation to know where to start writing the data.
+         */
+        WriteToStorageServer storageServerWriter = new WriteToStorageServer(requestContext, connection, encryptedBufferPtr);
+        requestHandlerOperations.put(storageServerWriter.getOperationType(), storageServerWriter);
     }
 
     /*
-     ** This will never be called for the CloseOutRequest. When the execute() method completes, the
-     **   RequestContext is no longer "running".
      */
     public void complete() {
 
@@ -135,22 +144,22 @@ public class SetupChunkWrite implements Operation {
      **   of which queue the connection is on. It will probably clean up the code some.
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (onDelayedQueue) {
             if (!delayedExecutionQueue) {
-                LOG.warn("SetupChunkWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
+                LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
             }
 
             onDelayedQueue = false;
             nextExecuteTime = 0;
         } else if (onExecutionQueue){
             if (delayedExecutionQueue) {
-                LOG.warn("SetupChunkWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
+                LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
             }
 
             onExecutionQueue = false;
         } else {
-            LOG.warn("SetupChunkWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
+            LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
         }
     }
 
@@ -178,9 +187,23 @@ public class SetupChunkWrite implements Operation {
             return false;
         }
 
-        //LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
+        //LOG.info("requestId[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
         return true;
     }
 
+    /*
+     ** Display what this has created and any BufferManager(s) and BufferManagerPointer(s)
+     */
+    public void dumpCreatedOperations() {
+        LOG.info(" ------------------");
+        LOG.info("requestId[" + requestContext.getRequestId() + "] type: " + operationType);
+        LOG.info(" -> Operations Created By " + operationType);
+
+        Collection<Operation> createdOperations = requestHandlerOperations.values();
+        Iterator<Operation> iter = createdOperations.iterator();
+        while (iter.hasNext()) {
+            iter.next().dumpCreatedOperations();
+        }
+    }
 
 }

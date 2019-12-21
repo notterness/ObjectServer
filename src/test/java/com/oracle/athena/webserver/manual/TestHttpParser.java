@@ -6,6 +6,7 @@ import com.oracle.athena.webserver.connectionstate.CasperHttpInfo;
 import com.oracle.athena.webserver.connectionstate.Md5Digest;
 import com.oracle.athena.webserver.http.parser.ByteBufferHttpParser;
 import com.oracle.athena.webserver.memory.MemoryManager;
+import com.oracle.athena.webserver.niosockets.NioEventPollThread;
 import com.oracle.athena.webserver.operations.Operation;
 import com.oracle.athena.webserver.operations.OperationTypeEnum;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
@@ -19,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 
 public class TestHttpParser {
 
+    private final NioEventPollThread nioEventThread;
 
     private final RequestContext requestContext;
     private final MemoryManager memoryManager;
@@ -34,8 +36,9 @@ public class TestHttpParser {
 
     TestHttpParser() {
 
+        nioEventThread = new NioEventPollThread(0x1000);
         memoryManager = new MemoryManager(WebServerFlavor.INTEGRATION_TESTS);
-        requestContext = new RequestContext(WebServerFlavor.INTEGRATION_TESTS,56, memoryManager);
+        requestContext = new RequestContext(WebServerFlavor.INTEGRATION_TESTS,56, memoryManager, nioEventThread);
 
         CasperHttpInfo casperHttpInfo = new CasperHttpInfo(requestContext);
         parser = new ByteBufferHttpParser(casperHttpInfo);

@@ -50,4 +50,9 @@ public interface Operation {
     void markAddedToQueue(final boolean delayedExecutionQueue);
     void markRemovedFromQueue(final boolean delayedExecutionQueue);
     boolean hasWaitTimeElapsed();
+
+    /*
+    ** Debug routine to show the dependencies (basically which Operation created other Operations)
+     */
+    void dumpCreatedOperations();
 }

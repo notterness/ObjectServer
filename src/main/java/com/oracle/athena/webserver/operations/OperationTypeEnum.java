@@ -19,12 +19,15 @@ public enum OperationTypeEnum {
     DETERMINE_REQUEST_TYPE(11),
     SETUP_V2_PUT(20),
 
+    HANDLE_CLIENT_ERROR(50),
+
     RUN_AUTHENTICATION_PIPELINE(120),   // Used by HttpParsePipelineMgr and HttpsParsePipelineMgr
     CHECK_EMBARGO(122),                 // This is used by the AuthenticatePipelineMgr
     AUTHENTICATE_REQUEST(123),
     AUTHENTICATE_FINISHED(124),
     ENCRYPT_BUFFER(130),
     SETUP_CHUNK_WRITE(150),
+    HANDLE_STORAGE_SERVER_ERROR(160),
     WRITE_TO_STORAGE_SERVER(200),
     SEND_FINAL_STATUS(300),
     REQUEST_FINISHED(301);

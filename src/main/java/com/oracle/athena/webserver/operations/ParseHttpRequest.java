@@ -269,4 +269,14 @@ public class ParseHttpRequest implements Operation {
         return true;
     }
 
+    /*
+     ** Display what this has created and any BufferManager(s) and BufferManagerPointer(s)
+     */
+    public void dumpCreatedOperations() {
+        LOG.info(" ------------------");
+        LOG.info("requestId[" + requestContext.getRequestId() + "] type: " + operationType);
+        httpBufferPointer.dumpPointerInfo();
+        LOG.info(" ------------------");
+    }
+
 }
