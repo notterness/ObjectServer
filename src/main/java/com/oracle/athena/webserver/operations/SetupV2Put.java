@@ -7,7 +7,9 @@ import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 public class SetupV2Put implements Operation {
@@ -104,14 +106,7 @@ public class SetupV2Put implements Operation {
          */
         EncryptBuffer encryptBuffer = new EncryptBuffer(requestContext, clientReadPtr);
         v2PutHandlerOperations.put(encryptBuffer.getOperationType(), encryptBuffer);
-        BufferManagerPointer encryptWritePtr = encryptBuffer.initialize();
-
-        /*
-        ** Add the WriteToStorageServer as a dependency on the encryptWritePtr
-         */
-        WriteToStorageServer writeToStorageServer = new WriteToStorageServer(requestContext, memoryManager, encryptWritePtr);
-        v2PutHandlerOperations.put(writeToStorageServer.getOperationType(), writeToStorageServer);
-        BufferManagerPointer storageServerWriteDonePtr = writeToStorageServer.initialize();
+        encryptBuffer.initialize();
     }
 
     public void complete() {
@@ -136,22 +131,22 @@ public class SetupV2Put implements Operation {
      **   of which queue the connection is on. It will probably clean up the code some.
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("SetupV2Put[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (onDelayedQueue) {
             if (!delayedExecutionQueue) {
-                LOG.warn("SetupV2Put[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
+                LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
             }
 
             onDelayedQueue = false;
             nextExecuteTime = 0;
         } else if (onExecutionQueue){
             if (delayedExecutionQueue) {
-                LOG.warn("SetupV2Put[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
+                LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
             }
 
             onExecutionQueue = false;
         } else {
-            LOG.warn("SetupV2Put[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
+            LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
         }
     }
 
@@ -179,8 +174,24 @@ public class SetupV2Put implements Operation {
             return false;
         }
 
-        //LOG.info("SetupV2Put[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
+        //LOG.info("requestId[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
         return true;
+    }
+
+
+    /*
+     ** Display what this has created and any BufferManager(s) and BufferManagerPointer(s)
+     */
+    public void dumpCreatedOperations() {
+        LOG.info(" ------------------");
+        LOG.info("requestId[" + requestContext.getRequestId() + "] type: " + operationType);
+        LOG.info(" -> Operations Created By " + operationType);
+
+        Collection<Operation> createdOperations = v2PutHandlerOperations.values();
+        Iterator<Operation> iter = createdOperations.iterator();
+        while (iter.hasNext()) {
+            iter.next().dumpCreatedOperations();
+        }
     }
 
 }

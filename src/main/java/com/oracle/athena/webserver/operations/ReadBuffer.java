@@ -18,7 +18,10 @@ public class ReadBuffer implements Operation {
 
     private final RequestContext requestContext;
 
-    private BufferManager bufferManager;
+    private final BufferManager bufferManager;
+
+    private final BufferManagerPointer meterBufferPtr;
+
     private BufferManagerPointer readBufferPointer;
 
     /*
@@ -33,9 +36,8 @@ public class ReadBuffer implements Operation {
     public ReadBuffer(final RequestContext requestContext, final BufferManagerPointer meterBufferPtr) {
 
         this.requestContext = requestContext;
+        this.meterBufferPtr = meterBufferPtr;
         this.bufferManager = this.requestContext.getClientReadBufferManager();
-
-        this.readBufferPointer = this.bufferManager.register(this, meterBufferPtr);
 
         /*
          ** This starts out not being on any queue
@@ -54,6 +56,8 @@ public class ReadBuffer implements Operation {
      **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
+
+        readBufferPointer = bufferManager.register(this, meterBufferPtr);
 
         return readBufferPointer;
     }
@@ -133,6 +137,16 @@ public class ReadBuffer implements Operation {
 
         //LOG.info("ReadBuffer[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
         return true;
+    }
+
+    /*
+     ** Display what this has created and any BufferManager(s) and BufferManagerPointer(s)
+     */
+    public void dumpCreatedOperations() {
+        LOG.info(" ------------------");
+        LOG.info("requestId[" + requestContext.getRequestId() + "] type: " + operationType);
+        readBufferPointer.dumpPointerInfo();
+        LOG.info(" ------------------");
     }
 
 }

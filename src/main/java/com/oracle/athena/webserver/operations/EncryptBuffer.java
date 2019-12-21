@@ -2,6 +2,7 @@ package com.oracle.athena.webserver.operations;
 
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
+import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,10 +42,15 @@ public class EncryptBuffer implements Operation {
 
     private final BufferManagerPointer clientFullBufferPtr;
 
+    private final int chunkSize;
+
     private BufferManagerPointer clientReadPtr;
     private BufferManagerPointer storageServerWritePtr;
 
+    private int chunkBytesEncrypted;
+
     private int savedSrcPosition;
+
 
     /*
      ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
@@ -65,10 +71,7 @@ public class EncryptBuffer implements Operation {
         onExecutionQueue = false;
         nextExecuteTime = 0;
 
-        /*
-        **
-         */
-        savedSrcPosition = 0;
+        chunkSize = this.requestContext.getChunkSize();
     }
 
     public OperationTypeEnum getOperationType() {
@@ -80,6 +83,17 @@ public class EncryptBuffer implements Operation {
      **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
+        /*
+         ** This keeps track of the number of bytes that have been encrypted. When it reaches a chunk
+         **   boundary, it then starts off a new chunk write sequence.
+         */
+        chunkBytesEncrypted = 0;
+
+        /*
+        ** savedSrcPosition is used to handle the case where there are no buffers available to place
+        **   encrypted data into, so this operation will need to wait until buffers are avaialble.
+         */
+        savedSrcPosition = 0;
 
         /*
          ** Register this with the Buffer Manager to allow it to be event(ed) when
@@ -253,6 +267,35 @@ public class EncryptBuffer implements Operation {
             **   completely fills the tgtBuffer.
              */
             if (tgtBuffer.remaining() == 0) {
+                /*
+                ** If this buffer is the first one for a chunk, add a bookmark and also kick off the
+                **   SetupWriteChunk operation
+                 */
+                if ((chunkBytesEncrypted % chunkSize) == 0) {
+                    /*
+                    ** This bookmark will be used by the WriteToStorageServer operations. The WriteStorageServer
+                    **   operations will be created by the SetupChunkWrite once it has determined the
+                    **   VON information.
+                     */
+                    storageServerWriteBufferMgr.bookmark(storageServerWritePtr);
+
+                    /*
+                    ** Now create the SetupChunkWrite and start it running
+                     */
+                    SetupChunkWrite setupChunkWrite = new SetupChunkWrite(requestContext, storageServerWritePtr);
+                    setupChunkWrite.initialize();
+                    setupChunkWrite.event();
+                }
+
+                /*
+                ** Update the number of bytes that have been encrypted
+                 */
+                chunkBytesEncrypted += tgtBuffer.limit();
+
+                /*
+                ** Since the target buffer has been written to, its position() is set to its limit(), so
+                **   reset the position() back to the start.
+                 */
                 tgtBuffer.flip();
                 storageServerWriteBufferMgr.updateProducerWritePointer(storageServerWritePtr);
             }
@@ -395,6 +438,17 @@ public class EncryptBuffer implements Operation {
 
         clientReadBufferMgr.unregister(readFillPtr);
         storageServerWriteBufferMgr.unregister(writeFillPtr);
-
     }
+
+    /*
+     ** Display what this has created and any BufferManager(s) and BufferManagerPointer(s)
+     */
+    public void dumpCreatedOperations() {
+        LOG.info(" ------------------");
+        LOG.info("requestId[" + requestContext.getRequestId() + "] type: " + operationType);
+        clientReadPtr.dumpPointerInfo();
+        storageServerWritePtr.dumpPointerInfo();
+        LOG.info(" ------------------");
+    }
+
 }

@@ -31,7 +31,7 @@ public class BufferManager {
 
     public BufferManagerPointer register(final Operation operation) {
 
-        LOG.info("BufferManager register("  + identifier + ":" + operation.getOperationType() + ")");
+        LOG.info("register("  + identifier + ":" + operation.getOperationType() + ")");
         BufferManagerPointer pointer = new BufferManagerPointer(operation, bufferArraySize, identifier);
         identifier++;
 
@@ -39,7 +39,7 @@ public class BufferManager {
     }
 
     public BufferManagerPointer register(final Operation operation, final BufferManagerPointer dependsOn) {
-        LOG.info("BufferManager register(" + identifier + ":" + operation.getOperationType() + ") depends on (" +
+        LOG.info("register(" + identifier + ":" + operation.getOperationType() + ") depends on (" +
                 + dependsOn.getIdentifier() + ":" + dependsOn.getOperationType() + ")");
 
         BufferManagerPointer pointer = new BufferManagerPointer(operation, dependsOn, bufferArraySize, identifier);
@@ -49,8 +49,20 @@ public class BufferManager {
         return pointer;
     }
 
+    public BufferManagerPointer register(final Operation operation, final BufferManagerPointer dependsOn, final int maxBytesToConsume) {
+        LOG.info("register(" + identifier + ":" + operation.getOperationType() + ") depends on (" +
+                + dependsOn.getIdentifier() + ":" + dependsOn.getOperationType() + ") maxBytesToConsume: " +
+                maxBytesToConsume);
+
+        BufferManagerPointer pointer = new BufferManagerPointer(operation, dependsOn, bufferArraySize, identifier, maxBytesToConsume);
+        identifier++;
+        dependsOn.addDependsOn(operation);
+
+        return pointer;
+    }
+
     public void unregister(final BufferManagerPointer pointer) {
-        LOG.info("BufferManager unregister(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ")" );
+        LOG.info("unregister(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ")" );
 
         pointer.terminate();
     }
@@ -89,7 +101,7 @@ public class BufferManager {
 
         int writeIndex = pointer.updateWriteIndex();
 
-        //LOG.info("BufferManager updateProducerWritePointer(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") writeIndex: " + writeIndex);
+        //LOG.info("updateProducerWritePointer(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") writeIndex: " + writeIndex);
 
         return writeIndex;
     }
@@ -100,7 +112,7 @@ public class BufferManager {
     public int updateConsumerReadPointer(final BufferManagerPointer pointer) {
 
         int readIndex = pointer.updateReadIndex();
-        //LOG.info("BufferManager updateConsumerReadPointer(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
+        //LOG.info("updateConsumerReadPointer(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
 
         return readIndex;
     }
@@ -114,7 +126,7 @@ public class BufferManager {
     public ByteBuffer poll(final BufferManagerPointer pointer) {
         int readIndex = pointer.getReadIndex(true);
 
-        //LOG.info("BufferManager poll(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
+        //LOG.info("poll(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
 
         if (readIndex != -1) {
             return bufferArray[readIndex];
@@ -133,7 +145,7 @@ public class BufferManager {
     public ByteBuffer getAndRemove(final BufferManagerPointer pointer) {
         int readIndex = pointer.getReadIndex(true);
 
-        //LOG.info("BufferManager poll(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
+        //LOG.info("poll(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
 
         if (readIndex != -1) {
             ByteBuffer buffer = bufferArray[readIndex];
@@ -157,7 +169,7 @@ public class BufferManager {
     public ByteBuffer peek(final BufferManagerPointer pointer) {
         int readIndex = pointer.getReadIndex(false);
 
-        //LOG.info("BufferManager peek(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
+        //LOG.info("peek(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
 
         if (readIndex != -1) {
             return bufferArray[readIndex];

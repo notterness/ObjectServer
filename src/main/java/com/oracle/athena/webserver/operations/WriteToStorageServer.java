@@ -2,7 +2,7 @@ package com.oracle.athena.webserver.operations;
 
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
-import com.oracle.athena.webserver.memory.MemoryManager;
+import com.oracle.athena.webserver.niosockets.NioSocket;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,31 +36,23 @@ public class WriteToStorageServer implements Operation {
     private long nextExecuteTime;
 
     /*
-     ** The MemoryManager is used to allocate a very small number of buffers used to send out the
-     **   final status
      */
-    private final MemoryManager memoryManager;
+    private final NioSocket connection;
 
     private final BufferManager clientWriteBufferMgr;
-    private BufferManagerPointer writeStatusPtr;
+    private final BufferManagerPointer encryptedBufferPtr;
 
-    private BufferManagerPointer writeDonePtr;
+    private BufferManagerPointer writeToStorageServerPtr;
 
 
-    public WriteToStorageServer(final RequestContext requestContext, final MemoryManager memoryManager,
-                                final BufferManagerPointer writePointer) {
+    public WriteToStorageServer(final RequestContext requestContext, final NioSocket connection,
+                                final BufferManagerPointer encryptedBufferPtr) {
 
         this.requestContext = requestContext;
-        this.memoryManager = memoryManager;
+        this.connection = connection;
         this.clientWriteBufferMgr = this.requestContext.getClientWriteBufferManager();
 
-        this.writeStatusPtr = writePointer;
-
-        /*
-         ** Register this with the Buffer Manager to allow it to be evented when
-         **   buffers are added by the read producer
-         */
-        this.writeDonePtr = this.clientWriteBufferMgr.register(this, writeStatusPtr);
+        this.encryptedBufferPtr = encryptedBufferPtr;
 
         /*
          ** This starts out not being on any queue
@@ -79,7 +71,13 @@ public class WriteToStorageServer implements Operation {
      **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
-        return writeDonePtr;
+        /*
+         ** Register this with the Buffer Manager to allow it to be evented when
+         **   buffers are added by the read producer
+         */
+        writeToStorageServerPtr = clientWriteBufferMgr.register(this, encryptedBufferPtr, requestContext.getChunkSize());
+
+        return writeToStorageServerPtr;
     }
 
     public void event() {
@@ -94,24 +92,16 @@ public class WriteToStorageServer implements Operation {
      **
      */
     public void execute() {
-        ByteBuffer respBuffer;
+        ByteBuffer writeBuffer;
 
-        while ((respBuffer = clientWriteBufferMgr.poll(writeDonePtr)) != null) {
+        while ((writeBuffer = clientWriteBufferMgr.poll(writeToStorageServerPtr)) != null) {
             /*
              ** Release the Buffers back to the free pool
              */
-            memoryManager.poolMemFree(respBuffer);
         }
-
-        /*
-         ** Close out the connection and place the RequestContext back on the "free" list
-         */
-        requestContext.cleanupRequest();
     }
 
     /*
-     ** This will never be called for the CloseOutRequest. When the execute() method completes, the
-     **   RequestContext is no longer "running".
      */
     public void complete() {
 
@@ -135,22 +125,22 @@ public class WriteToStorageServer implements Operation {
      **   of which queue the connection is on. It will probably clean up the code some.
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("WriteToStorageServer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (onDelayedQueue) {
             if (!delayedExecutionQueue) {
-                LOG.warn("WriteToStorageServer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
+                LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
             }
 
             onDelayedQueue = false;
             nextExecuteTime = 0;
         } else if (onExecutionQueue){
             if (delayedExecutionQueue) {
-                LOG.warn("WriteToStorageServer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
+                LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
             }
 
             onExecutionQueue = false;
         } else {
-            LOG.warn("WriteToStorageServer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
+            LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
         }
     }
 
@@ -178,8 +168,18 @@ public class WriteToStorageServer implements Operation {
             return false;
         }
 
-        //LOG.info("WriteToStorageServer[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
+        //LOG.info("requestId[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
         return true;
+    }
+
+    /*
+     ** Display what this has created and any BufferManager(s) and BufferManagerPointer(s)
+     */
+    public void dumpCreatedOperations() {
+        LOG.info(" ------------------");
+        LOG.info("requestId[" + requestContext.getRequestId() + "] type: " + operationType);
+        writeToStorageServerPtr.dumpPointerInfo();
+        LOG.info(" ------------------");
     }
 
 

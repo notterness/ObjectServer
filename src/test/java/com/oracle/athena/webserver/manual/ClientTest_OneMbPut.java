@@ -45,7 +45,7 @@ class ClientTest_OneMbPut extends ClientTest {
         /*
         ** Send out the 1MB data transfer here
          */
-        ByteBuffer dataBuffer = memoryAllocator.poolMemAlloc(MemoryManager.LARGE_BUFFER_SIZE, null);
+        ByteBuffer dataBuffer = ByteBuffer.allocate(MemoryManager.LARGE_BUFFER_SIZE);
         if (dataBuffer != null) {
             // Fill in a pattern
             long pattern = MemoryManager.LARGE_BUFFER_SIZE;
@@ -68,8 +68,6 @@ class ClientTest_OneMbPut extends ClientTest {
             if (!waitForWriteToComp()) {
                 System.out.println("Request timed out");
             }
-
-            memoryAllocator.poolMemFree(dataBuffer);
         }
     }
 

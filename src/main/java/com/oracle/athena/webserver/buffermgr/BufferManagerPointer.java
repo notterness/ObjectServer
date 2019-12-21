@@ -8,6 +8,17 @@ import org.slf4j.LoggerFactory;
 import java.util.LinkedList;
 import java.util.ListIterator;
 
+/*
+** The BufferManagerPointer is used to allow multiple Producers (Operations that produce data) and multiple
+**   Consumers (Operations that perform work on data that has been produced) to use the same
+**   BufferManager.
+** The BufferManagerPointer allows dependencies to be setup between Producers and Consumers. This allows
+**   multiple Consumers to be notified when a Producer has placed data into the BufferManager.
+**
+** A good example of a Producer/Consumer dependency is the NIO code which reads data off the wire and places
+**   it into a ByteBuffer (that is the Producer) and the HTTP Parser (the Consumer) which uses the data in
+**   in the ByteBuffer to parse out the URI and the HTTP headers.
+ */
 public class BufferManagerPointer {
 
     private static final Logger LOG = LoggerFactory.getLogger(BufferManager.class);
@@ -26,12 +37,26 @@ public class BufferManagerPointer {
     private int bookmark;
 
     /*
+    ** The following are used for pointers that are only going to consume a specified number of
+    **   bytes of data and then stop.
+     */
+    private final int maxBytesToConsume;
+    private int bytesConsumed;
+
+
+    /*
     ** Back link used to clean up any dependencies this might have on other
     **   BufferManagerPointer(s)
      */
     BufferManagerPointer ptrThisDependsOn;
     LinkedList<Operation> ptrWhoDependOnThisList;
 
+    /*
+    ** The following constructor is used by Producers.
+    ** When a Producer is first setup, it starts at the beginning of the BufferManager and will
+    **   setup a few other pieces of information to allow dealing with the fact that the
+    **   BufferManager is implemented as a ring buffer.
+     */
     BufferManagerPointer(final Operation operation, final int bufferArraySize, final int identifier) {
 
         this.operation = operation;
@@ -43,10 +68,23 @@ public class BufferManagerPointer {
         this.bookmark = -1;
         this.ptrThisDependsOn = null;
         this.bufferIndex = 0;
+
+        this.maxBytesToConsume = -1;
+        this.bytesConsumed = 0;
     }
 
+    /*
+    ** The following constructor is used by Consumers.
+    **
+    ** TODO: The bufferArraySize should be pulled from the dependsOnPointer to insure there are
+    **   no mismatches.
+    *
+    ** TODO: Add a enum that identifies the type of BufferManagerPointer as either a Producer
+    **   or a Consumer. Once that is done validate the a Consumer is never setting up a
+    **   dependency on another Consumer.
+     */
     BufferManagerPointer(final Operation operation, final BufferManagerPointer dependsOnPointer,
-                         final int bufferArraySize, final int identifier) {
+                         final int bufferArraySize, final int maxBytesToConsume, final int identifier) {
 
         this.operation = operation;
         this.bufferArraySize = bufferArraySize;
@@ -55,6 +93,9 @@ public class BufferManagerPointer {
 
         this.bookmark = -1;
         this.ptrThisDependsOn = dependsOnPointer;
+
+        this.maxBytesToConsume = maxBytesToConsume;
+        this.bytesConsumed = 0;
 
         int dependsOnBookmark = this.ptrThisDependsOn.getBookmark();
         if (dependsOnBookmark == -1) {
@@ -70,21 +111,41 @@ public class BufferManagerPointer {
                 operation.event();
             }
         }
-
     }
 
     /*
-    ** A useful debug routine to show dependency trees
+    ** The normal case for Consumers is they consume data until there is no more.
+     */
+    BufferManagerPointer(final Operation operation, final BufferManagerPointer dependsOnPointer,
+                         final int bufferArraySize, final int identifier) {
+        this(operation, dependsOnPointer, bufferArraySize, -1, identifier);
+    }
+
+    /*
+    ** A useful debug routine to show dependency trees in trace statements.
      */
     OperationTypeEnum getOperationType() {
         return operation.getOperationType();
     }
 
     /*
-    **
+    ** Each BufferManagerPointer is given a unique ID by the owning BufferManager. This allows tracking
+    **   for an easier tracking of dependencies between the pointers and their owning BufferManager.
      */
     int getIdentifier() {
         return identifier;
+    }
+
+    public void dumpPointerInfo() {
+        if (ptrThisDependsOn == null) {
+            LOG.info("Producer("  + identifier + ":" + getOperationType() + ") bufferIndex: " + bufferIndex +
+                    " bookmark: " + bookmark);
+        } else {
+            LOG.error("Consumer("  + identifier + ":" + getOperationType() + ") depends on Producer(" +
+                    ptrThisDependsOn.getIdentifier() + ":" + ptrThisDependsOn.getOperationType() +
+                    ") bufferIndex: " + bufferIndex + " maxBytesToConsume: " + maxBytesToConsume);
+
+        }
     }
 
     /*
@@ -99,7 +160,8 @@ public class BufferManagerPointer {
     }
 
     /*
-    **
+    ** The getBookmark() will only be called for Producers. It does not make sense for a Consumer
+    **   to have a bookmark as there must never be a Consumer that depends on a Consumer.
      */
     int getBookmark() {
         if (bookmark == -1) {
@@ -115,7 +177,16 @@ public class BufferManagerPointer {
     /*
     ** The setBookmark() with no parameters is only used for Consumer to indicate where they left off so that the
     **   next (could be more than one) Consumer who registers with the same Producer will pick up where this
-    **   Consumer left off.
+    **   Consumer left off. This allows Consumers to register with a Producer some time after the Producer
+    **   has moved on a placed more data into buffers. It allows the Producers to run at a different rate,
+    **   without requiring barriers, than Consumers.
+    **
+    ** A good example of the use of a bookmark is a Producer that is generating encrypted data for a chunk write.
+    **   The Consumer needs to register with the first buffer that holds data for that chunk, but there is no
+    **   reason to stop the consumer from encrypting more buffers while it is waiting for the registration to
+    **   take place. In that case, the Producer determines the first byte of the buffer that will begin a
+    **   chunk and sets a bookmark there. Later, when the Consumers register, they use that bookmark to start
+    **   reading (or using) that encrypted data at the beginning of the chunk.
      */
     void setBookmark() {
         LOG.error("Consumer("  + identifier + ":" + getOperationType() + ") setBookmark: " + bufferIndex + " on Producer(" +
@@ -124,6 +195,9 @@ public class BufferManagerPointer {
         ptrThisDependsOn.setBookmark(bufferIndex);
     }
 
+    /*
+    ** The following is the call to set a bookmark in a Producer.
+     */
     void setBookmark(final int consumerBookmarkValue) {
         LOG.error("Producer("  + identifier + ":" + getOperationType() + ") setBookmark: " + consumerBookmarkValue);
         bookmark = consumerBookmarkValue;
@@ -174,11 +248,15 @@ public class BufferManagerPointer {
         return bufferIndex;
     }
 
+    /*
+    ** This is used to reset a BufferManagerPointer back to its initial state.
+     */
     int reset() {
         int tempIndex = bufferIndex;
 
         LOG.info("reset() Producer("  + identifier + ":" + getOperationType() + ") writeIndex: " + bufferIndex);
         bufferIndex = 0;
+        bookmark = -1;
 
         return tempIndex;
     }
@@ -217,12 +295,20 @@ public class BufferManagerPointer {
         return bufferIndex;
     }
 
+    /*
+    ** This adds an Operation to the dependency list if it is not already on it. The dependency list
+    **   is used to event() all of the Operations when a change is made by the Producer.
+     */
     void addDependsOn(final Operation operation) {
-        if (ptrWhoDependOnThisList.contains(operation) == false) {
+        if (!ptrWhoDependOnThisList.contains(operation)) {
             ptrWhoDependOnThisList.add(operation);
         }
     }
 
+    /*
+    ** The following walks the depends on list and call event() for all of the registered operations
+    **   who are consumers of the data generated by the Producer who owns this BufferManagerPointer.
+     */
     void generateDependsOnEvents() {
         ListIterator<Operation> iter = ptrWhoDependOnThisList.listIterator(0);
 

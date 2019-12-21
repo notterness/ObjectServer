@@ -1,23 +1,33 @@
 package com.oracle.athena.webserver.niosockets;
 
+import com.oracle.athena.webserver.operations.Operation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.channels.*;
 import java.util.Iterator;
+import java.util.LinkedList;
 
 public class NioEventPollThread implements Runnable {
 
     private static final Logger LOG = LoggerFactory.getLogger(NioEventPollThread.class);
 
+    private static final int ALLOCATED_NIO_SOCKET = 10;
+
     private final int SELECT_TIMEOUT = 1000;
 
     private final int eventPollThreadBaseId;
 
+    private final LinkedList<NioSocket> freeConnections;
+    private final LinkedList<Operation> waitingForConnections;
+
     private volatile boolean threadRunning;
 
     private Thread eventPollThread;
+
+    private NioSelectHandler nioSelectHandler;
+
 
     /*
     ** This is the Selector used to handle READ and WRITE events for the client SocketChannel.
@@ -25,8 +35,11 @@ public class NioEventPollThread implements Runnable {
     private Selector clientSocketSelector;
 
 
-    NioEventPollThread(final int threadBaseId) {
+    public NioEventPollThread(final int threadBaseId) {
         this.eventPollThreadBaseId = threadBaseId;
+
+        this.freeConnections = new LinkedList<NioSocket>();
+        this.waitingForConnections = new LinkedList<Operation>();
 
         this.threadRunning = true;
     }
@@ -35,6 +48,26 @@ public class NioEventPollThread implements Runnable {
     ** Setup the Thread to handle the event loops for the SocketChannel
      */
     void start() {
+        /*
+        ** Setup NioSelectHandler for this thread.
+         */
+        nioSelectHandler = new NioSelectHandler();
+
+        /*
+        ** Now setup the Selector for the handler so it can be passed into the pre-allocated NioSocket
+        **   connection control objects.
+         */
+        Selector selector = nioSelectHandler.setupSelector();
+
+        /*
+        ** Create a collection of NioSocket to handle communications with the Storage Servers
+         */
+        for (int i = 0; i < ALLOCATED_NIO_SOCKET; i++) {
+            NioSocket connection = new NioSocket(nioSelectHandler);
+
+            freeConnections.add(connection);
+        }
+
         eventPollThread = new Thread(this);
         eventPollThread.start();
     }
@@ -47,7 +80,29 @@ public class NioEventPollThread implements Runnable {
     }
 
     /*
-    ** This is where a RequestContext is aquired for a connection and the association between the connection and
+    ** TODO: Wire in the wakeup of the waitingOperation if there are no NioSocket
+    **   available and add a test for this
+     */
+    public NioSocket allocateConnection(final Operation waitingOperation) {
+        NioSocket connection =  freeConnections.poll();
+        if (connection == null) {
+            waitingForConnections.add(waitingOperation);
+        }
+
+        return connection;
+    }
+
+    public void releaseConnection(final NioSocket connection) {
+        freeConnections.add(connection);
+
+        Operation waitingOperation = waitingForConnections.poll();
+        if (waitingOperation != null) {
+            waitingOperation.event();
+        }
+    }
+
+    /*
+    ** This is where a RequestContext is acquired for a connection and the association between the connection and
     **   the SocketChannel is made. This is how the NIO layer is linked into the actual RequestContext and its
     **   associated BufferManagers.
     ** Add a client SocketChannel to the Selector
@@ -70,43 +125,12 @@ public class NioEventPollThread implements Runnable {
     ** The following is the Thread to handle the select events for the client SocketChannel
      */
     public void run() {
-        int readyChannels;
-
-        Selector clientSocketSelector = setupSelector();
-        if (clientSocketSelector == null) {
-            return;
-        }
 
         while (threadRunning) {
-            try {
-                readyChannels = clientSocketSelector.select(SELECT_TIMEOUT);
-            } catch (IOException io_ex) {
-                LOG.error("NioEventPollthread[" + eventPollThreadBaseId + "] select() failed: " + io_ex.getMessage());
-
-                /*
-                ** Force exit due to a serious error
-                 */
-                threadRunning = false;
-                break;
-            }
-
-            if (readyChannels > 0) {
-                Iterator<SelectionKey> keyIter = clientSocketSelector.selectedKeys().iterator();
-                while (keyIter.hasNext()) {
-                    SelectionKey key = keyIter.next();
-
-                    if (key.isReadable()) {
-                        handleRead(key);
-                    }
-
-                    if (key.isWritable()) {
-                        handleWrite(key);
-                    }
-
-                    keyIter.remove();
-                }
-
-            }
+            /*
+            ** Perform the NIO SocketChannel work
+             */
+            nioSelectHandler.handleSelector();
 
             /*
             ** Now check if there is other work to be performed on the connections that does not deal with the
@@ -118,35 +142,15 @@ public class NioEventPollThread implements Runnable {
     /*
     **
      */
-    void handleRead(SelectionKey key) {
+    void handleRead(final NioSocket connection) {
 
     }
 
     /*
     **
      */
-    void handleWrite(SelectionKey key) {
+    void handleWrite(final NioSocket connection) {
 
     }
-
-
-    /*
-     ** This sets up a Selector for use with the client SocketChannel(s) that are being operated on.
-     **   A SocketChannel has a one to one relationship with a connection that is used to handle an
-     **   HTTP request.
-     */
-    private Selector setupSelector() {
-        Selector clientSelector;
-
-        try {
-            clientSelector = Selector.open();
-        } catch (IOException io_ex) {
-            LOG.error("NioEventPollthread[" + eventPollThreadBaseId + "] Selector.open() failed: " + io_ex.getMessage());
-            return null;
-        }
-
-        return clientSelector;
-    }
-
 
 }

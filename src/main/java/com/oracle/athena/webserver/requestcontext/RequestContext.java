@@ -5,6 +5,8 @@ import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.connectionstate.CasperHttpInfo;
 import com.oracle.athena.webserver.connectionstate.HttpMethodEnum;
 import com.oracle.athena.webserver.memory.MemoryManager;
+import com.oracle.athena.webserver.niosockets.NioEventPollThread;
+import com.oracle.athena.webserver.niosockets.NioSocket;
 import com.oracle.athena.webserver.operations.*;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.eclipse.jetty.http.HttpStatus;
@@ -27,11 +29,28 @@ public class RequestContext {
 
     private static final Logger LOG = LoggerFactory.getLogger(RequestContext.class);
 
+    /*
+     ** This is the define for the chunk size in bytes. There are two different defines, one to allow easy testing of
+     **   the chunk boundary crossing in a simulation environment and the other for production
+     **
+     **  MemoryManager.XFER_BUFFER_SIZE = 8k
+     **  (MemoryManager.XFER_BUFFER_SIZE * 64) = 524,288
+     **  (MemoryManager.XFER_BUFFER_SIZE * 16k) = 134,217,728 (128MB)
+     */
+    public final int TEST_CHUNK_SIZE_IN_BYTES = MemoryManager.XFER_BUFFER_SIZE * 64;
+    public final int CHUNK_SIZE_IN_BYTES = MemoryManager.XFER_BUFFER_SIZE * 4096;
+
 
     private static final int BUFFER_MGR_RING_SIZE = 128;
     private static final int STORAGE_SERVER_RESPONSE_RING_SIZE = 10;
 
     private static final int MAX_EXEC_WORK_LOOP_COUNT = 10;
+
+    /*
+    ** This is the Chunk Size used
+     */
+    private final int chunkSize;
+
 
     /*
     ** A connection may have multiple requests within it. For example:
@@ -48,6 +67,13 @@ public class RequestContext {
     ** The memory manager used to populate the various BufferManagers
      */
     private final MemoryManager memoryManager;
+
+    /*
+    ** This is the thread this RequestContext will always run on. There are multiple RequestContext assigned
+    **   to each thread.
+     */
+    private final NioEventPollThread threadThisContextRunsOn;
+
 
     /*
     ** This is the BufferManager to read data in from the client.
@@ -171,11 +197,18 @@ public class RequestContext {
     private BlockingQueue<Operation> timedWaitQueue;
 
 
-    public RequestContext(final WebServerFlavor flavor, final int requestId, final MemoryManager memoryManager) {
+    public RequestContext(final WebServerFlavor flavor, final int requestId, final MemoryManager memoryManager,
+                          final NioEventPollThread threadThisRunsOn) {
 
         this.webServerFlavor = flavor;
         this.connectionRequestId = requestId;
         this.memoryManager = memoryManager;
+        this.threadThisContextRunsOn = threadThisRunsOn;
+
+        /*
+         ** Setup the chunk size to use. It is dependent upon if this is running in production or simulation
+         */
+        chunkSize = TEST_CHUNK_SIZE_IN_BYTES;
 
         httpInfo = new CasperHttpInfo(this);
 
@@ -474,6 +507,25 @@ public class RequestContext {
         }
 
         return found;
+    }
+
+    /*
+    ** Allocation and free routines used for connections (NioSocket). The connections are tied to a specific
+    **   NioEventPollThread.
+     */
+    public NioSocket allocateConnection(final Operation requestingOperation) {
+        return threadThisContextRunsOn.allocateConnection(requestingOperation);
+    }
+
+    public void releaseConnection(final NioSocket connection) {
+        threadThisContextRunsOn.releaseConnection(connection);
+    }
+
+    /*
+    ** Used to obtain the Chunk size used
+     */
+    public int getChunkSize() {
+        return chunkSize;
     }
 
     /*
