@@ -88,6 +88,8 @@ public class DetermineRequestType implements Operation {
             HttpMethodEnum method = casperHttpInfo.getMethod();
             Operation httpRequestSetup = supportedHttpRequests.get(method);
             if (httpRequestSetup != null) {
+                requestContext.addOperation(httpRequestSetup);
+
                 LOG.info("DetermineRequestType[" + requestContext.getRequestId() + "] execute() " + method.toString());
                 httpRequestSetup.initialize();
                 httpRequestSetup.event();
@@ -172,10 +174,10 @@ public class DetermineRequestType implements Operation {
     /*
      ** Display what this has created and any BufferManager(s) and BufferManagerPointer(s)
      */
-    public void dumpCreatedOperations() {
-        LOG.info(" ------------------");
-        LOG.info("requestId[" + requestContext.getRequestId() + "] type: " + operationType);
-        LOG.info(" ------------------");
+    public void dumpCreatedOperations(final int level) {
+        LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
+        LOG.info("      No BufferManagerPointers");
+        LOG.info("");
     }
 
 }

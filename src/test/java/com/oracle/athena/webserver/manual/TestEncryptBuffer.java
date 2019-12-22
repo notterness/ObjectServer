@@ -35,5 +35,6 @@ public class TestEncryptBuffer {
     void execute() {
         encryptBuffer.testEncryption();
 
+        requestContext.dumpOperations();
     }
 }

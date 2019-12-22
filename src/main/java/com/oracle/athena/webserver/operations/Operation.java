@@ -54,5 +54,5 @@ public interface Operation {
     /*
     ** Debug routine to show the dependencies (basically which Operation created other Operations)
      */
-    void dumpCreatedOperations();
+    void dumpCreatedOperations(final int level);
 }

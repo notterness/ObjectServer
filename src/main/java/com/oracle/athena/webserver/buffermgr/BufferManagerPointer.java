@@ -138,10 +138,10 @@ public class BufferManagerPointer {
 
     public void dumpPointerInfo() {
         if (ptrThisDependsOn == null) {
-            LOG.info("Producer("  + identifier + ":" + getOperationType() + ") bufferIndex: " + bufferIndex +
+            LOG.info("     Producer("  + identifier + ":" + getOperationType() + ") bufferIndex: " + bufferIndex +
                     " bookmark: " + bookmark);
         } else {
-            LOG.error("Consumer("  + identifier + ":" + getOperationType() + ") depends on Producer(" +
+            LOG.info("     Consumer("  + identifier + ":" + getOperationType() + ") depends on Producer(" +
                     ptrThisDependsOn.getIdentifier() + ":" + ptrThisDependsOn.getOperationType() +
                     ") bufferIndex: " + bufferIndex + " maxBytesToConsume: " + maxBytesToConsume);
 

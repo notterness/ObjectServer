@@ -139,9 +139,8 @@ public class HandleStorageServerError implements Operation {
     /*
      ** Display what this has created and any BufferManager(s) and BufferManagerPointer(s)
      */
-    public void dumpCreatedOperations() {
-        LOG.info(" ------------------");
-        LOG.info("requestId[" + requestContext.getRequestId() + "] type: " + operationType);
-        LOG.info(" ------------------");
+    public void dumpCreatedOperations(final int level) {
+        LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
+        LOG.info("");
     }
 }

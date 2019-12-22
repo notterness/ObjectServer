@@ -596,7 +596,24 @@ public class RequestContext {
         return meteringPtr;
     }
 
+    /*
+    **
+     */
     public Operation getOperation(final OperationTypeEnum operationType) {
         return requestHandlerOperations.get(operationType);
+    }
+
+    public void addOperation(final Operation operation) {
+        requestHandlerOperations.put(operation.getOperationType(), operation);
+    }
+
+    public void dumpOperations() {
+        LOG.info(" RequestContext[" + connectionRequestId + "] Operation dependency");
+        Collection<Operation> createdOperations = requestHandlerOperations.values();
+        Iterator<Operation> iter = createdOperations.iterator();
+        while (iter.hasNext()) {
+            iter.next().dumpCreatedOperations(1);
+        }
+
     }
 }

@@ -182,16 +182,16 @@ public class SetupV2Put implements Operation {
     /*
      ** Display what this has created and any BufferManager(s) and BufferManagerPointer(s)
      */
-    public void dumpCreatedOperations() {
-        LOG.info(" ------------------");
-        LOG.info("requestId[" + requestContext.getRequestId() + "] type: " + operationType);
-        LOG.info(" -> Operations Created By " + operationType);
+    public void dumpCreatedOperations(final int level) {
+        LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
+        LOG.info("   -> Operations Created By " + operationType);
 
         Collection<Operation> createdOperations = v2PutHandlerOperations.values();
         Iterator<Operation> iter = createdOperations.iterator();
         while (iter.hasNext()) {
-            iter.next().dumpCreatedOperations();
+            iter.next().dumpCreatedOperations(level + 1);
         }
+        LOG.info("");
     }
 
 }

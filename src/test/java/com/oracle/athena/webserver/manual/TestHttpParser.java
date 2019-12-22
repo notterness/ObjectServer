@@ -141,6 +141,8 @@ public class TestHttpParser {
                 ** At this point there should be EncryptBuffer on the queue
                  */
                 requestContext.validateOperationOnQueue(OperationTypeEnum.ENCRYPT_BUFFER);
+
+                requestContext.dumpOperations();
             } else {
                 System.out.println("Unable to allocate content buffer");
             }
