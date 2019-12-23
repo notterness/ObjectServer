@@ -11,10 +11,10 @@ public class TestMain {
 
         AtomicInteger threadCount = new AtomicInteger(0);
 
-        TestEncryptBuffer testEncryptBuffer = new TestEncryptBuffer();
-        testEncryptBuffer.execute();
+        //TestEncryptBuffer testEncryptBuffer = new TestEncryptBuffer();
+        //testEncryptBuffer.execute();
 
-        TestHttpParser testHttpParser = new TestHttpParser();
+        TestHttpParser testHttpParser = new TestHttpParser("TestHttpParser");
         testHttpParser.execute();
 
         /*

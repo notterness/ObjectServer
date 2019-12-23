@@ -28,6 +28,26 @@ public class NioSocket implements IoInterface {
     private SocketChannel socketChannel;
 
     /*
+    ** The following are how read buffers are obtained and used.
+    ** The free buffer is pointed to by the readPointer. To obtain the buffer to read data in,
+    **   the user will call readBufferManager.peek(readPointer) to obtain the buffer. The pointers within the
+    **   ByteBuffer will allow the buffer to have data read into it multiple times (the position() index will get
+    **   updated as data is placed in the ByteBuffer) if desired. When the buffer is either full or no more data
+    **   will be read into it, then the filler of the buffer will need to call
+    **   readBufferManager.updateProducerWritePointer(readPointer) to indicate the buffer is ready to be consumed.
+    **   That will update the consumers of the data via events.
+    **
+    ** NOTE: This design implies that the ByteBuffer can only be filled by a single producer that must be single
+    **   single threaded. The design does not allow for multiple threads performing SocketChannel.read() into the
+    **   ByteBuffer.
+     */
+    private BufferManager readBufferManager;
+    private BufferManagerPointer readPointer;
+
+    private BufferManager writeBufferManager;
+    private BufferManagerPointer writePointer;
+
+    /*
     ** This is the Operation to call the event() handler on if there is an error either setting up
     **   or while using the socket (i.e. the other side disconnected).
      */
@@ -129,20 +149,28 @@ public class NioSocket implements IoInterface {
     ** The following is used to register with the NIO handling layer for reads. When a server connection is made, this
     **   registration is used to know where to pass the information from the socket.
      */
-    public void registerReadBufferManager(final BufferManager readBufferMgr, final BufferManagerPointer readPointer) {
+    public void registerReadBufferManager(final BufferManager readBufferMgr, final BufferManagerPointer readPtr) {
 
+        this.readBufferManager = readBufferMgr;
+        this.readPointer = readPtr;
     }
 
-    public void registerWriteBufferManager(final BufferManager writeBufferManager, final BufferManagerPointer writePtr) {
+    public void registerWriteBufferManager(final BufferManager writeBufferMgr, final BufferManagerPointer writePtr) {
 
+        this.writeBufferManager = writeBufferMgr;
+        this.writePointer = writePtr;
     }
 
     public void unregisterReadBufferManager() {
 
+        this.readBufferManager = null;
+        this.readPointer = null;
     }
 
     public void unregisterWriteBufferManager() {
 
+        this.writeBufferManager = null;
+        this.writePointer = null;
     }
 
     /*

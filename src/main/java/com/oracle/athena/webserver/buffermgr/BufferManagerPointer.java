@@ -49,6 +49,7 @@ public class BufferManagerPointer {
     **   BufferManagerPointer(s)
      */
     BufferManagerPointer ptrThisDependsOn;
+    LinkedList<BufferManagerPointer> dependentPointers;
     LinkedList<Operation> ptrWhoDependOnThisList;
 
     /*
@@ -63,6 +64,7 @@ public class BufferManagerPointer {
         this.bufferArraySize = bufferArraySize;
         this.identifier = identifier;
 
+        dependentPointers = new LinkedList<>();
         ptrWhoDependOnThisList = new LinkedList<>();
 
         this.bookmark = -1;
@@ -88,6 +90,7 @@ public class BufferManagerPointer {
 
         this.operation = operation;
         this.bufferArraySize = bufferArraySize;
+        dependentPointers = new LinkedList<>();
         this.ptrWhoDependOnThisList = new LinkedList<>();
         this.identifier = identifier;
 
@@ -96,6 +99,19 @@ public class BufferManagerPointer {
 
         this.maxBytesToConsume = maxBytesToConsume;
         this.bytesConsumed = 0;
+
+        /*
+        ** Add the Operation to the depends on list for the producer
+         */
+        dependsOnPointer.addDependsOn(operation);
+
+        /*
+        ** Add the consumer BufferManagerPointer (this) to the depends on list for the producer. The
+        **   list of consumer pointers is to insure that the producer does not catch up and
+        **   overwrite a consumer.
+         */
+        dependsOnPointer.addDependsOn(this);
+
 
         int dependsOnBookmark = this.ptrThisDependsOn.getBookmark();
         if (dependsOnBookmark == -1) {
@@ -114,7 +130,8 @@ public class BufferManagerPointer {
     }
 
     /*
-    ** The normal case for Consumers is they consume data until there is no more.
+    ** The normal case for Consumers is they consume data until there is no more. This means the
+    **   maxBytesToConsume is not passed in to the constructor.
      */
     BufferManagerPointer(final Operation operation, final BufferManagerPointer dependsOnPointer,
                          final int bufferArraySize, final int identifier) {
@@ -189,17 +206,23 @@ public class BufferManagerPointer {
     **   reading (or using) that encrypted data at the beginning of the chunk.
      */
     void setBookmark() {
-        LOG.error("Consumer("  + identifier + ":" + getOperationType() + ") setBookmark: " + bufferIndex + " on Producer(" +
-                  ptrThisDependsOn.getIdentifier() + ":" + ptrThisDependsOn.getOperationType() + ")");
+        if (ptrThisDependsOn != null) {
+            LOG.error("Consumer(" + identifier + ":" + getOperationType() + ") setBookmark: " + bufferIndex + " on Producer(" +
+                    ptrThisDependsOn.getIdentifier() + ":" + ptrThisDependsOn.getOperationType() + ")");
 
-        ptrThisDependsOn.setBookmark(bufferIndex);
+            ptrThisDependsOn.setBookmark(bufferIndex);
+        } else {
+            LOG.error("Producer(" + identifier + ":" + getOperationType() + ") setBookmark(1): " + bufferIndex);
+
+            bookmark = bufferIndex;
+        }
     }
 
     /*
     ** The following is the call to set a bookmark in a Producer.
      */
     void setBookmark(final int consumerBookmarkValue) {
-        LOG.error("Producer("  + identifier + ":" + getOperationType() + ") setBookmark: " + consumerBookmarkValue);
+        LOG.error("Producer("  + identifier + ":" + getOperationType() + ") setBookmark(2): " + consumerBookmarkValue);
         bookmark = consumerBookmarkValue;
     }
 
@@ -233,7 +256,35 @@ public class BufferManagerPointer {
                  */
             }
         } else {
-            LOG.error("Consumer("  + identifier + ":" + getOperationType() + ") must have a depends on relationship");
+            /*
+            ** This is the case for the producer accessing the buffer. It must check that it is not catching up to
+            **   to the consumers who are dependent upon it.
+             */
+            int nextIndex = bufferIndex + 1;
+            if (nextIndex == bufferArraySize) {
+                nextIndex = 0;
+            }
+
+            /*
+            ** Now check that this will not run into any dependent pointers
+             */
+            ListIterator<BufferManagerPointer> iter = dependentPointers.listIterator(0);
+
+            while (iter.hasNext()) {
+                BufferManagerPointer consumer = iter.next();
+                if (consumer.getCurrIndex() == nextIndex) {
+                    /*
+                    ** This is the wrap condition, cannot proceed
+                     */
+                    LOG.warn("Producer("  + identifier + ":" + getOperationType() + ") wrapCondition nextIndex: " + nextIndex +
+                            " Consumer(" + consumer.getIdentifier() + ":" + consumer.getOperationType() + ") readIndex: " +
+                            consumer.getCurrIndex());
+                    return -1;
+                }
+            }
+
+            LOG.info("Consumer("  + identifier + ":" + getOperationType() + ") readIndex: " + bufferIndex);
+            return bufferIndex;
         }
 
         return -1;
@@ -294,6 +345,19 @@ public class BufferManagerPointer {
 
         return bufferIndex;
     }
+
+    /*
+     ** This adds a consumer BufferManagerPointer to the dependency list if it is not already on it.
+     ** The dependency list is used to insure that the producer does not wrap over a consumer and
+     **   overwrite its data. This is to prevent the case where to producer is much quicker
+     **   than the consumer(s).
+     */
+    void addDependsOn(final BufferManagerPointer consumerPtr) {
+        if (!dependentPointers.contains(consumerPtr)) {
+            dependentPointers.add(consumerPtr);
+        }
+    }
+
 
     /*
     ** This adds an Operation to the dependency list if it is not already on it. The dependency list

@@ -367,7 +367,7 @@ public class EncryptBuffer implements Operation {
          **   BufferManagerPointer picks up the producers current write index as its starting read index.
          */
         clientReadPtr = clientReadBufferMgr.register(this, readFillPtr);
-        storageServerWritePtr = storageServerWriteBufferMgr.register(this, writeFillPtr);
+        storageServerWritePtr = storageServerWriteBufferMgr.register(this);
 
         /*
          ** Now create one more dependent BufferManagerPointer on the storageServerWritePtr to read all of
