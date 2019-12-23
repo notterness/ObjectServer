@@ -21,18 +21,18 @@ public class TestEncryptBuffer {
     private final ByteBufferHttpParser parser;
 
     TestEncryptBuffer() {
-        nioEventThread = new NioEventPollThread(0x1001);
-        nioEventThread.start();
+        this.memoryManager = new MemoryManager(WebServerFlavor.INTEGRATION_TESTS);
+        this.nioEventThread = new NioEventPollThread(0x1001, memoryManager);
+        this.nioEventThread.start();
 
-        memoryManager = new MemoryManager(WebServerFlavor.INTEGRATION_TESTS);
-        requestContext = new RequestContext(WebServerFlavor.INTEGRATION_TESTS, memoryManager, nioEventThread);
+        this.requestContext = new RequestContext(WebServerFlavor.INTEGRATION_TESTS, memoryManager, nioEventThread);
 
         IoInterface connection = nioEventThread.allocateConnection(null);
-        requestContext.initialize(connection, 55);
+        this.requestContext.initialize(connection, 55);
 
         CasperHttpInfo casperHttpInfo = new CasperHttpInfo(requestContext);
 
-        parser = new ByteBufferHttpParser(casperHttpInfo);
+        this.parser = new ByteBufferHttpParser(casperHttpInfo);
 
         encryptBuffer = new EncryptBuffer(requestContext, null);
     }

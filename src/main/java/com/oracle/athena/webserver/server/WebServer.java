@@ -70,8 +70,6 @@ public class WebServer {
     private final MdsClients mdsClients;
     private final MonitoringMetricsReporter metricsReporter;
     private final Tracer tracer;
-    private final ServerChannelLayer http;
-    private final ServerChannelLayer https;
     private final MemoryManager memoryManager;
     private final int webServerClientIdBase;
 
@@ -212,20 +210,9 @@ public class WebServer {
             numConnectionsPerWorkerThread = 2;
             numWorkerThreads = 1;
         }
-        ServerLoadBalancer serverWorkHandler = new ServerLoadBalancer(flavor, auths, numConnectionsPerWorkerThread, numWorkerThreads,
-                memoryManager, webServerClientIdBase);
-        ServerSSLLoadBalancer sslServerWorkHandler = new ServerSSLLoadBalancer(flavor, auths, numConnectionsPerWorkerThread, numWorkerThreads,
-                memoryManager, sslWebServerClientIdBase);
-
-        http = new ServerChannelLayer(serverWorkHandler, listenPort,
-                webServerClientIdBase);
-        https = new ServerChannelLayer(sslServerWorkHandler, listenPort + ServerChannelLayer.HTTPS_PORT_OFFSET,
-                sslWebServerClientIdBase);
     }
 
     public void start() {
-        http.start();
-        https.start();
 
         WebServerMetrics.init();
         OracleMetrics.init();
@@ -257,8 +244,6 @@ public class WebServer {
         mdsClients.stop();
 
         // stop the servers
-        http.stop();
-        https.stop();
 
         /*
          ** Verify that the MemoryManger has all of its memory back in the free pools

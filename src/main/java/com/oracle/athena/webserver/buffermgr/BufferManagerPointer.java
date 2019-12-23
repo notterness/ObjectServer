@@ -141,7 +141,7 @@ public class BufferManagerPointer {
     /*
     ** A useful debug routine to show dependency trees in trace statements.
      */
-    OperationTypeEnum getOperationType() {
+    public OperationTypeEnum getOperationType() {
         return operation.getOperationType();
     }
 
@@ -149,7 +149,7 @@ public class BufferManagerPointer {
     ** Each BufferManagerPointer is given a unique ID by the owning BufferManager. This allows tracking
     **   for an easier tracking of dependencies between the pointers and their owning BufferManager.
      */
-    int getIdentifier() {
+    public int getIdentifier() {
         return identifier;
     }
 
@@ -172,7 +172,7 @@ public class BufferManagerPointer {
     ** For consumers, this returns where it will read from. If the readIndex is the same as the
     **   the producers writeIndex, there is no valid data available.
      */
-    int getCurrIndex() {
+    public int getCurrIndex() {
         return bufferIndex;
     }
 

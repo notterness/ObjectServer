@@ -111,6 +111,8 @@ public class EncryptBuffer implements Operation {
          */
         storageServerWritePtr = storageServerWriteBufferMgr.register(this);
 
+        LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] initialize done");
+
         return storageServerWritePtr;
     }
 

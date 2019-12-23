@@ -28,6 +28,8 @@ public class SetupV2Put implements Operation {
     private final BufferManager clientReadBufferMgr;
     private final BufferManager storageServerWriteBufferMgr;
 
+    private final Operation metering;
+
     private BufferManagerPointer clientReadPtr;
 
 
@@ -52,10 +54,11 @@ public class SetupV2Put implements Operation {
     ** This is used to setup the initial Operation dependencies required to handle the V2 PUT
     **   request.
      */
-    public SetupV2Put(final RequestContext requestContext, final MemoryManager memoryManager) {
+    public SetupV2Put(final RequestContext requestContext, final MemoryManager memoryManager, final Operation metering) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
+        this.metering = metering;
 
         this.clientReadBufferMgr = this.requestContext.getClientReadBufferManager();
         this.storageServerWriteBufferMgr = this.requestContext.getStorageServerWriteBufferManager();
@@ -89,6 +92,10 @@ public class SetupV2Put implements Operation {
         **   Md5 Digest operation and the other will be used by the EncryptBuffer operation
          */
 
+        /*
+        ** Dole out another buffer to read in the content data
+         */
+        metering.event();
         return null;
     }
 
