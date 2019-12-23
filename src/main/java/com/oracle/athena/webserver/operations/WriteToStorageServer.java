@@ -2,7 +2,7 @@ package com.oracle.athena.webserver.operations;
 
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
-import com.oracle.athena.webserver.niosockets.NioSocket;
+import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,21 +36,22 @@ public class WriteToStorageServer implements Operation {
     private long nextExecuteTime;
 
     /*
+    ** This is the connection used to write to the Storage Server
      */
-    private final NioSocket connection;
+    private IoInterface connection;
 
-    private final BufferManager clientWriteBufferMgr;
+    private final BufferManager storageServerWriteBufferMgr;
     private final BufferManagerPointer encryptedBufferPtr;
 
     private BufferManagerPointer writeToStorageServerPtr;
 
 
-    public WriteToStorageServer(final RequestContext requestContext, final NioSocket connection,
+    public WriteToStorageServer(final RequestContext requestContext, final IoInterface connection,
                                 final BufferManagerPointer encryptedBufferPtr) {
 
         this.requestContext = requestContext;
         this.connection = connection;
-        this.clientWriteBufferMgr = this.requestContext.getClientWriteBufferManager();
+        this.storageServerWriteBufferMgr = this.requestContext.getStorageServerWriteBufferManager();
 
         this.encryptedBufferPtr = encryptedBufferPtr;
 
@@ -72,14 +73,27 @@ public class WriteToStorageServer implements Operation {
      */
     public BufferManagerPointer initialize() {
         /*
-         ** Register this with the Buffer Manager to allow it to be evented when
-         **   buffers are added by the read producer
+         ** Register this with the Buffer Manager to allow it to be event(ed) when
+         **   buffers are added by the EncryptBuffer producer
          */
-        writeToStorageServerPtr = clientWriteBufferMgr.register(this, encryptedBufferPtr, requestContext.getChunkSize());
+        writeToStorageServerPtr = storageServerWriteBufferMgr.register(this, encryptedBufferPtr, requestContext.getChunkSize());
+
+        /*
+        ** Register this BufferManager and BufferManagerPointer with the IoInterface. This will only be used for
+        **   writes out the IoInterface.
+         */
+        connection.registerWriteBufferManager(storageServerWriteBufferMgr, encryptedBufferPtr);
 
         return writeToStorageServerPtr;
     }
 
+    /*
+    ** This is the call when encrypted data is placed into the Storage Server Write BufferManager.
+    **
+    ** TODO: Make the connection.writeBufferReady() method thread safe so that it can be called from
+    **   the event() method if desired. Then there is not another thread wakeup step to get to the
+    **   execute() method.
+     */
     public void event() {
 
         /*
@@ -89,22 +103,29 @@ public class WriteToStorageServer implements Operation {
     }
 
     /*
-     **
+     ** This just informs the IoInterface that there is at least one buffer with data in it that is
+     **   ready to be written out the IoInterface.
      */
     public void execute() {
-        ByteBuffer writeBuffer;
-
-        while ((writeBuffer = clientWriteBufferMgr.poll(writeToStorageServerPtr)) != null) {
-            /*
-             ** Release the Buffers back to the free pool
-             */
+        if (storageServerWriteBufferMgr.peek(writeToStorageServerPtr) != null) {
+            connection.writeBufferReady();
         }
     }
 
     /*
      */
     public void complete() {
+        /*
+        ** Unregister the BufferManager and the BufferManagerPointer so that the IoInterface
+        **   can be used cleanly by another connection later.
+         */
+        connection.unregisterWriteBufferManager();
 
+        /*
+        ** Clear out the reference to the connection so it may be released back to the pool
+         */
+        requestContext.releaseConnection(connection);
+        connection = null;
     }
 
     /*

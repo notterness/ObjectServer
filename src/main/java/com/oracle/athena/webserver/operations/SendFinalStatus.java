@@ -4,6 +4,7 @@ import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.http.BuildHttpResult;
 import com.oracle.athena.webserver.memory.MemoryManager;
+import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -35,6 +36,11 @@ public class SendFinalStatus implements Operation {
     private final MemoryManager memoryManager;
 
     /*
+    ** This is the IoInterface that the final status will be written out on.
+     */
+    private final IoInterface clientConnection;
+
+    /*
     ** The clientWriteBufferMgr is used to queue up writes back to the client. In this case, the
     **   writes are to send the final request status.
      */
@@ -53,19 +59,19 @@ public class SendFinalStatus implements Operation {
     /*
     ** This is used to construct the final response to send to the client.
      */
-    private BuildHttpResult resultBuilder;
+    private final BuildHttpResult resultBuilder;
 
 
-    public SendFinalStatus(final RequestContext requestContext, final MemoryManager memoryManager) {
+    public SendFinalStatus(final RequestContext requestContext, final MemoryManager memoryManager,
+                           final IoInterface connection) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
+        this.clientConnection = connection;
 
         this.clientWriteBufferMgr = this.requestContext.getClientWriteBufferManager();
 
         this.resultBuilder = new BuildHttpResult();
-
-        this.writeStatusBufferPtr = this.clientWriteBufferMgr.register(this);
 
         /*
          ** This starts out not being on any queue
@@ -84,6 +90,12 @@ public class SendFinalStatus implements Operation {
      **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
+        writeStatusBufferPtr = this.clientWriteBufferMgr.register(this);
+
+        /*
+        ** Register with the IoInterface to perform writes
+         */
+        clientConnection.registerWriteBufferManager(clientWriteBufferMgr, writeStatusBufferPtr);
 
         return writeStatusBufferPtr;
     }
@@ -122,6 +134,8 @@ public class SendFinalStatus implements Operation {
             ** Add the ByteBuffer to the clientWriteBufferMgr to kick off the write of the response to the client
              */
             clientWriteBufferMgr.offer(writeStatusBufferPtr, respBuffer);
+
+            clientConnection.writeBufferReady();
         } else {
             /*
              ** If we are out of memory to allocate a response, might as well close out the connection and give up.

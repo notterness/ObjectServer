@@ -5,8 +5,8 @@ import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.connectionstate.CasperHttpInfo;
 import com.oracle.athena.webserver.connectionstate.HttpMethodEnum;
 import com.oracle.athena.webserver.memory.MemoryManager;
+import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.niosockets.NioEventPollThread;
-import com.oracle.athena.webserver.niosockets.NioSocket;
 import com.oracle.athena.webserver.operations.*;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.eclipse.jetty.http.HttpStatus;
@@ -28,6 +28,8 @@ import java.util.concurrent.locks.ReentrantLock;
 public class RequestContext {
 
     private static final Logger LOG = LoggerFactory.getLogger(RequestContext.class);
+
+    public static final int STORAGE_SERVER_PORT_BASE = 5050;
 
     /*
      ** This is the define for the chunk size in bytes. There are two different defines, one to allow easy testing of
@@ -56,7 +58,16 @@ public class RequestContext {
     ** A connection may have multiple requests within it. For example:
     **    GET, GET, GET
      */
-    private final int connectionRequestId;
+    private int connectionRequestId;
+
+    /*
+    ** The IoInterface is used to read and write data from the client side. If this is in a production
+    **   setup (and many test setups) the client side will be obtained through an NIO ServerSocketChannel
+    **   accept() call and then the reads and writes will occur on an NIO SocketChannel.
+    **
+    ** For certain test cases, the IoInterface allows a file to be used to read data in from as well.
+     */
+    private IoInterface clientConnection;
 
     /*
     ** The WebServerFlavor is used to provide different limits and behavior for the Web Server
@@ -111,23 +122,23 @@ public class RequestContext {
     /*
     ** The
      */
-    private final BufferReadMetering metering;
+    private BufferReadMetering metering;
 
     /*
     ** The readBuffer Operation is the interface to the code that fills in the buffers with data.
     **   In normal execution, this is the NIO handler code that reads from SocketChannel.
      */
-    private final ReadBuffer readBuffer;
+    private ReadBuffer readBuffer;
 
     /*
     **
      */
-    private final SendFinalStatus sendFinalStatus;
+    private SendFinalStatus sendFinalStatus;
 
     /*
     **
      */
-    private final CloseOutRequest closeRequest;
+    private CloseOutRequest closeRequest;
 
     /*
     ** The metering pointer is used to meter buffers to the read operation. It is used to indicate
@@ -197,11 +208,10 @@ public class RequestContext {
     private BlockingQueue<Operation> timedWaitQueue;
 
 
-    public RequestContext(final WebServerFlavor flavor, final int requestId, final MemoryManager memoryManager,
+    public RequestContext(final WebServerFlavor flavor, final MemoryManager memoryManager,
                           final NioEventPollThread threadThisRunsOn) {
 
         this.webServerFlavor = flavor;
-        this.connectionRequestId = requestId;
         this.memoryManager = memoryManager;
         this.threadThisContextRunsOn = threadThisRunsOn;
 
@@ -237,6 +247,15 @@ public class RequestContext {
         workQueue = new LinkedBlockingQueue<>(20);
         timedWaitQueue = new LinkedBlockingQueue<>(20);
 
+    }
+
+    /*
+    **
+     */
+    public void initialize(final IoInterface connection, final int requestId) {
+        clientConnection = connection;
+        connectionRequestId = requestId;
+
         /*
          ** Setup the Metering and Read pointers since they are required for the HTTP Parser and for most
          **   HTTP Request handlers.
@@ -245,19 +264,19 @@ public class RequestContext {
         requestHandlerOperations.put(metering.getOperationType(), metering);
         meteringPtr = metering.initialize();
 
-        readBuffer = new ReadBuffer(this, meteringPtr);
+        readBuffer = new ReadBuffer(this, meteringPtr, clientConnection);
         requestHandlerOperations.put(readBuffer.getOperationType(), readBuffer);
         readPtr = readBuffer.initialize();
 
         /*
-        ** The SendFinalStatus and CloseOutRequest are tied together. The SendFinalStatus is
-        **   responsible for writing the final status response to the client. The CloseOutRequest
-        **   is executed after the write to the client completes and it is responsible for
-        **   cleaning up the Request and its associated connection.
-        **   Once the cleanup is performed, then the RequestContext is added back to the free list so
-        **   it can be used to handle a new request.
+         ** The SendFinalStatus and CloseOutRequest are tied together. The SendFinalStatus is
+         **   responsible for writing the final status response to the client. The CloseOutRequest
+         **   is executed after the write to the client completes and it is responsible for
+         **   cleaning up the Request and its associated connection.
+         **   Once the cleanup is performed, then the RequestContext is added back to the free list so
+         **   it can be used to handle a new request.
          */
-        sendFinalStatus = new SendFinalStatus(this, memoryManager);
+        sendFinalStatus = new SendFinalStatus(this, memoryManager, clientConnection);
         requestHandlerOperations.put(sendFinalStatus.getOperationType(), sendFinalStatus);
         clientWritePtr = sendFinalStatus.initialize();
 
@@ -267,7 +286,7 @@ public class RequestContext {
 
 
         /*
-        ** Setup the specific part for parsing the buffers as an HTTP Request.
+         ** Setup the specific part for parsing the buffers as an HTTP Request.
          */
         initializeHttpParsing();
     }
@@ -323,6 +342,9 @@ public class RequestContext {
         operation = requestHandlerOperations.get(OperationTypeEnum.REQUEST_FINISHED);
         operation.complete();
 
+        operation = requestHandlerOperations.get(OperationTypeEnum.READ_BUFFER);
+        operation.complete();
+
         /*
         ** Now reset the BufferManagers back to their pristine state. That means that there are no
         **   registered BufferManagerPointers or dependencies remaining associated with the
@@ -333,6 +355,11 @@ public class RequestContext {
         storageServerWriteBufferManager.reset();
         storageServerResponseBufferManager.reset();
 
+        /*
+        ** Finally release the clientConnection back to the free pool.
+         */
+        releaseConnection(clientConnection);
+        clientConnection = null;
     }
 
     /*
@@ -510,14 +537,14 @@ public class RequestContext {
     }
 
     /*
-    ** Allocation and free routines used for connections (NioSocket). The connections are tied to a specific
+    ** Allocation and free routines used for connections (IoInterface). The connections are tied to a specific
     **   NioEventPollThread.
      */
-    public NioSocket allocateConnection(final Operation requestingOperation) {
+    public IoInterface allocateConnection(final Operation requestingOperation) {
         return threadThisContextRunsOn.allocateConnection(requestingOperation);
     }
 
-    public void releaseConnection(final NioSocket connection) {
+    public void releaseConnection(final IoInterface connection) {
         threadThisContextRunsOn.releaseConnection(connection);
     }
 

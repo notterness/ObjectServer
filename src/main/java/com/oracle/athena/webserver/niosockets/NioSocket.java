@@ -1,6 +1,7 @@
 package com.oracle.athena.webserver.niosockets;
 
 import com.oracle.athena.webserver.buffermgr.BufferManager;
+import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.operations.Operation;
 
 import java.io.IOException;
@@ -12,7 +13,7 @@ import java.nio.channels.SocketChannel;
 /*
 ** This class is responsible for handling the socket connection
  */
-public class NioSocket {
+public class NioSocket implements IoInterface {
 
     /*
     ** This connection being managed by this object is associated at startup with a particular thread
@@ -41,17 +42,23 @@ public class NioSocket {
     **   is assigned as part of the startClient() method to allow the NioSocket objects to be allocated out of a
     **   pool if so desired.
      */
-    void startClient(final SocketChannel socket, final Operation errorHandler) {
+    public void startClient(final SocketChannel socket, final Operation errorHandler) {
         socketChannel = socket;
 
         socketErrorHandler = errorHandler;
+    }
+
+    public void startClient(final String readFileName, final Operation errorHandler) {
+        /*
+        ** This is not used for the NIO based I/O
+         */
     }
 
     /*
     ** The startInitiator() call is used to open up a connection to (at least initially) write data out of. This
     **   requires opening a connection and attaching it to a remote listener.
      */
-    boolean startInitiator(final InetAddress targetAddress, final int targetPort, final Operation errorHandler) {
+    public boolean startInitiator(final InetAddress targetAddress, final int targetPort, final Operation errorHandler) {
 
         boolean success = true;
 
@@ -109,49 +116,57 @@ public class NioSocket {
     }
 
     /*
-    ** The following is used to shutdown the threads used to handle the NIO sockets and cleanup
-    **   the resources.
+    ** The following startInitiator() is not used for the NIO I/O
      */
-    void stop() {
-
+    public boolean startInitiator(final String writeFileName, final Operation errorHandler) {
+        /*
+        ** Not used for NIO
+         */
+        return true;
     }
 
     /*
-    ** The following is used to register with the NIO handling layer. When a server connection is made, this
+    ** The following is used to register with the NIO handling layer for reads. When a server connection is made, this
     **   registration is used to know where to pass the information from the socket.
      */
-    void registerNioClient(final BufferManager readBufferMgr, final BufferManager writeBufferMgr) {
+    public void registerReadBufferManager(final BufferManager readBufferMgr, final BufferManagerPointer readPointer) {
+
+    }
+
+    public void registerWriteBufferManager(final BufferManager writeBufferManager, final BufferManagerPointer writePtr) {
+
+    }
+
+    public void unregisterReadBufferManager() {
+
+    }
+
+    public void unregisterWriteBufferManager() {
 
     }
 
     /*
-    ** The following is used to inform the NIO layer that there are buffers awaiting reads in the read
-    **   BufferManager
+     ** This is called when there is a buffer in the BufferManager that is ready to accept data from
+     **   the SocketChannel
      */
-    void buffersReadyForRead() {
+    public void readBufferAvailable() {
 
     }
 
     /*
-    ** The following is used to inform the NIO layer that there are buffers ready to be written out. The buffers
-    **   are sitting in the NIO socket's control structure write BufferManager
+    ** This is called when there is a buffer in the BufferManager with data that is ready to be written out
+    **   the SocketChannel
      */
-    void buffersReadyToWrite() {
+    public void writeBufferReady() {
 
     }
 
-    /*
-    ** This is used to open an initiator side socket connection
-     */
-    void openNioConnection() {
-
-    }
 
     /*
     ** The following is used to force the NIO socket to be closed and release the resources associated with that
     **   socket.
      */
-    void closeNioConnection() {
+    public void closeConnection() {
 
     }
 
@@ -159,7 +174,7 @@ public class NioSocket {
     ** Accessor method to call the Operation that is setup to handle when there is an error on
     **   the SocketChannel.
      */
-    void sendErrorEvent() {
+    public void sendErrorEvent() {
         socketErrorHandler.event();
     }
 }

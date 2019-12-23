@@ -6,6 +6,7 @@ import com.oracle.athena.webserver.connectionstate.CasperHttpInfo;
 import com.oracle.athena.webserver.connectionstate.Md5Digest;
 import com.oracle.athena.webserver.http.parser.ByteBufferHttpParser;
 import com.oracle.athena.webserver.memory.MemoryManager;
+import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.niosockets.NioEventPollThread;
 import com.oracle.athena.webserver.operations.Operation;
 import com.oracle.athena.webserver.operations.OperationTypeEnum;
@@ -28,6 +29,9 @@ public class TestHttpParser {
     private final ByteBufferHttpParser parser;
 
     /*
+
+     */
+    /*
     ** The following are used to feed data into the HTTP Parser
      */
     private BufferManager clientReadBufferMgr;
@@ -37,8 +41,13 @@ public class TestHttpParser {
     TestHttpParser() {
 
         nioEventThread = new NioEventPollThread(0x1000);
+        nioEventThread.start();
+
         memoryManager = new MemoryManager(WebServerFlavor.INTEGRATION_TESTS);
-        requestContext = new RequestContext(WebServerFlavor.INTEGRATION_TESTS,56, memoryManager, nioEventThread);
+        requestContext = new RequestContext(WebServerFlavor.INTEGRATION_TESTS, memoryManager, nioEventThread);
+
+        IoInterface connection = nioEventThread.allocateConnection(null);
+        requestContext.initialize(connection, 56);
 
         CasperHttpInfo casperHttpInfo = new CasperHttpInfo(requestContext);
         parser = new ByteBufferHttpParser(casperHttpInfo);
@@ -147,6 +156,13 @@ public class TestHttpParser {
                 System.out.println("Unable to allocate content buffer");
             }
         }
+
+        /*
+        ** The cleanupRequest() and stop() must be called to release the resources back so there are no outstanding
+        **   references that prevent the program from cleanly shutting down.
+         */
+        requestContext.cleanupRequest();
+        nioEventThread.stop();
 
         return testSucceeded;
     }

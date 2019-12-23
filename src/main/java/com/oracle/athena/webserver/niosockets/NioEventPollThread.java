@@ -9,7 +9,7 @@ import java.nio.channels.*;
 import java.util.Iterator;
 import java.util.LinkedList;
 
-public class NioEventPollThread implements Runnable {
+public class NioEventPollThread implements Runnable, EventPollThread {
 
     private static final Logger LOG = LoggerFactory.getLogger(NioEventPollThread.class);
 
@@ -19,7 +19,7 @@ public class NioEventPollThread implements Runnable {
 
     private final int eventPollThreadBaseId;
 
-    private final LinkedList<NioSocket> freeConnections;
+    private final LinkedList<IoInterface> freeConnections;
     private final LinkedList<Operation> waitingForConnections;
 
     private volatile boolean threadRunning;
@@ -38,7 +38,7 @@ public class NioEventPollThread implements Runnable {
     public NioEventPollThread(final int threadBaseId) {
         this.eventPollThreadBaseId = threadBaseId;
 
-        this.freeConnections = new LinkedList<NioSocket>();
+        this.freeConnections = new LinkedList<IoInterface>();
         this.waitingForConnections = new LinkedList<Operation>();
 
         this.threadRunning = true;
@@ -47,7 +47,7 @@ public class NioEventPollThread implements Runnable {
     /*
     ** Setup the Thread to handle the event loops for the SocketChannel
      */
-    void start() {
+    public void start() {
         /*
         ** Setup NioSelectHandler for this thread.
          */
@@ -75,7 +75,17 @@ public class NioEventPollThread implements Runnable {
     /*
     ** Shutdown the Thread used to handle the event loop
      */
-    void stop() {
+    public void stop() {
+        /*
+        ** Remove all the entries on the freeConnections list
+         */
+        int numFreeConnections = freeConnections.size();
+        if (numFreeConnections != ALLOCATED_NIO_SOCKET) {
+            System.out.println(" numFreeConnections: " + numFreeConnections + " expected ALLOCATED_NIO_SOCKET: " +
+                    ALLOCATED_NIO_SOCKET);
+        }
+        freeConnections.clear();
+
         threadRunning = false;
     }
 
@@ -83,8 +93,8 @@ public class NioEventPollThread implements Runnable {
     ** TODO: Wire in the wakeup of the waitingOperation if there are no NioSocket
     **   available and add a test for this
      */
-    public NioSocket allocateConnection(final Operation waitingOperation) {
-        NioSocket connection =  freeConnections.poll();
+    public IoInterface allocateConnection(final Operation waitingOperation) {
+        IoInterface connection =  freeConnections.poll();
         if (connection == null) {
             waitingForConnections.add(waitingOperation);
         }
@@ -92,7 +102,7 @@ public class NioEventPollThread implements Runnable {
         return connection;
     }
 
-    public void releaseConnection(final NioSocket connection) {
+    public void releaseConnection(final IoInterface connection) {
         freeConnections.add(connection);
 
         Operation waitingOperation = waitingForConnections.poll();
@@ -126,6 +136,8 @@ public class NioEventPollThread implements Runnable {
      */
     public void run() {
 
+        LOG.info("eventThread[" + eventPollThreadBaseId + "] run()");
+
         while (threadRunning) {
             /*
             ** Perform the NIO SocketChannel work
@@ -137,20 +149,27 @@ public class NioEventPollThread implements Runnable {
             **   SocketChanel read and write operations
              */
         }
+
+        LOG.info("eventThread[" + eventPollThreadBaseId + "] exit");
+
+        nioSelectHandler.releaseSelector();
     }
 
     /*
     **
      */
-    void handleRead(final NioSocket connection) {
+    public void handleRead(final IoInterface connection) {
 
     }
 
     /*
     **
      */
-    void handleWrite(final NioSocket connection) {
+    public void handleWrite(final IoInterface connection) {
 
     }
 
+    public void closeConnection(final IoInterface connection) {
+
+    }
 }

@@ -2,6 +2,7 @@ package com.oracle.athena.webserver.operations;
 
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
+import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +23,8 @@ public class ReadBuffer implements Operation {
 
     private final BufferManagerPointer meterBufferPtr;
 
+    private IoInterface clientConnection;
+
     private BufferManagerPointer readBufferPointer;
 
     /*
@@ -33,10 +36,12 @@ public class ReadBuffer implements Operation {
     private boolean onExecutionQueue;
     private long nextExecuteTime;
 
-    public ReadBuffer(final RequestContext requestContext, final BufferManagerPointer meterBufferPtr) {
+    public ReadBuffer(final RequestContext requestContext, final BufferManagerPointer meterBufferPtr,
+                      final IoInterface connection) {
 
         this.requestContext = requestContext;
         this.meterBufferPtr = meterBufferPtr;
+        this.clientConnection = connection;
         this.bufferManager = this.requestContext.getClientReadBufferManager();
 
         /*
@@ -59,19 +64,38 @@ public class ReadBuffer implements Operation {
 
         readBufferPointer = bufferManager.register(this, meterBufferPtr);
 
+        /*
+        ** Register the BufferManager and BufferManagerPointer with the clientConnection to allow
+        **   data to be read in.
+         */
+        clientConnection.registerReadBufferManager(bufferManager, readBufferPointer);
+
         return readBufferPointer;
     }
 
     public void event() {
-
+        /*
+         ** Add this to the execute queue if it is not already on it.
+         */
+        requestContext.addToWorkQueue(this);
     }
 
     public void execute() {
-
+        if (bufferManager.peek(readBufferPointer) != null) {
+            clientConnection.readBufferAvailable();
+        }
     }
 
     public void complete() {
+        /*
+        ** Unregister the BuuferManager and the BufferManagerPointer with the clientConnection
+         */
+        clientConnection.unregisterReadBufferManager();
 
+        /*
+        ** Need to remove the reference to the IoManager
+         */
+        clientConnection = null;
     }
 
     /*
