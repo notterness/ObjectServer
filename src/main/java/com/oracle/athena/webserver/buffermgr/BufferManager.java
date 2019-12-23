@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class BufferManager {
 
@@ -19,44 +20,46 @@ public class BufferManager {
     private ByteBuffer[] bufferArray;
     private final int bufferArraySize;
 
-    private int identifier;
+    private AtomicInteger identifier;
 
     public BufferManager(final int bufferCount) {
         this.bufferArraySize = bufferCount;
 
         this.bufferArray = new ByteBuffer[this.bufferArraySize];
 
-        this.identifier = 1;
+        this.identifier = new AtomicInteger(1);
     }
 
     public BufferManagerPointer register(final Operation operation) {
 
-        LOG.info("register("  + identifier + ":" + operation.getOperationType() + ")");
-        BufferManagerPointer pointer = new BufferManagerPointer(operation, bufferArraySize, identifier);
-        identifier++;
+        int currIdentifer = identifier.getAndIncrement();
+
+        LOG.info("register("  + identifier + ":" + operation.getOperationType() + ") identifier: " + currIdentifer);
+        BufferManagerPointer pointer = new BufferManagerPointer(operation, bufferArraySize, currIdentifer);
 
         return pointer;
     }
 
     public BufferManagerPointer register(final Operation operation, final BufferManagerPointer dependsOn) {
-        LOG.info("register(" + identifier + ":" + operation.getOperationType() + ") depends on (" +
-                + dependsOn.getIdentifier() + ":" + dependsOn.getOperationType() + ")");
+        int currIdentifer = identifier.getAndIncrement();
 
-        BufferManagerPointer pointer = new BufferManagerPointer(operation, dependsOn, bufferArraySize, identifier);
-        identifier++;
-        dependsOn.addDependsOn(operation);
+        LOG.info("register(" + identifier + ":" + operation.getOperationType() + ") depends on (" +
+                + dependsOn.getIdentifier() + ":" + dependsOn.getOperationType() + ") identifier: " +
+                currIdentifer);
+
+        BufferManagerPointer pointer = new BufferManagerPointer(operation, dependsOn, bufferArraySize, currIdentifer);
 
         return pointer;
     }
 
     public BufferManagerPointer register(final Operation operation, final BufferManagerPointer dependsOn, final int maxBytesToConsume) {
+        int currIdentifer = identifier.getAndIncrement();
+
         LOG.info("register(" + identifier + ":" + operation.getOperationType() + ") depends on (" +
                 + dependsOn.getIdentifier() + ":" + dependsOn.getOperationType() + ") maxBytesToConsume: " +
-                maxBytesToConsume);
+                maxBytesToConsume + " identifier: " + currIdentifer);
 
-        BufferManagerPointer pointer = new BufferManagerPointer(operation, dependsOn, bufferArraySize, identifier, maxBytesToConsume);
-        identifier++;
-        dependsOn.addDependsOn(operation);
+        BufferManagerPointer pointer = new BufferManagerPointer(operation, dependsOn, bufferArraySize, currIdentifer, maxBytesToConsume);
 
         return pointer;
     }
@@ -118,10 +121,13 @@ public class BufferManager {
     }
 
     /*
-     ** This returns a BufferState if the readIndex for the consumer is not the
+     ** This returns a ByteBuffer if the readIndex for the consumer is not the
      **   same as the writeIndex for the producer (who the consumer is dependent
      **   upon).
-     ** It will update the readIndex if there is a BufferState ready
+     ** For producers, it will insure that the producer is not wrapping around onto its
+     **   dependent consumers. This checks that the producer's writeIndex is at least
+     **   one behind the readIndex(es) of its consumers.
+     ** It will update the readIndex if there is a ByteBuffer returned.
      */
     public ByteBuffer poll(final BufferManagerPointer pointer) {
         int readIndex = pointer.getReadIndex(true);
@@ -136,10 +142,10 @@ public class BufferManager {
     }
 
     /*
-     ** This returns a BufferState if the readIndex for the consumer is not the
+     ** This returns a ByteBuffer if the readIndex for the consumer is not the
      **   same as the writeIndex for the producer (who the consumer is dependent
      **   upon).
-     ** It will update the readIndex if there is a BufferState ready and will remove the reference to
+     ** It will update the readIndex if there is a ByteBuffer ready and will remove the reference to
      **   the ByteBuffer from the BufferManager.
      */
     public ByteBuffer getAndRemove(final BufferManagerPointer pointer) {
@@ -161,9 +167,11 @@ public class BufferManager {
      ** This returns a BufferState if the readIndex for the consumer is not the
      **   same as the writeIndex for the producer (who the consumer is dependent
      **   upon).
-     ** It will NOT update the readIndex if there is a BufferState ready. This will
-     **   allow a consumer to decide if it is done processing the BufferState or it
-     **   needs to operate on it again (i.e. the write could not empty the BufferState
+     ** For producers, it will insure that the producer is not wrapping around onto its
+     **   dependent consumers.
+     ** It will NOT update the readIndex if there is a ByteBuffer available. This will
+     **   allow a consumer to decide if it is done processing the ByteBuffer or it
+     **   needs to operate on it again (i.e. the write could not empty the ByteBuffer
      **   so another write attempt needs to be made at a later point in time).
      */
     public ByteBuffer peek(final BufferManagerPointer pointer) {
@@ -179,7 +187,7 @@ public class BufferManager {
     }
 
     /*
-    ** This is used to add a new pointer to within the BufferManager to allow multiple
+    ** This is used to add a new pointer (really an index) to within the BufferManager to allow multiple
     **   streams to consume data from different places within the buffer ring.
      */
     public void bookmark(final BufferManagerPointer pointer) {

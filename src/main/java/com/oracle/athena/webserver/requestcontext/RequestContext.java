@@ -5,8 +5,8 @@ import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.connectionstate.CasperHttpInfo;
 import com.oracle.athena.webserver.connectionstate.HttpMethodEnum;
 import com.oracle.athena.webserver.memory.MemoryManager;
+import com.oracle.athena.webserver.niosockets.EventPollThread;
 import com.oracle.athena.webserver.niosockets.IoInterface;
-import com.oracle.athena.webserver.niosockets.NioEventPollThread;
 import com.oracle.athena.webserver.operations.*;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.eclipse.jetty.http.HttpStatus;
@@ -83,7 +83,7 @@ public class RequestContext {
     ** This is the thread this RequestContext will always run on. There are multiple RequestContext assigned
     **   to each thread.
      */
-    private final NioEventPollThread threadThisContextRunsOn;
+    private final EventPollThread threadThisContextRunsOn;
 
 
     /*
@@ -209,7 +209,7 @@ public class RequestContext {
 
 
     public RequestContext(final WebServerFlavor flavor, final MemoryManager memoryManager,
-                          final NioEventPollThread threadThisRunsOn) {
+                          final EventPollThread threadThisRunsOn) {
 
         this.webServerFlavor = flavor;
         this.memoryManager = memoryManager;
