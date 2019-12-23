@@ -42,13 +42,17 @@ public class TestIoGenerator implements IoInterface {
      **   is assigned as part of the startClient() method to allow the NioSocket objects to be allocated out of a
      **   pool if so desired.
      */
-    public void startClient(final SocketChannel socket, final Operation errorHandler) {
+    public void startClient(final SocketChannel socket) {
     }
 
     public void startClient(final String readFileName, final Operation errorHandler) {
         /*
          ** This is not used for the NIO based I/O
          */
+    }
+
+    public void registerClientErrorHandler(final Operation clientErroHandler) {
+
     }
 
     /*
@@ -119,6 +123,13 @@ public class TestIoGenerator implements IoInterface {
     }
 
     /*
+    **
+     */
+    public void performRead() {
+
+    }
+
+    /*
      ** This is called when there is a buffer in the BufferManager with data that is ready to be written out
      **   to the test client
      */
@@ -126,6 +137,12 @@ public class TestIoGenerator implements IoInterface {
 
     }
 
+    /*
+    **
+     */
+    public void performWrite() {
+
+    }
 
     /*
      */

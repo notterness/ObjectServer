@@ -1,5 +1,6 @@
 package com.oracle.athena.webserver.niosockets;
 
+import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,6 +22,8 @@ public class NioServerHandler implements Runnable {
     private final int tcpListenPort;
     private final int serverThreadBaseId;
 
+    private final WebServerFlavor webServerFlavor;
+
     private volatile boolean threadRunning;
 
     private Selector serverSelector;
@@ -29,18 +32,20 @@ public class NioServerHandler implements Runnable {
     private NioEventPollBalancer eventPollBalancer;
     private Thread serverAcceptThread;
 
-    NioServerHandler(final int tcpListenPort, final int threadBaseId) {
+    public NioServerHandler(final WebServerFlavor flavor, final int tcpListenPort, final int threadBaseId) {
+
+        this.webServerFlavor = flavor;
         this.tcpListenPort = tcpListenPort;
         this.serverThreadBaseId = threadBaseId;
 
         this.threadRunning = true;
     }
 
-    void start() {
+    public void start() {
         /*
         ** First start the client NIO event poll threads
          */
-        eventPollBalancer = new NioEventPollBalancer(2, serverThreadBaseId + 10);
+        eventPollBalancer = new NioEventPollBalancer(webServerFlavor, 2, serverThreadBaseId + 10);
         eventPollBalancer.start();
 
         /*
@@ -50,7 +55,7 @@ public class NioServerHandler implements Runnable {
         serverAcceptThread.start();
     }
 
-    void stop() {
+    public void stop() {
         threadRunning = false;
 
         try {

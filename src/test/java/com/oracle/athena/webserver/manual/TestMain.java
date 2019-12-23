@@ -1,6 +1,9 @@
 package com.oracle.athena.webserver.manual;
 
 import com.oracle.athena.webserver.client.TestClient;
+import com.oracle.athena.webserver.niosockets.NioSelectHandler;
+import com.oracle.athena.webserver.niosockets.NioServerHandler;
+import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -9,13 +12,16 @@ public class TestMain {
     public static void main(String[] args) {
         final int baseTcpPortOffset = 1;
 
-        AtomicInteger threadCount = new AtomicInteger(0);
+        AtomicInteger threadCount = new AtomicInteger(1);
 
         //TestEncryptBuffer testEncryptBuffer = new TestEncryptBuffer();
         //testEncryptBuffer.execute();
 
-        TestHttpParser testHttpParser = new TestHttpParser("TestHttpParser");
-        testHttpParser.execute();
+        //TestHttpParser testHttpParser = new TestHttpParser("TestHttpParser");
+        //testHttpParser.execute();
+
+        NioServerHandler nioServer = new NioServerHandler(WebServerFlavor.INTEGRATION_TESTS, 5001, 0x1000);
+        nioServer.start();
 
         /*
         ** Uncomment out the following two lines to let TestMain just act as a server. It can then be used to

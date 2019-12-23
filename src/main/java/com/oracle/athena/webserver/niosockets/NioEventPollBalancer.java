@@ -1,6 +1,9 @@
 package com.oracle.athena.webserver.niosockets;
 
 
+import com.oracle.athena.webserver.memory.MemoryManager;
+import com.oracle.pic.casper.webserver.server.WebServerFlavor;
+
 import java.nio.channels.SocketChannel;
 
 /*
@@ -11,14 +14,20 @@ public class NioEventPollBalancer {
     private final int numberPollThreads;
     private final int eventPollThreadBaseId;
 
+    private final WebServerFlavor webServerFlavor;
+    private MemoryManager memoryManager;
+
     private NioEventPollThread[] eventPollThreadPool;
 
     private int currNioEventThread;
 
-    NioEventPollBalancer(final int numPollThreads, final int threadBaseId) {
+    NioEventPollBalancer(final WebServerFlavor flavor, final int numPollThreads, final int threadBaseId) {
 
+        this.webServerFlavor = flavor;
         this.numberPollThreads = numPollThreads;
         this.eventPollThreadBaseId = threadBaseId;
+
+        this.memoryManager = new MemoryManager(webServerFlavor);
 
         eventPollThreadPool = new NioEventPollThread[this.numberPollThreads];
     }
@@ -31,7 +40,7 @@ public class NioEventPollBalancer {
         currNioEventThread = 0;
 
         for (int i = 0; i < numberPollThreads; i++) {
-            NioEventPollThread pollThread = new NioEventPollThread(eventPollThreadBaseId + i);
+            NioEventPollThread pollThread = new NioEventPollThread(eventPollThreadBaseId + i, memoryManager);
 
             pollThread.start();
             eventPollThreadPool[i] = pollThread;
@@ -50,6 +59,8 @@ public class NioEventPollBalancer {
             eventPollThreadPool[i] = null;
             pollThread.stop();
         }
+
+        memoryManager = null;
     }
 
     /*

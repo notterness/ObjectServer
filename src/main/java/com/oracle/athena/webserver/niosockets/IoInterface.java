@@ -17,8 +17,10 @@ public interface IoInterface {
     ** There are two different startClient() interfaces, one for SocketChannel connections and another
     **   for File connections
      */
-    void startClient(final SocketChannel socket, final Operation errorHandler);
+    void startClient(final SocketChannel socket);
     void startClient(final String readFileName, final Operation errorHandler);
+
+    void registerClientErrorHandler(final Operation clientErroHandler);
 
     /*
     ** There are two different startInitiator() interfaces, one for SocketChannel connections and another for
@@ -39,7 +41,10 @@ public interface IoInterface {
     void unregisterWriteBufferManager();
 
     void readBufferAvailable();
+    void performRead();
+
     void writeBufferReady();
+    void performWrite();
 
     void sendErrorEvent();
 

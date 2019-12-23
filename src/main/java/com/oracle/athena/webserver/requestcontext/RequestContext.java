@@ -232,9 +232,6 @@ public class RequestContext {
          */
         this.supportedHttpRequests = new HashMap<HttpMethodEnum, Operation>();
 
-        SetupV2Put v2PutHandler = new SetupV2Put(this, memoryManager);
-        this.supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, v2PutHandler);
-
         /*
         ** Setup this RequestContext to be able to read in and parse the HTTP Request(s)
          */
@@ -284,6 +281,8 @@ public class RequestContext {
         requestHandlerOperations.put(closeRequest.getOperationType(), closeRequest);
         clientWriteDonePtr = closeRequest.initialize();
 
+        SetupV2Put v2PutHandler = new SetupV2Put(this, memoryManager, metering);
+        this.supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, v2PutHandler);
 
         /*
          ** Setup the specific part for parsing the buffers as an HTTP Request.
@@ -315,6 +314,11 @@ public class RequestContext {
         ParseHttpRequest httpParser = new ParseHttpRequest(this, readPtr, metering, determineRequestType);
         requestHandlerOperations.put(httpParser.getOperationType(), httpParser);
         clientDataReadPtr = httpParser.initialize();
+
+        /*
+        ** Now Meter out a buffer to read in the HTTP request
+         */
+        metering.event();
     }
 
     /*

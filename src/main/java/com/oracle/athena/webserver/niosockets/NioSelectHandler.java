@@ -1,11 +1,16 @@
 package com.oracle.athena.webserver.niosockets;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.nio.channels.*;
 import java.nio.channels.spi.SelectorProvider;
 import java.util.Iterator;
 
 public class NioSelectHandler {
+
+    private static final Logger LOG = LoggerFactory.getLogger(NioSelectHandler.class);
 
     /*
     ** This is the Selector to handle a portion of the connections in the system. There is
@@ -23,15 +28,16 @@ public class NioSelectHandler {
     /*
     ** This is how a SocketChannel is registered with the Selector()
      */
-    boolean registerWithSelector(final SocketChannel socketChannel, final int interestOps, final NioSocket nioSocket) {
+    SelectionKey registerWithSelector(final SocketChannel socketChannel, final int interestOps, final NioSocket nioSocket) {
 
+        SelectionKey key;
         try {
-            SelectionKey key = socketChannel.register(nioSelector, interestOps, nioSocket);
+            key = socketChannel.register(nioSelector, interestOps, nioSocket);
         } catch (ClosedChannelException | ClosedSelectorException ex) {
-            return false;
+            key = null;
         }
 
-        return true;
+        return key;
     }
 
     /*
@@ -75,6 +81,7 @@ public class NioSelectHandler {
             nioSelector.select(1000);
 
             Iterator selectedKeys = nioSelector.selectedKeys().iterator();
+
             while (selectedKeys.hasNext()) {
                 SelectionKey key = (SelectionKey) selectedKeys.next();
                 selectedKeys.remove();
@@ -88,7 +95,7 @@ public class NioSelectHandler {
                 }
 
                 if (key.isReadable()) {
-
+                    handleRead(key);
                 }
 
                 if (key.isWritable()) {
@@ -121,4 +128,17 @@ public class NioSelectHandler {
             }
         }
     }
+
+    private void handleRead(final SelectionKey key) {
+        NioSocket nioSocket = (NioSocket) key.attachment();
+
+        nioSocket.performRead();
+    }
+
+    private void handleWrite(final SelectionKey key) {
+        NioSocket nioSocket = (NioSocket) key.attachment();
+
+        nioSocket.performWrite();
+    }
+
 }

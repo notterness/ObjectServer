@@ -129,6 +129,9 @@ public class ParseHttpRequest implements Operation {
                 /*
                 ** Leave the pointer in the same place since there is data remaining in the buffer
                  */
+                LOG.info("ParseHttpRequest[" + requestContext.getRequestId() + "] remaining position: " +
+                        httpBuffer.position() + " limit: " + httpBuffer.limit());
+
             } else {
                 /*
                 ** Only update the pointer if the data in the buffer was all consumed.

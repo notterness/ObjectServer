@@ -1,6 +1,9 @@
 package com.oracle.athena.webserver.niosockets;
 
+import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.operations.Operation;
+import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,9 +21,12 @@ public class NioEventPollThread implements Runnable, EventPollThread {
     private final int SELECT_TIMEOUT = 1000;
 
     private final int eventPollThreadBaseId;
+    private final MemoryManager memoryManager;
 
     private final LinkedList<IoInterface> freeConnections;
     private final LinkedList<Operation> waitingForConnections;
+
+    private final LinkedList<RequestContext> runningContexts;
 
     private volatile boolean threadRunning;
 
@@ -35,11 +41,14 @@ public class NioEventPollThread implements Runnable, EventPollThread {
     private Selector clientSocketSelector;
 
 
-    public NioEventPollThread(final int threadBaseId) {
+    public NioEventPollThread(final int threadBaseId, final MemoryManager memoryManger) {
         this.eventPollThreadBaseId = threadBaseId;
+        this.memoryManager = memoryManger;
 
         this.freeConnections = new LinkedList<IoInterface>();
         this.waitingForConnections = new LinkedList<Operation>();
+
+        this.runningContexts = new LinkedList<RequestContext>();
 
         this.threadRunning = true;
     }
@@ -119,11 +128,20 @@ public class NioEventPollThread implements Runnable, EventPollThread {
      */
     boolean registerClientSocket(final SocketChannel clientChannel) {
         boolean success = true;
-        try {
-            clientChannel.register(clientSocketSelector, SelectionKey.OP_READ);
-        } catch (ClosedChannelException | ClosedSelectorException | IllegalSelectorException ex) {
-            LOG.error("registerClientSocket[" + eventPollThreadBaseId + "] failed: " + ex.getMessage());
 
+        /*
+        ** TODO: Change this from a new to an allocation from a free pool
+         */
+        RequestContext requestContext = new RequestContext(WebServerFlavor.INTEGRATION_TESTS, memoryManager, this);
+
+        IoInterface connection = allocateConnection(null);
+        if (connection != null) {
+            connection.startClient(clientChannel);
+            requestContext.initialize(connection, 56);
+
+            runningContexts.add(requestContext);
+        } else {
+            LOG.info("[" + eventPollThreadBaseId + "] no free connections");
             success = false;
         }
 
@@ -148,6 +166,10 @@ public class NioEventPollThread implements Runnable, EventPollThread {
             ** Now check if there is other work to be performed on the connections that does not deal with the
             **   SocketChanel read and write operations
              */
+            Iterator<RequestContext> iter = runningContexts.listIterator();
+            while (iter.hasNext()) {
+                iter.next().performOperationWork();
+            }
         }
 
         LOG.info("eventThread[" + eventPollThreadBaseId + "] exit");
@@ -159,7 +181,6 @@ public class NioEventPollThread implements Runnable, EventPollThread {
     **
      */
     public void handleRead(final IoInterface connection) {
-
     }
 
     /*

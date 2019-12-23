@@ -3,10 +3,13 @@ package com.oracle.athena.webserver.niosockets;
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.operations.Operation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 
@@ -15,12 +18,16 @@ import java.nio.channels.SocketChannel;
  */
 public class NioSocket implements IoInterface {
 
+    private static final Logger LOG = LoggerFactory.getLogger(NioSocket.class);
+
     /*
     ** This connection being managed by this object is associated at startup with a particular thread
     **   which in turn means there is a Selector() loop that this must use. The Selector() loop
     **   is controlled via the NioSelectHandler object.
      */
     private final NioSelectHandler nioSelectHandler;
+
+    private SelectionKey key;
 
     /*
     ** This is the connection being managed
@@ -54,7 +61,10 @@ public class NioSocket implements IoInterface {
     private Operation socketErrorHandler;
 
     public NioSocket(final NioSelectHandler nioSelectHandler) {
+
         this.nioSelectHandler = nioSelectHandler;
+
+        this.key = null;
     }
 
     /*
@@ -62,16 +72,18 @@ public class NioSocket implements IoInterface {
     **   is assigned as part of the startClient() method to allow the NioSocket objects to be allocated out of a
     **   pool if so desired.
      */
-    public void startClient(final SocketChannel socket, final Operation errorHandler) {
+    public void startClient(final SocketChannel socket) {
         socketChannel = socket;
-
-        socketErrorHandler = errorHandler;
     }
 
     public void startClient(final String readFileName, final Operation errorHandler) {
         /*
         ** This is not used for the NIO based I/O
          */
+    }
+
+    public void registerClientErrorHandler(final Operation clientErrorHandler) {
+        socketErrorHandler = clientErrorHandler;
     }
 
     /*
@@ -120,7 +132,8 @@ public class NioSocket implements IoInterface {
         ** Register with the selector for this thread to know when the connection is available to
         **   perform writes and reads.
          */
-        if (!nioSelectHandler.registerWithSelector(socketChannel, SelectionKey.OP_CONNECT, this)) {
+        key = nioSelectHandler.registerWithSelector(socketChannel, SelectionKey.OP_CONNECT, this);
+        if (key == null) {
             try {
                 socketChannel.close();
             } catch (IOException ex) {
@@ -151,11 +164,16 @@ public class NioSocket implements IoInterface {
      */
     public void registerReadBufferManager(final BufferManager readBufferMgr, final BufferManagerPointer readPtr) {
 
+        LOG.info(" readPtr (" + readPtr.getIdentifier() + ":" + readPtr.getOperationType() + ") bufferIndex: " +
+                readPtr.getCurrIndex());
         this.readBufferManager = readBufferMgr;
         this.readPointer = readPtr;
     }
 
     public void registerWriteBufferManager(final BufferManager writeBufferMgr, final BufferManagerPointer writePtr) {
+
+        LOG.info(" writePtr (" + writePtr.getIdentifier() + ":" + writePtr.getOperationType() + ") bufferIndex: " +
+                writePtr.getCurrIndex());
 
         this.writeBufferManager = writeBufferMgr;
         this.writePointer = writePtr;
@@ -178,7 +196,53 @@ public class NioSocket implements IoInterface {
      **   the SocketChannel
      */
     public void readBufferAvailable() {
+        LOG.info(" readBufferAvailable (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                readPointer.getCurrIndex());
 
+        if (key == null) {
+            key = nioSelectHandler.registerWithSelector(socketChannel, SelectionKey.OP_READ, this);
+        } else {
+            /*
+            ** Use the key again
+             */
+            int currentOps = key.interestOps() | SelectionKey.OP_WRITE;
+            key.interestOps(currentOps);
+        }
+    }
+
+    /*
+    ** This is called from the Select loop for the OP_READ case.
+     */
+    public void performRead() {
+        ByteBuffer readBuffer;
+
+        while ((readBuffer = readBufferManager.peek(readPointer)) != null) {
+
+            LOG.info(" read (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                    readPointer.getCurrIndex() + " position: " + readBuffer.position() + " limit: " + readBuffer.limit());
+
+            try {
+                int bytesRead = socketChannel.read(readBuffer);
+
+                if (bytesRead > 0) {
+                    /*
+                    ** Update the pointer
+                     */
+                    readBufferManager.updateProducerWritePointer(readPointer);
+                } else if (bytesRead == -1) {
+                    /*
+                    ** Need to close the SocketChannel and event() the error handler.
+                     */
+                    closeConnection();
+                    break;
+                }
+            } catch (IOException io_ex) {
+                LOG.info(" (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                        readPointer.getCurrIndex() + " exception: " + io_ex.getMessage());
+                break;
+            }
+
+        }
     }
 
     /*
@@ -186,16 +250,79 @@ public class NioSocket implements IoInterface {
     **   the SocketChannel
      */
     public void writeBufferReady() {
+        LOG.info(" writeBufferReady (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+                writePointer.getCurrIndex());
+
+        if (key == null) {
+            key = nioSelectHandler.registerWithSelector(socketChannel, SelectionKey.OP_WRITE, this);
+        } else {
+            /*
+             ** Use the key again
+             */
+            int currentOps = key.interestOps() | SelectionKey.OP_WRITE;
+            key.interestOps(currentOps);
+        }
 
     }
 
+    /*
+     ** This is called from the Select loop for the OP_WRITE case.
+     */
+    public void performWrite() {
+        ByteBuffer writeBuffer;
+
+        while ((writeBuffer = writeBufferManager.peek(writePointer)) != null) {
+
+            LOG.info(" write (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+                    writePointer.getCurrIndex() + " position: " + writeBuffer.position() + " limit: " + writeBuffer.limit());
+
+            try {
+                int bytesWritten = socketChannel.write(writeBuffer);
+
+                if (bytesWritten > 0) {
+                    /*
+                     ** Update the pointer if the entire buffer was written out
+                     */
+                    if (writeBuffer.remaining() == 0) {
+                        readBufferManager.updateProducerWritePointer(readPointer);
+                    } else {
+                        /*
+                        ** Need to set the OP_WRITE flag and try again later when the Select loop fires
+                         */
+                        writeBufferReady();
+                        break;
+                    }
+                } else if (bytesWritten == -1) {
+                    /*
+                     ** Need to close the SocketChannel and event() the error handler.
+                     */
+                    closeConnection();
+                    break;
+                }
+            } catch (IOException io_ex) {
+                LOG.info(" (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                        readPointer.getCurrIndex() + " exception: " + io_ex.getMessage());
+                break;
+            }
+
+        }
+    }
 
     /*
     ** The following is used to force the NIO socket to be closed and release the resources associated with that
     **   socket.
      */
     public void closeConnection() {
+        key.cancel();
+        key = null;
 
+        try {
+            socketChannel.close();
+        } catch (IOException io_ex) {
+
+        }
+
+        socketChannel = null;
     }
 
     /*
