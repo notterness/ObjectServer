@@ -52,6 +52,16 @@ public class NioSelectHandler {
         return nioSelector;
     }
 
+    void releaseSelector() {
+        try {
+            nioSelector.close();
+        } catch (IOException io_ex) {
+
+        }
+
+        nioSelector = null;
+    }
+
     /*
     ** This is the method to iterate over all of the active keys in the Selector and perform
     **   the ready work.
@@ -62,7 +72,7 @@ public class NioSelectHandler {
             ** The select() cannot block since this will be called from a thread that will perform
             **   other work.
              */
-            nioSelector.select(0);
+            nioSelector.select(1000);
 
             Iterator selectedKeys = nioSelector.selectedKeys().iterator();
             while (selectedKeys.hasNext()) {

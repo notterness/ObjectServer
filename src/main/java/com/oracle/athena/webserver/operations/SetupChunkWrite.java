@@ -2,13 +2,12 @@ package com.oracle.athena.webserver.operations;
 
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
-import com.oracle.athena.webserver.memory.MemoryManager;
-import com.oracle.athena.webserver.niosockets.NioSocket;
+import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.ByteBuffer;
+import java.net.InetAddress;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -109,7 +108,12 @@ public class SetupChunkWrite implements Operation {
         /*
         ** For each Storage Server, create the connection used to communicate with it.
          */
-        NioSocket connection = requestContext.allocateConnection(this);
+        IoInterface connection = requestContext.allocateConnection(this);
+
+        /*
+        ** Now open a initiator connection to write encrypted buffers out of.
+         */
+        connection.startInitiator(InetAddress.getLoopbackAddress(), RequestContext.STORAGE_SERVER_PORT_BASE, errorHandler);
 
         /*
         ** For each Storage Server, create a WriteToStorageServer operation that will handle writing the data out

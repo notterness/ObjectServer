@@ -3,6 +3,7 @@ package com.oracle.athena.webserver.manual;
 import com.oracle.athena.webserver.connectionstate.CasperHttpInfo;
 import com.oracle.athena.webserver.http.parser.ByteBufferHttpParser;
 import com.oracle.athena.webserver.memory.MemoryManager;
+import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.niosockets.NioEventPollThread;
 import com.oracle.athena.webserver.operations.EncryptBuffer;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
@@ -21,9 +22,13 @@ public class TestEncryptBuffer {
 
     TestEncryptBuffer() {
         nioEventThread = new NioEventPollThread(0x1001);
+        nioEventThread.start();
 
         memoryManager = new MemoryManager(WebServerFlavor.INTEGRATION_TESTS);
-        requestContext = new RequestContext(WebServerFlavor.INTEGRATION_TESTS, 55, memoryManager, nioEventThread);
+        requestContext = new RequestContext(WebServerFlavor.INTEGRATION_TESTS, memoryManager, nioEventThread);
+
+        IoInterface connection = nioEventThread.allocateConnection(null);
+        requestContext.initialize(connection, 55);
 
         CasperHttpInfo casperHttpInfo = new CasperHttpInfo(requestContext);
 
@@ -36,5 +41,9 @@ public class TestEncryptBuffer {
         encryptBuffer.testEncryption();
 
         requestContext.dumpOperations();
+
+        requestContext.cleanupRequest();
+
+        nioEventThread.stop();
     }
 }
