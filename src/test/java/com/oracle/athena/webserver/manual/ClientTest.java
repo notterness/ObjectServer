@@ -1,11 +1,19 @@
 package com.oracle.athena.webserver.manual;
 
-import com.oracle.athena.webserver.client.TestClient;
+import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
+import com.oracle.athena.webserver.client.ClientHttpHeaderWrite;
+import com.oracle.athena.webserver.client.ClientWriteObject;
+import com.oracle.athena.webserver.client.NioTestClient;
+import com.oracle.athena.webserver.client.SetupClientConnection;
 import com.oracle.athena.webserver.connectionstate.ConnectionState;
 import com.oracle.athena.webserver.http.HttpResponseListener;
 import com.oracle.athena.webserver.memory.MemoryManager;
+import com.oracle.athena.webserver.niosockets.EventPollThread;
+import com.oracle.athena.webserver.niosockets.IoInterface;
+import com.oracle.athena.webserver.requestcontext.RequestContext;
 import com.oracle.athena.webserver.server.WriteConnection;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
+import io.grpc.stub.ClientResponseObserver;
 import org.eclipse.jetty.http.HttpParser;
 
 import java.nio.ByteBuffer;
@@ -15,15 +23,18 @@ import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public abstract class ClientTest implements Runnable {
+public abstract class ClientTest {
 
-    private int serverConnId;
-    private int clientConnId;
+    private int serverTcpPort;
 
     private boolean writeSignalSent;
     private boolean statusSignalSent;
 
-    private AtomicInteger clientCount;
+    /*
+    ** The runningTestCount is used by the caller to keep track of the number of tests that
+    **   are currently running.
+     */
+    private final AtomicInteger runningTestCount;
 
     private Thread clientThread;
 
@@ -34,8 +45,11 @@ public abstract class ClientTest implements Runnable {
     private HttpResponseListener responseListener;
     private HttpParser httpParser;
 
-    protected WriteConnection writeConn;
-    protected final TestClient client;
+    protected final NioTestClient client;
+
+    protected final EventPollThread eventThread;
+
+    protected ByteBuffer objectBuffer;
 
     /*
     ** httpStatus is used in the sub-classes to validate that the correct response was
@@ -44,15 +58,18 @@ public abstract class ClientTest implements Runnable {
     protected int httpStatus;
     protected final String clientTestName;
 
-    ClientTest(final String testName, final TestClient testClient, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
+    ClientTest(final String testName, final NioTestClient testClient, final int serverTcpPort, AtomicInteger testCount) {
 
-        this.serverConnId = myServerId;
-        this.clientConnId = myTargetId;
+        this.serverTcpPort = serverTcpPort;
 
-        clientCount = threadCount;
-        clientCount.incrementAndGet();
+        this.runningTestCount = testCount;
+        this.runningTestCount.incrementAndGet();
 
+        /*
+        ** The testClient
+         */
         this.client = testClient;
+        this.eventThread = testClient.getEventThread();
 
         this.httpStatus = 0;
 
@@ -61,42 +78,21 @@ public abstract class ClientTest implements Runnable {
         this.writeDone = new Object();
     }
 
-    void start() {
-        clientThread = new Thread(this);
-        clientThread.start();
-
-        HttpResponseCompleted httpResponseCb = new HttpResponseCompleted(this);
-        responseListener = new HttpResponseListener(httpResponseCb);
-        httpParser = new HttpParser(responseListener);
-
-        memoryAllocator = new MemoryManager(WebServerFlavor.INTEGRATION_TESTS);
-    }
-
-    void stop() {
-        try {
-            clientThread.join(1000);
-        } catch (InterruptedException int_ex) {
-            System.out.println("clientThread.join() failed: " + int_ex.getMessage());
-        }
-
-        httpParser = null;
-        responseListener = null;
-    }
-
-    /*
-     ** This is the callback that is executed through the ClientWriteCompletion callback.
-     **  ClientWriteCompletion extends the WriteCompletion callback to make it specific
-     **  to the client who is performing the writes.
-     */
-    void writeCompleted(int result, ByteBuffer buffer) {
-
-        userWriteCompleted(result);
-    }
-
     /*
      **
      */
-    public void run() {
+    public void execute() {
+
+        /*
+         ** Allocate a RequestContext
+         */
+        RequestContext clientContext = eventThread.allocateContext();
+
+        /*
+        ** Allocate an IoInterface to use
+         */
+        IoInterface connection = eventThread.allocateConnection(null);
+
 
         try {
             Thread.sleep(1000);
@@ -104,66 +100,29 @@ public abstract class ClientTest implements Runnable {
             int_ex.printStackTrace();
         }
 
-        writeConn = client.addNewTarget(clientConnId, 5);
+        /*
+        ** Create the ClientHttpHeaderWrite operation and connect in this object to provide the HTTP header
+        **   generator
+         */
+        SetupClientConnection setupClientConnection = new SetupClientConnection(clientContext, this, connection, serverTcpPort);
+        setupClientConnection.initialize();
 
-        System.out.println("ClientTest[" + writeConn.getTransactionId() + "] " + clientTestName +
-                " serverConnId: " + serverConnId + " clientConnId: " + clientConnId);
+        /*
+        ** Start the process of sending the HTTP Request and the request object
+         */
+        setupClientConnection.event();
 
-        if (client.connectTarget(writeConn, 100)) {
-            // Setup the read callback before sending any data
-            TestClientReadCallback readDataCb = new TestClientReadCallback(this, httpParser);
+        /*
+        ** Now wait for the status to be received and then it can verified with the expected value
+         */
+        waitForStatus();
 
-            ConnectionState work = client.registerClientReadCallback(writeConn, readDataCb);
-
-            System.out.println("Starting TestClient[" + work.getConnStateId() + "] " + clientTestName);
-
-            /*
-            ** Build the HTTP request to send
-             */
-            ByteBuffer msgHdr = memoryAllocator.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE, null);
-
-            String tmp;
-            String Md5_Digest = buildBufferAndComputeMd5();
-            if (Md5_Digest != null) {
-                tmp = buildRequestString(Md5_Digest);
-            } else {
-                tmp = buildRequestString();
-            }
-
-            str_to_bb(msgHdr, tmp);
-            System.out.println("ClientTest[" + writeConn.getTransactionId() + "] msgHdr " + msgHdr.position() + " " + msgHdr.remaining());
-
-            int bytesToWrite = msgHdr.position();
-            msgHdr.flip();
-
-
-            // Send the message
-            statusSignalSent = false;
-            writeSignalSent = false;
-
-            writeHeader(msgHdr, bytesToWrite);
-
-            clientTestStep_1();
-
-            memoryAllocator.poolMemFree(msgHdr);
-
-            waitForStatus();
-
-            System.out.println("Completed ClientTest[" + writeConn.getTransactionId() + "] TestClient[" + work.getConnStateId() + "] " +
-                    clientTestName);
-
-            client.disconnectTarget(writeConn);
-        } else {
-            System.out.println("Completed ClientTest[" + writeConn.getTransactionId() + "] unable to connect to target");
-            client.setTestFailed(clientTestName);
-        }
-
-        clientCount.decrementAndGet();
+        runningTestCount.decrementAndGet();
     }
 
     private void userWriteCompleted(int result) {
 
-        System.out.println("ClientTest[" + writeConn.getTransactionId() + "] userWriteComp(): " + result);
+        System.out.println("ClientTest[" + clientTestName + "] userWriteComp(): " + result);
 
         synchronized (writeDone) {
             writeSignalSent = true;
@@ -192,13 +151,13 @@ public abstract class ClientTest implements Runnable {
             }
         }
 
-        System.out.println("ClientTest[" + writeConn.getTransactionId() + "] waitForWrite() done: " + status);
+        System.out.println("ClientTest[" + clientTestName + "] waitForWrite() done: " + status);
 
         return status;
     }
 
     void statusReceived(int result) {
-        System.out.println("ClientTest[" + writeConn.getTransactionId() + "]  statusReceived() : " + result);
+        System.out.println("ClientTest[" + clientTestName + "]  statusReceived() : " + result);
 
         synchronized (writeDone) {
             statusSignalSent = true;
@@ -224,12 +183,12 @@ public abstract class ClientTest implements Runnable {
             }
         }
 
-        System.out.println("ClientTest[" + writeConn.getTransactionId() + "] waitForStatus() done: " + status);
+        System.out.println("ClientTest[" + clientTestName + "] waitForStatus() done: " + status);
 
         return status;
     }
 
-    private void str_to_bb(ByteBuffer out, String in) {
+    public void str_to_bb(ByteBuffer out, String in) {
         Charset charset = StandardCharsets.UTF_8;
         CharsetEncoder encoder = charset.newEncoder();
 
@@ -243,37 +202,9 @@ public abstract class ClientTest implements Runnable {
     /*
      ** These are classes the various tests need to provide to change the test case behavior.
      */
-    String buildBufferAndComputeMd5() {
-        return null;
-    }
+    abstract public String buildBufferAndComputeMd5();
 
-    abstract String buildRequestString();
-
-    String buildRequestString(final String Md5_Digest) {
-        return null;
-    }
-
-
-    void clientTestStep_1() {
-        /*
-        ** The default case it to do nothing
-         */
-    }
-
-    /*
-    ** This writes the entire buffer used to hold the message out the write socket channel
-     */
-    void writeHeader(ByteBuffer msgHdr, int bytesToWrite) {
-        ClientWriteCompletion comp = new ClientWriteCompletion(this, writeConn, msgHdr, 1,
-                bytesToWrite, 0);
-
-        client.writeData(writeConn, comp);
-
-        if (!waitForWriteToComp()) {
-            System.out.println("Request timed out");
-        }
-    }
-
+    abstract public String buildRequestString(final String Md5Digest);
 
     abstract void targetResponse(final int result, final ByteBuffer readBuffer);
 

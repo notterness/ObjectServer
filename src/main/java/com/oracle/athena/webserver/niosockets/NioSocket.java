@@ -60,6 +60,13 @@ public class NioSocket implements IoInterface {
      */
     private Operation socketErrorHandler;
 
+    /*
+    ** This is the Operation that will be called when a Connect() occurs for a client socket. This is
+    **   setup through the startInitiator() call for NIO SocketChannel.
+     */
+    private Operation connectCompleteHandler;
+
+
     public NioSocket(final NioSelectHandler nioSelectHandler) {
 
         this.nioSelectHandler = nioSelectHandler;
@@ -90,11 +97,13 @@ public class NioSocket implements IoInterface {
     ** The startInitiator() call is used to open up a connection to (at least initially) write data out of. This
     **   requires opening a connection and attaching it to a remote listener.
      */
-    public boolean startInitiator(final InetAddress targetAddress, final int targetPort, final Operation errorHandler) {
+    public boolean startInitiator(final InetAddress targetAddress, final int targetPort, final Operation connectComplete,
+                                  final Operation errorHandler) {
 
         boolean success = true;
 
-        socketErrorHandler = errorHandler;
+        this.connectCompleteHandler = connectComplete;
+        this.socketErrorHandler = errorHandler;
 
         InetSocketAddress socketAddress = new InetSocketAddress(targetAddress, targetPort);
 
@@ -104,6 +113,7 @@ public class NioSocket implements IoInterface {
             /*
             ** What to do if the socket cannot be opened
              */
+            errorHandler.event();
             return false;
         }
 
@@ -125,6 +135,7 @@ public class NioSocket implements IoInterface {
             }
             socketChannel = null;
 
+            errorHandler.event();
             return false;
         }
 
@@ -143,6 +154,8 @@ public class NioSocket implements IoInterface {
             }
             socketChannel = null;
             success = false;
+
+            errorHandler.event();
         }
 
         return success;
@@ -331,6 +344,15 @@ public class NioSocket implements IoInterface {
      */
     public void sendErrorEvent() {
         socketErrorHandler.event();
+    }
+
+    /*
+    **
+     */
+    public void connectComplete() {
+        if (connectCompleteHandler != null) {
+            connectCompleteHandler.event();
+        }
     }
 }
 

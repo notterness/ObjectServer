@@ -126,6 +126,16 @@ public class NioSelectHandler {
             if (nioSocket != null) {
                 nioSocket.sendErrorEvent();
             }
+
+            return;
+        }
+
+        /*
+        ** Call the registered ConnectComplete operation if one is registered.
+         */
+        NioSocket nioSocket = (NioSocket) key.attachment();
+        if (nioSocket != null) {
+            nioSocket.connectComplete();
         }
     }
 

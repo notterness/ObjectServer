@@ -1,6 +1,6 @@
 package com.oracle.athena.webserver.manual;
 
-import com.oracle.athena.webserver.client.TestClient;
+import com.oracle.athena.webserver.client.NioTestClient;
 import com.oracle.athena.webserver.connectionstate.Md5Digest;
 import com.oracle.athena.webserver.memory.MemoryManager;
 import org.eclipse.jetty.http.HttpStatus;
@@ -17,15 +17,15 @@ class ClientTest_MissingObjectName extends ClientTest {
     private ByteBuffer dataBuffer;
 
 
-    ClientTest_MissingObjectName(final String testName, final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
-        super(testName, client, myServerId, myTargetId, threadCount);
+    ClientTest_MissingObjectName(final String testName, final NioTestClient client, final int serverTcpPort, AtomicInteger testCount) {
+        super(testName, client, serverTcpPort, testCount);
 
         digest = new Md5Digest();
         dataBuffer = null;
     }
 
     @Override
-    String buildBufferAndComputeMd5() {
+    public String buildBufferAndComputeMd5() {
         /*
          ** Setup the 1kB data transfer here
          */
@@ -52,7 +52,7 @@ class ClientTest_MissingObjectName extends ClientTest {
     }
 
     @Override
-    String buildRequestString(final String Md5_Digest) {
+    public String buildRequestString(final String Md5_Digest) {
         return new String("PUT /n/faketenantname" + "" +
                 "/b/bucket-5e1910d0-ea13-11e9-851d-234132e0fb02" +
                 " HTTP/1.1\n" +
@@ -67,37 +67,18 @@ class ClientTest_MissingObjectName extends ClientTest {
                 "Content-Length: " + BYTES_IN_CONTENT + "\n\n");
     }
 
-    @Override
-    String buildRequestString() {
-        return null;
-    }
-
-    @Override
     void clientTestStep_1() {
         /*
          ** Send out the 1kB data transfer here
          */
-        if (dataBuffer != null) {
-            ClientWriteCompletion comp = new ClientWriteCompletion(this, writeConn, dataBuffer, 1,
-                    BYTES_IN_CONTENT, 0);
-
-            resetWriteWaitFlag();
-            client.writeData(writeConn, comp);
-
-            if (!waitForWriteToComp()) {
-                System.out.println("Request timed out");
-            }
-
-            memoryAllocator.poolMemFree(dataBuffer);
-        }
-    }
+     }
 
     /*
      ** In this test, the full HTTP message is written and then a response is expected from the server.
      ** The response must have a result code of 200, indicating success.
      */
     @Override
-    void targetResponse(final int result, final ByteBuffer readBuffer) {
+    public void targetResponse(final int result, final ByteBuffer readBuffer) {
         if ((result == 0) && (super.httpStatus ==  HttpStatus.BAD_REQUEST_400)) {
             System.out.println(super.clientTestName + " passed");
         } else {

@@ -21,7 +21,7 @@ public class NioEventPollBalancer {
 
     private int currNioEventThread;
 
-    NioEventPollBalancer(final WebServerFlavor flavor, final int numPollThreads, final int threadBaseId) {
+    public NioEventPollBalancer(final WebServerFlavor flavor, final int numPollThreads, final int threadBaseId) {
 
         this.webServerFlavor = flavor;
         this.numberPollThreads = numPollThreads;
@@ -33,14 +33,14 @@ public class NioEventPollBalancer {
     }
 
     /*
-    ** Start any threads used to handle the event poll loop.
+     ** Start any threads used to handle the event poll loop.
      */
-    void start() {
+    public void start() {
 
         currNioEventThread = 0;
 
         for (int i = 0; i < numberPollThreads; i++) {
-            NioEventPollThread pollThread = new NioEventPollThread(eventPollThreadBaseId + i, memoryManager);
+            NioEventPollThread pollThread = new NioEventPollThread(webServerFlavor, eventPollThreadBaseId + i, memoryManager);
 
             pollThread.start();
             eventPollThreadPool[i] = pollThread;
@@ -49,10 +49,10 @@ public class NioEventPollBalancer {
     }
 
     /*
-    ** Stop any threads associated with the event poll loop and cleanup any allocated
-    **   resources.
+     ** Stop any threads associated with the event poll loop and cleanup any allocated
+     **   resources.
      */
-    void stop() {
+    public void stop() {
 
         for (int i = 0; i < numberPollThreads; i++) {
             NioEventPollThread pollThread = eventPollThreadPool[i];
@@ -64,18 +64,29 @@ public class NioEventPollBalancer {
     }
 
     /*
-    ** Add this socket to one the event poll work threads.
-    **
-    ** TODO: This does not need to be synchronized if there is only a single acceptor thread.
+     ** Add this socket to one the event poll work threads.
+     **
+     ** TODO: This does not need to be synchronized if there is only a single acceptor thread.
      */
     synchronized boolean registerClientSocket(SocketChannel clientChannel) {
-        boolean success = eventPollThreadPool[currNioEventThread].registerClientSocket(clientChannel);
+
+        EventPollThread eventThread = getNextEventThread();
+        boolean success = eventThread.registerClientSocket(clientChannel);
+
+        return success;
+    }
+
+    /*
+     ** This returns the next "ready" EventPollThread that can be used.
+     */
+    public synchronized EventPollThread getNextEventThread() {
+        NioEventPollThread eventThread = eventPollThreadPool[currNioEventThread];
 
         currNioEventThread++;
         if (currNioEventThread == numberPollThreads) {
             currNioEventThread = 0;
         }
 
-        return success;
+        return eventThread;
     }
 }

@@ -1,7 +1,6 @@
 package com.oracle.athena.webserver.manual;
 
-import com.oracle.athena.webserver.client.TestClient;
-import com.oracle.athena.webserver.niosockets.NioSelectHandler;
+import com.oracle.athena.webserver.client.NioTestClient;
 import com.oracle.athena.webserver.niosockets.NioServerHandler;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 
@@ -114,7 +113,7 @@ public class TestMain {
     **   decrements it when it completes. This allows the code to wait for a group of tests to complete
     **   prior to moving onto another set of tests or exiting.
      */
-    static String waitForTestsToComplete(final AtomicInteger testRunningCount, final TestClient client) {
+    static String waitForTestsToComplete(final AtomicInteger testRunningCount, final NioTestClient client) {
         // running infinite loop for getting
         // client request
         while (true) {
