@@ -3,7 +3,6 @@ package com.oracle.athena.webserver.manual;
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.memory.MemoryManager;
-import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.operations.Operation;
 import com.oracle.athena.webserver.operations.OperationTypeEnum;
 
@@ -112,7 +111,7 @@ public class TestHttpParser extends WebServerTest {
         ** The cleanupRequest() and stop() must be called to release the resources back so there are no outstanding
         **   references that prevent the program from cleanly shutting down.
          */
-        super.requestContext.cleanupRequest();
+        super.requestContext.cleanupServerRequest();
         super.testEventThread.stop();
 
         return testSucceeded;

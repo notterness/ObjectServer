@@ -1,18 +1,18 @@
 package com.oracle.athena.webserver.manual;
 
-import com.oracle.athena.webserver.client.TestClient;
+import com.oracle.athena.webserver.client.NioTestClient;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ClientTest_2 extends ClientTest {
 
-    ClientTest_2(final String testName, final TestClient client, final int myServerId, final int myTargetId, AtomicInteger threadCount) {
-        super(testName, client, myServerId, myTargetId, threadCount);
+    ClientTest_2(final String testName, final NioTestClient client, final int serverTcpPort, AtomicInteger testCount) {
+        super(testName, client, serverTcpPort, testCount);
     }
 
     @Override
-    String buildRequestString() {
+    public String buildRequestString(final String Md5Digest) {
         return new String("PUT / HTTP/1.1\n" +
                 "Host: ClientTest-" + super.clientTestName + "\n" +
                 "Content-Type: application/json\n" +
@@ -43,5 +43,10 @@ public class ClientTest_2 extends ClientTest {
         }
 
         statusReceived(result);
+    }
+
+    @Override
+    public String buildBufferAndComputeMd5() {
+        return null;
     }
 }

@@ -103,7 +103,7 @@ public class CloseOutRequest implements Operation {
         /*
         ** Close out the connection and place the RequestContext back on the "free" list
          */
-        requestContext.cleanupRequest();
+        requestContext.cleanupServerRequest();
     }
 
     /*

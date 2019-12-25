@@ -17,6 +17,8 @@ import java.nio.charset.StandardCharsets;
 
 public abstract class WebServerTest {
 
+    private static final WebServerFlavor webServerFlavor = WebServerFlavor.INTEGRATION_TESTS;
+
     protected final String testName;
 
     protected final TestEventThread testEventThread;
@@ -34,15 +36,15 @@ public abstract class WebServerTest {
     WebServerTest(final String testName) {
 
         this.testName = testName;
+        memoryManager = new MemoryManager(webServerFlavor);
 
-        testEventThread = new TestEventThread(0x1000, this);
+        testEventThread = new TestEventThread(webServerFlavor,0x1000, memoryManager,this);
         testEventThread.start();
 
-        memoryManager = new MemoryManager(WebServerFlavor.INTEGRATION_TESTS);
-        requestContext = new RequestContext(WebServerFlavor.INTEGRATION_TESTS, memoryManager, testEventThread);
+        requestContext = testEventThread.allocateContext();
 
         IoInterface connection = testEventThread.allocateConnection(null);
-        requestContext.initialize(connection, 56);
+        requestContext.initializeServer(connection, 56);
 
         CasperHttpInfo casperHttpInfo = new CasperHttpInfo(requestContext);
         parser = new ByteBufferHttpParser(casperHttpInfo);

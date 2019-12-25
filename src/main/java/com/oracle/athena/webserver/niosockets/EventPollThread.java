@@ -1,6 +1,9 @@
 package com.oracle.athena.webserver.niosockets;
 
 import com.oracle.athena.webserver.operations.Operation;
+import com.oracle.athena.webserver.requestcontext.RequestContext;
+
+import java.nio.channels.SocketChannel;
 
 public interface EventPollThread {
 
@@ -22,22 +25,9 @@ public interface EventPollThread {
 
     void releaseConnection(final IoInterface connection);
 
-    /*
-    ** This is used to tell the IoInterface that there are buffers available to read data into in the
-    **   read BufferManager.
-     */
-    void handleRead(final IoInterface connection);
+    RequestContext allocateContext();
+    void releaseContext(final RequestContext requestContext);
 
-    /*
-    ** This is used to tell the IoInterface that there are buffers available to read data into in the
-    **   write BufferManager.
-     */
-    void handleWrite(final IoInterface connection);
-
-    /*
-    ** This is used to close out the connection managed by the IoInterface. It can be called when all the users
-    **   of the connection are done or if an error occurs.
-     */
-    void closeConnection(final IoInterface connection);
+    boolean registerClientSocket(final SocketChannel clientChannel);
 
 }

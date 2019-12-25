@@ -247,9 +247,31 @@ public class RequestContext {
     }
 
     /*
+    ** This sets up the RequestContext to handle server requests. When it is operating as a
+    **   server, the first thing is expects is an HTTP request to arrive. This should be in
+    **   the first one or so buffer read in from the connection.
     **
+    ** The reading and parsing of the HTTP request is handled by the following operations:
+    **   -> BufferReadMetering - This hands out pre-allocated ByteBuffers to the ClientReadBufferManager.
+    **   -> ReadBuffer - This informs the IoInterface that there are ByteBuffers ready to have data read into them.
+    **          ReadBuffer has a BufferManagerPointer dependency on buffers that are made available by the
+    **          BufferReadMetering operation.
+    **   -> ParseHttpRequest - This has a dependency on the ClientReadBufferManager and the ReadBuffer BufferManagerPointer.
+    **          When the data is read into the ByteBuffer by the IoInterface, it will call the ParseHttpRequest event()
+    **          method. This will queue up the operation to be handled by the EventPollThread. When the execute()
+    **          method for ParseHttpRequest is called, it will parse all available buffers until it receives the all
+    **          headers parsed callback from the HTTP Parser. Once all of the headers are parsed, the DetermineRequestType
+    **          operations event() method is called.
+    **          The final step for the ParseHttpRequest is to cleanup so that the RequestContext can be used again
+    **          to parse another HTTP Request. This will allow a pool of RequestContext to be allocated at start of
+    **          day and then reused.
+    **
+    ** The DetermineRequestType uses the information that the HTTP Parser generated and stored in the CasperHttpInfo
+    **   object to setup the correct method handler. There is a list of supported HTTP Methods kept in the
+    **   Map<Operation> supportedHttpRequests. Once the correct request is determined, the Operation to setup the
+    **   method handler is run.
      */
-    public void initialize(final IoInterface connection, final int requestId) {
+    public void initializeServer(final IoInterface connection, final int requestId) {
         clientConnection = connection;
         connectionRequestId = requestId;
 
@@ -337,7 +359,7 @@ public class RequestContext {
     **   a pristine state so it can be used for a new request.
     ** Once it is cleaned up, this RequestContext is added back to the free list so it can be used again.
      */
-    public void cleanupRequest() {
+    public void cleanupServerRequest() {
         Operation operation;
 
         operation = requestHandlerOperations.get(OperationTypeEnum.SEND_FINAL_STATUS);

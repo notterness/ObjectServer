@@ -26,7 +26,8 @@ public interface IoInterface {
     ** There are two different startInitiator() interfaces, one for SocketChannel connections and another for
     **   opening a file to write to.
      */
-    boolean startInitiator(final InetAddress targetAddress, final int targetPort, final Operation errorHandler);
+    boolean startInitiator(final InetAddress targetAddress, final int targetPort, final Operation connectComplete,
+                           final Operation errorHandler);
     boolean startInitiator(final String writeFileName, final Operation errorHandler);
 
 
@@ -49,4 +50,6 @@ public interface IoInterface {
     void sendErrorEvent();
 
     void closeConnection();
+    void connectComplete();
+
 }

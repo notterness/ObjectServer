@@ -1,31 +1,50 @@
-package com.oracle.athena.webserver.operations;
+package com.oracle.athena.webserver.client;
 
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
+import com.oracle.athena.webserver.manual.ClientTest;
+import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.niosockets.IoInterface;
+import com.oracle.athena.webserver.operations.ConnectComplete;
+import com.oracle.athena.webserver.operations.Operation;
+import com.oracle.athena.webserver.operations.OperationTypeEnum;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
+import java.nio.ByteBuffer;
 
-public class SetupChunkWrite implements Operation {
-
-    private static final Logger LOG = LoggerFactory.getLogger(SetupChunkWrite.class);
+public class SetupClientConnection implements Operation {
+    private static final Logger LOG = LoggerFactory.getLogger(ConnectComplete.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_CHUNK_WRITE;
+    public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_CLIENT_CONNECTION;
+
+    private final int WRITE_BUFFERS_TO_ALLOCATE = 10;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
     private final RequestContext requestContext;
+
+    /*
+    ** The ClientTest is used to know what data is to be filled into the ByteBuffers and sent to the
+    **   WebServer
+     */
+    private final ClientTest clientTest;
+
+    /*
+     ** This is the IoInterface that the final status will be written out on.
+     */
+    private final IoInterface clientConnection;
+
+    /*
+    ** The targetTcpPort is where the connection is made to talk to the WebServer
+     */
+    private final int targetTcpPort;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -36,24 +55,24 @@ public class SetupChunkWrite implements Operation {
     private boolean onExecutionQueue;
     private long nextExecuteTime;
 
-    private final BufferManager clientWriteBufferMgr;
-    private final BufferManagerPointer encryptedBufferPtr;
-
     /*
-     ** The following is a map of all of the created Operations to handle this request.
+    ** Need a ConnectComplete and HandleInitiatorError operations for setting up the client initiator
+    **   connection
      */
-    private final Map<OperationTypeEnum, Operation> requestHandlerOperations;
+    private HandleInitiatorError initiatorError;
+    private ConnectComplete connectComplete;
 
-    /*
-    ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
-    **   up the calls to obtain the VON information and the meta-data write to the database.
-     */
-    public SetupChunkWrite(final RequestContext requestContext, final BufferManagerPointer encryptedBufferPtr) {
+    private BufferManager clientWriteBufferManager;
+    private BufferManagerPointer addBufferPointer;
+    private BufferManagerPointer writeInfillPointer;
+
+    public SetupClientConnection(final RequestContext requestContext, final ClientTest clientTest,
+                                 final IoInterface connection, final int targetTcpPort) {
 
         this.requestContext = requestContext;
-        this.clientWriteBufferMgr = this.requestContext.getClientWriteBufferManager();
-
-        this.encryptedBufferPtr = encryptedBufferPtr;
+        this.clientTest = clientTest;
+        this.clientConnection = connection;
+        this.targetTcpPort = targetTcpPort;
 
         /*
          ** This starts out not being on any queue
@@ -61,11 +80,6 @@ public class SetupChunkWrite implements Operation {
         onDelayedQueue = false;
         onExecutionQueue = false;
         nextExecuteTime = 0;
-
-        /*
-         ** Setup this RequestContext to be able to read in and parse the HTTP Request(s)
-         */
-        requestHandlerOperations = new HashMap<OperationTypeEnum, Operation>();
     }
 
     public OperationTypeEnum getOperationType() {
@@ -73,11 +87,39 @@ public class SetupChunkWrite implements Operation {
     }
 
     /*
-     ** This returns the BufferManagerPointer obtained by this operation, if there is one. If this operation
-     **   does not use a BufferManagerPointer, it will return null.
+    ** This will setup the TCP connection that the test will communicate with the WebServer over.
      */
     public BufferManagerPointer initialize() {
-        return null;
+
+        connectComplete = new ConnectComplete(requestContext, this);
+        connectComplete.initialize();
+
+        initiatorError = new HandleInitiatorError(requestContext, clientConnection);
+        initiatorError.initialize();
+
+        /*
+         ** Allocate buffers and add them to the clientWriteBufferManager
+         */
+        clientWriteBufferManager = requestContext.getClientWriteBufferManager();
+
+        addBufferPointer = clientWriteBufferManager.register(this);
+        writeInfillPointer = clientWriteBufferManager.register(this, addBufferPointer);
+
+        ByteBuffer buffer;
+
+        for (int i = 0; i < WRITE_BUFFERS_TO_ALLOCATE; i++) {
+            buffer = ByteBuffer.allocate(MemoryManager.MEDIUM_BUFFER_SIZE);
+
+            clientWriteBufferManager.offer(addBufferPointer, buffer);
+        }
+
+        /*
+        ** Start the connection to the remote WebServer. When it completes, this Operation's event() method
+        **   will be called and the ClientHttpHeaderWrite operation can be started.
+         */
+        clientConnection.startInitiator(InetAddress.getLoopbackAddress(), targetTcpPort, connectComplete, initiatorError);
+
+        return writeInfillPointer;
     }
 
     public void event() {
@@ -89,50 +131,33 @@ public class SetupChunkWrite implements Operation {
     }
 
     /*
-     **
      */
     public void execute() {
 
         /*
-        ** First determine the VON information for the various Storage Servers that need to be written to.
+         ** Create the ClientHttpHeaderWrite operation and connect in this object to provide the HTTP header
+         **   generator
          */
+        ClientHttpHeaderWrite headerWrite = new ClientHttpHeaderWrite(requestContext, clientConnection, clientTest,
+                writeInfillPointer);
+        headerWrite.initialize();
 
-        /*
-        ** For each Storage Server, setup a HandleStorageServerError operation that is used when there
-        **   is an error communicating with the StorageServer.
-         */
-        HandleStorageServerError errorHandler = new HandleStorageServerError(requestContext);
-        requestHandlerOperations.put(errorHandler.getOperationType(), errorHandler);
-
-        /*
-         ** For each Storage Server, create the connection used to communicate with it.
-         */
-        IoInterface connection = requestContext.allocateConnection(this);
-        /*
-         ** For each Storage Server, create a WriteToStorageServer operation that will handle writing the data out
-         **   to the Storage Server. The WriteToStorageServer will use the bookmark created in the
-         **   EncryptBuffer operation to know where to start writing the data.
-         */
-        WriteToStorageServer storageServerWriter = new WriteToStorageServer(requestContext, connection, encryptedBufferPtr);
-        requestHandlerOperations.put(storageServerWriter.getOperationType(), storageServerWriter);
-
-        /*
-         ** For each Storage Server, setup a ConnectComplete operation that is used when the NIO
-         **   connection is made with the StorageServer.
-         */
-        ConnectComplete connectComplete = new ConnectComplete(requestContext, storageServerWriter);
-
-        /*
-        ** Now open a initiator connection to write encrypted buffers out of.
-         */
-        connection.startInitiator(InetAddress.getLoopbackAddress(), RequestContext.STORAGE_SERVER_PORT_BASE,
-                connectComplete, errorHandler);
 
     }
 
     /*
+     ** This removes any dependencies that are put upon the BufferManager
      */
     public void complete() {
+        /*
+        ** Walk the BufferManager freeing up all the allocated buffers
+         */
+
+        /*
+        ** Unregister all of the BufferManagerPointer(s)
+         */
+        clientWriteBufferManager.unregister(addBufferPointer);
+        clientWriteBufferManager.unregister(writeInfillPointer);
 
     }
 
@@ -206,13 +231,7 @@ public class SetupChunkWrite implements Operation {
      */
     public void dumpCreatedOperations(final int level) {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
-        LOG.info("  -> Operations Created By " + operationType);
-
-        Collection<Operation> createdOperations = requestHandlerOperations.values();
-        Iterator<Operation> iter = createdOperations.iterator();
-        while (iter.hasNext()) {
-            iter.next().dumpCreatedOperations(level + 1);
-        }
+        LOG.info("      No BufferManagerPointers");
         LOG.info("");
     }
 

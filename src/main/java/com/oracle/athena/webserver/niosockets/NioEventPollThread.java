@@ -20,6 +20,7 @@ public class NioEventPollThread implements Runnable, EventPollThread {
 
     private final int SELECT_TIMEOUT = 1000;
 
+    private final WebServerFlavor webServerFlavor;
     private final int eventPollThreadBaseId;
     private final MemoryManager memoryManager;
 
@@ -41,7 +42,9 @@ public class NioEventPollThread implements Runnable, EventPollThread {
     private Selector clientSocketSelector;
 
 
-    public NioEventPollThread(final int threadBaseId, final MemoryManager memoryManger) {
+    public NioEventPollThread(final WebServerFlavor flavor, final int threadBaseId, final MemoryManager memoryManger) {
+
+        this.webServerFlavor = flavor;
         this.eventPollThreadBaseId = threadBaseId;
         this.memoryManager = memoryManger;
 
@@ -121,23 +124,34 @@ public class NioEventPollThread implements Runnable, EventPollThread {
     }
 
     /*
+    ** TODO: Change this to use a pool of pre-allocated RequestContext
+     */
+    public RequestContext allocateContext(){
+        return new RequestContext(webServerFlavor, memoryManager, this);
+    }
+
+    public void releaseContext(final RequestContext requestContext) {
+
+    }
+
+    /*
     ** This is where a RequestContext is acquired for a connection and the association between the connection and
     **   the SocketChannel is made. This is how the NIO layer is linked into the actual RequestContext and its
     **   associated BufferManagers.
     ** Add a client SocketChannel to the Selector
      */
-    boolean registerClientSocket(final SocketChannel clientChannel) {
+    public boolean registerClientSocket(final SocketChannel clientChannel) {
         boolean success = true;
 
         /*
         ** TODO: Change this from a new to an allocation from a free pool
          */
-        RequestContext requestContext = new RequestContext(WebServerFlavor.INTEGRATION_TESTS, memoryManager, this);
+        RequestContext requestContext = allocateContext();
 
         IoInterface connection = allocateConnection(null);
         if (connection != null) {
             connection.startClient(clientChannel);
-            requestContext.initialize(connection, 56);
+            requestContext.initializeServer(connection, 56);
 
             runningContexts.add(requestContext);
         } else {
@@ -177,20 +191,4 @@ public class NioEventPollThread implements Runnable, EventPollThread {
         nioSelectHandler.releaseSelector();
     }
 
-    /*
-    **
-     */
-    public void handleRead(final IoInterface connection) {
-    }
-
-    /*
-    **
-     */
-    public void handleWrite(final IoInterface connection) {
-
-    }
-
-    public void closeConnection(final IoInterface connection) {
-
-    }
 }
