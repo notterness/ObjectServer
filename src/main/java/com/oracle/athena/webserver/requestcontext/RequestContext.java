@@ -17,6 +17,7 @@ import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -177,7 +178,15 @@ public class RequestContext {
     **   provide the initial handler for an HTTP Request type. This is setup at the start of execution and
     **   is only populated with handler operations (i.e. V2 PUT).
      */
-    private final Map<HttpMethodEnum, Operation> supportedHttpRequests;
+    private Map<HttpMethodEnum, Operation> supportedHttpRequests;
+
+    /*
+    ** The following Map is used to keep track of when the HTTP Request is sent to the
+    **   Storage Server for the Web Server and it is used by the test code to know that
+    **   the HTTP Request has been sent by the client
+    ** The map is based upon the port of the target.
+     */
+    private Map<Integer, AtomicBoolean> httpRequestSent;
 
     /*
     ** The httpParseError is set if there is something the parser does not like or a header
@@ -236,6 +245,11 @@ public class RequestContext {
         ** Setup this RequestContext to be able to read in and parse the HTTP Request(s)
          */
         requestHandlerOperations = new HashMap<OperationTypeEnum, Operation> ();
+
+        /*
+        ** Setup the map for the HTTP Request Sent
+         */
+        httpRequestSent = new HashMap<Integer, AtomicBoolean>();
 
         queueMutex = new ReentrantLock();
         queueSignal = queueMutex.newCondition();
@@ -647,6 +661,25 @@ public class RequestContext {
 
     public BufferManagerPointer getMeteringPtr() {
         return meteringPtr;
+    }
+
+    /*
+    **
+     */
+    public boolean hasHttpRequestBeenSent(final int targetPort) {
+        AtomicBoolean responseSent = httpRequestSent.get(targetPort);
+        if (responseSent != null) {
+            if (responseSent.get() == true) {
+                httpRequestSent.remove(targetPort);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void setHttpResponseSet(final int targetPort) {
+        AtomicBoolean httpSent = new AtomicBoolean(true);
+        httpRequestSent.put(targetPort, httpSent);
     }
 
     /*

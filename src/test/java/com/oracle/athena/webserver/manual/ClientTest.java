@@ -1,19 +1,12 @@
 package com.oracle.athena.webserver.manual;
 
-import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
-import com.oracle.athena.webserver.client.ClientHttpHeaderWrite;
-import com.oracle.athena.webserver.client.ClientWriteObject;
 import com.oracle.athena.webserver.client.NioTestClient;
 import com.oracle.athena.webserver.client.SetupClientConnection;
-import com.oracle.athena.webserver.connectionstate.ConnectionState;
 import com.oracle.athena.webserver.http.HttpResponseListener;
 import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.niosockets.EventPollThread;
 import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
-import com.oracle.athena.webserver.server.WriteConnection;
-import com.oracle.pic.casper.webserver.server.WebServerFlavor;
-import io.grpc.stub.ClientResponseObserver;
 import org.eclipse.jetty.http.HttpParser;
 
 import java.nio.ByteBuffer;

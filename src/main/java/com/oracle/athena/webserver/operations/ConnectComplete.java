@@ -1,8 +1,6 @@
 package com.oracle.athena.webserver.operations;
 
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
-import com.oracle.athena.webserver.memory.MemoryManager;
-import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,11 +32,18 @@ public class ConnectComplete implements Operation {
     private boolean onExecutionQueue;
     private long nextExecuteTime;
 
+    /*
+    ** The targetTcpPort is used to inform the requestContext (as the centralized keeper of
+    **   information) that the connect() to the target has succeed.
+     */
+    private final int targetTcpPort;
 
-    public ConnectComplete(final RequestContext requestContext, final Operation operationToRun) {
+    public ConnectComplete(final RequestContext requestContext, final Operation operationToRun,
+                           final int targetTcpPort) {
 
         this.requestContext = requestContext;
         this.operationToRun = operationToRun;
+        this.targetTcpPort = targetTcpPort;
 
         /*
          ** This starts out not being on any queue
@@ -70,6 +75,7 @@ public class ConnectComplete implements Operation {
     /*
      */
     public void execute() {
+        requestContext.setHttpResponseSet(targetTcpPort);
         if (operationToRun != null) {
             operationToRun.event();
         }

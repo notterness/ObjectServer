@@ -50,13 +50,22 @@ public class ClientHttpHeaderWrite implements Operation {
     private final BufferManagerPointer writeInfillPointer;
     private BufferManagerPointer clientWritePointer;
 
+    /*
+    **
+     */
+    private final ClientObjectWrite clientObjectWrite;
+    private final int targetTcpPort;
+
     public ClientHttpHeaderWrite(final RequestContext requestContext, final IoInterface connection,
-                                 final ClientTest clientTest, final BufferManagerPointer writeInfillPtr) {
+                                 final ClientTest clientTest, final BufferManagerPointer writeInfillPtr,
+                                 final ClientObjectWrite writeObject, final int targetTcpPort) {
 
         this.requestContext = requestContext;
         this.clientConnection = connection;
         this.clientTest = clientTest;
         this.writeInfillPointer = writeInfillPtr;
+        this.clientObjectWrite = writeObject;
+        this.targetTcpPort = targetTcpPort;
 
         this.clientWriteBufferMgr = requestContext.getClientWriteBufferManager();
 
@@ -76,14 +85,7 @@ public class ClientHttpHeaderWrite implements Operation {
      */
     public BufferManagerPointer initialize() {
 
-        /*
-        ** The clientWritePointer is used to send data to the NIO layer to know when
-        **   buffers are available to write out the SocketChannel. It depends on data being placed into
-        **   the ByteBuffer accessed through the writeInfillPointer.
-         */
-        clientWritePointer = clientWriteBufferMgr.register(this, writeInfillPointer);
-
-        return clientWritePointer;
+        return null;
     }
 
     public void event() {
@@ -115,14 +117,18 @@ public class ClientHttpHeaderWrite implements Operation {
             clientTest.str_to_bb(msgHdr, tmp);
 
             /*
+            ** Need to flip() the buffer so that the limit() is set to the end of where the HTTP Request is
+            **   and the position() reset to 0.
+             */
+            msgHdr.flip();
+
+            /*
             ** Data is now present in the ByteBuffer so the writeInfillPtr needs to be updated,
              */
             clientWriteBufferMgr.updateProducerWritePointer(writeInfillPointer);
 
-            ClientWriteObject objectWrite = new ClientWriteObject(requestContext, clientConnection, clientTest, writeInfillPointer);
-            objectWrite.initialize();
-
-            objectWrite.event();
+            requestContext.setHttpResponseSet(targetTcpPort);
+            clientObjectWrite.event();
         }
 
     }

@@ -103,7 +103,9 @@ public class BufferManagerPointer {
         /*
         ** Add the Operation to the depends on list for the producer
          */
-        dependsOnPointer.addDependsOn(operation);
+        if (operation != null) {
+            dependsOnPointer.addDependsOn(operation);
+        }
 
         /*
         ** Add the consumer BufferManagerPointer (this) to the depends on list for the producer. The
