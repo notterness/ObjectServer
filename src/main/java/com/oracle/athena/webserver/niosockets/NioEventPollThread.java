@@ -101,6 +101,10 @@ public class NioEventPollThread implements Runnable, EventPollThread {
         threadRunning = false;
     }
 
+    public int getEventPollThreadBaseId() {
+        return eventPollThreadBaseId;
+    }
+
     /*
     ** TODO: Wire in the wakeup of the waitingOperation if there are no NioSocket
     **   available and add a test for this
@@ -111,6 +115,7 @@ public class NioEventPollThread implements Runnable, EventPollThread {
             waitingForConnections.add(waitingOperation);
         }
 
+        LOG.info("allocateConnection [" + eventPollThreadBaseId + "]");
         return connection;
     }
 
@@ -127,11 +132,22 @@ public class NioEventPollThread implements Runnable, EventPollThread {
     ** TODO: Change this to use a pool of pre-allocated RequestContext
      */
     public RequestContext allocateContext(){
-        return new RequestContext(webServerFlavor, memoryManager, this);
+
+        RequestContext requestContext = new RequestContext(webServerFlavor, memoryManager, this);
+
+        runningContexts.add(requestContext);
+
+        LOG.info("allocateContext [" + eventPollThreadBaseId + "]");
+
+        return requestContext;
     }
 
     public void releaseContext(final RequestContext requestContext) {
+        runningContexts.remove(requestContext);
+    }
 
+    public void addContext(final RequestContext requestContext) {
+        runningContexts.add(requestContext);
     }
 
     /*
@@ -152,8 +168,6 @@ public class NioEventPollThread implements Runnable, EventPollThread {
         if (connection != null) {
             connection.startClient(clientChannel);
             requestContext.initializeServer(connection, 56);
-
-            runningContexts.add(requestContext);
         } else {
             LOG.info("[" + eventPollThreadBaseId + "] no free connections");
             success = false;

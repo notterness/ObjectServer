@@ -1,6 +1,7 @@
 package com.oracle.athena.webserver.manual;
 
 import com.oracle.athena.webserver.client.NioTestClient;
+import com.oracle.athena.webserver.client.SetupClientConnection;
 import com.oracle.athena.webserver.niosockets.NioServerHandler;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 
@@ -9,7 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 // Server class
 public class TestMain {
     public static void main(String[] args) {
-        final int baseTcpPortOffset = 1;
+        final int serverTcpPort = 5001;
 
         AtomicInteger threadCount = new AtomicInteger(1);
 
@@ -19,8 +20,14 @@ public class TestMain {
         //TestHttpParser testHttpParser = new TestHttpParser("TestHttpParser");
         //testHttpParser.execute();
 
-        NioServerHandler nioServer = new NioServerHandler(WebServerFlavor.INTEGRATION_TESTS, 5001, 0x1000);
+        NioServerHandler nioServer = new NioServerHandler(WebServerFlavor.INTEGRATION_TESTS, 5001, 1000);
         nioServer.start();
+
+        NioTestClient testClient = new NioTestClient(2000);
+        testClient.start();
+
+        ClientTest client_1 = new ClientTest_2("ClientTest_2", testClient, serverTcpPort, threadCount);
+        client_1.execute();
 
         /*
         ** Uncomment out the following two lines to let TestMain just act as a server. It can then be used to
@@ -33,25 +40,25 @@ public class TestMain {
         /*
         TestClient client = null;
 
-        ClientTest client_checkMd5 = new ClientTest_CheckMd5("CheckMd5", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        ClientTest client_checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverTcpPort, threadCount);
         client_checkMd5.start();
 
-        ClientTest client_badMd5 = new ClientTest_BadMd5("BadMd5", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+        ClientTest client_badMd5 = new ClientTest_BadMd5("BadMd5", testClient, serverTcpPort, threadCount);
         client_badMd5.start();
 
-        String failedTestName = waitForTestsToComplete(threadCount, client);
+        String failedTestName = waitForTestsToComplete(threadCount, testClient);
 
         client_checkMd5.stop();
         client_badMd5.stop();
 
         if (failedTestName == null) {
-            ClientTest client_invalidMd5 = new ClientTest_InvalidMd5Header("InvalidMd5Header", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            ClientTest client_invalidMd5 = new ClientTest_InvalidMd5Header("InvalidMd5Header", testClient, serverTcpPort, threadCount);
             client_invalidMd5.start();
 
-            ClientTest client_missingObjectName = new ClientTest_MissingObjectName("MissingObjectName", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            ClientTest client_missingObjectName = new ClientTest_MissingObjectName("MissingObjectName", testClient, serverTcpPort, threadCount);
             client_missingObjectName.start();
 
-            failedTestName = waitForTestsToComplete(threadCount, client);
+            failedTestName = waitForTestsToComplete(threadCount, testClient);
 
             client_invalidMd5.stop();
             client_missingObjectName.stop();
@@ -59,19 +66,19 @@ public class TestMain {
 
         if (failedTestName == null) {
 
-            ClientTest client_1 = new ClientTest_2("ClientTest_2", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            ClientTest client_1 = new ClientTest_2("ClientTest_2", testClient, serverTcpPort, threadCount);
             client_1.start();
 
-            ClientTest earlyClose = new ClientTest_EarlyClose("EarlyClose", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            ClientTest earlyClose = new ClientTest_EarlyClose("EarlyClose", testClient, serverTcpPort, threadCount);
             earlyClose.start();
 
-            ClientTest slowHeaderSend = new ClientTest_SlowHeaderSend("SlowHeaderSend", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            ClientTest slowHeaderSend = new ClientTest_SlowHeaderSend("SlowHeaderSend", testClient, serverTcpPort, threadCount);
             slowHeaderSend.start();
 
-            ClientTest oneMbPut = new ClientTest_OneMbPut("OneMbPut", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            ClientTest oneMbPut = new ClientTest_OneMbPut("OneMbPut", testClient, serverTcpPort, threadCount);
             oneMbPut.start();
 
-            ClientTest outOfConnections = new ClientTest_OutOfConnections("OutOfConnections", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            ClientTest outOfConnections = new ClientTest_OutOfConnections("OutOfConnections", testClient, serverTcpPort, threadCount);
             outOfConnections.start();
 
             System.out.println("Starting Tests");
@@ -87,16 +94,16 @@ public class TestMain {
 */
         /*
         if (failedTestName == null) {
-            ClientTest malformedRequest_1 = new ClientTest_MalformedRequest_1("MalformedRequest_1", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            ClientTest malformedRequest_1 = new ClientTest_MalformedRequest_1("MalformedRequest_1", testClient, serverTcpPort, threadCount);
             malformedRequest_1.start();
 
-            ClientTest invalidContentLength = new ClientTest_InvalidContentLength("InvalidContentLength", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            ClientTest invalidContentLength = new ClientTest_InvalidContentLength("InvalidContentLength", testClient, serverTcpPort, threadCount);
             invalidContentLength.start();
 
-            ClientTest noContentLength = new ClientTest_NoContentLength("NoContentLength", client, (baseTcpPortOffset + 1), baseTcpPortOffset, threadCount);
+            ClientTest noContentLength = new ClientTest_NoContentLength("NoContentLength", testClient, serverTcpPort, threadCount);
             noContentLength.start();
 
-            failedTestName = waitForTestsToComplete(threadCount, client);
+            failedTestName = waitForTestsToComplete(threadCount, testClient);
 
             malformedRequest_1.stop();
             invalidContentLength.stop();

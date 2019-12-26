@@ -18,6 +18,8 @@ public interface EventPollThread {
      */
     void stop();
 
+    int getEventPollThreadBaseId();
+
     /*
     ** This allocates an IoInterface object that is used to track an individual connection.
      */

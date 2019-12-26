@@ -14,9 +14,10 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SetupClientConnection implements Operation {
-    private static final Logger LOG = LoggerFactory.getLogger(ConnectComplete.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SetupClientConnection.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
@@ -60,11 +61,16 @@ public class SetupClientConnection implements Operation {
     **   connection
      */
     private HandleInitiatorError initiatorError;
-    private ConnectComplete connectComplete;
+    private ClientConnectComplete connectComplete;
 
     private BufferManager clientWriteBufferManager;
     private BufferManagerPointer addBufferPointer;
     private BufferManagerPointer writeInfillPointer;
+    private BufferManagerPointer writePointer;
+
+    private ClientHttpHeaderWrite headerWrite;
+
+    private final AtomicBoolean alreadyExecuted;
 
     public SetupClientConnection(final RequestContext requestContext, final ClientTest clientTest,
                                  final IoInterface connection, final int targetTcpPort) {
@@ -80,6 +86,8 @@ public class SetupClientConnection implements Operation {
         onDelayedQueue = false;
         onExecutionQueue = false;
         nextExecuteTime = 0;
+
+        this.alreadyExecuted = new AtomicBoolean(false);
     }
 
     public OperationTypeEnum getOperationType() {
@@ -91,19 +99,13 @@ public class SetupClientConnection implements Operation {
      */
     public BufferManagerPointer initialize() {
 
-        connectComplete = new ConnectComplete(requestContext, this);
-        connectComplete.initialize();
-
-        initiatorError = new HandleInitiatorError(requestContext, clientConnection);
-        initiatorError.initialize();
-
         /*
          ** Allocate buffers and add them to the clientWriteBufferManager
          */
         clientWriteBufferManager = requestContext.getClientWriteBufferManager();
 
         addBufferPointer = clientWriteBufferManager.register(this);
-        writeInfillPointer = clientWriteBufferManager.register(this, addBufferPointer);
+        clientWriteBufferManager.bookmark(addBufferPointer);
 
         ByteBuffer buffer;
 
@@ -112,12 +114,49 @@ public class SetupClientConnection implements Operation {
 
             clientWriteBufferManager.offer(addBufferPointer, buffer);
         }
+        clientWriteBufferManager.reset(addBufferPointer);
+
+        writeInfillPointer = clientWriteBufferManager.register(this, addBufferPointer);
 
         /*
-        ** Start the connection to the remote WebServer. When it completes, this Operation's event() method
-        **   will be called and the ClientHttpHeaderWrite operation can be started.
+        ** When the ClientHttpHeaderWrite completes it then triggers the ClientObjectWrite, so
+        **   the ClientObjectWrite needs to be passed into the ClientHttpHeaderWrite.
          */
-        clientConnection.startInitiator(InetAddress.getLoopbackAddress(), targetTcpPort, connectComplete, initiatorError);
+        ClientObjectWrite objectWrite = new ClientObjectWrite(requestContext, clientConnection, clientTest,
+                writeInfillPointer, targetTcpPort);
+        objectWrite.initialize();
+
+         /*
+         ** Create the ClientHttpHeaderWrite operation and connect in this object to provide the HTTP header
+         **   generator
+         */
+        headerWrite = new ClientHttpHeaderWrite(requestContext, clientConnection, clientTest,
+                writeInfillPointer, objectWrite, targetTcpPort);
+        headerWrite.initialize();
+
+        /*
+         ** Setup the Operation the will trigger the NIO work loop to actually perform the writes to
+         **   the SocketChannel
+         */
+        ClientWrite clientWrite = new ClientWrite(requestContext, clientConnection, writeInfillPointer);
+        writePointer = clientWrite.initialize();
+
+        /*
+         ** Register the writePointer and the clientWriteBufferManager with the
+         **   IoInterface so it can actually write the data within the ByteBuffer(s) out
+         **   the SocketChannel
+         */
+        clientConnection.registerWriteBufferManager(clientWriteBufferManager, writePointer);
+
+        /*
+        ** When the ConnectComplete event is called, this means that the writing of the HTTP Request can
+        **   take place.
+         */
+        connectComplete = new ClientConnectComplete(requestContext, headerWrite, targetTcpPort, addBufferPointer);
+        connectComplete.initialize();
+
+        initiatorError = new HandleInitiatorError(requestContext, clientConnection);
+        initiatorError.initialize();
 
         return writeInfillPointer;
     }
@@ -127,22 +166,29 @@ public class SetupClientConnection implements Operation {
         /*
          ** Add this to the execute queue if it is not already on it.
          */
-        requestContext.addToWorkQueue(this);
-    }
+        if (!alreadyExecuted.get()) {
+            requestContext.addToWorkQueue(this);
+        }
+     }
 
     /*
      */
     public void execute() {
 
+        LOG.info("execute()");
+
         /*
-         ** Create the ClientHttpHeaderWrite operation and connect in this object to provide the HTTP header
-         **   generator
+        ** Only run this once, even though it will get kicked everytime a buffer is added to the
+        **   available buffers. The better way would be to add a WriteBufferAdd operation or to
+        **   allocate all of the buffers up front.
          */
-        ClientHttpHeaderWrite headerWrite = new ClientHttpHeaderWrite(requestContext, clientConnection, clientTest,
-                writeInfillPointer);
-        headerWrite.initialize();
+        alreadyExecuted.set(true);
 
-
+        /*
+         ** Start the connection to the remote WebServer. When it completes, this Operation's event() method
+         **   will be called and the ClientHttpHeaderWrite operation can be started.
+         */
+        clientConnection.startInitiator(InetAddress.getLoopbackAddress(), targetTcpPort, connectComplete, initiatorError);
     }
 
     /*

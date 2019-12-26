@@ -2,7 +2,6 @@ package com.oracle.athena.webserver.client;
 
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
-import com.oracle.athena.webserver.manual.ClientTest;
 import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.operations.Operation;
 import com.oracle.athena.webserver.operations.OperationTypeEnum;
@@ -10,13 +9,15 @@ import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ClientWriteObject implements Operation {
-    private static final Logger LOG = LoggerFactory.getLogger(ClientWriteObject.class);
+
+public class ClientWrite implements Operation {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ClientObjectWrite.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_WRITE_OBJECT;
+    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_WRITE;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -28,14 +29,7 @@ public class ClientWriteObject implements Operation {
      */
     private final IoInterface clientConnection;
 
-    /*
-    ** ClientTest provides the routines to know what HTTP Request and Object to send to the
-    **   the WebServer and it provides the routines to validate the correct response from
-    **   the WebServer.
-     */
-    private final ClientTest clientTest;
-
-    private final BufferManager clientWriteBufferMgr;
+    private final BufferManager clientWriteBufferManager;
     private final BufferManagerPointer writeInfillPointer;
 
     /*
@@ -47,18 +41,16 @@ public class ClientWriteObject implements Operation {
     private boolean onExecutionQueue;
     private long nextExecuteTime;
 
-    /*
-     */
+    private BufferManagerPointer writePointer;
 
-    public ClientWriteObject(final RequestContext requestContext, final IoInterface connection,
-                             final ClientTest clientTest, final BufferManagerPointer writeInfillPtr) {
+    public ClientWrite(final RequestContext requestContext, final IoInterface connection,
+                       final BufferManagerPointer writeInfillPtr) {
 
         this.requestContext = requestContext;
         this.clientConnection = connection;
-        this.clientTest = clientTest;
         this.writeInfillPointer = writeInfillPtr;
 
-        this.clientWriteBufferMgr = requestContext.getClientWriteBufferManager();
+        this.clientWriteBufferManager = requestContext.getClientWriteBufferManager();
 
         /*
          ** This starts out not being on any queue
@@ -75,8 +67,8 @@ public class ClientWriteObject implements Operation {
     /*
      */
     public BufferManagerPointer initialize() {
-
-        return null;
+        writePointer = clientWriteBufferManager.register(this, writeInfillPointer);
+        return writePointer;
     }
 
     public void event() {
@@ -90,7 +82,9 @@ public class ClientWriteObject implements Operation {
     /*
      */
     public void execute() {
-
+        if (clientWriteBufferManager.peek(writePointer) != null) {
+            clientConnection.writeBufferReady();
+        }
     }
 
     /*
@@ -173,5 +167,6 @@ public class ClientWriteObject implements Operation {
         LOG.info("      No BufferManagerPointers");
         LOG.info("");
     }
+
 
 }

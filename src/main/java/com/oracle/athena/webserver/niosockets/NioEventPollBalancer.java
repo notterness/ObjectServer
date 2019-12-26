@@ -3,6 +3,8 @@ package com.oracle.athena.webserver.niosockets;
 
 import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.channels.SocketChannel;
 
@@ -10,6 +12,8 @@ import java.nio.channels.SocketChannel;
 ** This is used to determine which of the event poll threads should be used for this client socket
  */
 public class NioEventPollBalancer {
+
+    private static final Logger LOG = LoggerFactory.getLogger(NioEventPollBalancer.class);
 
     private final int numberPollThreads;
     private final int eventPollThreadBaseId;
@@ -72,6 +76,8 @@ public class NioEventPollBalancer {
 
         EventPollThread eventThread = getNextEventThread();
         boolean success = eventThread.registerClientSocket(clientChannel);
+
+        LOG.error("NioEventPollBalancer[" + eventThread.getEventPollThreadBaseId() + "] handleAccept()");
 
         return success;
     }

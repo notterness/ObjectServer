@@ -297,7 +297,7 @@ public class NioSocket implements IoInterface {
                      ** Update the pointer if the entire buffer was written out
                      */
                     if (writeBuffer.remaining() == 0) {
-                        readBufferManager.updateProducerWritePointer(readPointer);
+                        writeBufferManager.updateProducerWritePointer(writePointer);
                     } else {
                         /*
                         ** Need to set the OP_WRITE flag and try again later when the Select loop fires
@@ -313,8 +313,8 @@ public class NioSocket implements IoInterface {
                     break;
                 }
             } catch (IOException io_ex) {
-                LOG.info(" (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
-                        readPointer.getCurrIndex() + " exception: " + io_ex.getMessage());
+                LOG.info(" (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+                        writePointer.getCurrIndex() + " exception: " + io_ex.getMessage());
                 break;
             }
 

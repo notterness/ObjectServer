@@ -43,9 +43,15 @@ public class BufferManager {
     public BufferManagerPointer register(final Operation operation, final BufferManagerPointer dependsOn) {
         int currIdentifer = identifier.getAndIncrement();
 
-        LOG.info("register(" + identifier + ":" + operation.getOperationType() + ") depends on (" +
-                + dependsOn.getIdentifier() + ":" + dependsOn.getOperationType() + ") identifier: " +
-                currIdentifer);
+        if (operation != null) {
+            LOG.info("register(" + identifier + ":" + operation.getOperationType() + ") depends on (" +
+                    + dependsOn.getIdentifier() + ":" + dependsOn.getOperationType() + ") identifier: " +
+                    currIdentifer);
+        } else {
+            LOG.info("register(" + identifier + ": null) depends on (" +
+                    + dependsOn.getIdentifier() + ":" + dependsOn.getOperationType() + ") identifier: " +
+                    currIdentifer);
+        }
 
         BufferManagerPointer pointer = new BufferManagerPointer(operation, dependsOn, bufferArraySize, currIdentifer);
 

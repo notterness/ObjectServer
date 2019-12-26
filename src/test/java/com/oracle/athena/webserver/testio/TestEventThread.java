@@ -80,6 +80,10 @@ public class TestEventThread implements EventPollThread {
 
     }
 
+    public int getEventPollThreadBaseId() {
+        return eventPollThreadBaseId;
+    }
+
     /*
      ** TODO: Wire in the wakeup of the waitingOperation if there are no NioSocket
      **   available and add a test for this

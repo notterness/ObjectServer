@@ -91,15 +91,21 @@ public class NioSelectHandler {
                 }
 
                 if (key.isConnectable()) {
+                    handleConnect(key);
+                } else {
+                    /*
+                    ** Only perform the following if the isConnectable() not true. Otherwise, if the
+                    **   isConnectable() is set and then there is an error processing the the
+                    **   handleConnect(), if it falls through and checks the isReadable() it will
+                    **   get a CancelledKeyException.
+                     */
+                    if (key.isReadable()) {
+                        handleRead(key);
+                    }
 
-                }
-
-                if (key.isReadable()) {
-                    handleRead(key);
-                }
-
-                if (key.isWritable()) {
-
+                    if (key.isWritable()) {
+                        handleWrite(key);
+                    }
                 }
             }
         } catch (IOException io_ex) {
