@@ -32,26 +32,11 @@ public class CloseOutRequest implements Operation {
     private boolean onExecutionQueue;
     private long nextExecuteTime;
 
-    /*
-     ** The MemoryManager is used to allocate a very small number of buffers used to send out the
-     **   final status
-     */
-    private final MemoryManager memoryManager;
-
-    private final BufferManager clientWriteBufferMgr;
     private BufferManagerPointer writeStatusPtr;
 
-    private BufferManagerPointer writeDonePtr;
-
-
-    public CloseOutRequest(final RequestContext requestContext, final MemoryManager memoryManager,
-                           final BufferManagerPointer writePointer) {
+    public CloseOutRequest(final RequestContext requestContext) {
 
         this.requestContext = requestContext;
-        this.memoryManager = memoryManager;
-        this.clientWriteBufferMgr = this.requestContext.getClientWriteBufferManager();
-
-        this.writeStatusPtr = writePointer;
 
         /*
         ** This starts out not being on any queue
@@ -70,13 +55,7 @@ public class CloseOutRequest implements Operation {
      **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
-        /*
-         ** Register this with the Buffer Manager to allow it to be evented when
-         **   buffers are added by the read producer
-         */
-        writeDonePtr = clientWriteBufferMgr.register(this, writeStatusPtr);
-
-        return writeDonePtr;
+        return null;
     }
 
     public void event() {
@@ -91,15 +70,6 @@ public class CloseOutRequest implements Operation {
      **
      */
     public void execute() {
-        ByteBuffer respBuffer;
-
-        while ((respBuffer = clientWriteBufferMgr.poll(writeDonePtr)) != null) {
-            /*
-             ** Release the Buffers back to the free pool
-             */
-            memoryManager.poolMemFree(respBuffer);
-        }
-
         /*
         ** Close out the connection and place the RequestContext back on the "free" list
          */
@@ -184,7 +154,6 @@ public class CloseOutRequest implements Operation {
      */
     public void dumpCreatedOperations(final int level) {
         LOG.info("  " + level + ":   requestId[" + requestContext.getRequestId() + "] type: " + operationType);
-        writeDonePtr.dumpPointerInfo();
     }
 
 }

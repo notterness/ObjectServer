@@ -209,6 +209,8 @@ public abstract class ClientTest {
     void httpResponse(final int status, final boolean headerCompleted, final boolean messageCompleted) {
         if (headerCompleted) {
             httpStatus = status;
+
+            targetResponse(0, null);
         }
     }
 }

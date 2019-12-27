@@ -13,9 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SetupClientConnection implements Operation {
@@ -239,15 +237,13 @@ public class SetupClientConnection implements Operation {
         clientResponseHandler.initialize();
 
         /*
-        ** Dole out a single ByteBuffer to read in the response.
-         */
-        readMetering.event();
-
-        /*
         ** When the ConnectComplete event is called, this means that the writing of the HTTP Request can
         **   take place.
          */
-        connectComplete = new ClientConnectComplete(requestContext, headerWrite, targetTcpPort, addBufferPointer);
+        List<Operation> operationsToRun = new LinkedList<>();
+        operationsToRun.add(headerWrite);
+        operationsToRun.add(readMetering);
+        connectComplete = new ClientConnectComplete(requestContext, operationsToRun, targetTcpPort, addBufferPointer);
         clientOperations.put(connectComplete.getOperationType(), connectComplete);
         connectComplete.initialize();
 

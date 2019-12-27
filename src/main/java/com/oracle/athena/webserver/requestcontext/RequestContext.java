@@ -313,9 +313,13 @@ public class RequestContext {
         requestHandlerOperations.put(sendFinalStatus.getOperationType(), sendFinalStatus);
         clientWritePtr = sendFinalStatus.initialize();
 
-        closeRequest = new CloseOutRequest(this, memoryManager, clientWritePtr);
+        closeRequest = new CloseOutRequest(this);
         requestHandlerOperations.put(closeRequest.getOperationType(), closeRequest);
-        clientWriteDonePtr = closeRequest.initialize();
+        closeRequest.initialize();
+
+        WriteToClient writeToClient = new WriteToClient(this, clientConnection, closeRequest, clientWritePtr);
+        requestHandlerOperations.put(writeToClient.getOperationType(), writeToClient);
+        clientWriteDonePtr = writeToClient.initialize();
 
         SetupV2Put v2PutHandler = new SetupV2Put(this, memoryManager, metering);
         this.supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, v2PutHandler);

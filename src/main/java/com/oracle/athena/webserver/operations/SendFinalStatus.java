@@ -93,9 +93,10 @@ public class SendFinalStatus implements Operation {
         writeStatusBufferPtr = this.clientWriteBufferMgr.register(this);
 
         /*
-        ** Register with the IoInterface to perform writes
+        ** Add a bookmark to insure that the pointer dependent upon this starts at
+        **   position 0.
          */
-        clientConnection.registerWriteBufferManager(clientWriteBufferMgr, writeStatusBufferPtr);
+        clientWriteBufferMgr.bookmark(writeStatusBufferPtr);
 
         return writeStatusBufferPtr;
     }

@@ -79,6 +79,10 @@ public class DetermineRequestType implements Operation {
             /*
             ** Event the send client response operation here so that the final status is sent
              */
+            LOG.warn("DetermineRequestType[" + requestContext.getRequestId() + "] sending final status");
+
+            Operation sendFinalStatus = requestContext.getOperation(OperationTypeEnum.SEND_FINAL_STATUS);
+            sendFinalStatus.event();
         } else {
 
             /*
