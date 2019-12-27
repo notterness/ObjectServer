@@ -1,6 +1,6 @@
 package com.oracle.athena.webserver.http.parser;
 
-import com.oracle.athena.webserver.connectionstate.CasperHttpInfo;
+import com.oracle.athena.webserver.http.CasperHttpInfo;
 import org.eclipse.jetty.http.HttpParser;
 
 import java.nio.ByteBuffer;

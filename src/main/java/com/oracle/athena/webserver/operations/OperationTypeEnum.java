@@ -13,7 +13,7 @@ public enum OperationTypeEnum {
 
     INVALID_STATE(0),
     INITIAL_SETUP(1),
-    METER_BUFFERS(2),
+    METER_READ_BUFFERS(2),
     READ_BUFFER(3),
     PARSE_HTTP_BUFFER(10),
     DETERMINE_REQUEST_TYPE(11),
@@ -38,6 +38,7 @@ public enum OperationTypeEnum {
     CLIENT_WRITE_HTTP_HEADER(402),
     CLIENT_WRITE_OBJECT(403),
     CLIENT_WRITE(404),
+    CLIENT_RESPONSE_HANDLER(405),
     HANDLE_INITIATOR_ERROR(410);
 
     private int value;

@@ -1,4 +1,4 @@
-package com.oracle.athena.webserver.connectionstate;
+package com.oracle.athena.webserver.http;
 
 import com.google.common.hash.Hashing;
 import com.google.common.io.BaseEncoding;

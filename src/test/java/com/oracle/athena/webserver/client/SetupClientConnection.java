@@ -5,15 +5,17 @@ import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.manual.ClientTest;
 import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.niosockets.IoInterface;
-import com.oracle.athena.webserver.operations.ConnectComplete;
-import com.oracle.athena.webserver.operations.Operation;
-import com.oracle.athena.webserver.operations.OperationTypeEnum;
+import com.oracle.athena.webserver.operations.*;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SetupClientConnection implements Operation {
@@ -25,6 +27,11 @@ public class SetupClientConnection implements Operation {
     public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_CLIENT_CONNECTION;
 
     private final int WRITE_BUFFERS_TO_ALLOCATE = 10;
+
+    /*
+    **
+     */
+    private final WebServerFlavor webServerFlavor;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -43,6 +50,11 @@ public class SetupClientConnection implements Operation {
     private final IoInterface clientConnection;
 
     /*
+    **
+     */
+    private final MemoryManager memoryManager;
+
+    /*
     ** The targetTcpPort is where the connection is made to talk to the WebServer
      */
     private final int targetTcpPort;
@@ -57,26 +69,37 @@ public class SetupClientConnection implements Operation {
     private long nextExecuteTime;
 
     /*
+     ** The following is a map of all of the created Operations to handle this client request.
+     */
+    private Map<OperationTypeEnum, Operation> clientOperations;
+
+
+    /*
     ** Need a ConnectComplete and HandleInitiatorError operations for setting up the client initiator
     **   connection
      */
     private HandleInitiatorError initiatorError;
     private ClientConnectComplete connectComplete;
 
+    /*
+    ** The following deal with sending data to the WebServer. This consists of allocating
+    **   empty ByteBuffer(s), filling them in with the HTTP Request and the PUT Object
+    **   data and then writing the data out the SocketChannel.
+     */
     private BufferManager clientWriteBufferManager;
     private BufferManagerPointer addBufferPointer;
     private BufferManagerPointer writeInfillPointer;
-    private BufferManagerPointer writePointer;
-
-    private ClientHttpHeaderWrite headerWrite;
 
     private final AtomicBoolean alreadyExecuted;
 
-    public SetupClientConnection(final RequestContext requestContext, final ClientTest clientTest,
+    public SetupClientConnection(final WebServerFlavor flavor, final RequestContext requestContext,
+                                 final MemoryManager memoryManager, final ClientTest clientTest,
                                  final IoInterface connection, final int targetTcpPort) {
 
+        this.webServerFlavor = flavor;
         this.requestContext = requestContext;
         this.clientTest = clientTest;
+        this.memoryManager = memoryManager;
         this.clientConnection = connection;
         this.targetTcpPort = targetTcpPort;
 
@@ -87,6 +110,8 @@ public class SetupClientConnection implements Operation {
         onExecutionQueue = false;
         nextExecuteTime = 0;
 
+        this.clientOperations = new HashMap<>();
+
         this.alreadyExecuted = new AtomicBoolean(false);
     }
 
@@ -96,11 +121,46 @@ public class SetupClientConnection implements Operation {
 
     /*
     ** This will setup the TCP connection that the test will communicate with the WebServer over.
+    **
+    ** This test uses only the ClientWriteBufferManager and ClientReadBufferManager to move
+    **   ByteBuffer(s) around.
+    **
+    ** The dependencies for this are:
+    **   ClientConnectComplete - This is executed when the connect() call completes in the NioSocket code. It
+    **     is used to tell the rest of the state machine that there is a valid SocketChannel to read and write
+    **     data from. When it executes, it sends an event to the ClientHttpRequestWrite() to start it
+    **     running. It also, increments the addBufferPointer to "indicate" that a ByteBuffer is available to
+    **     have data written into it. As a later optimization, this operation could be left out entirely and
+    **     just have the ClientHttpRequestWrite be event(ed) directly when the connect() completes.
+    **
+    **   ClientHttpRequestWrite - This is what builds the HTTP Request via a call into the ClientTest
+    **     child class that is actually running the test. The ClientHttpRequestWrite uses depends on
+    **     the following BufferManagerPointers:
+    **       -> addBufferPointer - This is used to add ByteBuffer(s) to the ClientWriteBufferManager. It
+    **            is a producer.
+    **       -> writeInfillPointer - This is used to access the ByteBuffer that is filled with data to be sent to
+    **            the WebServer. It is used by the ClientHttpRequestWrite and ClientObjectWrite classes to
+    **            obtain the buffer from the ClientWriteBufferManager. It is dependent upon the
+    **            addBufferPointer.
+    **
+    **   ClientWriteObject - This executes after the ClientHttpRequestWrite has filled in the ByteBuffer (this is
+    **     tracked via the requestContext.setHttpResponseSet(targetTcpPort) boolean) and there are buffers
+    **     available (as added through the addBufferPointer). It uses the writeInfillPointer to obtain ByteBuffer(s)
+    **     to put data in.
+    **
+    **   ClientWrite - This is what actually kicks the NioSocket code to indicate that there is data available to
+    **     be written out the SocketChannel. It uses the following BufferManagerPointer:
+    **       -> writePointer - This is the pointer to where the data is that is ready to be written out the
+    **            SocketChannel. It is dependent upon the writeInfillPointer (that is the producer of the data
+    **            to be written out and the writePointer is the consumer).
+    **
+    **   ClientReadResponse - This is what reads the HTTP Response from the WebServer in an processes it.
+    **
      */
     public BufferManagerPointer initialize() {
 
         /*
-         ** Allocate buffers and add them to the clientWriteBufferManager
+         ** Allocate empty ByteBuffer(s) and add them to the clientWriteBufferManager
          */
         clientWriteBufferManager = requestContext.getClientWriteBufferManager();
 
@@ -110,12 +170,16 @@ public class SetupClientConnection implements Operation {
         ByteBuffer buffer;
 
         for (int i = 0; i < WRITE_BUFFERS_TO_ALLOCATE; i++) {
-            buffer = ByteBuffer.allocate(MemoryManager.MEDIUM_BUFFER_SIZE);
+            buffer = memoryManager.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE, null);
 
             clientWriteBufferManager.offer(addBufferPointer, buffer);
         }
         clientWriteBufferManager.reset(addBufferPointer);
 
+        /*
+        ** The writeInfillPointer is used to access empty ByteBuffer(s) that will be filled in
+        **   with data to transfer to the WebServer
+         */
         writeInfillPointer = clientWriteBufferManager.register(this, addBufferPointer);
 
         /*
@@ -124,14 +188,16 @@ public class SetupClientConnection implements Operation {
          */
         ClientObjectWrite objectWrite = new ClientObjectWrite(requestContext, clientConnection, clientTest,
                 writeInfillPointer, targetTcpPort);
+        clientOperations.put(objectWrite.getOperationType(), objectWrite);
         objectWrite.initialize();
 
          /*
          ** Create the ClientHttpHeaderWrite operation and connect in this object to provide the HTTP header
          **   generator
          */
-        headerWrite = new ClientHttpHeaderWrite(requestContext, clientConnection, clientTest,
+        ClientHttpRequestWrite headerWrite = new ClientHttpRequestWrite(requestContext, clientConnection, clientTest,
                 writeInfillPointer, objectWrite, targetTcpPort);
+        clientOperations.put(headerWrite.getOperationType(), headerWrite);
         headerWrite.initialize();
 
         /*
@@ -139,7 +205,8 @@ public class SetupClientConnection implements Operation {
          **   the SocketChannel
          */
         ClientWrite clientWrite = new ClientWrite(requestContext, clientConnection, writeInfillPointer);
-        writePointer = clientWrite.initialize();
+        clientOperations.put(clientWrite.getOperationType(), clientWrite);
+        BufferManagerPointer writePointer = clientWrite.initialize();
 
         /*
          ** Register the writePointer and the clientWriteBufferManager with the
@@ -149,13 +216,43 @@ public class SetupClientConnection implements Operation {
         clientConnection.registerWriteBufferManager(clientWriteBufferManager, writePointer);
 
         /*
+        ** Now setup the operations required to read in the HTTP Response. Two of the operations,
+        **   BufferReadMetering and ReadBuffer are already setup as part of the RequestContext since
+        **   they are common operations.
+        ** The readPointer from the RequestContext is required to allow the operation that will
+        **   process the data to be able to access the data.
+        **
+        ** The allocation of empty ByteBuffer(s) is handled by the BufferReadMetering operation that is
+        **   created and managed by the RequestContext.
+        ** Setup the Metering and Read pointers since they are required for the HTTP Response Parser.
+         */
+        BufferReadMetering readMetering = new BufferReadMetering(webServerFlavor, requestContext, memoryManager);
+        clientOperations.put(readMetering.getOperationType(), readMetering);
+        BufferManagerPointer meteringPointer = readMetering.initialize();
+
+        ReadBuffer readBuffer = new ReadBuffer(requestContext, meteringPointer, clientConnection);
+        clientOperations.put(readBuffer.getOperationType(), readBuffer);
+        BufferManagerPointer readPointer = readBuffer.initialize();
+
+        ClientResponseHandler clientResponseHandler = new ClientResponseHandler(requestContext, clientTest, readPointer);
+        clientOperations.put(clientResponseHandler.getOperationType(), clientResponseHandler);
+        clientResponseHandler.initialize();
+
+        /*
+        ** Dole out a single ByteBuffer to read in the response.
+         */
+        readMetering.event();
+
+        /*
         ** When the ConnectComplete event is called, this means that the writing of the HTTP Request can
         **   take place.
          */
         connectComplete = new ClientConnectComplete(requestContext, headerWrite, targetTcpPort, addBufferPointer);
+        clientOperations.put(connectComplete.getOperationType(), connectComplete);
         connectComplete.initialize();
 
         initiatorError = new HandleInitiatorError(requestContext, clientConnection);
+        clientOperations.put(initiatorError.getOperationType(), initiatorError);
         initiatorError.initialize();
 
         return writeInfillPointer;
@@ -198,6 +295,16 @@ public class SetupClientConnection implements Operation {
         /*
         ** Walk the BufferManager freeing up all the allocated buffers
          */
+
+        /*
+        ** Close out all of the operations
+         */
+        Collection<Operation> createdOperations = clientOperations.values();
+        for (Operation createdOperation : createdOperations) {
+            createdOperation.complete();
+        }
+
+        clientOperations.clear();
 
         /*
         ** Unregister all of the BufferManagerPointer(s)

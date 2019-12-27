@@ -1,7 +1,7 @@
 package com.oracle.athena.webserver;
 
 import com.oracle.athena.webserver.common.GlobalSystemPropertiesConfigurator;
-import com.oracle.athena.webserver.server.WebServer;
+//import com.oracle.athena.webserver.server.WebServer;
 import com.oracle.pic.casper.common.config.ConfigAvailabilityDomain;
 import com.oracle.pic.casper.common.config.ConfigRegion;
 import com.oracle.pic.casper.common.config.v2.CasperConfig;
@@ -23,8 +23,8 @@ public class Main {
         ConfigRegion region = ConfigRegion.tryFromSystemProperty().orElse(ConfigRegion.LOCAL);
         final ConfigAvailabilityDomain ad =
                 ConfigAvailabilityDomain.tryFromSystemProperty().orElse(ConfigAvailabilityDomain.GLOBAL);
-        WebServer server = new WebServer(WebServerFlavor.INTEGRATION_TESTS, CasperConfig.create(region, ad));
-        server.start();
+        //WebServer server = new WebServer(WebServerFlavor.INTEGRATION_TESTS, CasperConfig.create(region, ad));
+        //server.start();
         LOG.info("Athena WebServer initialized.");
     }
 }

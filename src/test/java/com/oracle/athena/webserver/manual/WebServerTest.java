@@ -1,7 +1,7 @@
 package com.oracle.athena.webserver.manual;
 
-import com.oracle.athena.webserver.connectionstate.CasperHttpInfo;
-import com.oracle.athena.webserver.connectionstate.Md5Digest;
+import com.oracle.athena.webserver.http.CasperHttpInfo;
+import com.oracle.athena.webserver.common.Md5Digest;
 import com.oracle.athena.webserver.http.parser.ByteBufferHttpParser;
 import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.niosockets.IoInterface;

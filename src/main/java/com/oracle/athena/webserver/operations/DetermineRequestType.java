@@ -1,8 +1,8 @@
 package com.oracle.athena.webserver.operations;
 
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
-import com.oracle.athena.webserver.connectionstate.CasperHttpInfo;
-import com.oracle.athena.webserver.connectionstate.HttpMethodEnum;
+import com.oracle.athena.webserver.http.CasperHttpInfo;
+import com.oracle.athena.webserver.http.HttpMethodEnum;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

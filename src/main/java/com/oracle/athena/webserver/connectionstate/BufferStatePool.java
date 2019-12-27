@@ -1,12 +1,12 @@
 package com.oracle.athena.webserver.connectionstate;
 
+import com.oracle.athena.webserver.memory.MemoryAvailableCallback;
 import com.oracle.athena.webserver.memory.MemoryManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.Iterator;
-import java.util.ListIterator;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 

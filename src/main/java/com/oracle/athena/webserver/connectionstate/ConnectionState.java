@@ -1,8 +1,8 @@
 package com.oracle.athena.webserver.connectionstate;
 
+import com.oracle.athena.webserver.common.Md5Digest;
 import com.oracle.athena.webserver.http.BuildHttpResult;
 import com.oracle.athena.webserver.memory.MemoryManager;
-import com.oracle.athena.webserver.server.*;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -25,7 +25,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.bouncycastle.cms.jcajce.JcaSelectorConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

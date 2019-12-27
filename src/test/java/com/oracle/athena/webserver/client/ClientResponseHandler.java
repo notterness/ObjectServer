@@ -2,20 +2,25 @@ package com.oracle.athena.webserver.client;
 
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
-import com.oracle.athena.webserver.operations.ConnectComplete;
+import com.oracle.athena.webserver.http.HttpResponseListener;
+import com.oracle.athena.webserver.manual.ClientTest;
+import com.oracle.athena.webserver.manual.HttpResponseCompleted;
 import com.oracle.athena.webserver.operations.Operation;
 import com.oracle.athena.webserver.operations.OperationTypeEnum;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import org.eclipse.jetty.http.HttpParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ClientConnectComplete implements Operation {
-    private static final Logger LOG = LoggerFactory.getLogger(ClientConnectComplete.class);
+import java.nio.ByteBuffer;
+
+public class ClientResponseHandler implements Operation {
+    private static final Logger LOG = LoggerFactory.getLogger(ClientResponseHandler.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_CONNECT_COMPLETE;
+    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_RESPONSE_HANDLER;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -23,9 +28,9 @@ public class ClientConnectComplete implements Operation {
     private final RequestContext requestContext;
 
     /*
-     ** The following is the operation to run (if any) when the ConnectComplete is executed.
+     ** The
      */
-    private Operation operationToRun;
+    private final ClientTest clientTest;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -36,24 +41,20 @@ public class ClientConnectComplete implements Operation {
     private boolean onExecutionQueue;
     private long nextExecuteTime;
 
-    /*
-     ** The targetTcpPort is used to inform the requestContext (as the centralized keeper of
-     **   information) that the connect() to the target has succeed.
-     */
-    private final int targetTcpPort;
+    private final BufferManager clientReadBufferManager;
+    private final BufferManagerPointer readBufferPointer;
+    private BufferManagerPointer httpResponseBufferPointer;
 
-    private final BufferManager clientWriteBufferManager;
-    private final BufferManagerPointer addBufferPointer;
+    private HttpParser httpParser;
 
-    public ClientConnectComplete(final RequestContext requestContext, final Operation operationToRun,
-                           final int targetTcpPort, final BufferManagerPointer addBufferPtr) {
+    public ClientResponseHandler(final RequestContext requestContext, final ClientTest clientTest,
+                                 final BufferManagerPointer readBufferPtr) {
 
         this.requestContext = requestContext;
-        this.operationToRun = operationToRun;
-        this.targetTcpPort = targetTcpPort;
-        this.addBufferPointer = addBufferPtr;
+        this.clientTest = clientTest;
+        this.readBufferPointer = readBufferPtr;
 
-        this.clientWriteBufferManager = requestContext.getClientWriteBufferManager();
+        this.clientReadBufferManager = requestContext.getClientReadBufferManager();
 
 
         /*
@@ -71,8 +72,22 @@ public class ClientConnectComplete implements Operation {
     /*
      */
     public BufferManagerPointer initialize() {
+        /*
+         ** Register this with the Buffer Manager to allow it to be event(ed) when
+         **   buffers are added by the read producer
+         */
+        httpResponseBufferPointer = clientReadBufferManager.register(this, readBufferPointer);
 
-        return null;
+        HttpResponseCompleted httpResponseCompleted = new HttpResponseCompleted(clientTest);
+        HttpResponseListener listener = new HttpResponseListener(httpResponseCompleted);
+        httpParser = new HttpParser(listener);
+
+        if (httpParser.isState(HttpParser.State.END))
+            httpParser.reset();
+        if (!httpParser.isState(HttpParser.State.START))
+            throw new IllegalStateException("!START");
+
+        return httpResponseBufferPointer;
     }
 
     public void event() {
@@ -86,14 +101,18 @@ public class ClientConnectComplete implements Operation {
     /*
      */
     public void execute() {
-        /*
-         ** Dole out a buffer for use in the HTTP Header write
-         */
-        clientWriteBufferManager.updateProducerWritePointer(addBufferPointer);
+        ByteBuffer httpBuffer;
 
-        if (operationToRun != null) {
-            operationToRun.event();
+        while ((httpBuffer = clientReadBufferManager.peek(httpResponseBufferPointer)) != null) {
+            /*
+             ** Now run the Buffer State through the Http Parser
+             */
+            httpBuffer.flip();
+
+            httpParser.parseNext(httpBuffer);
+            clientReadBufferManager.updateConsumerReadPointer(httpResponseBufferPointer);
         }
+
     }
 
     /*

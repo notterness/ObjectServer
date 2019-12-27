@@ -12,8 +12,8 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
-public class ClientHttpHeaderWrite implements Operation {
-    private static final Logger LOG = LoggerFactory.getLogger(ClientHttpHeaderWrite.class);
+public class ClientHttpRequestWrite implements Operation {
+    private static final Logger LOG = LoggerFactory.getLogger(ClientHttpRequestWrite.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
@@ -56,7 +56,7 @@ public class ClientHttpHeaderWrite implements Operation {
     private final ClientObjectWrite clientObjectWrite;
     private final int targetTcpPort;
 
-    public ClientHttpHeaderWrite(final RequestContext requestContext, final IoInterface connection,
+    public ClientHttpRequestWrite(final RequestContext requestContext, final IoInterface connection,
                                  final ClientTest clientTest, final BufferManagerPointer writeInfillPtr,
                                  final ClientObjectWrite writeObject, final int targetTcpPort) {
 
@@ -127,7 +127,7 @@ public class ClientHttpHeaderWrite implements Operation {
              */
             clientWriteBufferMgr.updateProducerWritePointer(writeInfillPointer);
 
-            requestContext.setHttpResponseSet(targetTcpPort);
+            requestContext.setHttpResponseSent(targetTcpPort);
             clientObjectWrite.event();
         }
 

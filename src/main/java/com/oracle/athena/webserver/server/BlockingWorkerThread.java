@@ -1,6 +1,6 @@
 package com.oracle.athena.webserver.server;
 
-import com.oracle.athena.webserver.connectionstate.ConnectionState;
+import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,10 +20,10 @@ class BlockingWorkerThread implements Runnable {
     private volatile boolean running;
     private Thread blockingThread;
 
-    private final BlockingQueue<ConnectionState> blockingWorkQ;
+    private final BlockingQueue<RequestContext> blockingWorkQ;
 
 
-    BlockingWorkerThread(final BlockingQueue<ConnectionState> workQueue, final int blockingThreadId) {
+    BlockingWorkerThread(final BlockingQueue<RequestContext> workQueue, final int blockingThreadId) {
 
         this.blockingWorkQ = workQueue;
         this.blockingThreadId = blockingThreadId;
@@ -55,7 +55,7 @@ class BlockingWorkerThread implements Runnable {
         LOG.info("BlockingWorkerThread[" + blockingThreadId + "] start " + Thread.currentThread().getName());
 
         while (running) {
-            ConnectionState work;
+            RequestContext work;
 
             try {
                 work = blockingWorkQ.poll(100, TimeUnit.MILLISECONDS);
@@ -66,7 +66,6 @@ class BlockingWorkerThread implements Runnable {
             }
 
             if (work != null) {
-                work.stateMachine();
             }
         }
 

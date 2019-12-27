@@ -1,7 +1,7 @@
 package com.oracle.athena.webserver.manual;
 
 import com.oracle.athena.webserver.client.NioTestClient;
-import com.oracle.athena.webserver.connectionstate.Md5Digest;
+import com.oracle.athena.webserver.common.Md5Digest;
 import com.oracle.athena.webserver.memory.MemoryManager;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;

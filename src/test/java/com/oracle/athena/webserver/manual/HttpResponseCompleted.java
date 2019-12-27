@@ -6,7 +6,7 @@ public class HttpResponseCompleted extends HttpResponseCallback {
 
     private ClientTest clientTest;
 
-    HttpResponseCompleted(final ClientTest test) {
+    public HttpResponseCompleted(final ClientTest test) {
         clientTest = test;
     }
 
