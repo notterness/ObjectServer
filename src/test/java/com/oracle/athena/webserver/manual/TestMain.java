@@ -11,7 +11,7 @@ public class TestMain {
     public static void main(String[] args) {
         final int serverTcpPort = 5001;
 
-        AtomicInteger threadCount = new AtomicInteger(1);
+        AtomicInteger threadCount = new AtomicInteger(0);
 
         //TestEncryptBuffer testEncryptBuffer = new TestEncryptBuffer();
         //testEncryptBuffer.execute();

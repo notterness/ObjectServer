@@ -218,7 +218,7 @@ public class NioSocket implements IoInterface {
             /*
             ** Use the key again
              */
-            int currentOps = key.interestOps() | SelectionKey.OP_WRITE;
+            int currentOps = key.interestOps() | SelectionKey.OP_READ;
             key.interestOps(currentOps);
         }
     }

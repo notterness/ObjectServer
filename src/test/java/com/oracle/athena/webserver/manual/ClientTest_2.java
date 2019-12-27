@@ -1,6 +1,7 @@
 package com.oracle.athena.webserver.manual;
 
 import com.oracle.athena.webserver.client.NioTestClient;
+import org.eclipse.jetty.http.HttpStatus;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -30,12 +31,13 @@ public class ClientTest_2 extends ClientTest {
     }
 
     /*
-     ** In this test, the full HTTP message is written and then a response is expected from the server.
-     ** The response must have a result code of 200, indicating success.
+     ** In this test, the full HTTP Request is written and then a response is expected from the server.
+     ** The response must have a result code of 400 since several required fields are missing in the
+     **   request.
      */
     @Override
     void targetResponse(final int result, final ByteBuffer readBuffer) {
-        if (result == 0) {
+        if ((result == 0) && (super.httpStatus ==  HttpStatus.BAD_REQUEST_400)) {
             System.out.println(super.clientTestName + " passed");
         } else {
             System.out.println(super.clientTestName + " failed");

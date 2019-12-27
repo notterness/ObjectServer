@@ -1,33 +1,32 @@
-package com.oracle.athena.webserver.client;
+package com.oracle.athena.webserver.operations;
 
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
-import com.oracle.athena.webserver.operations.Operation;
-import com.oracle.athena.webserver.operations.OperationTypeEnum;
+import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Iterator;
-import java.util.List;
+public class WriteToClient implements Operation {
 
-public class ClientConnectComplete implements Operation {
-    private static final Logger LOG = LoggerFactory.getLogger(ClientConnectComplete.class);
+    private static final Logger LOG = LoggerFactory.getLogger(WriteToClient.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_CONNECT_COMPLETE;
+    public final OperationTypeEnum operationType = OperationTypeEnum.WRITE_TO_CLIENT;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
     private final RequestContext requestContext;
 
+    private IoInterface clientConnection;
+
     /*
      ** The following is the operation to run (if any) when the ConnectComplete is executed.
      */
-    private List<Operation> operationsToRun;
+    private Operation operationToRun;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -38,22 +37,17 @@ public class ClientConnectComplete implements Operation {
     private boolean onExecutionQueue;
     private long nextExecuteTime;
 
-    /*
-     ** The targetTcpPort is used to inform the requestContext (as the centralized keeper of
-     **   information) that the connect() to the target has succeed.
-     */
-    private final int targetTcpPort;
-
     private final BufferManager clientWriteBufferManager;
-    private final BufferManagerPointer addBufferPointer;
+    private final BufferManagerPointer bufferInfillPointer;
+    private BufferManagerPointer writePointer;
 
-    public ClientConnectComplete(final RequestContext requestContext, final List<Operation> operationsToRun,
-                           final int targetTcpPort, final BufferManagerPointer addBufferPtr) {
+    public WriteToClient(final RequestContext requestContext, final IoInterface connection,
+                         final Operation operationToRun, final BufferManagerPointer bufferInfillPtr) {
 
         this.requestContext = requestContext;
-        this.operationsToRun = operationsToRun;
-        this.targetTcpPort = targetTcpPort;
-        this.addBufferPointer = addBufferPtr;
+        this.clientConnection = connection;
+        this.operationToRun = operationToRun;
+        this.bufferInfillPointer = bufferInfillPtr;
 
         this.clientWriteBufferManager = requestContext.getClientWriteBufferManager();
 
@@ -73,8 +67,15 @@ public class ClientConnectComplete implements Operation {
     /*
      */
     public BufferManagerPointer initialize() {
+        writePointer = clientWriteBufferManager.register(this, bufferInfillPointer);
 
-        return null;
+        /*
+         ** Register with the IoInterface to perform writes
+         */
+        clientConnection.registerWriteBufferManager(clientWriteBufferManager, writePointer);
+
+
+        return writePointer;
     }
 
     public void event() {
@@ -88,20 +89,10 @@ public class ClientConnectComplete implements Operation {
     /*
      */
     public void execute() {
-        /*
-         ** Dole out a buffer for use in the HTTP Header write
-         */
-        clientWriteBufferManager.updateProducerWritePointer(addBufferPointer);
-
-        /*
-        ** event() all of the operations that are ready to run once the connect() has
-        **   succeeded.
-         */
-        Iterator<Operation> iter = operationsToRun.iterator();
-        while (iter.hasNext()) {
-            iter.next().event();
+        if (clientWriteBufferManager.peek(writePointer) != null) {
+            clientConnection.writeBufferReady();
         }
-        operationsToRun.clear();
+
     }
 
     /*
@@ -184,5 +175,6 @@ public class ClientConnectComplete implements Operation {
         LOG.info("      No BufferManagerPointers");
         LOG.info("");
     }
+
 
 }
