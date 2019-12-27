@@ -2,8 +2,10 @@ package com.oracle.athena.webserver.operations;
 
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
+import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
+import jnr.x86asm.Mem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,9 +20,11 @@ public class BufferReadMetering implements Operation {
     /*
     ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.METER_BUFFERS;
+    public final OperationTypeEnum operationType = OperationTypeEnum.METER_READ_BUFFERS;
 
     private final RequestContext requestContext;
+
+    private final MemoryManager memoryManager;
 
     /*
     ** This is used to determine how many buffers to allocate in the ClientReadBufferManager up
@@ -45,10 +49,13 @@ public class BufferReadMetering implements Operation {
      */
     private int lastAddIndex;
 
-    public BufferReadMetering(final WebServerFlavor flavor, final RequestContext requestContext) {
+    public BufferReadMetering(final WebServerFlavor flavor, final RequestContext requestContext,
+                              final MemoryManager memoryManager) {
 
         this.webServerFlavor = flavor;
         this.requestContext = requestContext;
+        this.memoryManager = memoryManager;
+
         this.clientReadBufferMgr = requestContext.getClientReadBufferManager();
 
         /*
@@ -80,7 +87,7 @@ public class BufferReadMetering implements Operation {
             ByteBuffer buffer;
 
             for (int i = 0; i < INITIAL_INTEGRATION_BUFFER_ALLOC; i++) {
-                buffer = ByteBuffer.allocate(1024);
+                buffer = memoryManager.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE, null);
 
                 clientReadBufferMgr.offer(bufferMeteringPointer, buffer);
             }

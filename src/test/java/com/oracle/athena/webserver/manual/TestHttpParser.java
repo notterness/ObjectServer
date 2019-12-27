@@ -43,7 +43,7 @@ public class TestHttpParser extends WebServerTest {
         ** To mimic the metering of buffers, need the BufferReadMetering operation to be able to
         **   call its execute() method.
          */
-        Operation metering = requestContext.getOperation(OperationTypeEnum.METER_BUFFERS);
+        Operation metering = requestContext.getOperation(OperationTypeEnum.METER_READ_BUFFERS);
 
         /*
         ** Kick the metering task to allow a buffer to be added (made available to write data to) in the

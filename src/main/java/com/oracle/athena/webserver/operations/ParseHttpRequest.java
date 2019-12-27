@@ -2,7 +2,7 @@ package com.oracle.athena.webserver.operations;
 
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
-import com.oracle.athena.webserver.connectionstate.CasperHttpInfo;
+import com.oracle.athena.webserver.http.CasperHttpInfo;
 import com.oracle.athena.webserver.http.parser.ByteBufferHttpParser;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
@@ -43,6 +43,7 @@ public class ParseHttpRequest implements Operation {
     private final RequestContext requestContext;
 
     private final BufferManager clientReadBufferMgr;
+    private final BufferManagerPointer readBufferPointer;
     private BufferManagerPointer httpBufferPointer;
 
     private final BufferReadMetering meteringOperation;
@@ -61,22 +62,17 @@ public class ParseHttpRequest implements Operation {
                             final BufferReadMetering metering, final DetermineRequestType determineRequestType) {
 
         this.requestContext = requestContext;
-        this.clientReadBufferMgr = this.requestContext.getClientReadBufferManager();
-
+        this.readBufferPointer = readBufferPtr;
         this.meteringOperation = metering;
         this.determineRequestType = determineRequestType;
+
+        this.clientReadBufferMgr = this.requestContext.getClientReadBufferManager();
 
         /*
          ** The CasperHttpInfo keeps track of the details of a particular
          **   HTTP transfer and the parsed information.
          */
         this.casperHttpInfo = requestContext.getHttpInfo();
-
-        /*
-         ** Register this with the Buffer Manager to allow it to be evented when
-         **   buffers are added by the read producer
-         */
-        this.httpBufferPointer = this.clientReadBufferMgr.register(this, readBufferPtr);
 
         /*
          ** This starts out not being on any queue
@@ -91,6 +87,12 @@ public class ParseHttpRequest implements Operation {
     }
 
     public BufferManagerPointer initialize() {
+
+        /*
+         ** Register this with the Buffer Manager to allow it to be event(ed) when
+         **   buffers are added by the read producer
+         */
+        httpBufferPointer = clientReadBufferMgr.register(this, readBufferPointer);
 
         initialHttpBuffer = true;
         httpParser = new ByteBufferHttpParser(casperHttpInfo);

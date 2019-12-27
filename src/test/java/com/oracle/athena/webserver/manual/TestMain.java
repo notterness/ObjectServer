@@ -1,7 +1,6 @@
 package com.oracle.athena.webserver.manual;
 
 import com.oracle.athena.webserver.client.NioTestClient;
-import com.oracle.athena.webserver.client.SetupClientConnection;
 import com.oracle.athena.webserver.niosockets.NioServerHandler;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 

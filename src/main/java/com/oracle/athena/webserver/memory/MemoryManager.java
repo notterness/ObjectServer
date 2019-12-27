@@ -1,7 +1,5 @@
 package com.oracle.athena.webserver.memory;
 
-import com.oracle.athena.webserver.connectionstate.MemoryAvailableCallback;
-
 import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;

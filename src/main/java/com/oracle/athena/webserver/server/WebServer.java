@@ -75,11 +75,11 @@ public class WebServer {
 
 
     public WebServer(final WebServerFlavor flavor, final CasperConfig config) {
-        this(flavor, ServerChannelLayer.DEFAULT_CLIENT_ID, config);
+        this(flavor, 10, config);
     }
 
     public WebServer(final WebServerFlavor flavor, final int serverClientId, final CasperConfig config) {
-        this(flavor, ServerChannelLayer.BASE_TCP_PORT, serverClientId, config);
+        this(flavor, 500, serverClientId, config);
     }
 
     public WebServer(

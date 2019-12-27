@@ -7,6 +7,7 @@ import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.niosockets.EventPollThread;
 import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.eclipse.jetty.http.HttpParser;
 
 import java.nio.ByteBuffer;
@@ -17,6 +18,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public abstract class ClientTest {
+
+    private static final WebServerFlavor webServerFlavor = WebServerFlavor.INTEGRATION_TESTS;
 
     private int serverTcpPort;
 
@@ -97,7 +100,9 @@ public abstract class ClientTest {
         ** Create the ClientHttpHeaderWrite operation and connect in this object to provide the HTTP header
         **   generator
          */
-        SetupClientConnection setupClientConnection = new SetupClientConnection(clientContext, this, connection, serverTcpPort);
+        MemoryManager memoryManager = new MemoryManager(webServerFlavor);
+        SetupClientConnection setupClientConnection = new SetupClientConnection(webServerFlavor, clientContext, memoryManager,
+                this, connection, serverTcpPort);
         setupClientConnection.initialize();
 
         /*

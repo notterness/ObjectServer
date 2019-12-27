@@ -1,5 +1,6 @@
 package com.oracle.athena.webserver.connectionstate;
 
+import com.oracle.athena.webserver.http.HttpMethodEnum;
 import com.oracle.athena.webserver.http.parser.ByteBufferHttpParser;
 import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.server.BlockingPipelineThreadPool;
@@ -14,7 +15,6 @@ import org.slf4j.LoggerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.ListIterator;

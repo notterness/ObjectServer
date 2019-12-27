@@ -1,5 +1,6 @@
 package com.oracle.athena.webserver.connectionstate;
 
+import com.oracle.athena.webserver.http.CasperHttpInfo;
 import com.oracle.athena.webserver.statemachine.StateEntry;
 import com.oracle.athena.webserver.statemachine.StateMachine;
 import com.oracle.athena.webserver.statemachine.StateQueueResult;

@@ -2,8 +2,8 @@ package com.oracle.athena.webserver.requestcontext;
 
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
-import com.oracle.athena.webserver.connectionstate.CasperHttpInfo;
-import com.oracle.athena.webserver.connectionstate.HttpMethodEnum;
+import com.oracle.athena.webserver.http.CasperHttpInfo;
+import com.oracle.athena.webserver.http.HttpMethodEnum;
 import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.niosockets.EventPollThread;
 import com.oracle.athena.webserver.niosockets.IoInterface;
@@ -152,7 +152,7 @@ public class RequestContext {
     ** The read pointer is used by the code used to read data into buffers to indicate
     **   where valid data is.
      */
-    private BufferManagerPointer readPtr;
+    private BufferManagerPointer readPointer;
 
     /*
     ** The clientReadDataPtr is where in the data stream consumers are accessing the data. Initially, this is
@@ -293,13 +293,13 @@ public class RequestContext {
          ** Setup the Metering and Read pointers since they are required for the HTTP Parser and for most
          **   HTTP Request handlers.
          */
-        metering = new BufferReadMetering(webServerFlavor, this);
+        metering = new BufferReadMetering(webServerFlavor, this, memoryManager);
         requestHandlerOperations.put(metering.getOperationType(), metering);
         meteringPtr = metering.initialize();
 
         readBuffer = new ReadBuffer(this, meteringPtr, clientConnection);
         requestHandlerOperations.put(readBuffer.getOperationType(), readBuffer);
-        readPtr = readBuffer.initialize();
+        readPointer = readBuffer.initialize();
 
         /*
          ** The SendFinalStatus and CloseOutRequest are tied together. The SendFinalStatus is
@@ -347,7 +347,7 @@ public class RequestContext {
         requestHandlerOperations.put(determineRequestType.getOperationType(), determineRequestType);
         determineRequestType.initialize();
 
-        ParseHttpRequest httpParser = new ParseHttpRequest(this, readPtr, metering, determineRequestType);
+        ParseHttpRequest httpParser = new ParseHttpRequest(this, readPointer, metering, determineRequestType);
         requestHandlerOperations.put(httpParser.getOperationType(), httpParser);
         clientDataReadPtr = httpParser.initialize();
 
@@ -652,7 +652,7 @@ public class RequestContext {
     ** The following are getters for test specific code.
      */
     public BufferManagerPointer getReadBufferPointer() {
-        return readPtr;
+        return readPointer;
     }
 
     public BufferManagerPointer getClientDataReadPtr() {
@@ -677,7 +677,7 @@ public class RequestContext {
         return false;
     }
 
-    public void setHttpResponseSet(final int targetPort) {
+    public void setHttpResponseSent(final int targetPort) {
         AtomicBoolean httpSent = new AtomicBoolean(true);
         httpRequestSent.put(targetPort, httpSent);
     }

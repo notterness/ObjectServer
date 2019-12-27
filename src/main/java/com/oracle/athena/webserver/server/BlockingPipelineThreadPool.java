@@ -1,10 +1,6 @@
 package com.oracle.athena.webserver.server;
 
-import com.oracle.athena.webserver.connectionstate.ConnectionState;
-import com.oracle.athena.webserver.memory.MemoryManager;
-import com.oracle.athena.webserver.server.ServerLoadBalancer;
-import com.oracle.athena.webserver.server.ServerWorkerThread;
-import com.oracle.pic.casper.webserver.server.WebServerAuths;
+import com.oracle.athena.webserver.requestcontext.RequestContext;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,7 +24,7 @@ public class BlockingPipelineThreadPool {
     protected final int blockingThreadBaseId;
 
     protected final BlockingWorkerThread[] threadPool;
-    protected final BlockingQueue<ConnectionState> blockingWorkQueue;
+    protected final BlockingQueue<RequestContext> blockingWorkQueue;
 
 
     BlockingPipelineThreadPool(final WebServerFlavor flavor, final int queueSize, final int numWorkerThreads, final int blockingThreadBaseId) {
@@ -77,12 +73,12 @@ public class BlockingPipelineThreadPool {
     ** There is a single work queue for all of the BlockingWorkerThread(s). Any thread can pull work off and
     **   perform work on the ConnectionState.
      */
-    public void addBlockingWorkToThread(ConnectionState connectionState) {
+    public void addBlockingWorkToThread(RequestContext requestContext) {
 
-        if (!blockingWorkQueue.offer(connectionState)) {
-            LOG.error("Unable to offer() [" + connectionState.getConnStateId() + "]");
+        if (!blockingWorkQueue.offer(requestContext)) {
+            LOG.error("Unable to offer() [" + requestContext.getRequestId() + "]");
         } else {
-            LOG.info("addComputeWorkToThread() [" + connectionState.getConnStateId() + "]");
+            LOG.info("addComputeWorkToThread() [" + requestContext.getRequestId() + "]");
         }
     }
 

@@ -75,7 +75,6 @@ public class ConnectComplete implements Operation {
     /*
      */
     public void execute() {
-        requestContext.setHttpResponseSet(targetTcpPort);
         if (operationToRun != null) {
             operationToRun.event();
         }

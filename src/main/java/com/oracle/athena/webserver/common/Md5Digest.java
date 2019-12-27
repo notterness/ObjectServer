@@ -1,4 +1,4 @@
-package com.oracle.athena.webserver.connectionstate;
+package com.oracle.athena.webserver.common;
 
 import com.oracle.oci.casper.jopenssl.CryptoMessageDigest;
 import com.oracle.pic.casper.common.encryption.Digest;
