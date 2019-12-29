@@ -10,13 +10,15 @@ import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
+
 public class ClientObjectWrite implements Operation {
     private static final Logger LOG = LoggerFactory.getLogger(ClientObjectWrite.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_WRITE_OBJECT;
+    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_OBJECT_WRITE;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -95,6 +97,22 @@ public class ClientObjectWrite implements Operation {
     /*
      */
     public void execute() {
+        ByteBuffer buffer = clientTest.getObjectBuffer();
+        if (buffer != null) {
+            ByteBuffer infillBuffer = clientWriteBufferMgr.peek(writeInfillPointer);
+            if (infillBuffer != null) {
+                infillBuffer.put(buffer.array());
+                infillBuffer.flip();
+
+                LOG.info("ClientWriteObject position: " + infillBuffer.position() + " limit: " +
+                        infillBuffer.limit());
+                clientWriteBufferMgr.updateProducerWritePointer(writeInfillPointer);
+            } else {
+                LOG.info("ClientWriteObject Infill Buffer null");
+            }
+        } else {
+            LOG.info("ClientWriteObject Object Buffer null");
+        }
     }
 
     /*

@@ -168,7 +168,7 @@ public class SetupClientConnection implements Operation {
         ByteBuffer buffer;
 
         for (int i = 0; i < WRITE_BUFFERS_TO_ALLOCATE; i++) {
-            buffer = memoryManager.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE, null);
+            buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
 
             clientWriteBufferManager.offer(addBufferPointer, buffer);
         }
@@ -193,7 +193,7 @@ public class SetupClientConnection implements Operation {
          ** Create the ClientHttpHeaderWrite operation and connect in this object to provide the HTTP header
          **   generator
          */
-        ClientHttpRequestWrite headerWrite = new ClientHttpRequestWrite(requestContext, clientConnection, clientTest,
+        ClientHttpRequestWrite headerWrite = new ClientHttpRequestWrite(requestContext, clientTest,
                 writeInfillPointer, objectWrite, targetTcpPort);
         clientOperations.put(headerWrite.getOperationType(), headerWrite);
         headerWrite.initialize();
@@ -288,6 +288,10 @@ public class SetupClientConnection implements Operation {
      ** This removes any dependencies that are put upon the BufferManager
      */
     public void complete() {
+
+        clientWriteBufferManager.unregister(writeInfillPointer);
+        clientWriteBufferManager.unregister(addBufferPointer);
+
         /*
         ** Walk the BufferManager freeing up all the allocated buffers
          */
@@ -308,6 +312,7 @@ public class SetupClientConnection implements Operation {
         clientWriteBufferManager.unregister(addBufferPointer);
         clientWriteBufferManager.unregister(writeInfillPointer);
 
+        clientConnection.unregisterWriteBufferManager();
     }
 
     /*

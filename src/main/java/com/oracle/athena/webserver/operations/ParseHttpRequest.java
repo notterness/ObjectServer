@@ -134,6 +134,12 @@ public class ParseHttpRequest implements Operation {
                 LOG.info("ParseHttpRequest[" + requestContext.getRequestId() + "] remaining position: " +
                         httpBuffer.position() + " limit: " + httpBuffer.limit());
 
+                /*
+                ** Need to break out of the loop if the parsing is complete.
+                 */
+                if (casperHttpInfo.getHeaderComplete()) {
+                    break;
+                }
             } else {
                 /*
                 ** Only update the pointer if the data in the buffer was all consumed.

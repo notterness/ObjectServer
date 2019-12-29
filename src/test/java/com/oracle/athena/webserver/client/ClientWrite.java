@@ -91,7 +91,8 @@ public class ClientWrite implements Operation {
      ** This removes any dependencies that are put upon the BufferManager
      */
     public void complete() {
-
+        clientWriteBufferManager.unregister(writePointer);
+        writePointer = null;
     }
 
     /*

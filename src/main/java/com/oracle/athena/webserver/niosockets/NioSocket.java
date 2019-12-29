@@ -1,5 +1,6 @@
 package com.oracle.athena.webserver.niosockets;
 
+import com.oracle.athena.webserver.buffermgr.BufferAssociation;
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.operations.Operation;
@@ -12,6 +13,8 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.EmptyStackException;
+import java.util.Stack;
 
 /*
 ** This class is responsible for handling the socket connection
@@ -66,12 +69,25 @@ public class NioSocket implements IoInterface {
      */
     private Operation connectCompleteHandler;
 
+    /*
+    ** The Stack is used to allow different BufferManagers to be used to perform reads and writes
+     */
+    Stack<BufferAssociation> readBufferAssociations;
+    Stack<BufferAssociation> writeBufferAssociations;
+
 
     public NioSocket(final NioSelectHandler nioSelectHandler) {
 
         this.nioSelectHandler = nioSelectHandler;
-
         this.key = null;
+
+        this.readBufferManager = null;
+        this.writeBufferManager = null;
+        this.readPointer = null;
+        this.writePointer = null;
+
+        readBufferAssociations = new Stack<>();
+        writeBufferAssociations = new Stack<>();
     }
 
     /*
@@ -177,16 +193,32 @@ public class NioSocket implements IoInterface {
      */
     public void registerReadBufferManager(final BufferManager readBufferMgr, final BufferManagerPointer readPtr) {
 
-        LOG.info(" readPtr (" + readPtr.getIdentifier() + ":" + readPtr.getOperationType() + ") bufferIndex: " +
+        LOG.info(" readPtr register (" + readPtr.getIdentifier() + ":" + readPtr.getOperationType() + ") bufferIndex: " +
                 readPtr.getCurrIndex());
+
+        if (readBufferManager != null) {
+            LOG.info(" readPtr push (" + readPtr.getIdentifier() + ":" + readPtr.getOperationType() + ") bufferIndex: " +
+                    readPtr.getCurrIndex());
+
+            BufferAssociation assocation = new BufferAssociation(readBufferManager, readPointer);
+
+            readBufferAssociations.push(assocation);
+        }
+
         this.readBufferManager = readBufferMgr;
         this.readPointer = readPtr;
     }
 
     public void registerWriteBufferManager(final BufferManager writeBufferMgr, final BufferManagerPointer writePtr) {
 
-        LOG.info(" writePtr (" + writePtr.getIdentifier() + ":" + writePtr.getOperationType() + ") bufferIndex: " +
+        LOG.info(" writePtr register (" + writePtr.getIdentifier() + ":" + writePtr.getOperationType() + ") bufferIndex: " +
                 writePtr.getCurrIndex());
+
+        if (writeBufferManager != null) {
+            BufferAssociation assocation = new BufferAssociation(writeBufferManager, writePointer);
+
+            readBufferAssociations.push(assocation);
+        }
 
         this.writeBufferManager = writeBufferMgr;
         this.writePointer = writePtr;
@@ -194,14 +226,57 @@ public class NioSocket implements IoInterface {
 
     public void unregisterReadBufferManager() {
 
-        this.readBufferManager = null;
-        this.readPointer = null;
+        LOG.warn(" readPtr unregister (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                readPointer.getCurrIndex());
+
+        if (!readBufferAssociations.empty()) {
+            try {
+                BufferAssociation association = readBufferAssociations.pop();
+
+                readBufferManager = association.getBufferManager();
+                readPointer = association.getBufferManagerPointer();
+
+                LOG.warn(" POP readPtr unregister (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                        readPointer.getCurrIndex());
+
+            } catch (EmptyStackException ex) {
+                LOG.warn(" ERROR readPtr unregister (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                        readPointer.getCurrIndex());
+
+                readBufferManager = null;
+                readPointer = null;
+            }
+        } else {
+            readBufferManager = null;
+            readPointer = null;
+        }
     }
 
     public void unregisterWriteBufferManager() {
+        LOG.warn(" writePtr unregister (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+                writePointer.getCurrIndex());
 
-        this.writeBufferManager = null;
-        this.writePointer = null;
+        if (!writeBufferAssociations.empty()) {
+            try {
+                BufferAssociation association = writeBufferAssociations.pop();
+
+                writeBufferManager = association.getBufferManager();
+                writePointer = association.getBufferManagerPointer();
+
+                LOG.info(" POP writePtr unregister (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+                        writePointer.getCurrIndex());
+
+            } catch (EmptyStackException ex) {
+                LOG.warn(" ERROR writePtr unregister (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+                        writePointer.getCurrIndex());
+
+                writeBufferManager = null;
+                writePointer = null;
+            }
+        } else {
+            writeBufferManager = null;
+            writePointer = null;
+        }
     }
 
     /*

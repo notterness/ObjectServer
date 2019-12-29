@@ -40,20 +40,28 @@ public class WriteToStorageServer implements Operation {
      */
     private IoInterface connection;
 
+    /*
+    ** This is the TCP Port of the Storage Server
+     */
+    private final int storageServerTcpPort;
+
     private final BufferManager storageServerWriteBufferMgr;
     private final BufferManagerPointer encryptedBufferPtr;
 
     private BufferManagerPointer writeToStorageServerPtr;
 
+    private boolean registeredWriteBufferManager;
 
     public WriteToStorageServer(final RequestContext requestContext, final IoInterface connection,
-                                final BufferManagerPointer encryptedBufferPtr) {
+                                final BufferManagerPointer encryptedBufferPtr,
+                                final int tcpPort) {
 
         this.requestContext = requestContext;
         this.connection = connection;
-        this.storageServerWriteBufferMgr = this.requestContext.getStorageServerWriteBufferManager();
-
         this.encryptedBufferPtr = encryptedBufferPtr;
+        this.storageServerTcpPort = tcpPort;
+
+        this.storageServerWriteBufferMgr = this.requestContext.getStorageServerWriteBufferManager();
 
         /*
          ** This starts out not being on any queue
@@ -61,6 +69,11 @@ public class WriteToStorageServer implements Operation {
         onDelayedQueue = false;
         onExecutionQueue = false;
         nextExecuteTime = 0;
+
+        /*
+        ** Used to determine if this has been registered with the IoInterface to perform writes
+         */
+        registeredWriteBufferManager = false;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -78,13 +91,7 @@ public class WriteToStorageServer implements Operation {
          */
         writeToStorageServerPtr = storageServerWriteBufferMgr.register(this, encryptedBufferPtr, requestContext.getChunkSize());
 
-        /*
-        ** Register this BufferManager and BufferManagerPointer with the IoInterface. This will only be used for
-        **   writes out the IoInterface.
-         */
-        connection.registerWriteBufferManager(storageServerWriteBufferMgr, encryptedBufferPtr);
-
-        return writeToStorageServerPtr;
+         return writeToStorageServerPtr;
     }
 
     /*
@@ -97,9 +104,11 @@ public class WriteToStorageServer implements Operation {
     public void event() {
 
         /*
-         ** Add this to the execute queue if it is not already on it.
+         ** Add this to the execute queue if the HTTP Request has been sent to the Storage Server
          */
-        requestContext.addToWorkQueue(this);
+        if (requestContext.hasHttpRequestBeenSent(storageServerTcpPort) == true) {
+            requestContext.addToWorkQueue(this);
+        }
     }
 
     /*
@@ -107,6 +116,15 @@ public class WriteToStorageServer implements Operation {
      **   ready to be written out the IoInterface.
      */
     public void execute() {
+        if (!registeredWriteBufferManager) {
+            /*
+             ** Register this BufferManager and BufferManagerPointer with the IoInterface. This will only be used for
+             **   writes out the IoInterface.
+             */
+            connection.registerWriteBufferManager(storageServerWriteBufferMgr, encryptedBufferPtr);
+            registeredWriteBufferManager = true;
+        }
+
         if (storageServerWriteBufferMgr.peek(writeToStorageServerPtr) != null) {
             connection.writeBufferReady();
         }

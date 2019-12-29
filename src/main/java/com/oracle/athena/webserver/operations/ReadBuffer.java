@@ -83,12 +83,14 @@ public class ReadBuffer implements Operation {
     public void execute() {
         if (bufferManager.peek(readBufferPointer) != null) {
             clientConnection.readBufferAvailable();
+        } else {
+            LOG.info("ReadBuffer no buffers to read into");
         }
     }
 
     public void complete() {
         /*
-        ** Unregister the BuuferManager and the BufferManagerPointer with the clientConnection
+        ** Unregister the BufferManager and the BufferManagerPointer with the clientConnection
          */
         clientConnection.unregisterReadBufferManager();
 

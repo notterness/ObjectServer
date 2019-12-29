@@ -30,7 +30,7 @@ public class RequestContext {
 
     private static final Logger LOG = LoggerFactory.getLogger(RequestContext.class);
 
-    public static final int STORAGE_SERVER_PORT_BASE = 5050;
+    public static final int STORAGE_SERVER_PORT_BASE = 5010;
 
     /*
      ** This is the define for the chunk size in bytes. There are two different defines, one to allow easy testing of
@@ -198,7 +198,7 @@ public class RequestContext {
     ** The requestContentLength is how many bytes are going to be transferred following the
     **   HTTP request
      */
-    private long requestContentLength;
+    private int requestContentLength;
 
     /*
     ** This is set when there is either a parsing error or the entire HTTP request has been
@@ -637,7 +637,7 @@ public class RequestContext {
     }
 
 
-    public void httpHeaderParseComplete(final long contentLength) {
+    public void httpHeaderParseComplete(final int contentLength) {
         LOG.info("requestId[" + connectionRequestId + "] httpHeaderParseComplete() contentLength: " + contentLength);
 
         requestContentLength = contentLength;
@@ -650,6 +650,10 @@ public class RequestContext {
 
     public boolean getHttpParseError() {
         return httpParseError;
+    }
+
+    public int getRequestContentLength() {
+        return requestContentLength;
     }
 
     /*

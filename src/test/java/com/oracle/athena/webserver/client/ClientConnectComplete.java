@@ -89,8 +89,9 @@ public class ClientConnectComplete implements Operation {
      */
     public void execute() {
         /*
-         ** Dole out a buffer for use in the HTTP Header write
+         ** Dole out buffers for use in the HTTP Header write and the Object write
          */
+        clientWriteBufferManager.updateProducerWritePointer(addBufferPointer);
         clientWriteBufferManager.updateProducerWritePointer(addBufferPointer);
 
         /*

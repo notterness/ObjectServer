@@ -1,6 +1,8 @@
 package com.oracle.athena.webserver.operations;
 
+import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
+import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,13 +10,13 @@ import org.slf4j.LoggerFactory;
 import java.util.Iterator;
 import java.util.List;
 
-public class ConnectComplete implements Operation {
-    private static final Logger LOG = LoggerFactory.getLogger(ConnectComplete.class);
+public class WriteHeaderToStorageServer implements Operation {
+    private static final Logger LOG = LoggerFactory.getLogger(WriteHeaderToStorageServer.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CONNECT_COMPLETE;
+    public final OperationTypeEnum operationType = OperationTypeEnum.WRITE_HEADER_TO_STORAGE_SERVER;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -22,9 +24,19 @@ public class ConnectComplete implements Operation {
     private final RequestContext requestContext;
 
     /*
-    ** The following is the operation to run (if any) when the ConnectComplete is executed.
+     ** The IoInterface is what is used to communicate with the Storage Server.
      */
-    private List<Operation> operationsToRun;
+    private final IoInterface storageServerConnection;
+
+    /*
+     ** The following is the operation to run (if any) when the ConnectComplete is executed.
+     */
+    private final List<Operation> operationsToRun;
+
+    /*
+    ** This is the TCP Port of the Storage Server this header is being sent to
+     */
+    private final int storageServerTcpPort;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -35,18 +47,22 @@ public class ConnectComplete implements Operation {
     private boolean onExecutionQueue;
     private long nextExecuteTime;
 
-    /*
-    ** The targetTcpPort is used to inform the requestContext (as the centralized keeper of
-    **   information) that the connect() to the target has succeed.
-     */
-    private final int targetTcpPort;
+    private final BufferManager storageServerBufferManager;
+    private final BufferManagerPointer writePointer;
+    private BufferManagerPointer writeDonePointer;
 
-    public ConnectComplete(final RequestContext requestContext, final List<Operation> operationsToRun,
-                           final int targetTcpPort) {
+    public WriteHeaderToStorageServer(final RequestContext requestContext, final IoInterface storageServerConnection,
+                                      final List<Operation> operationsToRun, final BufferManager storageServerBufferManager,
+                                      final BufferManagerPointer writePtr, final int tcpPort) {
 
         this.requestContext = requestContext;
+        this.storageServerConnection = storageServerConnection;
         this.operationsToRun = operationsToRun;
-        this.targetTcpPort = targetTcpPort;
+
+        this.storageServerBufferManager = storageServerBufferManager;
+        this.writePointer = writePtr;
+
+        this.storageServerTcpPort = tcpPort;
 
         /*
          ** This starts out not being on any queue
@@ -63,8 +79,17 @@ public class ConnectComplete implements Operation {
     /*
      */
     public BufferManagerPointer initialize() {
+        /*
+        ** This will be woken up when there is data to write and when the data has all been written
+         */
+        writeDonePointer = storageServerBufferManager.register(this, writePointer);
 
-        return null;
+        /*
+        ** Register with the storageServerConnection to perform the write
+         */
+        storageServerConnection.registerWriteBufferManager(storageServerBufferManager, writePointer);
+
+        return writeDonePointer;
     }
 
     public void event() {
@@ -79,14 +104,31 @@ public class ConnectComplete implements Operation {
      */
     public void execute() {
         /*
-         ** event() all of the operations that are ready to run once the connect() has
-         **   succeeded.
+        ** Check if there is data to write out
          */
-        Iterator<Operation> iter = operationsToRun.iterator();
-        while (iter.hasNext()) {
-            iter.next().event();
+        if (storageServerBufferManager.peek(writePointer) != null) {
+            storageServerConnection.writeBufferReady();
         }
-        operationsToRun.clear();
+
+        /*
+        ** Check if the data has been written out
+         */
+        if (storageServerBufferManager.peek(writeDonePointer) != null) {
+            /*
+            ** Set the HTTP Header has been written to the Storage Server flag
+             */
+            requestContext.setHttpResponseSent(storageServerTcpPort);
+
+            /*
+             ** event() all of the operations that are ready to run once the connect() has
+             **   succeeded.
+             */
+            Iterator<Operation> iter = operationsToRun.iterator();
+            while (iter.hasNext()) {
+                iter.next().event();
+            }
+            operationsToRun.clear();
+        }
 
     }
 

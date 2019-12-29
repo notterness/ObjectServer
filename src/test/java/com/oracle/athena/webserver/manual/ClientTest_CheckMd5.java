@@ -8,18 +8,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 class ClientTest_CheckMd5 extends ClientTest {
 
-    private final int BYTES_IN_CONTENT = 1024;
+    private final int BYTES_IN_CONTENT = MemoryManager.XFER_BUFFER_SIZE;
 
     private final Md5Digest digest;
-
-    private ByteBuffer dataBuffer;
-
 
     ClientTest_CheckMd5(final String testName, final NioTestClient client, final int serverTcpPort, AtomicInteger testCount) {
         super(testName, client, serverTcpPort, testCount);
 
         digest = new Md5Digest();
-        dataBuffer = null;
+        objectBuffer = null;
     }
 
     @Override
@@ -29,19 +26,19 @@ class ClientTest_CheckMd5 extends ClientTest {
          */
         String objectDigestString = null;
 
-        dataBuffer = memoryAllocator.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE, null);
-        if (dataBuffer != null) {
+        objectBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
+        if (objectBuffer != null) {
             // Fill in a pattern
-            long pattern = MemoryManager.MEDIUM_BUFFER_SIZE;
-            for (int i = 0; i < MemoryManager.MEDIUM_BUFFER_SIZE; i = i + 8) {
-                dataBuffer.putLong(i, pattern);
+            long pattern = MemoryManager.XFER_BUFFER_SIZE;
+            for (int i = 0; i < MemoryManager.XFER_BUFFER_SIZE; i = i + 8) {
+                objectBuffer.putLong(i, pattern);
                 pattern++;
             }
 
-            digest.digestByteBuffer(dataBuffer);
+            digest.digestByteBuffer(objectBuffer);
             objectDigestString = digest.getFinalDigest();
 
-            dataBuffer.rewind();
+            objectBuffer.rewind();
 
             System.out.println("MD5 Digest String: " + objectDigestString);
         }
@@ -79,13 +76,13 @@ class ClientTest_CheckMd5 extends ClientTest {
         /*
          ** Send out the 1MB data transfer here
          */
-        if (dataBuffer != null) {
+        if (objectBuffer != null) {
 
             if (!waitForWriteToComp()) {
                 System.out.println("Request timed out");
             }
 
-            memoryAllocator.poolMemFree(dataBuffer);
+            memoryManager.poolMemFree(objectBuffer);
         }
     }
 

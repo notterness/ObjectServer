@@ -32,8 +32,8 @@ public class MemoryManager {
     private static final int PRODUCTION_MEDIUM_BUFFER_COUNT = 100;
     private static final int PRODUCTION_XFER_BUFFER_COUNT = 10;
 
-    private static final int INTEGRATION_SMALL_BUFFER_COUNT = 1000;
-    private static final int INTEGRATION_MEDIUM_BUFFER_COUNT = 100;
+    private static final int INTEGRATION_SMALL_BUFFER_COUNT = 10;
+    private static final int INTEGRATION_MEDIUM_BUFFER_COUNT = 10;
     private static final int INTEGRATION_XFER_BUFFER_COUNT = 100;
 
     /* In sorted order */

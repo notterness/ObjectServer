@@ -13,6 +13,8 @@ public class EncryptBuffer implements Operation {
 
     private static final Logger LOG = LoggerFactory.getLogger(EncryptBuffer.class);
 
+    private final int NUM_STORAGE_SERVER_WRITE_BUFFERS = 10;
+
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
@@ -22,6 +24,8 @@ public class EncryptBuffer implements Operation {
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
     private final RequestContext requestContext;
+
+    private final MemoryManager memoryManager;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -44,9 +48,13 @@ public class EncryptBuffer implements Operation {
 
     private final int chunkSize;
 
+    private final Operation readBufferMetering;
+
     private BufferManagerPointer clientReadPtr;
+    private BufferManagerPointer storageServerAddPointer;
     private BufferManagerPointer storageServerWritePtr;
 
+    private long chunkBytesToEncrypt;
     private int chunkBytesEncrypted;
 
     private int savedSrcPosition;
@@ -56,14 +64,17 @@ public class EncryptBuffer implements Operation {
      ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
      **   up the calls to obtain the VON information and the meta-data write to the database.
      */
-    public EncryptBuffer(final RequestContext requestContext, final BufferManagerPointer clientReadPointer) {
+    public EncryptBuffer(final RequestContext requestContext, final MemoryManager memoryManager,
+                         final BufferManagerPointer clientReadPointer) {
 
         this.requestContext = requestContext;
+        this.memoryManager = memoryManager;
         this.clientReadBufferMgr = this.requestContext.getClientReadBufferManager();
         this.storageServerWriteBufferMgr = this.requestContext.getStorageServerWriteBufferManager();
 
         this.clientFullBufferPtr = clientReadPointer;
 
+        this.readBufferMetering = requestContext.getOperation(OperationTypeEnum.METER_READ_BUFFERS);
         /*
          ** This starts out not being on any queue
          */
@@ -89,6 +100,8 @@ public class EncryptBuffer implements Operation {
          */
         chunkBytesEncrypted = 0;
 
+        chunkBytesToEncrypt = requestContext.getRequestContentLength();
+
         /*
         ** savedSrcPosition is used to handle the case where there are no buffers available to place
         **   encrypted data into, so this operation will need to wait until buffers are avaialble.
@@ -109,7 +122,15 @@ public class EncryptBuffer implements Operation {
          **   The buffers produced are used by the WriteToStorageServer operation(s) to stream data out to
          **   the storage servers.
          */
-        storageServerWritePtr = storageServerWriteBufferMgr.register(this);
+        storageServerAddPointer = storageServerWriteBufferMgr.register(this);
+        storageServerWriteBufferMgr.bookmark(storageServerAddPointer);
+
+        for (int i = 0; i < NUM_STORAGE_SERVER_WRITE_BUFFERS; i++) {
+            ByteBuffer writeBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
+            storageServerWriteBufferMgr.offer(storageServerAddPointer, writeBuffer);
+        }
+
+        storageServerWritePtr = storageServerWriteBufferMgr.register(this, storageServerAddPointer);
 
         LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] initialize done");
 
@@ -162,9 +183,16 @@ public class EncryptBuffer implements Operation {
                      */
                     encryptBuffer(srcBuffer, encryptedBuffer);
                 } else {
+                    LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] out of write buffers");
                     outOfBuffers = true;
                 }
             } else {
+                LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] out of read buffers");
+
+                if (chunkBytesEncrypted < chunkBytesToEncrypt) {
+                    readBufferMetering.event();
+                }
+
                 outOfBuffers = true;
             }
         }
@@ -176,6 +204,11 @@ public class EncryptBuffer implements Operation {
      */
     public void complete() {
 
+        clientReadBufferMgr.unregister(clientReadPtr);
+        clientReadPtr = null;
+
+        storageServerWriteBufferMgr.unregister(storageServerWritePtr);
+        storageServerWritePtr = null;
     }
 
     /*
@@ -264,11 +297,13 @@ public class EncryptBuffer implements Operation {
         if (bytesToEncrypt <= bytesInTgtBuffer) {
             tgtBuffer.put(srcBuffer);
 
+            LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] 1 - remaining: " + tgtBuffer.remaining());
+
             /*
             ** This is the case where the amount of data remaining to be encrypted in the srcBuffer
             **   completely fills the tgtBuffer.
              */
-            if (tgtBuffer.remaining() == 0) {
+            if ((tgtBuffer.remaining() == 0) || ((tgtBuffer.position() + chunkBytesEncrypted) == chunkBytesToEncrypt)) {
                 /*
                 ** If this buffer is the first one for a chunk, add a bookmark and also kick off the
                 **   SetupWriteChunk operation
@@ -284,7 +319,8 @@ public class EncryptBuffer implements Operation {
                     /*
                     ** Now create the SetupChunkWrite and start it running
                      */
-                    SetupChunkWrite setupChunkWrite = new SetupChunkWrite(requestContext, storageServerWritePtr);
+                    SetupChunkWrite setupChunkWrite = new SetupChunkWrite(requestContext, memoryManager,
+                            storageServerWritePtr, chunkBytesToEncrypt);
                     setupChunkWrite.initialize();
                     setupChunkWrite.event();
                 }
@@ -293,6 +329,8 @@ public class EncryptBuffer implements Operation {
                 ** Update the number of bytes that have been encrypted
                  */
                 chunkBytesEncrypted += tgtBuffer.limit();
+                LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] chunkBytesToEncrypt: " + chunkBytesToEncrypt +
+                        " chunkBytesEncrypted: " + chunkBytesEncrypted);
 
                 /*
                 ** Since the target buffer has been written to, its position() is set to its limit(), so

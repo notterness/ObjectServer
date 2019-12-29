@@ -90,7 +90,7 @@ class ClientTest_BadMd5 extends ClientTest {
                 System.out.println("Request timed out");
             }
 
-            memoryAllocator.poolMemFree(dataBuffer);
+            memoryManager.poolMemFree(dataBuffer);
         }
     }
 
