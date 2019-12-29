@@ -27,7 +27,7 @@ public class FixedSizeBufferPool {
         freeQueue = new LinkedBlockingQueue<>(bufferCount) ;
         inuseQueue = new LinkedBlockingQueue<>(bufferCount) ;
         for (int i = 0; i < bufferCount; ++i) {
-            freeQueue.add( ByteBuffer.allocateDirect( bufferSize));
+            freeQueue.add( ByteBuffer.allocate( bufferSize));
         }
     }
 

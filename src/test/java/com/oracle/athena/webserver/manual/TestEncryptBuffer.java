@@ -36,7 +36,11 @@ public class TestEncryptBuffer {
 
         this.parser = new ByteBufferHttpParser(casperHttpInfo);
 
-        encryptBuffer = new EncryptBuffer(requestContext, null);
+        /*
+        ** clientReadPointer is setup in the testEncryption() method for EncryptBuffer. So, for
+        **   this test passing in null is acceptable.
+         */
+        encryptBuffer = new EncryptBuffer(requestContext, memoryManager, null);
     }
 
     void execute() {

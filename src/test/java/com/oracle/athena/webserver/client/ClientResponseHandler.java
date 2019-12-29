@@ -56,7 +56,6 @@ public class ClientResponseHandler implements Operation {
 
         this.clientReadBufferManager = requestContext.getClientReadBufferManager();
 
-
         /*
          ** This starts out not being on any queue
          */
@@ -119,7 +118,10 @@ public class ClientResponseHandler implements Operation {
      ** This removes any dependencies that are put upon the BufferManager
      */
     public void complete() {
+        httpParser = null;
 
+        clientReadBufferManager.unregister(httpResponseBufferPointer);
+        httpResponseBufferPointer = null;
     }
 
     /*

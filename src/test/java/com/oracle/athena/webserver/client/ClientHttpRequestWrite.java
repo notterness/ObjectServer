@@ -26,11 +26,6 @@ public class ClientHttpRequestWrite implements Operation {
     private final RequestContext requestContext;
 
     /*
-     ** This is the IoInterface that the final status will be written out on.
-     */
-    private final IoInterface clientConnection;
-
-    /*
     ** The ClientTest is used to obtain the HTTP Request string
      */
     private final ClientTest clientTest;
@@ -48,7 +43,6 @@ public class ClientHttpRequestWrite implements Operation {
      */
     private final BufferManager clientWriteBufferMgr;
     private final BufferManagerPointer writeInfillPointer;
-    private BufferManagerPointer clientWritePointer;
 
     /*
     **
@@ -56,12 +50,11 @@ public class ClientHttpRequestWrite implements Operation {
     private final ClientObjectWrite clientObjectWrite;
     private final int targetTcpPort;
 
-    public ClientHttpRequestWrite(final RequestContext requestContext, final IoInterface connection,
+    public ClientHttpRequestWrite(final RequestContext requestContext,
                                  final ClientTest clientTest, final BufferManagerPointer writeInfillPtr,
                                  final ClientObjectWrite writeObject, final int targetTcpPort) {
 
         this.requestContext = requestContext;
-        this.clientConnection = connection;
         this.clientTest = clientTest;
         this.writeInfillPointer = writeInfillPtr;
         this.clientObjectWrite = writeObject;

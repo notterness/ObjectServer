@@ -36,7 +36,7 @@ public abstract class ClientTest {
 
     private final Object writeDone;
 
-    MemoryManager memoryAllocator;
+    protected MemoryManager memoryManager;
 
     private HttpResponseListener responseListener;
     private HttpParser httpParser;
@@ -71,6 +71,8 @@ public abstract class ClientTest {
 
         this.clientTestName = testName;
 
+        this.objectBuffer = null;
+
         this.writeDone = new Object();
     }
 
@@ -100,7 +102,7 @@ public abstract class ClientTest {
         ** Create the ClientHttpHeaderWrite operation and connect in this object to provide the HTTP header
         **   generator
          */
-        MemoryManager memoryManager = new MemoryManager(webServerFlavor);
+        memoryManager = new MemoryManager(webServerFlavor);
         SetupClientConnection setupClientConnection = new SetupClientConnection(webServerFlavor, clientContext, memoryManager,
                 this, connection, serverTcpPort);
         setupClientConnection.initialize();
@@ -198,6 +200,13 @@ public abstract class ClientTest {
     }
 
     /*
+    **
+     */
+    public ByteBuffer getObjectBuffer() {
+        return objectBuffer;
+    }
+
+    /*
      ** These are classes the various tests need to provide to change the test case behavior.
      */
     abstract public String buildBufferAndComputeMd5();
@@ -211,6 +220,10 @@ public abstract class ClientTest {
             httpStatus = status;
 
             targetResponse(0, null);
+        }
+
+        if (objectBuffer != null) {
+            memoryManager.poolMemFree(objectBuffer);
         }
     }
 }

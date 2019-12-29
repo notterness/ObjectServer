@@ -95,7 +95,7 @@ public class CasperHttpInfo {
 
     private String UserAgent;
 
-    private long contentLength;
+    private int contentLength;
 
     /*
      **
@@ -462,7 +462,7 @@ public class CasperHttpInfo {
         if (result != -1) {
             try {
                 contentLengthReceived = true;
-                contentLength = Long.parseLong(field.getValue());
+                contentLength = int.parseLong(field.getValue());
 
                 /*
                  ** TODO: Are there specific limits for the Content-Length that need to be validated

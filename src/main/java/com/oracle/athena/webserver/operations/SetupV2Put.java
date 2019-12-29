@@ -7,6 +7,7 @@ import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -92,10 +93,6 @@ public class SetupV2Put implements Operation {
         **   Md5 Digest operation and the other will be used by the EncryptBuffer operation
          */
 
-        /*
-        ** Dole out another buffer to read in the content data
-         */
-        metering.event();
         return null;
     }
 
@@ -111,9 +108,23 @@ public class SetupV2Put implements Operation {
         /*
         ** Add compute MD5 and encrypt to the dependency on the ClientReadBufferManager read pointer.
          */
-        EncryptBuffer encryptBuffer = new EncryptBuffer(requestContext, clientReadPtr);
+        EncryptBuffer encryptBuffer = new EncryptBuffer(requestContext, memoryManager, clientReadPtr);
         v2PutHandlerOperations.put(encryptBuffer.getOperationType(), encryptBuffer);
         encryptBuffer.initialize();
+
+        /*
+         ** Dole out another buffer to read in the content data if there is not data remaining in
+         **   the buffer from the HTTP Parsing.
+         */
+        BufferManager clientReadBufferManager = requestContext.getClientReadBufferManager();
+        ByteBuffer remainingBuffer = clientReadBufferManager.peek(clientReadPtr);
+        if (remainingBuffer != null) {
+            if (remainingBuffer.remaining() > 0) {
+                encryptBuffer.event();
+            } else {
+                metering.event();
+            }
+        }
     }
 
     public void complete() {
