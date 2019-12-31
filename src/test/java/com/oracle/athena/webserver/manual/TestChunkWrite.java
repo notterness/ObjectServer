@@ -10,11 +10,15 @@ import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.operations.SetupChunkWrite;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class TestChunkWrite {
+
+    private static final Logger LOG = LoggerFactory.getLogger(TestChunkWrite.class);
 
     private static final WebServerFlavor webServerFlavor = WebServerFlavor.INTEGRATION_TESTS;
 
@@ -82,7 +86,7 @@ public class TestChunkWrite {
         /*
          ** The ChunkWriteTest operation is what is called back when the Chunk Write completes
          */
-        ChunkWriteTestComplete testChunkWrite = new ChunkWriteTestComplete(clientContext);
+        ChunkWriteTestComplete testChunkWrite = new ChunkWriteTestComplete(clientContext,this);
 
         /*
         ** Fill in some buffers to pass into the chunk write
@@ -108,7 +112,7 @@ public class TestChunkWrite {
         BufferManagerPointer storageServerWritePtr = storageServerWriteBufferMgr.register(testChunkWrite, storageServerAddPointer);
 
         SetupChunkWrite setupChunkWrite = new SetupChunkWrite(clientContext, memoryManager,
-                storageServerWritePtr, NUMBER_OF_BYTES_TO_WRITE);
+                storageServerWritePtr, NUMBER_OF_BYTES_TO_WRITE, testChunkWrite);
         setupChunkWrite.initialize();
 
         /*
@@ -121,11 +125,38 @@ public class TestChunkWrite {
          */
         waitForStatus();
 
-        runningTestCount.decrementAndGet();
+        /*
+        ** Remove the write pointer dependency from the add pointer so all the buffers can
+        **   be released.
+         */
+        storageServerWriteBufferMgr.unregister(storageServerWritePtr);
 
+        /*
+        ** Now free up all the memory allocated for the test
+         */
+        storageServerWriteBufferMgr.reset(storageServerAddPointer);
+        for (int i = 0; i < NUM_STORAGE_SERVER_WRITE_BUFFERS; i++) {
+            ByteBuffer buffer = storageServerWriteBufferMgr.poll(storageServerAddPointer);
+
+            if (buffer != null) {
+                memoryManager.poolMemFree(buffer);
+            } else {
+                LOG.info("TestChunkWrite storageServerAddPointer index: " + storageServerAddPointer.getCurrIndex());
+            }
+        }
+        storageServerWriteBufferMgr.unregister(storageServerAddPointer);
+        storageServerWriteBufferMgr.reset();
+
+        eventThread.releaseConnection(connection);
+        eventThread.releaseContext(clientContext);
+
+        /*
+        ** Let the higher level know this test is complete
+         */
+        runningTestCount.decrementAndGet();
     }
 
-    void statusReceived(int result) {
+    public void statusReceived(int result) {
         System.out.println("TestChunkWrite  statusReceived() : " + result);
 
         synchronized (writeDone) {

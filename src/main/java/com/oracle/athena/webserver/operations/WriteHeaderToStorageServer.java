@@ -150,6 +150,13 @@ public class WriteHeaderToStorageServer implements Operation {
         ** There is no longer a need for the writeDonePointer
          */
         storageServerBufferManager.unregister(writeDonePointer);
+        writeDonePointer = null;
+
+        /*
+        ** Need to unregister() in the reverse order that the dependencies are created in
+         */
+        storageServerBufferManager.unregister(writeInfoPointer);
+        writeInfoPointer = null;
     }
 
     /*

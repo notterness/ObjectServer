@@ -286,8 +286,14 @@ public class BufferManagerPointer {
                 }
             }
 
-            LOG.info("Consumer("  + identifier + ":" + getOperationType() + ") readIndex: " + bufferIndex);
-            return bufferIndex;
+            /*
+            ** Advance the pointer for the next read since it has not wrapped
+             */
+            int returnIndex = bufferIndex;
+            bufferIndex = nextIndex;
+
+            LOG.info("Consumer("  + identifier + ":" + getOperationType() + ") readIndex: " + returnIndex);
+            return returnIndex;
         }
 
         return -1;
@@ -397,6 +403,12 @@ public class BufferManagerPointer {
                     " Producer(" + ptrThisDependsOn.getIdentifier() + ":" + ptrThisDependsOn.getOperationType() + ")" );
 
             ptrThisDependsOn.removeDependency(operation);
+
+            /*
+            ** Remove from the dependentPointers list that is used to check for wrap conditions
+             */
+            ptrThisDependsOn.dependentPointers.remove(this);
+
             ptrThisDependsOn = null;
         }
 

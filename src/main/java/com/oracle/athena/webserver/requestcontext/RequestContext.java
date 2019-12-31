@@ -188,6 +188,11 @@ public class RequestContext {
     private Map<Integer, AtomicBoolean> httpRequestSent;
 
     /*
+    ** The following Map is used to indicate that a Storage Server has responded.
+     */
+    private Map<Integer, Integer> storageServerResponse;
+
+    /*
     ** The httpParseError is set if there is something the parser does not like or a header
     **   does not match the expected values.
      */
@@ -238,12 +243,14 @@ public class RequestContext {
         /*
         ** Build the list of all supported HTTP Request and the handler
          */
-        this.supportedHttpRequests = new HashMap<HttpMethodEnum, Operation>();
+        this.supportedHttpRequests = new HashMap<>();
 
         /*
         ** Setup this RequestContext to be able to read in and parse the HTTP Request(s)
          */
-        requestHandlerOperations = new HashMap<OperationTypeEnum, Operation> ();
+        requestHandlerOperations = new HashMap<> ();
+
+        storageServerResponse = new HashMap<>();
 
         /*
         ** Setup the map for the HTTP Request Sent
@@ -683,6 +690,27 @@ public class RequestContext {
     public void setHttpResponseSent(final int targetPort) {
         AtomicBoolean httpSent = new AtomicBoolean(true);
         httpRequestSent.put(targetPort, httpSent);
+    }
+
+    public boolean hasStorageServerResponseArrived(final int targetPort) {
+        Integer responseSent = storageServerResponse.get(targetPort);
+        if (responseSent != null) {
+            return true;
+        }
+        return false;
+    }
+
+    public int getStorageResponseResult(final int targetPort) {
+        Integer responseSent = storageServerResponse.get(targetPort);
+        if (responseSent != null) {
+            return responseSent;
+        }
+        return -1;
+    }
+
+    public void setStorageServerResponse(final int targetPort, final int result) {
+        Integer storageServerResult = new Integer(result);
+        storageServerResponse.put(targetPort, storageServerResult);
     }
 
     /*
