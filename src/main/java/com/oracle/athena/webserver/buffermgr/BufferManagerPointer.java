@@ -187,7 +187,8 @@ public class BufferManagerPointer {
             LOG.error("Producer("  + identifier + ":" + getOperationType() + ") getBookmark: -1, will use: " + bufferIndex);
 
         } else {
-            LOG.error("Producer("  + identifier + ":" + getOperationType() + ") getBookmark: " + bookmark);
+            LOG.error("Producer("  + identifier + ":" + getOperationType() + ") getBookmark: " + bookmark +
+                    " bufferIndex: " + bufferIndex);
         }
 
         return bookmark;
@@ -330,7 +331,7 @@ public class BufferManagerPointer {
             bufferIndex = 0;
         }
 
-        //LOG.info("Producer("  + identifier + ":" + getOperationType() + ") writeIndex: " + bufferIndex);
+        LOG.info("Producer("  + identifier + ":" + getOperationType() + ") writeIndex: " + bufferIndex);
 
         return bufferIndex;
     }

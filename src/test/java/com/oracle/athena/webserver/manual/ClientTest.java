@@ -42,7 +42,6 @@ public abstract class ClientTest {
     private HttpParser httpParser;
 
     protected final NioTestClient client;
-
     protected final EventPollThread eventThread;
 
     protected ByteBuffer objectBuffer;
@@ -62,7 +61,8 @@ public abstract class ClientTest {
         this.runningTestCount.incrementAndGet();
 
         /*
-        ** The testClient
+        ** The testClient is responsible for providing the threads the Operation(s) will run on and the
+        **   NIO Socket handling.
          */
         this.client = testClient;
         this.eventThread = testClient.getEventThread();

@@ -26,9 +26,6 @@ public class SetupV2Put implements Operation {
 
     private final MemoryManager memoryManager;
 
-    private final BufferManager clientReadBufferMgr;
-    private final BufferManager storageServerWriteBufferMgr;
-
     private final Operation metering;
 
     private BufferManagerPointer clientReadPtr;
@@ -60,9 +57,6 @@ public class SetupV2Put implements Operation {
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
         this.metering = metering;
-
-        this.clientReadBufferMgr = this.requestContext.getClientReadBufferManager();
-        this.storageServerWriteBufferMgr = this.requestContext.getStorageServerWriteBufferManager();
 
         /*
          ** Setup the list of Operations currently used to handle the V2 PUT
@@ -205,9 +199,8 @@ public class SetupV2Put implements Operation {
         LOG.info("   -> Operations Created By " + operationType);
 
         Collection<Operation> createdOperations = v2PutHandlerOperations.values();
-        Iterator<Operation> iter = createdOperations.iterator();
-        while (iter.hasNext()) {
-            iter.next().dumpCreatedOperations(level + 1);
+        for (Operation createdOperation : createdOperations) {
+            createdOperation.dumpCreatedOperations(level + 1);
         }
         LOG.info("");
     }

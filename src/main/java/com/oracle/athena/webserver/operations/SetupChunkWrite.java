@@ -45,11 +45,19 @@ public class SetupChunkWrite implements Operation {
     private final int chunkBytesToEncrypt;
 
     private BufferManager storageServerBufferManager;
+    private BufferManager storageServerResponseBufferManager;
 
     /*
      ** The following is a map of all of the created Operations to handle this request.
      */
     private final Map<OperationTypeEnum, Operation> requestHandlerOperations;
+
+    /*
+    ** The following is the connection used to communicate with the Storage Server
+     */
+    private IoInterface storageServerConnection;
+
+    private boolean chunkWriteSetupComplete;
 
     /*
     ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
@@ -77,6 +85,8 @@ public class SetupChunkWrite implements Operation {
          ** Setup this RequestContext to be able to read in and parse the HTTP Request(s)
          */
         requestHandlerOperations = new HashMap<OperationTypeEnum, Operation>();
+
+        chunkWriteSetupComplete = false;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -103,89 +113,145 @@ public class SetupChunkWrite implements Operation {
      **
      */
     public void execute() {
+        if (!chunkWriteSetupComplete) {
+            chunkWriteSetupComplete = true;
 
-        /*
-        ** Create a BufferManager with two required entries to send the HTTP Request header to the
-        **   Storage Server and then to send the final Shaw-256 calculation.
-         */
-        storageServerBufferManager = new BufferManager(STORAGE_SERVER_HEADER_BUFFER_COUNT);
+            /*
+             ** Create a BufferManager with two required entries to send the HTTP Request header to the
+             **   Storage Server and then to send the final Shaw-256 calculation.
+             */
+            storageServerBufferManager = new BufferManager(STORAGE_SERVER_HEADER_BUFFER_COUNT + 1);
 
-        /*
-        ** Allocate ByteBuffer for the header and the Shaw-256
-         */
-        BufferManagerPointer addBufferPointer = storageServerBufferManager.register(this);
-        storageServerBufferManager.bookmark(addBufferPointer);
-        for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
-            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
+            /*
+             ** Create a BufferManager to accept the HTTP Response from the Storage Server
+             */
+            storageServerResponseBufferManager = new BufferManager(STORAGE_SERVER_HEADER_BUFFER_COUNT + 1);
 
-            storageServerBufferManager.offer(addBufferPointer, buffer);
+            /*
+             ** Allocate ByteBuffer(s) for the header and the Shaw-256
+             */
+            BufferManagerPointer addBufferPointer = storageServerBufferManager.register(this);
+            storageServerBufferManager.bookmark(addBufferPointer);
+            for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
+                ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
+
+                storageServerBufferManager.offer(addBufferPointer, buffer);
+            }
+
+            storageServerBufferManager.reset(addBufferPointer);
+
+            /*
+             ** Allocate ByteBuffer(s) to read in the HTTP Response from the Storage Server
+             */
+            BufferManagerPointer respBufferPointer = storageServerResponseBufferManager.register(this);
+            storageServerResponseBufferManager.bookmark(respBufferPointer);
+            for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
+                ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
+
+                storageServerResponseBufferManager.offer(respBufferPointer, buffer);
+            }
+
+            storageServerResponseBufferManager.reset(respBufferPointer);
+
+            /*
+             ** First determine the VON information for the various Storage Servers that need to be written to.
+             */
+            int storageServerTcpPort = RequestContext.STORAGE_SERVER_PORT_BASE;
+
+            /*
+             ** For each Storage Server, setup a HandleStorageServerError operation that is used when there
+             **   is an error communicating with the StorageServer.
+             */
+            HandleStorageServerError errorHandler = new HandleStorageServerError(requestContext);
+            requestHandlerOperations.put(errorHandler.getOperationType(), errorHandler);
+
+            /*
+             ** For each Storage Server, create the connection used to communicate with it.
+             */
+            storageServerConnection = requestContext.allocateConnection(this);
+
+            /*
+             ** For each Storage Server, create a WriteToStorageServer operation that will handle writing the data out
+             **   to the Storage Server. The WriteToStorageServer will use the bookmark created in the
+             **   EncryptBuffer operation to know where to start writing the data.
+             */
+            WriteToStorageServer storageServerWriter = new WriteToStorageServer(requestContext, storageServerConnection,
+                    encryptedBufferPtr, storageServerTcpPort);
+            requestHandlerOperations.put(storageServerWriter.getOperationType(), storageServerWriter);
+            storageServerWriter.initialize();
+
+            /*
+             ** The PUT Header must be written to the Storage Server prior to sending the data
+             */
+            BuildHeaderToStorageServer headerBuilder = new BuildHeaderToStorageServer(requestContext, storageServerConnection,
+                    storageServerBufferManager, addBufferPointer, chunkBytesToEncrypt);
+            requestHandlerOperations.put(headerBuilder.getOperationType(), headerBuilder);
+            BufferManagerPointer writePointer = headerBuilder.initialize();
+
+            List<Operation> ops = new LinkedList<>();
+            ops.add(storageServerWriter);
+            WriteHeaderToStorageServer headerWriter = new WriteHeaderToStorageServer(requestContext, storageServerConnection, ops,
+                    storageServerBufferManager, writePointer, storageServerTcpPort);
+            requestHandlerOperations.put(headerWriter.getOperationType(), headerWriter);
+            headerWriter.initialize();
+
+            /*
+             ** For each Storage Server, setup a ConnectComplete operation that is used when the NIO
+             **   connection is made with the StorageServer.
+             */
+            List<Operation> operationList = new LinkedList<>();
+            operationList.add(headerBuilder);
+            ConnectComplete connectComplete = new ConnectComplete(requestContext, operationList,
+                    RequestContext.STORAGE_SERVER_PORT_BASE);
+            requestHandlerOperations.put(connectComplete.getOperationType(), connectComplete);
+
+            /*
+             ** Setup the operations to read in the HTTP Response header and process it
+             */
+            ReadStorageServerResponseBuffer readRespBuffer = new ReadStorageServerResponseBuffer(requestContext,
+                    storageServerConnection, storageServerResponseBufferManager, respBufferPointer);
+            requestHandlerOperations.put(readRespBuffer.getOperationType(), readRespBuffer);
+            BufferManagerPointer httpBufferPointer = readRespBuffer.initialize();
+
+            StorageServerResponseHandler httpRespHandler = new StorageServerResponseHandler(requestContext,
+                    storageServerResponseBufferManager, httpBufferPointer, this);
+            requestHandlerOperations.put(httpRespHandler.getOperationType(), httpRespHandler);
+            httpRespHandler.initialize();
+
+            /*
+             ** Meter out a buffer to allow the Storage Server HTTP response to be read in
+             */
+            storageServerResponseBufferManager.updateProducerWritePointer(respBufferPointer);
+
+            /*
+             ** Now open a initiator connection to write encrypted buffers out of.
+             */
+            storageServerConnection.startInitiator(InetAddress.getLoopbackAddress(), storageServerTcpPort,
+                    connectComplete, errorHandler);
+        } else {
+            complete();
         }
-
-        /*
-        ** First determine the VON information for the various Storage Servers that need to be written to.
-         */
-        int storageServerTcpPort = RequestContext.STORAGE_SERVER_PORT_BASE;
-
-        /*
-        ** For each Storage Server, setup a HandleStorageServerError operation that is used when there
-        **   is an error communicating with the StorageServer.
-         */
-        HandleStorageServerError errorHandler = new HandleStorageServerError(requestContext);
-        requestHandlerOperations.put(errorHandler.getOperationType(), errorHandler);
-
-        /*
-         ** For each Storage Server, create the connection used to communicate with it.
-         */
-        IoInterface connection = requestContext.allocateConnection(this);
-
-        /*
-         ** For each Storage Server, create a WriteToStorageServer operation that will handle writing the data out
-         **   to the Storage Server. The WriteToStorageServer will use the bookmark created in the
-         **   EncryptBuffer operation to know where to start writing the data.
-         */
-        WriteToStorageServer storageServerWriter = new WriteToStorageServer(requestContext, connection,
-                encryptedBufferPtr, storageServerTcpPort);
-        requestHandlerOperations.put(storageServerWriter.getOperationType(), storageServerWriter);
-        storageServerWriter.initialize();
-
-        /*
-        ** The PUT Header must be written to the Storage Server prior to sending the data
-         */
-        BuildHeaderToStorageServer headerBuilder = new BuildHeaderToStorageServer(requestContext, connection,
-                storageServerBufferManager, addBufferPointer, chunkBytesToEncrypt);
-        requestHandlerOperations.put(headerBuilder.getOperationType(), headerBuilder);
-        BufferManagerPointer writePointer = headerBuilder.initialize();
-
-        List<Operation> ops = new LinkedList<>();
-        ops.add(storageServerWriter);
-        WriteHeaderToStorageServer headerWriter = new WriteHeaderToStorageServer(requestContext, connection, ops,
-                storageServerBufferManager, writePointer, storageServerTcpPort);
-        requestHandlerOperations.put(headerWriter.getOperationType(), headerWriter);
-        headerWriter.initialize();
-
-        /*
-         ** For each Storage Server, setup a ConnectComplete operation that is used when the NIO
-         **   connection is made with the StorageServer.
-         */
-        List<Operation> operationList = new LinkedList<>();
-        operationList.add(headerBuilder);
-        ConnectComplete connectComplete = new ConnectComplete(requestContext, operationList,
-                RequestContext.STORAGE_SERVER_PORT_BASE);
-        requestHandlerOperations.put(connectComplete.getOperationType(), connectComplete);
-
-
-        /*
-        ** Now open a initiator connection to write encrypted buffers out of.
-         */
-        connection.startInitiator(InetAddress.getLoopbackAddress(), storageServerTcpPort,
-                connectComplete, errorHandler);
-
     }
 
     /*
      */
     public void complete() {
 
+        /*
+        ** Close out the connection used to communicate with the Storage Server
+         */
+        storageServerConnection.closeConnection();
+        storageServerConnection = null;
+
+        /*
+        ** Call the complete() methods for all of the Operations created to handle the chunk write
+         */
+        Collection<Operation> createdOperations = requestHandlerOperations.values();
+        for (Operation createdOperation : createdOperations) {
+            createdOperation.complete();
+        }
+
+        requestHandlerOperations.clear();
     }
 
     /*
@@ -261,9 +327,8 @@ public class SetupChunkWrite implements Operation {
         LOG.info("  -> Operations Created By " + operationType);
 
         Collection<Operation> createdOperations = requestHandlerOperations.values();
-        Iterator<Operation> iter = createdOperations.iterator();
-        while (iter.hasNext()) {
-            iter.next().dumpCreatedOperations(level + 1);
+        for (Operation createdOperation : createdOperations) {
+            createdOperation.dumpCreatedOperations(level + 1);
         }
         LOG.info("");
     }

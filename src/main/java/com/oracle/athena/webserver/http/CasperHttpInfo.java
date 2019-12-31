@@ -40,6 +40,7 @@ public class CasperHttpInfo {
     private static final String OBJECT_NAME = "/o/";
     private static final String TENANCY_NAME = "/n/";
     private static final String BUCKET_NAME = "/b/";
+    private static final String COMMAND_TYPE = "/v/";
 
 
     /*
@@ -235,7 +236,7 @@ public class CasperHttpInfo {
      */
     private final Map<String, List<String>> headers;
 
-    private String[] uriFields = {OBJECT_NAME, BUCKET_NAME, TENANCY_NAME};
+    private String[] uriFields = {OBJECT_NAME, BUCKET_NAME, TENANCY_NAME, COMMAND_TYPE};
 
 
     /*
@@ -257,6 +258,7 @@ public class CasperHttpInfo {
         parseFailureCode = 0;
         parseFailureReason = null;
         contentLengthReceived = false;
+
         // provide case-insensitive key management for the headers map using get(), containsKey(), and put()
         headers = new HashMap<String, List<String>>() {
             @Override
@@ -272,6 +274,7 @@ public class CasperHttpInfo {
                 return super.put(key.toLowerCase(), value);
             }
         };
+
         /*
          ** Need the ConnectionState to know who to inform when the different
          **   HTTP parsing phases complete.
@@ -384,6 +387,13 @@ public class CasperHttpInfo {
                 break;
             }
         }
+
+        if (httpMethod == HttpMethodEnum.PUT_METHOD) {
+            String version = putObjectInfoMap.get(COMMAND_TYPE);
+            if ((version != null) && (version.equals("StorageServer"))) {
+                httpMethod = HttpMethodEnum.PUT_STORAGE_SERVER;
+            }
+        }
     }
 
     public HttpMethodEnum getMethod() {
@@ -462,7 +472,7 @@ public class CasperHttpInfo {
         if (result != -1) {
             try {
                 contentLengthReceived = true;
-                contentLength = int.parseLong(field.getValue());
+                contentLength = Integer.parseInt(field.getValue());
 
                 /*
                  ** TODO: Are there specific limits for the Content-Length that need to be validated

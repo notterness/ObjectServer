@@ -141,6 +141,8 @@ public class RequestContext {
      */
     private CloseOutRequest closeRequest;
 
+    private DetermineRequestType determineRequestType;
+
     /*
     ** The metering pointer is used to meter buffers to the read operation. It is used to indicate
     **   where buffers are available to read data into. The read operation has a dependency upon
@@ -164,9 +166,6 @@ public class RequestContext {
     **
      */
     private BufferManagerPointer clientWritePtr;
-
-    private BufferManagerPointer clientWriteDonePtr;
-
 
     /*
     ** The following is a map of all of the created Operations to handle this request.
@@ -319,10 +318,18 @@ public class RequestContext {
 
         WriteToClient writeToClient = new WriteToClient(this, clientConnection, closeRequest, clientWritePtr);
         requestHandlerOperations.put(writeToClient.getOperationType(), writeToClient);
-        clientWriteDonePtr = writeToClient.initialize();
+        writeToClient.initialize();
+
+        determineRequestType = new DetermineRequestType(this, supportedHttpRequests);
+        requestHandlerOperations.put(determineRequestType.getOperationType(), determineRequestType);
+        determineRequestType.initialize();
 
         SetupV2Put v2PutHandler = new SetupV2Put(this, memoryManager, metering);
         this.supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, v2PutHandler);
+
+        SetupStorageServerPut storageServerPutHandler = new SetupStorageServerPut(this, memoryManager, metering,
+                determineRequestType);
+        this.supportedHttpRequests.put(HttpMethodEnum.PUT_STORAGE_SERVER, storageServerPutHandler);
 
         /*
          ** Setup the specific part for parsing the buffers as an HTTP Request.
@@ -347,10 +354,6 @@ public class RequestContext {
          **   will event the DetermineRequestType operation to determine what operation sequence
          **   to setup.
          */
-        DetermineRequestType determineRequestType = new DetermineRequestType(this, supportedHttpRequests);
-        requestHandlerOperations.put(determineRequestType.getOperationType(), determineRequestType);
-        determineRequestType.initialize();
-
         ParseHttpRequest httpParser = new ParseHttpRequest(this, readPointer, metering, determineRequestType);
         requestHandlerOperations.put(httpParser.getOperationType(), httpParser);
         clientDataReadPtr = httpParser.initialize();
@@ -663,21 +666,13 @@ public class RequestContext {
         return readPointer;
     }
 
-    public BufferManagerPointer getClientDataReadPtr() {
-        return clientDataReadPtr;
-    }
-
-    public BufferManagerPointer getMeteringPtr() {
-        return meteringPtr;
-    }
-
     /*
     **
      */
     public boolean hasHttpRequestBeenSent(final int targetPort) {
         AtomicBoolean responseSent = httpRequestSent.get(targetPort);
         if (responseSent != null) {
-            if (responseSent.get() == true) {
+            if (responseSent.get()) {
                 httpRequestSent.remove(targetPort);
                 return true;
             }
@@ -704,9 +699,8 @@ public class RequestContext {
     public void dumpOperations() {
         LOG.info(" RequestContext[" + connectionRequestId + "] Operation dependency");
         Collection<Operation> createdOperations = requestHandlerOperations.values();
-        Iterator<Operation> iter = createdOperations.iterator();
-        while (iter.hasNext()) {
-            iter.next().dumpCreatedOperations(1);
+        for (Operation createdOperation : createdOperations) {
+            createdOperation.dumpCreatedOperations(1);
         }
 
     }

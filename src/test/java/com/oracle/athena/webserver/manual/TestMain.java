@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class TestMain {
     public static void main(String[] args) {
         final int serverTcpPort = 5001;
+        final int storageServerTcpPort = 5010;
 
         AtomicInteger threadCount = new AtomicInteger(1);
 
@@ -19,19 +20,22 @@ public class TestMain {
         //TestHttpParser testHttpParser = new TestHttpParser("TestHttpParser");
         //testHttpParser.execute();
 
-        NioServerHandler nioServer = new NioServerHandler(WebServerFlavor.INTEGRATION_TESTS, 5001, 1000);
+        NioServerHandler nioServer = new NioServerHandler(WebServerFlavor.INTEGRATION_TESTS, serverTcpPort, 1000);
         nioServer.start();
 
-        NioServerHandler nioStorageServer = new NioServerHandler(WebServerFlavor.INTEGRATION_TESTS, 5010, 1000);
+        NioServerHandler nioStorageServer = new NioServerHandler(WebServerFlavor.INTEGRATION_TESTS, storageServerTcpPort, 1000);
         nioStorageServer.start();
 
         NioTestClient testClient = new NioTestClient(2000);
         testClient.start();
 
+        TestChunkWrite testChunkWrite = new TestChunkWrite(testClient, storageServerTcpPort, threadCount);
+        testChunkWrite.execute();
+
         //ClientTest client_1 = new ClientTest_2("ClientTest_2", testClient, serverTcpPort, threadCount);
         //client_1.execute();
-        ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverTcpPort, threadCount);
-        checkMd5.execute();
+        //ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverTcpPort, threadCount);
+        //checkMd5.execute();
 
         /*
         ** Uncomment out the following two lines to let TestMain just act as a server. It can then be used to

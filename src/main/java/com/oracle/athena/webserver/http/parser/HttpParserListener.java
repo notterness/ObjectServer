@@ -62,6 +62,11 @@ public class HttpParserListener implements HttpParser.RequestHandler {
         _headerCompleted = false;
         _early = false;
 
+        /*
+        ** Parse the URI first to obtain any version information
+         */
+        casperHttpInfo.setHttpUri(uri);
+
         if (_versionOrReason != null) {
             LOG.info("StartRequest() method: " + method + " uri: " + uri +
                     " version: " + _versionOrReason);
@@ -71,8 +76,6 @@ public class HttpParserListener implements HttpParser.RequestHandler {
             LOG.info("StartRequest() method: " + method + " uri: " + uri +
                     " version: null");
         }
-
-        casperHttpInfo.setHttpUri(uri);
 
         return false;
     }
