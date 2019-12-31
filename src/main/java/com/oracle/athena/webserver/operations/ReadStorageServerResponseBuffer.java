@@ -1,24 +1,30 @@
 package com.oracle.athena.webserver.operations;
 
+import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
-import com.oracle.athena.webserver.http.CasperHttpInfo;
-import com.oracle.athena.webserver.http.HttpMethodEnum;
+import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Map;
-
-public class DetermineRequestType implements Operation {
-
-    private static final Logger LOG = LoggerFactory.getLogger(DetermineRequestType.class);
+public class ReadStorageServerResponseBuffer implements Operation {
+    private static final Logger LOG = LoggerFactory.getLogger(ReadStorageServerResponseBuffer.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.DETERMINE_REQUEST_TYPE;
+    public final OperationTypeEnum operationType = OperationTypeEnum.READ_STORAGE_SERVER_RESPONSE_BUFFER;
+
 
     private final RequestContext requestContext;
+
+    private final BufferManager storageServerResponseBufferManager;
+
+    private final BufferManagerPointer meterBufferPtr;
+
+    private IoInterface storageServerConnection;
+
+    private BufferManagerPointer readBufferPointer;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -29,24 +35,14 @@ public class DetermineRequestType implements Operation {
     private boolean onExecutionQueue;
     private long nextExecuteTime;
 
-    /*
-     ** The following map is passed into the RequestContext and it provides a list of all of the Operations that
-     **   provide the initial handler for an HTTP Request type. This is setup at the start of execution and
-     **   is only populated with handler operations (i.e. V2 PUT).
-     */
-    private final Map<HttpMethodEnum, Operation> supportedHttpRequests;
-
-    private CasperHttpInfo casperHttpInfo;
-
-    private boolean methodDeterminationDone;
-
-
-    public DetermineRequestType(final RequestContext requestContext, final Map<HttpMethodEnum, Operation> supportedHttpRequests) {
+    public ReadStorageServerResponseBuffer(final RequestContext requestContext,
+                                           final IoInterface connection, final BufferManager storageServerResponseBufferMgr,
+                                           final BufferManagerPointer meterBufferPtr) {
 
         this.requestContext = requestContext;
-        this.supportedHttpRequests = supportedHttpRequests;
-
-        this.casperHttpInfo = this.requestContext.getHttpInfo();
+        this.storageServerConnection = connection;
+        this.storageServerResponseBufferManager = storageServerResponseBufferMgr;
+        this.meterBufferPtr = meterBufferPtr;
 
         /*
          ** This starts out not being on any queue
@@ -54,8 +50,6 @@ public class DetermineRequestType implements Operation {
         onDelayedQueue = false;
         onExecutionQueue = false;
         nextExecuteTime = 0;
-
-        methodDeterminationDone = false;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -67,11 +61,19 @@ public class DetermineRequestType implements Operation {
      **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
-        return null;
+
+        readBufferPointer = storageServerResponseBufferManager.register(this, meterBufferPtr);
+
+        /*
+         ** Register the BufferManager and BufferManagerPointer with the clientConnection to allow
+         **   data to be read in.
+         */
+        storageServerConnection.registerReadBufferManager(storageServerResponseBufferManager, readBufferPointer);
+
+        return readBufferPointer;
     }
 
     public void event() {
-
         /*
          ** Add this to the execute queue if it is not already on it.
          */
@@ -79,46 +81,23 @@ public class DetermineRequestType implements Operation {
     }
 
     public void execute() {
-        if (!methodDeterminationDone) {
-            if (requestContext.getHttpParseError()) {
-                /*
-                 ** Event the send client response operation here so that the final status is sent
-                 */
-                LOG.warn("DetermineRequestType[" + requestContext.getRequestId() + "] sending final status");
-
-                Operation sendFinalStatus = requestContext.getOperation(OperationTypeEnum.SEND_FINAL_STATUS);
-                sendFinalStatus.event();
-            } else {
-
-                /*
-                 ** Now, based on the HTTP method, figure out the Operation to event that will setup the sequences for the
-                 **   handling of the request.
-                 */
-                HttpMethodEnum method = casperHttpInfo.getMethod();
-                Operation httpRequestSetup = supportedHttpRequests.get(method);
-                if (httpRequestSetup != null) {
-                    requestContext.addOperation(httpRequestSetup);
-
-                    LOG.info("DetermineRequestType[" + requestContext.getRequestId() + "] execute() " + method.toString());
-                    httpRequestSetup.initialize();
-                    httpRequestSetup.event();
-                } else {
-                    LOG.info("DetermineRequestType[" + requestContext.getRequestId() + "] execute() unsupported request " + method.toString());
-                }
-            }
-
-            methodDeterminationDone = true;
+        if (storageServerResponseBufferManager.peek(readBufferPointer) != null) {
+            storageServerConnection.readBufferAvailable();
         } else {
-            Operation sendFinalStatus = requestContext.getOperation(OperationTypeEnum.SEND_FINAL_STATUS);
-            sendFinalStatus.event();
+            LOG.info("ReadBuffer no buffers to read into");
         }
     }
 
     public void complete() {
         /*
-        ** This does not have anything that needs to be released or cleaned up, so this is just an
-        **   empty method for now.
+         ** Unregister the BufferManager and the BufferManagerPointer with the clientConnection
          */
+        storageServerConnection.unregisterReadBufferManager();
+
+        /*
+         ** Need to remove the reference to the IoManager
+         */
+        storageServerConnection = null;
     }
 
     /*
@@ -129,7 +108,7 @@ public class DetermineRequestType implements Operation {
      ** The following methods are called by the event thread under a queue mutex.
      **   markRemoveFromQueue - This method is used by the event thread to update the queue
      **     the Operation is on when the operation is removed from the queue.
-     **   markAddedToQueue - This method is used when an Operation is added to a queue to mark
+     **   markAddedToQueue - This method is used when a operation is added to a queue to mark
      **     which queue it is on.
      **   isOnWorkQueue - Accessor method
      **   isOnTimedWaitQueue - Accessor method
@@ -139,22 +118,22 @@ public class DetermineRequestType implements Operation {
      **   of which queue the connection is on. It will probably clean up the code some.
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("DetermineRequestType[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("ReadBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (onDelayedQueue) {
             if (!delayedExecutionQueue) {
-                LOG.warn("DetermineRequestType[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
+                LOG.warn("ReadBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
             }
 
             onDelayedQueue = false;
             nextExecuteTime = 0;
         } else if (onExecutionQueue){
             if (delayedExecutionQueue) {
-                LOG.warn("DetermineRequestType[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
+                LOG.warn("ReadBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
             }
 
             onExecutionQueue = false;
         } else {
-            LOG.warn("DetermineRequestType[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
+            LOG.warn("ReadBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
         }
     }
 
@@ -182,7 +161,7 @@ public class DetermineRequestType implements Operation {
             return false;
         }
 
-        //LOG.info("DetermineRequestType[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
+        //LOG.info("ReadBuffer[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
         return true;
     }
 
@@ -191,7 +170,7 @@ public class DetermineRequestType implements Operation {
      */
     public void dumpCreatedOperations(final int level) {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
-        LOG.info("      No BufferManagerPointers");
+        readBufferPointer.dumpPointerInfo();
         LOG.info("");
     }
 

@@ -44,6 +44,12 @@ public class EncryptBuffer implements Operation {
     private final BufferManager clientReadBufferMgr;
     private final BufferManager storageServerWriteBufferMgr;
 
+    /*
+    ** The clientFullBufferPtr is used to track ByteBuffer(s) that are filled with client object data and are
+    **   ready to be encrypted prior to being written to the Storage Servers.
+    ** The clientFullBufferPtr tracks the clientReadBufferManager where data is placed following reads from
+    **   the client connection's SocketChannel.
+     */
     private final BufferManagerPointer clientFullBufferPtr;
 
     private final int chunkSize;
@@ -54,7 +60,11 @@ public class EncryptBuffer implements Operation {
     private BufferManagerPointer storageServerAddPointer;
     private BufferManagerPointer storageServerWritePtr;
 
-    private long chunkBytesToEncrypt;
+    /*
+    ** The following are used to keep track of how much has been written to this Storage Server and
+    **   how much is supposed to be written.
+     */
+    private int chunkBytesToEncrypt;
     private int chunkBytesEncrypted;
 
     private int savedSrcPosition;
@@ -75,6 +85,7 @@ public class EncryptBuffer implements Operation {
         this.clientFullBufferPtr = clientReadPointer;
 
         this.readBufferMetering = requestContext.getOperation(OperationTypeEnum.METER_READ_BUFFERS);
+
         /*
          ** This starts out not being on any queue
          */
@@ -104,7 +115,7 @@ public class EncryptBuffer implements Operation {
 
         /*
         ** savedSrcPosition is used to handle the case where there are no buffers available to place
-        **   encrypted data into, so this operation will need to wait until buffers are avaialble.
+        **   encrypted data into, so this operation will need to wait until buffers are available.
          */
         savedSrcPosition = 0;
 

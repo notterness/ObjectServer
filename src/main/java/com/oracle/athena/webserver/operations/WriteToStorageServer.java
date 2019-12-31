@@ -108,6 +108,8 @@ public class WriteToStorageServer implements Operation {
          */
         if (requestContext.hasHttpRequestBeenSent(storageServerTcpPort) == true) {
             requestContext.addToWorkQueue(this);
+        } else {
+            LOG.info("WriteToStorageServer[" + requestContext.getRequestId() + "] HTTP request not sent");
         }
     }
 
@@ -127,6 +129,8 @@ public class WriteToStorageServer implements Operation {
 
         if (storageServerWriteBufferMgr.peek(writeToStorageServerPtr) != null) {
             connection.writeBufferReady();
+        } else {
+            LOG.info("WriteToStorageServer[" + requestContext.getRequestId() + "] no buffers to write");
         }
     }
 

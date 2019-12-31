@@ -49,6 +49,7 @@ public class WriteHeaderToStorageServer implements Operation {
 
     private final BufferManager storageServerBufferManager;
     private final BufferManagerPointer writePointer;
+    private BufferManagerPointer writeInfoPointer;
     private BufferManagerPointer writeDonePointer;
 
     public WriteHeaderToStorageServer(final RequestContext requestContext, final IoInterface storageServerConnection,
@@ -80,16 +81,21 @@ public class WriteHeaderToStorageServer implements Operation {
      */
     public BufferManagerPointer initialize() {
         /*
-        ** This will be woken up when there is data to write and when the data has all been written
+        ** This will be woken up when there is data to write via the writeDonePointer
          */
-        writeDonePointer = storageServerBufferManager.register(this, writePointer);
+        writeInfoPointer = storageServerBufferManager.register(this, writePointer);
+
+        /*
+        ** This will be woken up when the data has been written out the SocketChannel via the writeDonePointer
+         */
+        writeDonePointer = storageServerBufferManager.register(this, writeInfoPointer);
 
         /*
         ** Register with the storageServerConnection to perform the write
          */
-        storageServerConnection.registerWriteBufferManager(storageServerBufferManager, writePointer);
+        storageServerConnection.registerWriteBufferManager(storageServerBufferManager, writeInfoPointer);
 
-        return writeDonePointer;
+        return writeInfoPointer;
     }
 
     public void event() {
@@ -106,14 +112,16 @@ public class WriteHeaderToStorageServer implements Operation {
         /*
         ** Check if there is data to write out
          */
-        if (storageServerBufferManager.peek(writePointer) != null) {
+        if (storageServerBufferManager.peek(writeInfoPointer) != null) {
             storageServerConnection.writeBufferReady();
+        } else {
+            LOG.info("WriteHeaderToStorageServer writePointer no buffers");
         }
 
         /*
         ** Check if the data has been written out
          */
-        if (storageServerBufferManager.peek(writeDonePointer) != null) {
+        if (storageServerBufferManager.peek(writeInfoPointer) == null) {
             /*
             ** Set the HTTP Header has been written to the Storage Server flag
              */
@@ -128,6 +136,8 @@ public class WriteHeaderToStorageServer implements Operation {
                 iter.next().event();
             }
             operationsToRun.clear();
+        } else {
+            LOG.info("WriteHeaderToStorageServer writeDonePointer not finished");
         }
 
     }
@@ -136,7 +146,10 @@ public class WriteHeaderToStorageServer implements Operation {
      ** This removes any dependencies that are put upon the BufferManager
      */
     public void complete() {
-
+        /*
+        ** There is no longer a need for the writeDonePointer
+         */
+        storageServerBufferManager.unregister(writeDonePointer);
     }
 
     /*

@@ -96,7 +96,7 @@ public class BufferManager {
         bufferArray[writeIndex] = buffer;
 
         /*
-        ** Now the pointer can be advanced to allow anything waiting on this to be evented.
+        ** Now the pointer can be advanced to allow anything waiting on this to be event(ed).
          */
         pointer.updateWriteIndex();
     }

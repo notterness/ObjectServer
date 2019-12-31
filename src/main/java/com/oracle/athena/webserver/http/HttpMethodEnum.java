@@ -9,7 +9,8 @@ public enum HttpMethodEnum {
 
     INVALID_METHOD(0),
     PUT_METHOD(1),
-    POST_METHOD(2);
+    PUT_STORAGE_SERVER(2),
+    POST_METHOD(3);
 
     private int value;
 

@@ -2,38 +2,28 @@ package com.oracle.athena.webserver.operations;
 
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
-import com.oracle.athena.webserver.niosockets.IoInterface;
+import com.oracle.athena.webserver.http.HttpResponseListener;
+import com.oracle.athena.webserver.http.StorageServerResponseCallback;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import org.eclipse.jetty.http.HttpParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.charset.Charset;
-import java.nio.charset.CharsetEncoder;
-import java.nio.charset.StandardCharsets;
-import java.util.Iterator;
-import java.util.List;
 
-public class BuildHeaderToStorageServer implements Operation {
-    private static final Logger LOG = LoggerFactory.getLogger(BuildHeaderToStorageServer.class);
+public class StorageServerResponseHandler implements Operation {
+    private static final Logger LOG = LoggerFactory.getLogger(StorageServerResponseHandler.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.BUILD_HEADER_TO_STORGE_SERVER;
+    public final OperationTypeEnum operationType = OperationTypeEnum.STORAGE_SERVER_RESPONSE_HANDLER;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
     private final RequestContext requestContext;
 
-    /*
-    ** The IoInterface is what is used to communicate with the Storage Server.
-     */
-    private final IoInterface storageServerConnection;
-
-    private final int chunkBytesToEncrypt;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -44,23 +34,35 @@ public class BuildHeaderToStorageServer implements Operation {
     private boolean onExecutionQueue;
     private long nextExecuteTime;
 
-    private final BufferManager storageServerBufferManager;
-    private final BufferManagerPointer addBufferPointer;
-    private BufferManagerPointer writePointer;
+    /*
+    ** The following are the BufferManager and pointers that are used to read in the HTTP Response from
+    **   the Storage Server and to process it.
+     */
+    private final BufferManager storageServerResponseBufferManager;
+    private final BufferManagerPointer readBufferPointer;
+    private BufferManagerPointer httpResponseBufferPointer;
 
-    private boolean headerNotBuilt;
+    /*
+    ** The HTTP Parser is used to extract the status from the Storage Server response
+     */
+    private HttpParser httpParser;
 
-    public BuildHeaderToStorageServer(final RequestContext requestContext, final IoInterface storageServerConnection,
-                                      final BufferManager storageServerBufferManager, final BufferManagerPointer addBufferPtr,
-                                      final int chunkBytesToEncrypt) {
+    /*
+    ** The completionCallback is what is used to call back into the SetupChunkWrite to indicate that the
+    **   response has been received (good or bad) from the Storage Server
+     */
+    private final Operation completionCallback;
+
+
+    public StorageServerResponseHandler(final RequestContext requestContext, final BufferManager storageServerResponseBufferMgr,
+                                 final BufferManagerPointer readBufferPtr, final Operation completionCb) {
 
         this.requestContext = requestContext;
-        this.storageServerConnection = storageServerConnection;
 
-        this.storageServerBufferManager = storageServerBufferManager;
-        this.addBufferPointer = addBufferPtr;
+        this.storageServerResponseBufferManager = storageServerResponseBufferMgr;
+        this.readBufferPointer = readBufferPtr;
 
-        this.chunkBytesToEncrypt = chunkBytesToEncrypt;
+        this.completionCallback = completionCb;
 
         /*
          ** This starts out not being on any queue
@@ -68,8 +70,6 @@ public class BuildHeaderToStorageServer implements Operation {
         onDelayedQueue = false;
         onExecutionQueue = false;
         nextExecuteTime = 0;
-
-        headerNotBuilt = true;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -79,8 +79,22 @@ public class BuildHeaderToStorageServer implements Operation {
     /*
      */
     public BufferManagerPointer initialize() {
-        writePointer = storageServerBufferManager.register(this, addBufferPointer);
-        return writePointer;
+        /*
+         ** Register this with the Buffer Manager to allow it to be event(ed) when
+         **   buffers are added by the read producer
+         */
+        httpResponseBufferPointer = storageServerResponseBufferManager.register(this, readBufferPointer);
+
+        StorageServerResponseCallback httpResponseCompleted = new StorageServerResponseCallback(completionCallback);
+        HttpResponseListener listener = new HttpResponseListener(httpResponseCompleted);
+        httpParser = new HttpParser(listener);
+
+        if (httpParser.isState(HttpParser.State.END))
+            httpParser.reset();
+        if (!httpParser.isState(HttpParser.State.START))
+            throw new IllegalStateException("!START");
+
+        return httpResponseBufferPointer;
     }
 
     public void event() {
@@ -94,46 +108,28 @@ public class BuildHeaderToStorageServer implements Operation {
     /*
      */
     public void execute() {
-        if (headerNotBuilt) {
+        ByteBuffer httpBuffer;
+
+        while ((httpBuffer = storageServerResponseBufferManager.peek(httpResponseBufferPointer)) != null) {
             /*
-             ** Add a buffer if this is the first time through
+             ** Now run the Buffer State through the Http Parser
              */
-            storageServerBufferManager.updateProducerWritePointer(addBufferPointer);
+            httpBuffer.flip();
 
-            /*
-             ** Build the HTTP Header and the Object to be sent
-             */
-            ByteBuffer msgHdr = storageServerBufferManager.peek(writePointer);
-            if (msgHdr != null) {
-
-                String tmp;
-                tmp = buildRequestString(chunkBytesToEncrypt);
-
-                str_to_bb(msgHdr, tmp);
-
-                /*
-                 ** Need to flip() the buffer so that the limit() is set to the end of where the HTTP Request is
-                 **   and the position() reset to 0.
-                 */
-                msgHdr.flip();
-
-                /*
-                 ** Data is now present in the ByteBuffer so the writeInfillPtr needs to be updated,
-                 */
-                storageServerBufferManager.updateProducerWritePointer(writePointer);
-            } else {
-                LOG.info("BuildHeaderToStorageServer no buffers");
-            }
-
-            headerNotBuilt = false;
+            httpParser.parseNext(httpBuffer);
+            storageServerResponseBufferManager.updateConsumerReadPointer(httpResponseBufferPointer);
         }
+
     }
 
     /*
      ** This removes any dependencies that are put upon the BufferManager
      */
     public void complete() {
+        httpParser = null;
 
+        storageServerResponseBufferManager.unregister(httpResponseBufferPointer);
+        httpResponseBufferPointer = null;
     }
 
     /*
@@ -210,30 +206,5 @@ public class BuildHeaderToStorageServer implements Operation {
         LOG.info("");
     }
 
-    private String buildRequestString(final int bytesInContent) {
-        return new String("PUT /n/faketenantname" + "" +
-                "/b/bucket-5e1910d0-ea13-11e9-851d-234132e0fb02" +
-                "/v/StorageServer" +
-                "/o/5e223890-ea13-11e9-851d-234132e0fb02  HTTP/1.1\n" +
-                "Host: StorageServerWrite\n" +
-                "Content-Type: application/json\n" +
-                "Connection: keep-alive\n" +
-                "Accept: */*\n" +
-                "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
-                "Accept-Language: en-us\n" +
-                "Accept-Encoding: gzip, deflate\n" +
-                "Content-Length: " + bytesInContent + "\n\n");
-    }
-
-    private void str_to_bb(ByteBuffer out, String in) {
-        Charset charset = StandardCharsets.UTF_8;
-        CharsetEncoder encoder = charset.newEncoder();
-
-        try {
-            encoder.encode(CharBuffer.wrap(in), out, true);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-    }
 
 }
