@@ -1,13 +1,12 @@
 package com.oracle.athena.webserver.client;
 
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
+import com.oracle.athena.webserver.manual.TestChunkWrite;
 import com.oracle.athena.webserver.operations.Operation;
 import com.oracle.athena.webserver.operations.OperationTypeEnum;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.List;
 
 public class ChunkWriteTestComplete implements Operation {
     private static final Logger LOG = LoggerFactory.getLogger(ChunkWriteTestComplete.class);
@@ -15,12 +14,14 @@ public class ChunkWriteTestComplete implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_CONNECT_COMPLETE;
+    public final OperationTypeEnum operationType = OperationTypeEnum.CHUNK_WRITE_TEST_COMPLETE;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
     private final RequestContext requestContext;
+
+    private final TestChunkWrite testWriteChunk;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -32,9 +33,10 @@ public class ChunkWriteTestComplete implements Operation {
     private long nextExecuteTime;
 
 
-    public ChunkWriteTestComplete(final RequestContext requestContext) {
+    public ChunkWriteTestComplete(final RequestContext requestContext, final TestChunkWrite testWriteChunk) {
 
         this.requestContext = requestContext;
+        this.testWriteChunk = testWriteChunk;
 
         /*
          ** This starts out not being on any queue
@@ -66,6 +68,14 @@ public class ChunkWriteTestComplete implements Operation {
     /*
      */
     public void execute() {
+        /*
+         ** Let the caller know that status has been received
+         */
+        if (requestContext.hasStorageServerResponseArrived(RequestContext.STORAGE_SERVER_PORT_BASE)) {
+            int result = requestContext.getStorageResponseResult(RequestContext.STORAGE_SERVER_PORT_BASE);
+            LOG.info("ChunkWriteTestComplete result: " + result);
+            testWriteChunk.statusReceived(result);
+        }
     }
 
     /*

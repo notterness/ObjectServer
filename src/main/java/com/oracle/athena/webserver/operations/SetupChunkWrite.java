@@ -30,6 +30,8 @@ public class SetupChunkWrite implements Operation {
 
     private final MemoryManager memoryManager;
 
+    private final Operation completeCallback;
+
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
@@ -39,13 +41,15 @@ public class SetupChunkWrite implements Operation {
     private boolean onExecutionQueue;
     private long nextExecuteTime;
 
-    private final BufferManager clientWriteBufferMgr;
     private final BufferManagerPointer encryptedBufferPtr;
 
     private final int chunkBytesToEncrypt;
 
     private BufferManager storageServerBufferManager;
     private BufferManager storageServerResponseBufferManager;
+
+    private BufferManagerPointer addBufferPointer;
+    private BufferManagerPointer respBufferPointer;
 
     /*
      ** The following is a map of all of the created Operations to handle this request.
@@ -65,14 +69,14 @@ public class SetupChunkWrite implements Operation {
      */
     public SetupChunkWrite(final RequestContext requestContext, final MemoryManager memoryManager,
                            final BufferManagerPointer encryptedBufferPtr,
-                           final int chunkBytesToEncrypt) {
+                           final int chunkBytesToEncrypt, final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
         this.encryptedBufferPtr = encryptedBufferPtr;
         this.chunkBytesToEncrypt = chunkBytesToEncrypt;
 
-        this.clientWriteBufferMgr = this.requestContext.getClientWriteBufferManager();
+        this.completeCallback = completeCb;
 
         /*
          ** This starts out not being on any queue
@@ -130,7 +134,7 @@ public class SetupChunkWrite implements Operation {
             /*
              ** Allocate ByteBuffer(s) for the header and the Shaw-256
              */
-            BufferManagerPointer addBufferPointer = storageServerBufferManager.register(this);
+            addBufferPointer = storageServerBufferManager.register(this);
             storageServerBufferManager.bookmark(addBufferPointer);
             for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
                 ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
@@ -143,7 +147,7 @@ public class SetupChunkWrite implements Operation {
             /*
              ** Allocate ByteBuffer(s) to read in the HTTP Response from the Storage Server
              */
-            BufferManagerPointer respBufferPointer = storageServerResponseBufferManager.register(this);
+            respBufferPointer = storageServerResponseBufferManager.register(this);
             storageServerResponseBufferManager.bookmark(respBufferPointer);
             for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
                 ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
@@ -214,7 +218,8 @@ public class SetupChunkWrite implements Operation {
             BufferManagerPointer httpBufferPointer = readRespBuffer.initialize();
 
             StorageServerResponseHandler httpRespHandler = new StorageServerResponseHandler(requestContext,
-                    storageServerResponseBufferManager, httpBufferPointer, this);
+                    storageServerResponseBufferManager, httpBufferPointer, this,
+                    storageServerTcpPort);
             requestHandlerOperations.put(httpRespHandler.getOperationType(), httpRespHandler);
             httpRespHandler.initialize();
 
@@ -229,6 +234,7 @@ public class SetupChunkWrite implements Operation {
             storageServerConnection.startInitiator(InetAddress.getLoopbackAddress(), storageServerTcpPort,
                     connectComplete, errorHandler);
         } else {
+
             complete();
         }
     }
@@ -244,6 +250,32 @@ public class SetupChunkWrite implements Operation {
         storageServerConnection = null;
 
         /*
+        ** The following must be called in order to make sure that the BufferManagerPointer
+        **   dependencies are torn down in the correct order. The pointers in
+        **   headerWriter are dependent upon the pointers in headerBuilder
+         */
+        Operation headerWriter = requestHandlerOperations.get(OperationTypeEnum.WRITE_HEADER_TO_STORAGE_SERVER);
+        headerWriter.complete();
+        requestHandlerOperations.remove(OperationTypeEnum.WRITE_HEADER_TO_STORAGE_SERVER);
+
+        Operation headerBuilder = requestHandlerOperations.get(OperationTypeEnum.BUILD_HEADER_TO_STORGE_SERVER);
+        headerBuilder.complete();
+        requestHandlerOperations.remove(OperationTypeEnum.BUILD_HEADER_TO_STORGE_SERVER);
+
+        /*
+         ** The following must be called in order to make sure that the BufferManagerPointer
+         **   dependencies are torn down in the correct order. The pointers in
+         **   httpRespHandler are dependent upon the pointers in readRespBuffer.
+         */
+        Operation httpRespHandler = requestHandlerOperations.get(OperationTypeEnum.STORAGE_SERVER_RESPONSE_HANDLER);
+        httpRespHandler.complete();
+        requestHandlerOperations.remove(OperationTypeEnum.STORAGE_SERVER_RESPONSE_HANDLER);
+
+        Operation readRespBuffer = requestHandlerOperations.get(OperationTypeEnum.READ_STORAGE_SERVER_RESPONSE_BUFFER);
+        readRespBuffer.complete();
+        requestHandlerOperations.remove(OperationTypeEnum.READ_STORAGE_SERVER_RESPONSE_BUFFER);
+
+        /*
         ** Call the complete() methods for all of the Operations created to handle the chunk write
          */
         Collection<Operation> createdOperations = requestHandlerOperations.values();
@@ -252,6 +284,48 @@ public class SetupChunkWrite implements Operation {
         }
 
         requestHandlerOperations.clear();
+
+        /*
+        ** Return the allocated buffers that were used to send the HTTP Request and the
+        **   Shaw-256 value to the Storage Server
+         */
+        storageServerBufferManager.reset(addBufferPointer);
+        for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
+            ByteBuffer buffer = storageServerBufferManager.poll(addBufferPointer);
+            if (buffer != null) {
+                memoryManager.poolMemFree(buffer);
+            } else {
+                LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] addBufferPointer index: " + addBufferPointer.getCurrIndex());
+            }
+        }
+
+        storageServerBufferManager.unregister(addBufferPointer);
+        storageServerBufferManager.reset();
+        storageServerBufferManager = null;
+
+        /*
+         ** Return the allocated buffers that were used to receive the HTTP Response
+         **   from the Storage Server
+         */
+        storageServerResponseBufferManager.reset(respBufferPointer);
+        for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
+            ByteBuffer buffer = storageServerResponseBufferManager.poll(respBufferPointer);
+            if (buffer != null) {
+                memoryManager.poolMemFree(buffer);
+            } else {
+                LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] respBufferPointer index: " +
+                        respBufferPointer.getCurrIndex());
+            }
+        }
+
+        storageServerResponseBufferManager.unregister(respBufferPointer);
+        storageServerResponseBufferManager.reset();
+        storageServerResponseBufferManager = null;
+
+        /*
+        ** Now call back the Operation that will handle the completion
+         */
+        completeCallback.event();
     }
 
     /*

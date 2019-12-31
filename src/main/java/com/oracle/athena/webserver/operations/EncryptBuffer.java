@@ -331,7 +331,7 @@ public class EncryptBuffer implements Operation {
                     ** Now create the SetupChunkWrite and start it running
                      */
                     SetupChunkWrite setupChunkWrite = new SetupChunkWrite(requestContext, memoryManager,
-                            storageServerWritePtr, chunkBytesToEncrypt);
+                            storageServerWritePtr, chunkBytesToEncrypt, this);
                     setupChunkWrite.initialize();
                     setupChunkWrite.event();
                 }

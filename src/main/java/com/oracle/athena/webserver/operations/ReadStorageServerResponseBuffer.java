@@ -95,6 +95,12 @@ public class ReadStorageServerResponseBuffer implements Operation {
         storageServerConnection.unregisterReadBufferManager();
 
         /*
+        ** Remove the BufferManagerPointer
+         */
+        storageServerResponseBufferManager.unregister(readBufferPointer);
+        readBufferPointer = null;
+
+        /*
          ** Need to remove the reference to the IoManager
          */
         storageServerConnection = null;

@@ -133,7 +133,8 @@ public class BuildHeaderToStorageServer implements Operation {
      ** This removes any dependencies that are put upon the BufferManager
      */
     public void complete() {
-
+        storageServerBufferManager.unregister(writePointer);
+        writePointer = null;
     }
 
     /*

@@ -144,6 +144,10 @@ public class NioEventPollThread implements Runnable, EventPollThread {
 
     public void releaseContext(final RequestContext requestContext) {
         runningContexts.remove(requestContext);
+
+        /*
+        ** TODO: Clean up all the Map(s) used
+         */
     }
 
     public void addContext(final RequestContext requestContext) {

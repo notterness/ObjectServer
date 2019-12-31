@@ -24,6 +24,7 @@ public class StorageServerResponseHandler implements Operation {
      */
     private final RequestContext requestContext;
 
+    private final int storageServerTcpPort;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -55,7 +56,8 @@ public class StorageServerResponseHandler implements Operation {
 
 
     public StorageServerResponseHandler(final RequestContext requestContext, final BufferManager storageServerResponseBufferMgr,
-                                 final BufferManagerPointer readBufferPtr, final Operation completionCb) {
+                                        final BufferManagerPointer readBufferPtr, final Operation completionCb,
+                                        final int storageServerTcpPort) {
 
         this.requestContext = requestContext;
 
@@ -63,6 +65,8 @@ public class StorageServerResponseHandler implements Operation {
         this.readBufferPointer = readBufferPtr;
 
         this.completionCallback = completionCb;
+
+        this.storageServerTcpPort = storageServerTcpPort;
 
         /*
          ** This starts out not being on any queue
@@ -85,7 +89,8 @@ public class StorageServerResponseHandler implements Operation {
          */
         httpResponseBufferPointer = storageServerResponseBufferManager.register(this, readBufferPointer);
 
-        StorageServerResponseCallback httpResponseCompleted = new StorageServerResponseCallback(completionCallback);
+        StorageServerResponseCallback httpResponseCompleted = new StorageServerResponseCallback(requestContext,
+                completionCallback, storageServerTcpPort);
         HttpResponseListener listener = new HttpResponseListener(httpResponseCompleted);
         httpParser = new HttpParser(listener);
 

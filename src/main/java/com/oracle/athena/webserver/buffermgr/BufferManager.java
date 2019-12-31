@@ -207,6 +207,12 @@ public class BufferManager {
      **   BufferManager.
      */
     public void reset() {
+        /*
+        ** Make sure all the BufferPointer values are null
+         */
+        for (int i = 0; i < bufferArraySize; i++) {
+            bufferArray[i] = null;
+        }
 
     }
 
