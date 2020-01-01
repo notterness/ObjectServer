@@ -2,10 +2,13 @@ package com.oracle.athena.webserver.operations;
 
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
+import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.nio.ByteBuffer;
 
 public class WriteToClient implements Operation {
 
@@ -21,12 +24,14 @@ public class WriteToClient implements Operation {
      */
     private final RequestContext requestContext;
 
+    private final MemoryManager memoryManager;
+
     private IoInterface clientConnection;
 
     /*
      ** The following is the operation to run (if any) when the ConnectComplete is executed.
      */
-    private Operation operationToRun;
+    private Operation finalOperationToRun;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -40,17 +45,19 @@ public class WriteToClient implements Operation {
     private final BufferManager clientWriteBufferManager;
     private final BufferManagerPointer bufferInfillPointer;
     private BufferManagerPointer writePointer;
+    private BufferManagerPointer writeDonePointer;
 
     public WriteToClient(final RequestContext requestContext, final IoInterface connection,
-                         final Operation operationToRun, final BufferManagerPointer bufferInfillPtr) {
+                         final MemoryManager memoryManager, final Operation operationToRun,
+                         final BufferManagerPointer bufferInfillPtr) {
 
         this.requestContext = requestContext;
         this.clientConnection = connection;
-        this.operationToRun = operationToRun;
+        this.memoryManager = memoryManager;
+        this.finalOperationToRun = operationToRun;
         this.bufferInfillPointer = bufferInfillPtr;
 
         this.clientWriteBufferManager = requestContext.getClientWriteBufferManager();
-
 
         /*
          ** This starts out not being on any queue
@@ -67,13 +74,19 @@ public class WriteToClient implements Operation {
     /*
      */
     public BufferManagerPointer initialize() {
+        /*
+        ** The writePointer BufferManagerPointer is used to event() this operation when
+        **   data is placed where the bufferInfillPointer is pointing and then the
+        **   bufferInfillPointer is updated (incremented).
+         */
         writePointer = clientWriteBufferManager.register(this, bufferInfillPointer);
 
+        writeDonePointer = clientWriteBufferManager.register(this, writePointer);
+
         /*
-         ** Register with the IoInterface to perform writes
+         ** Register with the IoInterface to perform writes to the client
          */
         clientConnection.registerWriteBufferManager(clientWriteBufferManager, writePointer);
-
 
         return writePointer;
     }
@@ -87,10 +100,33 @@ public class WriteToClient implements Operation {
     }
 
     /*
+    ** TODO: There needs to be another Operation or something to handle when the write is actually complete. This
+    **   works if there is only a write of a header, but not for writing data back to the client.
      */
     public void execute() {
+        /*
+        ** The following is to check if there is data ready to be written to the client.
+         */
         if (clientWriteBufferManager.peek(writePointer) != null) {
             clientConnection.writeBufferReady();
+        }
+
+        /*
+        ** The following is to check if data has been written to the client (meaning there
+        **   are buffers available that are dependent upon the writePointer).
+         */
+        ByteBuffer buffer;
+        if ((buffer = clientWriteBufferManager.poll(writeDonePointer)) != null) {
+            /*
+            ** Since there are "buffers" available, it means the data was written out the SocketChannel
+            **   and from this server's perspective it is done.
+             */
+            memoryManager.poolMemFree(buffer);
+
+            /*
+            ** Done with this client connection as well
+             */
+            finalOperationToRun.event();
         }
 
     }
@@ -99,7 +135,13 @@ public class WriteToClient implements Operation {
      ** This removes any dependencies that are put upon the BufferManager
      */
     public void complete() {
+        clientConnection.unregisterWriteBufferManager();
 
+        clientWriteBufferManager.unregister(writeDonePointer);
+        writeDonePointer = null;
+
+        clientWriteBufferManager.unregister(writePointer);
+        writePointer = null;
     }
 
     /*

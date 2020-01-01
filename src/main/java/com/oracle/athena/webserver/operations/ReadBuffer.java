@@ -94,6 +94,9 @@ public class ReadBuffer implements Operation {
          */
         clientConnection.unregisterReadBufferManager();
 
+        bufferManager.unregister(readBufferPointer);
+        readBufferPointer = null;
+
         /*
         ** Need to remove the reference to the IoManager
          */
