@@ -107,14 +107,6 @@ public class RequestContext {
     private final BufferManager storageServerWriteBufferManager;
 
     /*
-    ** This is the BufferManager to receive responses from the StorageServers. There is one response BufferManager
-    **   per StorageServer.
-    ** TODO: This will need to be made into either an array or a Map to support more than one
-    **   Storage Server.
-     */
-    private final BufferManager storageServerResponseBufferManager;
-
-    /*
     ** The CasperHttpInfo is a holding object for all of the data parsed out of the HTTP Request and some
     **   other information that is generated from the HTTP parsed headers and URI.
      */
@@ -238,7 +230,6 @@ public class RequestContext {
         this.clientReadBufferManager = new BufferManager(BUFFER_MGR_RING_SIZE);
         this.clientWriteBufferManager = new BufferManager(BUFFER_MGR_RING_SIZE);
         this.storageServerWriteBufferManager = new BufferManager(BUFFER_MGR_RING_SIZE);
-        this.storageServerResponseBufferManager = new BufferManager(STORAGE_SERVER_RESPONSE_RING_SIZE);
 
         /*
         ** Build the list of all supported HTTP Request and the handler
@@ -417,7 +408,6 @@ public class RequestContext {
         clientReadBufferManager.reset();
         clientWriteBufferManager.reset();
         storageServerWriteBufferManager.reset();
-        storageServerResponseBufferManager.reset();
 
         /*
         ** Finally release the clientConnection back to the free pool.
