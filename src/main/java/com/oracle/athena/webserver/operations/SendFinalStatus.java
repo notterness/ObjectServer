@@ -61,6 +61,8 @@ public class SendFinalStatus implements Operation {
      */
     private final BuildHttpResult resultBuilder;
 
+    private boolean httpResponseSent;
+
 
     public SendFinalStatus(final RequestContext requestContext, final MemoryManager memoryManager,
                            final IoInterface connection) {
@@ -79,6 +81,8 @@ public class SendFinalStatus implements Operation {
         onDelayedQueue = false;
         onExecutionQueue = false;
         nextExecuteTime = 0;
+
+        httpResponseSent = false;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -116,37 +120,37 @@ public class SendFinalStatus implements Operation {
      */
     public void execute() {
 
-        int resultCode = requestContext.getHttpParseStatus();
+        if (!httpResponseSent) {
+            int resultCode = requestContext.getHttpParseStatus();
 
-        ByteBuffer respBuffer = memoryManager.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE, null);
-        if (respBuffer != null) {
-            resultBuilder.buildResponse(respBuffer, resultCode, true, true);
+            ByteBuffer respBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
+            if (respBuffer != null) {
+                resultBuilder.buildResponse(respBuffer, resultCode, true, true);
 
-            respBuffer.flip();
+                respBuffer.flip();
 
-            HttpStatus.Code result = HttpStatus.getCode(resultCode);
-            if (result != null) {
-                LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] resultCode: " + result.getCode() + " " + result.getMessage());
+                HttpStatus.Code result = HttpStatus.getCode(resultCode);
+                if (result != null) {
+                    LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] resultCode: " + result.getCode() + " " + result.getMessage());
+                } else {
+                    LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] resultCode: " + result.getCode());
+                }
+
+                /*
+                 ** Add the ByteBuffer to the clientWriteBufferMgr to kick off the write of the response to the client
+                 */
+                clientWriteBufferMgr.offer(writeStatusBufferPtr, respBuffer);
             } else {
-                LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] resultCode: " + result.getCode());
+                /*
+                 ** If we are out of memory to allocate a response, might as well close out the connection and give up.
+                 */
+                LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] unable to allocate response buffer");
+
+                /*
+                 ** Go right to the CloseOutRequest operation. That will close out the connection.
+                 */
+
             }
-
-            /*
-            ** Add the ByteBuffer to the clientWriteBufferMgr to kick off the write of the response to the client
-             */
-            clientWriteBufferMgr.offer(writeStatusBufferPtr, respBuffer);
-
-            clientConnection.writeBufferReady();
-        } else {
-            /*
-             ** If we are out of memory to allocate a response, might as well close out the connection and give up.
-             */
-            LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] unable to allocate response buffer");
-
-            /*
-            ** Go right to the CloseOutRequest operation. That will close out the connection.
-             */
-
         }
     }
 

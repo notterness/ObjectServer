@@ -248,14 +248,14 @@ public class RequestContext {
         /*
         ** Setup this RequestContext to be able to read in and parse the HTTP Request(s)
          */
-        requestHandlerOperations = new HashMap<> ();
+        this.requestHandlerOperations = new HashMap<> ();
 
-        storageServerResponse = new HashMap<>();
+        this.storageServerResponse = new HashMap<>();
 
         /*
         ** Setup the map for the HTTP Request Sent
          */
-        httpRequestSent = new HashMap<Integer, AtomicBoolean>();
+        this.httpRequestSent = new HashMap<>();
 
         queueMutex = new ReentrantLock();
         queueSignal = queueMutex.newCondition();
@@ -323,7 +323,8 @@ public class RequestContext {
         requestHandlerOperations.put(closeRequest.getOperationType(), closeRequest);
         closeRequest.initialize();
 
-        WriteToClient writeToClient = new WriteToClient(this, clientConnection, closeRequest, clientWritePtr);
+        WriteToClient writeToClient = new WriteToClient(this, clientConnection, memoryManager,
+                closeRequest, clientWritePtr);
         requestHandlerOperations.put(writeToClient.getOperationType(), writeToClient);
         writeToClient.initialize();
 
@@ -388,7 +389,13 @@ public class RequestContext {
     ** Once it is cleaned up, this RequestContext is added back to the free list so it can be used again.
      */
     public void cleanupServerRequest() {
+
+        clientConnection.closeConnection();
+
         Operation operation;
+
+        operation = requestHandlerOperations.get(OperationTypeEnum.WRITE_TO_CLIENT);
+        operation.complete();
 
         operation = requestHandlerOperations.get(OperationTypeEnum.SEND_FINAL_STATUS);
         operation.complete();
@@ -397,6 +404,9 @@ public class RequestContext {
         operation.complete();
 
         operation = requestHandlerOperations.get(OperationTypeEnum.READ_BUFFER);
+        operation.complete();
+
+        operation = requestHandlerOperations.get(OperationTypeEnum.METER_READ_BUFFERS);
         operation.complete();
 
         /*
@@ -414,6 +424,19 @@ public class RequestContext {
          */
         releaseConnection(clientConnection);
         clientConnection = null;
+    }
+
+    /*
+    **
+     */
+    public void reset() {
+
+        supportedHttpRequests.clear();
+        storageServerResponse.clear();
+        httpRequestSent.clear();
+
+        dumpOperations();
+        requestHandlerOperations.clear();
     }
 
     /*

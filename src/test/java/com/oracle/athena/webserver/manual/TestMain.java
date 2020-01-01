@@ -23,10 +23,10 @@ public class TestMain {
         NioServerHandler nioServer = new NioServerHandler(WebServerFlavor.INTEGRATION_TESTS, serverTcpPort, 1000);
         nioServer.start();
 
-        NioServerHandler nioStorageServer = new NioServerHandler(WebServerFlavor.INTEGRATION_TESTS, storageServerTcpPort, 1000);
+        NioServerHandler nioStorageServer = new NioServerHandler(WebServerFlavor.INTEGRATION_TESTS, storageServerTcpPort, 2000);
         nioStorageServer.start();
 
-        NioTestClient testClient = new NioTestClient(2000);
+        NioTestClient testClient = new NioTestClient(3000);
         testClient.start();
 
         TestChunkWrite testChunkWrite = new TestChunkWrite(testClient, storageServerTcpPort, threadCount);
@@ -119,6 +119,10 @@ public class TestMain {
         }
 
         */
+
+        nioServer.stop();
+        nioStorageServer.stop();
+        testClient.stop();
 
         System.out.println("Server shutting down");
     }

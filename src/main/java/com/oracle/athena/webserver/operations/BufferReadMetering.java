@@ -137,6 +137,7 @@ public class BufferReadMetering implements Operation {
         ** Release the metering pointer
          */
         clientReadBufferMgr.unregister(bufferMeteringPointer);
+        bufferMeteringPointer = null;
     }
 
     /*

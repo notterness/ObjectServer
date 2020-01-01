@@ -93,7 +93,7 @@ public class NioEventPollThread implements Runnable, EventPollThread {
          */
         int numFreeConnections = freeConnections.size();
         if (numFreeConnections != ALLOCATED_NIO_SOCKET) {
-            System.out.println(" numFreeConnections: " + numFreeConnections + " expected ALLOCATED_NIO_SOCKET: " +
+            System.out.println("[" + eventPollThreadBaseId + "] numFreeConnections: " + numFreeConnections + " expected ALLOCATED_NIO_SOCKET: " +
                     ALLOCATED_NIO_SOCKET);
         }
         freeConnections.clear();

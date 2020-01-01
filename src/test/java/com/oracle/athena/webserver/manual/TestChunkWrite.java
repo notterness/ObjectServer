@@ -148,6 +148,8 @@ public class TestChunkWrite {
         storageServerWriteBufferMgr.reset();
 
         eventThread.releaseConnection(connection);
+
+        clientContext.reset();
         eventThread.releaseContext(clientContext);
 
         /*
