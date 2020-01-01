@@ -292,7 +292,7 @@ public class BufferManagerPointer {
             int returnIndex = bufferIndex;
             bufferIndex = nextIndex;
 
-            LOG.info("Consumer("  + identifier + ":" + getOperationType() + ") readIndex: " + returnIndex);
+            //LOG.info("Consumer("  + identifier + ":" + getOperationType() + ") readIndex: " + returnIndex);
             return returnIndex;
         }
 
@@ -314,7 +314,7 @@ public class BufferManagerPointer {
     int reset() {
         int tempIndex = bufferIndex;
 
-        LOG.info("reset() Producer("  + identifier + ":" + getOperationType() + ") writeIndex: " + bufferIndex);
+        LOG.info("reset() Producer("  + identifier + ":" + getOperationType() + ") bufferIndex: " + bufferIndex);
         bufferIndex = 0;
         bookmark = -1;
 
@@ -337,7 +337,7 @@ public class BufferManagerPointer {
             bufferIndex = 0;
         }
 
-        LOG.info("Producer("  + identifier + ":" + getOperationType() + ") writeIndex: " + bufferIndex);
+        //LOG.info("Producer("  + identifier + ":" + getOperationType() + ") writeIndex: " + bufferIndex);
 
         return bufferIndex;
     }

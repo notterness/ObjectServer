@@ -40,7 +40,7 @@ public class TestEncryptBuffer {
         ** clientReadPointer is setup in the testEncryption() method for EncryptBuffer. So, for
         **   this test passing in null is acceptable.
          */
-        encryptBuffer = new EncryptBuffer(requestContext, memoryManager, null);
+        encryptBuffer = new EncryptBuffer(requestContext, memoryManager, null, null);
     }
 
     void execute() {

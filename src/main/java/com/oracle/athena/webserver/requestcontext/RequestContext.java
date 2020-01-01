@@ -332,7 +332,7 @@ public class RequestContext {
         requestHandlerOperations.put(determineRequestType.getOperationType(), determineRequestType);
         determineRequestType.initialize();
 
-        SetupV2Put v2PutHandler = new SetupV2Put(this, memoryManager, metering);
+        SetupV2Put v2PutHandler = new SetupV2Put(this, memoryManager, metering, determineRequestType);
         this.supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, v2PutHandler);
 
         SetupStorageServerPut storageServerPutHandler = new SetupStorageServerPut(this, memoryManager, metering,

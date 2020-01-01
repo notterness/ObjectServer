@@ -56,6 +56,8 @@ public class EncryptBuffer implements Operation {
 
     private final Operation readBufferMetering;
 
+    private final Operation completeCallback;
+
     private BufferManagerPointer clientReadPtr;
     private BufferManagerPointer storageServerAddPointer;
     private BufferManagerPointer storageServerWritePtr;
@@ -69,17 +71,25 @@ public class EncryptBuffer implements Operation {
 
     private int savedSrcPosition;
 
+    /*
+    ** This is set when the number of bytes encrypted matches the value passed in through the
+    **   HTTP Header, content-length.
+     */
+    private boolean buffersAllEncrypted;
 
     /*
      ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
      **   up the calls to obtain the VON information and the meta-data write to the database.
      */
     public EncryptBuffer(final RequestContext requestContext, final MemoryManager memoryManager,
-                         final BufferManagerPointer clientReadPointer) {
+                         final BufferManagerPointer clientReadPointer,
+                         final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
         this.clientReadBufferMgr = this.requestContext.getClientReadBufferManager();
+        this.completeCallback = completeCb;
+
         this.storageServerWriteBufferMgr = this.requestContext.getStorageServerWriteBufferManager();
 
         this.clientFullBufferPtr = clientReadPointer;
@@ -94,6 +104,8 @@ public class EncryptBuffer implements Operation {
         nextExecuteTime = 0;
 
         chunkSize = this.requestContext.getChunkSize();
+
+        buffersAllEncrypted = false;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -171,40 +183,58 @@ public class EncryptBuffer implements Operation {
      **        buffers available.
      */
     public void execute() {
-        ByteBuffer readBuffer;
-        ByteBuffer encryptedBuffer;
-        boolean outOfBuffers = false;
+        if (!buffersAllEncrypted) {
+            ByteBuffer readBuffer;
+            ByteBuffer encryptedBuffer;
+            boolean outOfBuffers = false;
 
-        while (!outOfBuffers) {
-            if ((readBuffer = clientReadBufferMgr.peek(clientReadPtr)) != null) {
-                /*
-                 ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
-                 **  affecting the position() and limit() indexes
-                 */
-                ByteBuffer srcBuffer = readBuffer.duplicate();
-                srcBuffer.position(savedSrcPosition);
-
-                /*
-                 ** Is there an available buffer in the storageServerWriteBufferMgr
-                 */
-                if ((encryptedBuffer = storageServerWriteBufferMgr.peek(storageServerWritePtr)) != null) {
+            while (!outOfBuffers) {
+                if ((readBuffer = clientReadBufferMgr.peek(clientReadPtr)) != null) {
+                    /*
+                     ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
+                     **  affecting the position() and limit() indexes
+                     */
+                    ByteBuffer srcBuffer = readBuffer.duplicate();
+                    srcBuffer.position(savedSrcPosition);
 
                     /*
-                     ** Encrypt the buffers and place them into the storageServerWriteBufferMgr
+                     ** Is there an available buffer in the storageServerWriteBufferMgr
                      */
-                    encryptBuffer(srcBuffer, encryptedBuffer);
+                    if ((encryptedBuffer = storageServerWriteBufferMgr.peek(storageServerWritePtr)) != null) {
+
+                        /*
+                         ** Encrypt the buffers and place them into the storageServerWriteBufferMgr
+                         */
+                        encryptBuffer(srcBuffer, encryptedBuffer);
+                    } else {
+                        LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] out of write buffers");
+                        outOfBuffers = true;
+                    }
                 } else {
-                    LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] out of write buffers");
+                    LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] out of read buffers chunkBytesEncrypted: " +
+                            chunkBytesEncrypted + " chunkBytesEncrypted: " + chunkBytesEncrypted);
+
+                    if (chunkBytesEncrypted < chunkBytesEncrypted) {
+                        readBufferMetering.event();
+                    } else if (chunkBytesEncrypted == chunkBytesToEncrypt) {
+                        /*
+                        ** No more buffers should arrive at this point from the client
+                         */
+                        buffersAllEncrypted = true;
+                    }
+
                     outOfBuffers = true;
                 }
-            } else {
-                LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] out of read buffers");
+            }
+        } else {
+            /*
+            ** Need to cleanup here from the Encrypt operation
+             */
+            if (requestContext.hasStorageServerResponseArrived(RequestContext.STORAGE_SERVER_PORT_BASE)) {
+                int result = requestContext.getStorageResponseResult(RequestContext.STORAGE_SERVER_PORT_BASE);
+                LOG.info("ChunkWriteComplete result: " + result);
 
-                if (chunkBytesEncrypted < chunkBytesToEncrypt) {
-                    readBufferMetering.event();
-                }
-
-                outOfBuffers = true;
+                complete();
             }
         }
     }
@@ -220,6 +250,13 @@ public class EncryptBuffer implements Operation {
 
         storageServerWriteBufferMgr.unregister(storageServerWritePtr);
         storageServerWritePtr = null;
+
+        /*
+        ** Now need to send out the final status
+         */
+        if (completeCallback != null){
+            completeCallback.complete();
+        }
     }
 
     /*
@@ -314,7 +351,7 @@ public class EncryptBuffer implements Operation {
             ** This is the case where the amount of data remaining to be encrypted in the srcBuffer
             **   completely fills the tgtBuffer.
              */
-            if ((tgtBuffer.remaining() == 0) || ((tgtBuffer.position() + chunkBytesEncrypted) == chunkBytesToEncrypt)) {
+            if ((tgtBuffer.remaining() == 0) || ((tgtBuffer.remaining() + chunkBytesEncrypted) == chunkBytesToEncrypt)) {
                 /*
                 ** If this buffer is the first one for a chunk, add a bookmark and also kick off the
                 **   SetupWriteChunk operation

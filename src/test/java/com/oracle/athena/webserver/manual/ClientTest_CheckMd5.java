@@ -62,30 +62,6 @@ class ClientTest_CheckMd5 extends ClientTest {
                 "Content-Length: " + BYTES_IN_CONTENT + "\n\n");
     }
 
-    void clientTestStep_1() {
-        /*
-         ** Wait a 100mS before sending the content. This is to make debugging the state machine
-         ** a bit easier.
-         */
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException int_ex) {
-            int_ex.printStackTrace();
-        }
-
-        /*
-         ** Send out the 1MB data transfer here
-         */
-        if (objectBuffer != null) {
-
-            if (!waitForWriteToComp()) {
-                System.out.println("Request timed out");
-            }
-
-            memoryManager.poolMemFree(objectBuffer);
-        }
-    }
-
     /*
      ** In this test, the full HTTP message is written and then a response is expected from the server.
      ** The response must have a result code of 200, indicating success.

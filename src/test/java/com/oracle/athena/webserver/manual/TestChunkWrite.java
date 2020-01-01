@@ -53,6 +53,11 @@ public class TestChunkWrite {
          */
         this.statusSignalSent = false;
         this.writeDone = new Object();
+
+        /*
+        ** Increment the number of running tests
+         */
+        runningTestCount.incrementAndGet();
     }
 
     void execute() {
