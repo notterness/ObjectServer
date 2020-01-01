@@ -91,7 +91,6 @@ public abstract class ClientTest {
          */
         IoInterface connection = eventThread.allocateConnection(null);
 
-
         try {
             Thread.sleep(1000);
         } catch (InterruptedException int_ex) {

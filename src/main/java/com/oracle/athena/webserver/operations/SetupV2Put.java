@@ -28,6 +28,8 @@ public class SetupV2Put implements Operation {
 
     private final Operation metering;
 
+    private final Operation completeCallback;
+
     private BufferManagerPointer clientReadPtr;
 
 
@@ -52,11 +54,13 @@ public class SetupV2Put implements Operation {
     ** This is used to setup the initial Operation dependencies required to handle the V2 PUT
     **   request.
      */
-    public SetupV2Put(final RequestContext requestContext, final MemoryManager memoryManager, final Operation metering) {
+    public SetupV2Put(final RequestContext requestContext, final MemoryManager memoryManager, final Operation metering,
+                      final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
         this.metering = metering;
+        this.completeCallback = completeCb;
 
         /*
          ** Setup the list of Operations currently used to handle the V2 PUT
@@ -102,7 +106,8 @@ public class SetupV2Put implements Operation {
         /*
         ** Add compute MD5 and encrypt to the dependency on the ClientReadBufferManager read pointer.
          */
-        EncryptBuffer encryptBuffer = new EncryptBuffer(requestContext, memoryManager, clientReadPtr);
+        EncryptBuffer encryptBuffer = new EncryptBuffer(requestContext, memoryManager, clientReadPtr,
+                this);
         v2PutHandlerOperations.put(encryptBuffer.getOperationType(), encryptBuffer);
         encryptBuffer.initialize();
 
@@ -122,6 +127,9 @@ public class SetupV2Put implements Operation {
     }
 
     public void complete() {
+        completeCallback.event();
+
+        LOG.info("SetupV2Put[" + requestContext.getRequestId() + "] completed");
 
     }
 
