@@ -45,12 +45,12 @@ public class EncryptBuffer implements Operation {
     private final BufferManager storageServerWriteBufferMgr;
 
     /*
-    ** The clientFullBufferPtr is used to track ByteBuffer(s) that are filled with client object data and are
+    ** The encyptInputPointer is used to track ByteBuffer(s) that are filled with client object data and are
     **   ready to be encrypted prior to being written to the Storage Servers.
-    ** The clientFullBufferPtr tracks the clientReadBufferManager where data is placed following reads from
+    ** The encyptInputPointer tracks the clientReadBufferManager where data is placed following reads from
     **   the client connection's SocketChannel.
      */
-    private final BufferManagerPointer clientFullBufferPtr;
+    private BufferManagerPointer encyptInputPointer;
 
     private final int chunkSize;
 
@@ -58,7 +58,6 @@ public class EncryptBuffer implements Operation {
 
     private final Operation completeCallback;
 
-    private BufferManagerPointer clientReadPtr;
     private BufferManagerPointer storageServerAddPointer;
     private BufferManagerPointer storageServerWritePtr;
 
@@ -82,7 +81,7 @@ public class EncryptBuffer implements Operation {
      **   up the calls to obtain the VON information and the meta-data write to the database.
      */
     public EncryptBuffer(final RequestContext requestContext, final MemoryManager memoryManager,
-                         final BufferManagerPointer clientReadPointer,
+                         final BufferManagerPointer encryptInputPtr,
                          final Operation completeCb) {
 
         this.requestContext = requestContext;
@@ -92,7 +91,7 @@ public class EncryptBuffer implements Operation {
 
         this.storageServerWriteBufferMgr = this.requestContext.getStorageServerWriteBufferManager();
 
-        this.clientFullBufferPtr = clientReadPointer;
+        this.encyptInputPointer = encryptInputPtr;
 
         this.readBufferMetering = requestContext.getOperation(OperationTypeEnum.METER_READ_BUFFERS);
 
@@ -130,15 +129,6 @@ public class EncryptBuffer implements Operation {
         **   encrypted data into, so this operation will need to wait until buffers are available.
          */
         savedSrcPosition = 0;
-
-        /*
-         ** Register this with the Buffer Manager to allow it to be event(ed) when
-         **   buffers are added by the read producer. The buffers added to the clientReadBufferMgr are
-         **   encrypted and placed into the storageServerWriteBufferMgr.
-         **
-         ** This operation (EncryptBuffer) is a consumer of ByteBuffer(s) produced by the ReadBuffer operation.
-         */
-        clientReadPtr = clientReadBufferMgr.register(this, clientFullBufferPtr);
 
         /*
          ** The storageServerWritePtr is a producer of ByteBuffers in the storage server write BufferManager.
@@ -189,7 +179,7 @@ public class EncryptBuffer implements Operation {
             boolean outOfBuffers = false;
 
             while (!outOfBuffers) {
-                if ((readBuffer = clientReadBufferMgr.peek(clientReadPtr)) != null) {
+                if ((readBuffer = clientReadBufferMgr.peek(encyptInputPointer)) != null) {
                     /*
                      ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
                      **  affecting the position() and limit() indexes
@@ -245,11 +235,23 @@ public class EncryptBuffer implements Operation {
      */
     public void complete() {
 
-        clientReadBufferMgr.unregister(clientReadPtr);
-        clientReadPtr = null;
+        /*
+        ** Remove the reference to the passed in encryptInputPointer (it is not owned by this Operation)
+         */
+        encyptInputPointer = null;
 
         storageServerWriteBufferMgr.unregister(storageServerWritePtr);
         storageServerWritePtr = null;
+
+        storageServerWriteBufferMgr.reset(storageServerAddPointer);
+        for (int i = 0; i < NUM_STORAGE_SERVER_WRITE_BUFFERS; i++) {
+            ByteBuffer buffer = storageServerWriteBufferMgr.poll(storageServerAddPointer);
+            if (buffer != null) {
+                memoryManager.poolMemFree(buffer);
+            }
+        }
+        storageServerWriteBufferMgr.unregister(storageServerAddPointer);
+        storageServerAddPointer = null;
 
         /*
         ** Now need to send out the final status
@@ -394,7 +396,7 @@ public class EncryptBuffer implements Operation {
             **   obtained.
              */
             savedSrcPosition = 0;
-            clientReadBufferMgr.updateConsumerReadPointer(clientReadPtr);
+            clientReadBufferMgr.updateConsumerReadPointer(encyptInputPointer);
 
         } else {
 
@@ -454,7 +456,7 @@ public class EncryptBuffer implements Operation {
          ** NOTE: This needs to be done prior to adding buffers to the BufferManager as the dependent
          **   BufferManagerPointer picks up the producers current write index as its starting read index.
          */
-        clientReadPtr = clientReadBufferMgr.register(this, readFillPtr);
+        BufferManagerPointer clientReadPtr = clientReadBufferMgr.register(this, readFillPtr);
         storageServerWritePtr = storageServerWriteBufferMgr.register(this);
 
         /*
@@ -533,7 +535,7 @@ public class EncryptBuffer implements Operation {
      */
     public void dumpCreatedOperations(final int level) {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
-        clientReadPtr.dumpPointerInfo();
+        storageServerAddPointer.dumpPointerInfo();
         storageServerWritePtr.dumpPointerInfo();
         LOG.info("");
     }

@@ -687,24 +687,37 @@ public class RequestContext {
     }
 
     /*
-    **
+    ** The following are used to keep track of Storage Servers and if the HTTP Request has been sent successfully
+    **   to it. The setter (setHttpResponseSent() is called by WriteHeaderToStorageServer after the buffer has been
+    **   written to the SocketChannel.
      */
     public boolean hasHttpRequestBeenSent(final int targetPort) {
         AtomicBoolean responseSent = httpRequestSent.get(targetPort);
         if (responseSent != null) {
             if (responseSent.get()) {
-                httpRequestSent.remove(targetPort);
                 return true;
             }
         }
         return false;
     }
 
-    public void setHttpResponseSent(final int targetPort) {
+    public void setHttpRequestSent(final int targetPort) {
         AtomicBoolean httpSent = new AtomicBoolean(true);
         httpRequestSent.put(targetPort, httpSent);
     }
 
+    /*
+    ** This is used to remove the Map<> entry for the Storage Server after it has completed it's writes
+     */
+    public void removeHttpRequestSent(final int targetPort) {
+        if (httpRequestSent.remove(targetPort) == null) {
+            LOG.warn("RequestContext[" + getRequestId() + "] HTTP Request remove failed targetPort: " + targetPort);
+        }
+    }
+
+    /*
+    ** The following are used to keep track of the HTTP Response from the Storage Server.
+     */
     public boolean hasStorageServerResponseArrived(final int targetPort) {
         Integer responseSent = storageServerResponse.get(targetPort);
         if (responseSent != null) {
@@ -725,6 +738,13 @@ public class RequestContext {
         Integer storageServerResult = new Integer(result);
         storageServerResponse.put(targetPort, storageServerResult);
     }
+
+    public void removeStorageServerResponse(final int targetPort) {
+        if (storageServerResponse.remove(targetPort) == null) {
+            LOG.warn("RequestContext[" + getRequestId() + "] HTTP Response remove failed targetPort: " + targetPort);
+        }
+    }
+
 
     /*
     **
