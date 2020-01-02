@@ -314,7 +314,7 @@ public class RequestContext {
         requestHandlerOperations.put(closeRequest.getOperationType(), closeRequest);
         closeRequest.initialize();
 
-        WriteToClient writeToClient = new WriteToClient(this, clientConnection, memoryManager,
+        WriteToClient writeToClient = new WriteToClient(this, clientConnection,
                 closeRequest, clientWritePtr);
         requestHandlerOperations.put(writeToClient.getOperationType(), writeToClient);
         writeToClient.initialize();
@@ -369,9 +369,8 @@ public class RequestContext {
     public void cleanupHttpParser() {
         Operation operation;
 
-        operation = requestHandlerOperations.get(OperationTypeEnum.PARSE_HTTP_BUFFER);
+        operation = requestHandlerOperations.remove(OperationTypeEnum.PARSE_HTTP_BUFFER);
         operation.complete();
-        requestHandlerOperations.remove(OperationTypeEnum.PARSE_HTTP_BUFFER);
     }
 
     /*
@@ -385,29 +384,29 @@ public class RequestContext {
 
         Operation operation;
 
-        operation = requestHandlerOperations.get(OperationTypeEnum.WRITE_TO_CLIENT);
+        operation = requestHandlerOperations.remove(OperationTypeEnum.WRITE_TO_CLIENT);
         operation.complete();
 
-        operation = requestHandlerOperations.get(OperationTypeEnum.SEND_FINAL_STATUS);
+        operation = requestHandlerOperations.remove(OperationTypeEnum.SEND_FINAL_STATUS);
         operation.complete();
 
-        operation = requestHandlerOperations.get(OperationTypeEnum.REQUEST_FINISHED);
+        operation = requestHandlerOperations.remove(OperationTypeEnum.REQUEST_FINISHED);
         operation.complete();
 
-        operation = requestHandlerOperations.get(OperationTypeEnum.READ_BUFFER);
+        operation = requestHandlerOperations.remove(OperationTypeEnum.READ_BUFFER);
         operation.complete();
 
-        operation = requestHandlerOperations.get(OperationTypeEnum.METER_READ_BUFFERS);
+        operation = requestHandlerOperations.remove(OperationTypeEnum.METER_READ_BUFFERS);
+        operation.complete();
+
+        operation = requestHandlerOperations.remove(OperationTypeEnum.DETERMINE_REQUEST_TYPE);
         operation.complete();
 
         /*
-        ** Now reset the BufferManagers back to their pristine state. That means that there are no
-        **   registered BufferManagerPointers or dependencies remaining associated with the
-        **   BufferManager.
+        ** Call reset() to make sure the BufferManager(s) have released all the references to
+        **   ByteBuffer(s).
          */
-        clientReadBufferManager.reset();
-        clientWriteBufferManager.reset();
-        storageServerWriteBufferManager.reset();
+        reset();
 
         /*
         ** Finally release the clientConnection back to the free pool.
@@ -417,14 +416,31 @@ public class RequestContext {
     }
 
     /*
-    **
+    ** This is used to clean up both the Client and Server side for the RequestContext.
      */
     public void reset() {
 
+        /*
+         ** Now reset the BufferManagers back to their pristine state. That means that there are no
+         **   registered BufferManagerPointers or dependencies remaining associated with the
+         **   BufferManager.
+         */
+        clientReadBufferManager.reset();
+        clientWriteBufferManager.reset();
+        storageServerWriteBufferManager.reset();
+
+        /*
+        ** Clear out the Map<> associated with HTTP Requests and Responses from the Storage Server and then
+        **   the Map<> that keeps track if an HTTP Request has been sent (used for the client side).
+         */
         supportedHttpRequests.clear();
         storageServerResponse.clear();
         httpRequestSent.clear();
 
+        /*
+        ** The dumpOperations() should have either the SETUP_V2_PUT or SETUP_STORAGE_SERVER_PUT in its
+        **   list.
+         */
         dumpOperations();
         requestHandlerOperations.clear();
     }

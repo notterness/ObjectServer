@@ -223,12 +223,20 @@ public class WriteToFile implements Operation {
             } else {
                 LOG.info("WriteToFile[" + requestContext.getRequestId() + "] out of read buffers");
 
+                /*
+                ** Check if all the bytes (meaning the amount passed in the content-length in the HTTP header)
+                **   have been written to the file. If not, dole out another ByteBuffer to the NIO read
+                **   operation.
+                 */
                 if (fileBytesWritten < bytesToWriteToFile) {
                     readBufferMetering.event();
                 } else if (fileBytesWritten == bytesToWriteToFile) {
                     /*
                     ** Done with this operation
-                    ** Tell the Operation that produced this that it is done.
+                    ** Tell the SetupStorageServerPut operation that produced this that it is done.
+                    **
+                    ** TODO: This should probalby call the event() method and have a different higher
+                    **   level operation or the RequestContext call the complete() method.
                      */
                     completeCallback.complete();
                 }

@@ -14,14 +14,10 @@ class ClientTest_MissingObjectName extends ClientTest {
 
     private final Md5Digest digest;
 
-    private ByteBuffer dataBuffer;
-
-
     ClientTest_MissingObjectName(final String testName, final NioTestClient client, final int serverTcpPort, AtomicInteger testCount) {
         super(testName, client, serverTcpPort, testCount);
 
         digest = new Md5Digest();
-        dataBuffer = null;
     }
 
     @Override
@@ -31,19 +27,19 @@ class ClientTest_MissingObjectName extends ClientTest {
          */
         String objectDigestString = null;
 
-        dataBuffer = memoryManager.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE, null);
-        if (dataBuffer != null) {
+        objectBuffer = memoryManager.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE, null);
+        if (objectBuffer != null) {
             // Fill in a pattern
             long pattern = MemoryManager.MEDIUM_BUFFER_SIZE;
             for (int i = 0; i < MemoryManager.MEDIUM_BUFFER_SIZE; i = i + 8) {
-                dataBuffer.putLong(i, pattern);
+                objectBuffer.putLong(i, pattern);
                 pattern++;
             }
 
-            digest.digestByteBuffer(dataBuffer);
+            digest.digestByteBuffer(objectBuffer);
             objectDigestString = digest.getFinalDigest();
 
-            dataBuffer.rewind();
+            objectBuffer.rewind();
 
             System.out.println("MD5 Digest String: " + objectDigestString);
         }
@@ -67,12 +63,6 @@ class ClientTest_MissingObjectName extends ClientTest {
                 "Content-Length: " + BYTES_IN_CONTENT + "\n\n");
     }
 
-    void clientTestStep_1() {
-        /*
-         ** Send out the 1kB data transfer here
-         */
-     }
-
     /*
      ** In this test, the full HTTP message is written and then a response is expected from the server.
      ** The response must have a result code of 200, indicating success.
@@ -85,6 +75,12 @@ class ClientTest_MissingObjectName extends ClientTest {
             System.out.println(super.clientTestName + " failed");
             super.client.setTestFailed(super.clientTestName);
         }
+
+        /*
+         ** Make sure to release the memory
+         */
+        memoryManager.poolMemFree(objectBuffer);
+        objectBuffer = null;
 
         statusReceived(result);
     }

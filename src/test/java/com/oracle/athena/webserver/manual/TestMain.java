@@ -34,8 +34,8 @@ public class TestMain {
 
         //ClientTest client_1 = new ClientTest_2("ClientTest_2", testClient, serverTcpPort, threadCount);
         //client_1.execute();
-        ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverTcpPort, threadCount);
-        checkMd5.execute();
+        //ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverTcpPort, threadCount);
+        //checkMd5.execute();
 
         /*
         ** Uncomment out the following two lines to let TestMain just act as a server. It can then be used to

@@ -61,6 +61,12 @@ public class SendFinalStatus implements Operation {
      */
     private final BuildHttpResult resultBuilder;
 
+    /*
+    ** The respBuffer is used to hold to HTTP Response that is built prior to it being added to the
+    **   clientWriteBufferMgr.
+     */
+    private ByteBuffer respBuffer;
+
     private boolean httpResponseSent;
 
 
@@ -158,6 +164,23 @@ public class SendFinalStatus implements Operation {
     ** This removes any dependencies that are put upon the BufferManager
      */
     public void complete() {
+
+        LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] complete()");
+
+        /*
+        ** Release any buffers in the clientWriteBufferMgr
+         */
+        int bufferCount = writeStatusBufferPtr.getCurrIndex();
+
+        clientWriteBufferMgr.reset(writeStatusBufferPtr);
+        for (int i = 0; i < bufferCount; i++) {
+            ByteBuffer buffer = clientWriteBufferMgr.poll(writeStatusBufferPtr);
+            if (buffer != null) {
+                memoryManager.poolMemFree(buffer);
+            } else {
+                LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] missing buffer i: " + i);
+            }
+        }
 
         clientWriteBufferMgr.unregister(writeStatusBufferPtr);
         writeStatusBufferPtr = null;

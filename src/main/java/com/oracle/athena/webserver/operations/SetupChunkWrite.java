@@ -306,7 +306,7 @@ public class SetupChunkWrite implements Operation {
             if (buffer != null) {
                 memoryManager.poolMemFree(buffer);
             } else {
-                LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] addBufferPointer index: " + addBufferPointer.getCurrIndex());
+                LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] null buffer addBufferPointer index: " + addBufferPointer.getCurrIndex());
             }
         }
 
@@ -324,7 +324,7 @@ public class SetupChunkWrite implements Operation {
             if (buffer != null) {
                 memoryManager.poolMemFree(buffer);
             } else {
-                LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] respBufferPointer index: " +
+                LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] null buffer respBufferPointer index: " +
                         respBufferPointer.getCurrIndex());
             }
         }

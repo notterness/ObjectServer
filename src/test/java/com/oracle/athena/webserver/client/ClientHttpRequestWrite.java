@@ -100,7 +100,6 @@ public class ClientHttpRequestWrite implements Operation {
         ** Build the HTTP Header and the Object to be sent
          */
         ByteBuffer msgHdr = clientWriteBufferMgr.peek(writeInfillPointer);
-
         if (msgHdr != null) {
 
             String tmp;

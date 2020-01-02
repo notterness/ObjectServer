@@ -165,12 +165,13 @@ public class SetupClientConnection implements Operation {
         addBufferPointer = clientWriteBufferManager.register(this);
         clientWriteBufferManager.bookmark(addBufferPointer);
 
-        ByteBuffer buffer;
-
         for (int i = 0; i < WRITE_BUFFERS_TO_ALLOCATE; i++) {
-            buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
-
-            clientWriteBufferManager.offer(addBufferPointer, buffer);
+            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
+            if (buffer != null) {
+                clientWriteBufferManager.offer(addBufferPointer, buffer);
+            } else {
+                System.out.println("SetupClientConnection initialize() null buffer i: " + i);
+            }
         }
         clientWriteBufferManager.reset(addBufferPointer);
 
@@ -289,15 +290,30 @@ public class SetupClientConnection implements Operation {
      */
     public void complete() {
 
-        clientWriteBufferManager.unregister(writeInfillPointer);
-        clientWriteBufferManager.unregister(addBufferPointer);
-
         /*
-        ** Walk the BufferManager freeing up all the allocated buffers
+         ** Remove the BufferManager and BufferManagerPointer from the NioSocket (clientConnection)
          */
+        clientConnection.unregisterWriteBufferManager();
 
         /*
-        ** Close out all of the operations
+        ** The following operations have dependencies upon each other so need to be completed() in the correct order.
+        **
+        ** METER_READ_BUFFERS provides the meteringPointer
+        ** READ_BUFFER provides the readPointer that is dependent upon the meteringPointer
+        ** CLIENT_RESPONSE_HANDLER creates the httpResponseBufferPointer which is dependent upon the readPointer
+         */
+        Operation operationToComplete;
+        operationToComplete = clientOperations.remove(OperationTypeEnum.CLIENT_RESPONSE_HANDLER);
+        operationToComplete.complete();
+
+        operationToComplete = clientOperations.remove(OperationTypeEnum.READ_BUFFER);
+        operationToComplete.complete();
+
+        operationToComplete = clientOperations.remove(OperationTypeEnum.METER_READ_BUFFERS);
+        operationToComplete.complete();
+
+        /*
+        ** Close out all of the remaining operations
          */
         Collection<Operation> createdOperations = clientOperations.values();
         for (Operation createdOperation : createdOperations) {
@@ -307,12 +323,25 @@ public class SetupClientConnection implements Operation {
         clientOperations.clear();
 
         /*
-        ** Unregister all of the BufferManagerPointer(s)
+         ** Unregister all of the BufferManagerPointer(s). Since the writeInfillPointer has a dependency upon
+         **   addBufferPointer, it must be unregistered() first.
          */
-        clientWriteBufferManager.unregister(addBufferPointer);
         clientWriteBufferManager.unregister(writeInfillPointer);
 
-        clientConnection.unregisterWriteBufferManager();
+        /*
+         ** Walk the BufferManager freeing up all the allocated buffers
+         */
+        clientWriteBufferManager.reset(addBufferPointer);
+        for (int i = 0; i < WRITE_BUFFERS_TO_ALLOCATE; i++) {
+            ByteBuffer buffer = clientWriteBufferManager.poll(addBufferPointer);
+            if (buffer != null) {
+                memoryManager.poolMemFree(buffer);
+            } else {
+                System.out.println("ClientTest_CheckMd5 missing ByteBuffer i: " + i);
+            }
+        }
+
+        clientWriteBufferManager.unregister(addBufferPointer);
     }
 
     /*

@@ -101,7 +101,8 @@ public class SetupStorageServerPut implements Operation {
 
     public void execute() {
         /*
-         **
+         ** For the current test Storage Server implementation, simply write the bytes to a file and when
+         **   that completes, call this Operation's complete() method.
          */
         WriteToFile writeToFile = new WriteToFile(requestContext, memoryManager, clientReadPtr, this);
         storageServerPutHandlerOperations.put(writeToFile.getOperationType(), writeToFile);
@@ -109,7 +110,8 @@ public class SetupStorageServerPut implements Operation {
 
         /*
          ** Dole out another buffer to read in the content data if there is not data remaining in
-         **   the buffer from the HTTP Parsing.
+         **   the buffer from the HTTP Parsing. This is only done once and all further doling out
+         **   of buffers is done within the WriteToFile operation.
          */
         BufferManager clientReadBufferManager = requestContext.getClientReadBufferManager();
         ByteBuffer remainingBuffer = clientReadBufferManager.peek(clientReadPtr);
@@ -124,7 +126,14 @@ public class SetupStorageServerPut implements Operation {
         LOG.info("SetupStorageServerPut[" + requestContext.getRequestId() + "] initialized");
     }
 
+    /*
+    ** This complete() is called when the WriteToFile operation has written all of its buffers
+    **   to the file.
+     */
     public void complete() {
+
+        LOG.info("SetupStorageServerPut[" + requestContext.getRequestId() + "] complete()");
+
         /*
         ** Call the complete() method for any operations that this one created.
          */
