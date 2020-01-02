@@ -158,6 +158,11 @@ public class TestChunkWrite {
         eventThread.releaseContext(clientContext);
 
         /*
+        ** Verify all the ByteBuffer(s) were returned to the MemoryManager
+         */
+        memoryManager.verifyMemoryPools("TestChunkWrite");
+
+        /*
         ** Let the higher level know this test is complete
          */
         runningTestCount.decrementAndGet();

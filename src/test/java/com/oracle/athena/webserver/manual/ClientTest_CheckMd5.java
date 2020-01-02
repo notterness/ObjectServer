@@ -75,6 +75,12 @@ class ClientTest_CheckMd5 extends ClientTest {
             super.client.setTestFailed(super.clientTestName);
         }
 
+        /*
+        ** Make sure to release the memory
+         */
+        memoryManager.poolMemFree(objectBuffer);
+        objectBuffer = null;
+
         statusReceived(result);
     }
 

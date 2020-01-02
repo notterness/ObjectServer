@@ -84,7 +84,7 @@ public class DetermineRequestType implements Operation {
                 /*
                  ** Event the send client response operation here so that the final status is sent
                  */
-                LOG.warn("DetermineRequestType[" + requestContext.getRequestId() + "] sending final status");
+                LOG.warn("DetermineRequestType[" + requestContext.getRequestId() + "] sending final status HTTP Parse error");
 
                 Operation sendFinalStatus = requestContext.getOperation(OperationTypeEnum.SEND_FINAL_STATUS);
                 sendFinalStatus.event();
@@ -97,6 +97,10 @@ public class DetermineRequestType implements Operation {
                 HttpMethodEnum method = casperHttpInfo.getMethod();
                 Operation httpRequestSetup = supportedHttpRequests.get(method);
                 if (httpRequestSetup != null) {
+                    /*
+                    ** The operation being run is added to the list for the RequestContext so that it can be cleaned up
+                    **   if needed (meaning calling the complete() method).
+                     */
                     requestContext.addOperation(httpRequestSetup);
 
                     LOG.info("DetermineRequestType[" + requestContext.getRequestId() + "] execute() " + method.toString());
@@ -110,7 +114,11 @@ public class DetermineRequestType implements Operation {
             methodDeterminationDone = true;
         } else {
             Operation sendFinalStatus = requestContext.getOperation(OperationTypeEnum.SEND_FINAL_STATUS);
-            sendFinalStatus.event();
+            if (sendFinalStatus != null) {
+                sendFinalStatus.event();
+            } else {
+                LOG.info("DetermineRequestType[" + requestContext.getRequestId() + "] sendFinalStatus null");
+            }
         }
     }
 

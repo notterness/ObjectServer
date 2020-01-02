@@ -116,6 +116,21 @@ public abstract class ClientTest {
          */
         waitForStatus();
 
+        /*
+        ** Close out the SetupClientConnection Operation
+         */
+        setupClientConnection.complete();
+
+        /*
+        ** Release the resources back to the event thread (the owner of the RequestContext and IoInterface objects)
+         */
+        connection.closeConnection();
+        eventThread.releaseConnection(connection);
+
+        eventThread.releaseContext(clientContext);
+
+        memoryManager.verifyMemoryPools(clientTestName);
+
         runningTestCount.decrementAndGet();
     }
 

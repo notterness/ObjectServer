@@ -124,10 +124,9 @@ public class ParseHttpRequest implements Operation {
             httpBuffer.flip();
 
             //displayBuffer(bufferState);
-            ByteBuffer remainingBuffer;
 
-            remainingBuffer = httpParser.parseHttpData(httpBuffer, initialHttpBuffer);
-            if (remainingBuffer != null) {
+            boolean remainingBuffer = httpParser.parseHttpData(httpBuffer, initialHttpBuffer);
+            if (remainingBuffer) {
                 /*
                 ** Leave the pointer in the same place since there is data remaining in the buffer
                  */

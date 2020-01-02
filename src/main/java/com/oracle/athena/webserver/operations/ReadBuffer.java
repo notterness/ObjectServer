@@ -173,7 +173,12 @@ public class ReadBuffer implements Operation {
      */
     public void dumpCreatedOperations(final int level) {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
-        readBufferPointer.dumpPointerInfo();
+        if (readBufferPointer != null) {
+            /*
+            ** To handle the case after complete() has been called
+             */
+            readBufferPointer.dumpPointerInfo();
+        }
         LOG.info("");
     }
 

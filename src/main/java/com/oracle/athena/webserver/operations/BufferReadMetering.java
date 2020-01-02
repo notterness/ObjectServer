@@ -84,10 +84,8 @@ public class BufferReadMetering implements Operation {
         **   pointer.
          */
         if (webServerFlavor == WebServerFlavor.INTEGRATION_TESTS) {
-            ByteBuffer buffer;
-
             for (int i = 0; i < INITIAL_INTEGRATION_BUFFER_ALLOC; i++) {
-                buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
+                ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
 
                 clientReadBufferMgr.offer(bufferMeteringPointer, buffer);
             }
@@ -133,6 +131,20 @@ public class BufferReadMetering implements Operation {
     }
 
     public void complete() {
+
+        /*
+         ** Set the pointer back to the beginning of the BufferManager to release the allocated memory
+         */
+        clientReadBufferMgr.reset(bufferMeteringPointer);
+        for (int i = 0; i < INITIAL_INTEGRATION_BUFFER_ALLOC; i++) {
+            ByteBuffer buffer = clientReadBufferMgr.poll(bufferMeteringPointer);
+            if (buffer != null) {
+                memoryManager.poolMemFree(buffer);
+            } else {
+                LOG.warn("BufferReadMetering[" + requestContext.getRequestId() + "] null buffer i: " + i);
+            }
+        }
+
         /*
         ** Release the metering pointer
          */
@@ -210,7 +222,12 @@ public class BufferReadMetering implements Operation {
      */
     public void dumpCreatedOperations(final int level) {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
-        bufferMeteringPointer.dumpPointerInfo();
+        if (bufferMeteringPointer != null) {
+            /*
+             ** To handle the case after complete() has been called
+             */
+            bufferMeteringPointer.dumpPointerInfo();
+        }
         LOG.info("");
     }
 }

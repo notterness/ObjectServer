@@ -213,20 +213,14 @@ public class BufferManager {
         for (int i = 0; i < bufferArraySize; i++) {
             bufferArray[i] = null;
         }
-
-    }
-
-
-    public int reset(final BufferManagerPointer pointer) {
-        return pointer.reset();
     }
 
 
     /*
-    ** This is used to convert a single BufferState into two BufferState and can be used
-    **   when a BufferState crosses an HTTP Parse or a Chunk boundary.
+    ** The following sets the BufferManagerPointer bufferIndex back to 0.
      */
-    void split(final BufferManagerPointer pointer, final int splitIndex) {
-
+    public int reset(final BufferManagerPointer pointer) {
+        return pointer.reset();
     }
+
 }

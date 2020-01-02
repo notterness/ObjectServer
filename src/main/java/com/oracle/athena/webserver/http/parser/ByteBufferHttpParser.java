@@ -30,7 +30,7 @@ public class ByteBufferHttpParser {
     **   content is handled differently.
     **   The content data is not feed through the HTTP Parser to avoid copies.
      */
-    public ByteBuffer parseHttpData(ByteBuffer buffer, boolean initiallBuffer) {
+    public boolean parseHttpData(ByteBuffer buffer, boolean initiallBuffer) {
 
         if (initiallBuffer) {
             if (httpParser.isState(HttpParser.State.END))
@@ -41,7 +41,7 @@ public class ByteBufferHttpParser {
 
         StringChunk chunk = new StringChunk(buffer);
         ByteBuffer bufferToParse;
-        ByteBuffer remainingBuffer = null;
+        boolean remainingBuffer = false;
 
         while ((bufferToParse = chunk.getBuffer()) != null) {
             int remaining = bufferToParse.remaining();
@@ -60,7 +60,7 @@ public class ByteBufferHttpParser {
              */
             if (casperHeaderInfo.getHeaderComplete() == true) {
                 LOG.info("parseHttpData() headerComplete");
-                remainingBuffer = chunk.getRemainingBuffer();
+                remainingBuffer = chunk.isThereRemainingData();
                 break;
             }
         }

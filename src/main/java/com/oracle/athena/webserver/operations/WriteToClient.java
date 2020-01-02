@@ -2,13 +2,11 @@ package com.oracle.athena.webserver.operations;
 
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
-import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.ByteBuffer;
 
 public class WriteToClient implements Operation {
 
@@ -23,8 +21,6 @@ public class WriteToClient implements Operation {
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
     private final RequestContext requestContext;
-
-    private final MemoryManager memoryManager;
 
     private IoInterface clientConnection;
 
@@ -48,12 +44,10 @@ public class WriteToClient implements Operation {
     private BufferManagerPointer writeDonePointer;
 
     public WriteToClient(final RequestContext requestContext, final IoInterface connection,
-                         final MemoryManager memoryManager, final Operation operationToRun,
-                         final BufferManagerPointer bufferInfillPtr) {
+                         final Operation operationToRun, final BufferManagerPointer bufferInfillPtr) {
 
         this.requestContext = requestContext;
         this.clientConnection = connection;
-        this.memoryManager = memoryManager;
         this.finalOperationToRun = operationToRun;
         this.bufferInfillPointer = bufferInfillPtr;
 
@@ -115,13 +109,11 @@ public class WriteToClient implements Operation {
         ** The following is to check if data has been written to the client (meaning there
         **   are buffers available that are dependent upon the writePointer).
          */
-        ByteBuffer buffer;
-        if ((buffer = clientWriteBufferManager.poll(writeDonePointer)) != null) {
+        if (clientWriteBufferManager.poll(writeDonePointer) != null) {
             /*
             ** Since there are "buffers" available, it means the data was written out the SocketChannel
             **   and from this server's perspective it is done.
              */
-            memoryManager.poolMemFree(buffer);
 
             /*
             ** Done with this client connection as well

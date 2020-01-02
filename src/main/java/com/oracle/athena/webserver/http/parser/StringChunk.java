@@ -81,21 +81,22 @@ public class StringChunk {
         return bb;
     }
 
-    ByteBuffer getRemainingBuffer() {
+    /*
+    ** After the HTTP Parsing is done, this checks if there is more data remaining in the buffer
+     */
+    boolean isThereRemainingData() {
         /*
          ** End of buffer checking
          */
         if (currentPosition == remaining) {
             //LOG.info("StringChunk getRemainingBuffer() null");
-            return null;
+            return false;
         }
-
-        ByteBuffer bb = initialBuffer.slice();
 
         //LOG.info("StringChunk position: " + bb.position() + " limit: " + bb.limit() +
         //        " remaining: " + bb.remaining());
 
-        return bb;
+        return true;
     }
 
     private String bb_to_str(ByteBuffer buffer) {
