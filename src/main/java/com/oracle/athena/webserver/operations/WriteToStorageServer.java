@@ -48,17 +48,24 @@ public class WriteToStorageServer implements Operation {
     private final BufferManager storageServerWriteBufferMgr;
     private final BufferManagerPointer encryptedBufferPtr;
 
+    private final int bytesToWriteToStorageServer;
+
     private BufferManagerPointer writeToStorageServerPtr;
+    private BufferManagerPointer writeDonePointer;
+
+    private int bytesWrittenToStorageServer;
 
     private boolean registeredWriteBufferManager;
+    private boolean completeCalled;
 
     public WriteToStorageServer(final RequestContext requestContext, final IoInterface connection,
-                                final BufferManagerPointer encryptedBufferPtr,
+                                final BufferManagerPointer encryptedBufferPtr, final int bytesToWrite,
                                 final int tcpPort) {
 
         this.requestContext = requestContext;
         this.connection = connection;
         this.encryptedBufferPtr = encryptedBufferPtr;
+        this.bytesToWriteToStorageServer = bytesToWrite;
         this.storageServerTcpPort = tcpPort;
 
         this.storageServerWriteBufferMgr = this.requestContext.getStorageServerWriteBufferManager();
@@ -71,9 +78,20 @@ public class WriteToStorageServer implements Operation {
         nextExecuteTime = 0;
 
         /*
+        ** Keep track of the number of bytes actually written to the Storage Server so this operation knows when it
+        **   has completed all of its work.
+         */
+        this.bytesWrittenToStorageServer = 0;
+
+        /*
         ** Used to determine if this has been registered with the IoInterface to perform writes
          */
-        registeredWriteBufferManager = false;
+        this.registeredWriteBufferManager = false;
+
+        /*
+        ** Used to insure that complete() is not called multiple times
+         */
+        this.completeCalled = false;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -89,9 +107,16 @@ public class WriteToStorageServer implements Operation {
          ** Register this with the Buffer Manager to allow it to be event(ed) when
          **   buffers are added by the EncryptBuffer producer
          */
-        writeToStorageServerPtr = storageServerWriteBufferMgr.register(this, encryptedBufferPtr, requestContext.getChunkSize());
+        writeToStorageServerPtr = storageServerWriteBufferMgr.register(this, encryptedBufferPtr,
+                requestContext.getChunkSize());
 
-         return writeToStorageServerPtr;
+        /*
+        ** Register a dependency upon the writeToStorageServerPtr to know when the buffers have actually been
+        **   written out to the SocketChannel.
+         */
+        writeDonePointer = storageServerWriteBufferMgr.register(this, writeToStorageServerPtr);
+
+        return writeToStorageServerPtr;
     }
 
     /*
@@ -130,24 +155,35 @@ public class WriteToStorageServer implements Operation {
         if (storageServerWriteBufferMgr.peek(writeToStorageServerPtr) != null) {
             connection.writeBufferReady();
         } else {
-            LOG.info("WriteToStorageServer[" + requestContext.getRequestId() + "] no buffers to write");
+            ByteBuffer buffer;
+            while ((buffer = storageServerWriteBufferMgr.poll(writeDonePointer)) != null) {
+                bytesWrittenToStorageServer += buffer.limit();
+            }
+
+            LOG.info("WriteToStorageServer[" + requestContext.getRequestId() + "] bytesWrittenToStorageServer: " +
+                    bytesWrittenToStorageServer);
+            if (bytesWrittenToStorageServer == bytesToWriteToStorageServer) {
+                /*
+                ** All the bytes have been written to this Storage Server, cleanup this operation
+                 */
+                complete();
+            }
         }
     }
 
     /*
+    **
      */
     public void complete() {
-        /*
-        ** Unregister the BufferManager and the BufferManagerPointer so that the IoInterface
-        **   can be used cleanly by another connection later.
-         */
-        connection.unregisterWriteBufferManager();
+        if (!completeCalled) {
+            /*
+             ** Unregister the BufferManager and the BufferManagerPointer so that the IoInterface
+             **   can be used cleanly by another connection later.
+             */
+            connection.unregisterWriteBufferManager();
 
-        /*
-        ** Clear out the reference to the connection so it may be released back to the pool
-         */
-        requestContext.releaseConnection(connection);
-        connection = null;
+            completeCalled = true;
+        }
     }
 
     /*

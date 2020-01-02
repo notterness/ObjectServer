@@ -31,6 +31,7 @@ public class SetupV2Put implements Operation {
     private final Operation completeCallback;
 
     private BufferManagerPointer clientReadPtr;
+    private BufferManagerPointer encryptInputPointer;
 
 
     /*
@@ -84,12 +85,14 @@ public class SetupV2Put implements Operation {
      **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
+        BufferManager clientReadBufferManager = requestContext.getClientReadBufferManager();
         clientReadPtr = requestContext.getReadBufferPointer();
 
         /*
         ** Need to create two pointer here that are clones of the clientReadPtr, one will be used by the
         **   Md5 Digest operation and the other will be used by the EncryptBuffer operation
          */
+        encryptInputPointer = clientReadBufferManager.register(this, clientReadPtr);
 
         return null;
     }
@@ -106,7 +109,7 @@ public class SetupV2Put implements Operation {
         /*
         ** Add compute MD5 and encrypt to the dependency on the ClientReadBufferManager read pointer.
          */
-        EncryptBuffer encryptBuffer = new EncryptBuffer(requestContext, memoryManager, clientReadPtr,
+        EncryptBuffer encryptBuffer = new EncryptBuffer(requestContext, memoryManager, encryptInputPointer,
                 this);
         v2PutHandlerOperations.put(encryptBuffer.getOperationType(), encryptBuffer);
         encryptBuffer.initialize();
@@ -127,6 +130,15 @@ public class SetupV2Put implements Operation {
     }
 
     public void complete() {
+        /*
+        ** Remove the registration for the encryptInputPointer
+         */
+        BufferManager clientReadBufferManager = requestContext.getClientReadBufferManager();
+        clientReadBufferManager.unregister(encryptInputPointer);
+        encryptInputPointer = null;
+
+        clientReadPtr = null;
+
         completeCallback.event();
 
         LOG.info("SetupV2Put[" + requestContext.getRequestId() + "] completed");

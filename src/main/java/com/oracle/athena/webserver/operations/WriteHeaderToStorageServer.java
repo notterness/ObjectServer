@@ -52,6 +52,12 @@ public class WriteHeaderToStorageServer implements Operation {
     private BufferManagerPointer writeInfoPointer;
     private BufferManagerPointer writeDonePointer;
 
+    /*
+    ** Once the header has been written, this operation will call complete() to unregister the
+    **   BufferManagerPointer(s).
+     */
+    private boolean completeCalled;
+
     public WriteHeaderToStorageServer(final RequestContext requestContext, final IoInterface storageServerConnection,
                                       final List<Operation> operationsToRun, final BufferManager storageServerBufferManager,
                                       final BufferManagerPointer writePtr, final int tcpPort) {
@@ -71,6 +77,8 @@ public class WriteHeaderToStorageServer implements Operation {
         onDelayedQueue = false;
         onExecutionQueue = false;
         nextExecuteTime = 0;
+
+        completeCalled = false;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -81,17 +89,24 @@ public class WriteHeaderToStorageServer implements Operation {
      */
     public BufferManagerPointer initialize() {
         /*
-        ** This will be woken up when there is data to write via the writeDonePointer
+        ** This will be woken up when there is data to write via the writePointer. This is the dependency
+        **   upon data to write.
          */
         writeInfoPointer = storageServerBufferManager.register(this, writePointer);
 
         /*
-        ** This will be woken up when the data has been written out the SocketChannel via the writeDonePointer
+        ** This will be woken up when the data has been written out the SocketChannel via the writeDonePointer. This
+        **   allows a check to insure that the data has been picked up and written to the SocketChannel. The
+        **   writeInfoPointer is updated after the data has all been written out the SocketChannel. The update
+        **   will cause the writeDonePointer to generate an event() for this operation. Then the check to make
+        **   sure all the data was written can be done.
          */
         writeDonePointer = storageServerBufferManager.register(this, writeInfoPointer);
 
         /*
-        ** Register with the storageServerConnection to perform the write
+        ** Register with the storageServerConnection to perform the write. This tells the connection
+        **   which BufferManager and the write BufferManagerPointer to use to get the ByteBuffers
+        **   from.
          */
         storageServerConnection.registerWriteBufferManager(storageServerBufferManager, writeInfoPointer);
 
@@ -107,56 +122,74 @@ public class WriteHeaderToStorageServer implements Operation {
     }
 
     /*
+    ** The execute() method will be called:
+    **   1) When BuildHeaderToStorageServer updates the writePointer that the writeInfoPointer has a dependency upon.
+    **      This happens when the HTTP Request is written into the buffer.
+    **   2) When the NioSocket performWrite() method has written all of the bytes in the ByteBuffer out the
+    **      SocketChannel. When all the bytes have been written, then the writePointer is updated. The writeDonePointer
+    **      has a dependency upon the writePointer and that will cause this operation to have its event() method
+    **      called.
      */
     public void execute() {
         /*
-        ** Check if there is data to write out
+        ** Check if there is data to write out or if it has all been written.
          */
         if (storageServerBufferManager.peek(writeInfoPointer) != null) {
             storageServerConnection.writeBufferReady();
         } else {
-            LOG.info("WriteHeaderToStorageServer writePointer no buffers");
-        }
-
-        /*
-        ** Check if the data has been written out
-         */
-        if (storageServerBufferManager.peek(writeInfoPointer) == null) {
             /*
-            ** Set the HTTP Header has been written to the Storage Server flag
+            ** Validate that this is being woken up and buffers have already been written to the
+            **   SocketChannel
              */
-            requestContext.setHttpResponseSent(storageServerTcpPort);
+            if (storageServerBufferManager.peek(writeDonePointer) != null) {
+                /*
+                 ** Check if the data has been written out. This means there are no buffers waiting to be written out
+                 **   that are pointed to be the writeInfoPointer.
+                 ** Set the HTTP Header has been written to the Storage Server flag
+                 */
+                LOG.info("WriteHeaderToStorageServer[" + requestContext.getRequestId() + "] all data written");
+                requestContext.setHttpRequestSent(storageServerTcpPort);
 
-            /*
-             ** event() all of the operations that are ready to run once the connect() has
-             **   succeeded.
-             */
-            Iterator<Operation> iter = operationsToRun.iterator();
-            while (iter.hasNext()) {
-                iter.next().event();
+                /*
+                 ** event() all of the operations that are ready to run once the connect() has
+                 **   succeeded.
+                 */
+                Iterator<Operation> iter = operationsToRun.iterator();
+                while (iter.hasNext()) {
+                    iter.next().event();
+                }
+                operationsToRun.clear();
+            } else {
+                LOG.info("WriteHeaderToStorageServer[" + requestContext.getRequestId() + "] waiting for HTTP header write");
             }
-            operationsToRun.clear();
-        } else {
-            LOG.info("WriteHeaderToStorageServer writeDonePointer not finished");
         }
-
     }
 
     /*
-     ** This removes any dependencies that are put upon the BufferManager
+    ** This removes any dependencies that are put upon the BufferManager for this operation.
+    ** At this point, all communications with the Storage Server for this chunk of data have been completed.
      */
     public void complete() {
-        /*
-        ** There is no longer a need for the writeDonePointer
-         */
-        storageServerBufferManager.unregister(writeDonePointer);
-        writeDonePointer = null;
+        if (!completeCalled) {
+            /*
+            ** Remove the BufferManager registration from the NioSocket handler
+             */
+            storageServerConnection.unregisterWriteBufferManager();
 
-        /*
-        ** Need to unregister() in the reverse order that the dependencies are created in
-         */
-        storageServerBufferManager.unregister(writeInfoPointer);
-        writeInfoPointer = null;
+            /*
+             ** There is no longer a need for the writeDonePointer
+             */
+            storageServerBufferManager.unregister(writeDonePointer);
+            writeDonePointer = null;
+
+            /*
+             ** Need to unregister() in the reverse order that the dependencies are created in
+             */
+            storageServerBufferManager.unregister(writeInfoPointer);
+            writeInfoPointer = null;
+
+            completeCalled = true;
+        }
     }
 
     /*

@@ -92,11 +92,18 @@ public class BuildHeaderToStorageServer implements Operation {
     }
 
     /*
+    ** The execute() method for this operation will be called for the following:
+    **
+    **   1) It is called by the ConnectComplete operation when the connection to the Storage Server is completed.
+    **   2) It will be called again when the update is called for the addBufferPointer since the writePointer has
+    **      a dependency on it (and this Operation is registered with the writePointer).
      */
     public void execute() {
         if (headerNotBuilt) {
             /*
-             ** Add a buffer if this is the first time through
+             ** Add a buffer if this is the first time through. The addBufferPointer (which the writePointer depends on
+             **   is reset() after all the buffers are added, so it needs to be "updated" to allow the dependent
+             **   BufferManagerPointer to access a buffer.
              */
             storageServerBufferManager.updateProducerWritePointer(addBufferPointer);
 
@@ -118,7 +125,8 @@ public class BuildHeaderToStorageServer implements Operation {
                 msgHdr.flip();
 
                 /*
-                 ** Data is now present in the ByteBuffer so the writeInfillPtr needs to be updated,
+                 ** Data is now present in the ByteBuffer so the writePointer needs to be updated. This will trigger
+                 **   the event() to be sent to the WriteHeaderToStorageServer operation.
                  */
                 storageServerBufferManager.updateProducerWritePointer(writePointer);
             } else {

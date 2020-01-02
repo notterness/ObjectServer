@@ -61,6 +61,13 @@ public class SetupChunkWrite implements Operation {
      */
     private IoInterface storageServerConnection;
 
+    /*
+    ** This is the port used to communicate with the Storage Server.
+    **
+    ** TODO: This is going to need to be an object that represents the IP Address and the Port.
+     */
+    private int storageServerTcpPort;
+
     private boolean chunkWriteSetupComplete;
 
     /*
@@ -88,7 +95,7 @@ public class SetupChunkWrite implements Operation {
         /*
          ** Setup this RequestContext to be able to read in and parse the HTTP Request(s)
          */
-        requestHandlerOperations = new HashMap<OperationTypeEnum, Operation>();
+        requestHandlerOperations = new HashMap<>();
 
         chunkWriteSetupComplete = false;
     }
@@ -124,12 +131,12 @@ public class SetupChunkWrite implements Operation {
              ** Create a BufferManager with two required entries to send the HTTP Request header to the
              **   Storage Server and then to send the final Shaw-256 calculation.
              */
-            storageServerBufferManager = new BufferManager(STORAGE_SERVER_HEADER_BUFFER_COUNT + 1);
+            storageServerBufferManager = new BufferManager(STORAGE_SERVER_HEADER_BUFFER_COUNT);
 
             /*
              ** Create a BufferManager to accept the HTTP Response from the Storage Server
              */
-            storageServerResponseBufferManager = new BufferManager(STORAGE_SERVER_HEADER_BUFFER_COUNT + 1);
+            storageServerResponseBufferManager = new BufferManager(STORAGE_SERVER_HEADER_BUFFER_COUNT);
 
             /*
              ** Allocate ByteBuffer(s) for the header and the Shaw-256
@@ -160,7 +167,7 @@ public class SetupChunkWrite implements Operation {
             /*
              ** First determine the VON information for the various Storage Servers that need to be written to.
              */
-            int storageServerTcpPort = RequestContext.STORAGE_SERVER_PORT_BASE;
+            storageServerTcpPort = RequestContext.STORAGE_SERVER_PORT_BASE;
 
             /*
              ** For each Storage Server, setup a HandleStorageServerError operation that is used when there
@@ -180,7 +187,7 @@ public class SetupChunkWrite implements Operation {
              **   EncryptBuffer operation to know where to start writing the data.
              */
             WriteToStorageServer storageServerWriter = new WriteToStorageServer(requestContext, storageServerConnection,
-                    encryptedBufferPtr, storageServerTcpPort);
+                    encryptedBufferPtr, chunkBytesToEncrypt, storageServerTcpPort);
             requestHandlerOperations.put(storageServerWriter.getOperationType(), storageServerWriter);
             storageServerWriter.initialize();
 
@@ -243,10 +250,14 @@ public class SetupChunkWrite implements Operation {
      */
     public void complete() {
 
+        LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] complete");
+
         /*
-        ** Close out the connection used to communicate with the Storage Server
+        ** Close out the connection used to communicate with the Storage Server. Then
+        ** clear out the reference to the connection so it may be released back to the pool.
          */
         storageServerConnection.closeConnection();
+        requestContext.releaseConnection(storageServerConnection);
         storageServerConnection = null;
 
         /*
@@ -276,13 +287,13 @@ public class SetupChunkWrite implements Operation {
         requestHandlerOperations.remove(OperationTypeEnum.READ_STORAGE_SERVER_RESPONSE_BUFFER);
 
         /*
-        ** Call the complete() methods for all of the Operations created to handle the chunk write
+        ** Call the complete() methods for all of the Operations created to handle the chunk write that did not have
+        **   ordering dependencies due to the registrations with the BufferManager(s).
          */
         Collection<Operation> createdOperations = requestHandlerOperations.values();
         for (Operation createdOperation : createdOperations) {
             createdOperation.complete();
         }
-
         requestHandlerOperations.clear();
 
         /*
@@ -321,6 +332,11 @@ public class SetupChunkWrite implements Operation {
         storageServerResponseBufferManager.unregister(respBufferPointer);
         storageServerResponseBufferManager.reset();
         storageServerResponseBufferManager = null;
+
+        /*
+        ** Clear the HTTP Request sent for this Storage Server
+         */
+        requestContext.removeHttpRequestSent(storageServerTcpPort);
 
         /*
         ** Now call back the Operation that will handle the completion

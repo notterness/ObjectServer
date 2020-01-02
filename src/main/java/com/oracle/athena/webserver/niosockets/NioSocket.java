@@ -215,9 +215,12 @@ public class NioSocket implements IoInterface {
                 writePtr.getCurrIndex());
 
         if (writeBufferManager != null) {
+            LOG.info(" writePtr push (" + writePtr.getIdentifier() + ":" + writePtr.getOperationType() + ") bufferIndex: " +
+                    writePtr.getCurrIndex());
+
             BufferAssociation assocation = new BufferAssociation(writeBufferManager, writePointer);
 
-            readBufferAssociations.push(assocation);
+            writeBufferAssociations.push(assocation);
         }
 
         this.writeBufferManager = writeBufferMgr;

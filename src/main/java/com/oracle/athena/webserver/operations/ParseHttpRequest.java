@@ -144,6 +144,9 @@ public class ParseHttpRequest implements Operation {
                 /*
                 ** Only update the pointer if the data in the buffer was all consumed.
                  */
+                LOG.info("ParseHttpRequest[" + requestContext.getRequestId() + "]  position: " +
+                        httpBuffer.position() + " limit: " + httpBuffer.limit());
+
                 clientReadBufferMgr.updateConsumerReadPointer(httpBufferPointer);
             }
 

@@ -75,6 +75,11 @@ public class ChunkWriteTestComplete implements Operation {
             int result = requestContext.getStorageResponseResult(RequestContext.STORAGE_SERVER_PORT_BASE);
             LOG.info("ChunkWriteTestComplete result: " + result);
             testWriteChunk.statusReceived(result);
+
+            /*
+             ** Clear the HTTP Response for this Storage Server
+             */
+            requestContext.removeStorageServerResponse(RequestContext.STORAGE_SERVER_PORT_BASE);
         }
     }
 

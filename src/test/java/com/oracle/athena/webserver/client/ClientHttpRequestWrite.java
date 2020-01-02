@@ -120,7 +120,11 @@ public class ClientHttpRequestWrite implements Operation {
              */
             clientWriteBufferMgr.updateProducerWritePointer(writeInfillPointer);
 
-            requestContext.setHttpResponseSent(targetTcpPort);
+            /*
+            ** Need to set that the HTTP Request has been sent to the Web Server to allow the writes of the
+            **   object data can take place.
+             */
+            requestContext.setHttpRequestSent(targetTcpPort);
             clientObjectWrite.event();
         }
 
