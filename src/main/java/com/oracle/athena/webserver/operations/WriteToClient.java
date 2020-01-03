@@ -116,7 +116,7 @@ public class WriteToClient implements Operation {
              */
 
             /*
-            ** Done with this client connection as well
+            ** Done with this client connection as well since this is only being used to write the HTTP Response
              */
             finalOperationToRun.event();
         }

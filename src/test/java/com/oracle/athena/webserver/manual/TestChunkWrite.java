@@ -111,7 +111,8 @@ public class TestChunkWrite {
 
         int fillPattern = 1;
         for (int i = 0; i < NUM_STORAGE_SERVER_WRITE_BUFFERS; i++) {
-            ByteBuffer writeBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
+            ByteBuffer writeBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null,
+                    storageServerWriteBufferMgr);
 
             /*
             ** Write a known pattern into the buffers

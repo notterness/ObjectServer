@@ -4,6 +4,7 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,23 +23,18 @@ public class MemoryManager {
     private BlockingQueue<MemoryAvailableCallback> waitingForBuffersQueue;
 
     // These are publicly visible and used in the buffer allocation calls.
-    public static final int SMALL_BUFFER_SIZE = 0x100;  // 256
     public static final int MEDIUM_BUFFER_SIZE = 0x400;  // 1 kB;
     public static final int XFER_BUFFER_SIZE = 0x2000;  // 8 kB
-    public static final int LARGE_BUFFER_SIZE = 0x100000;  // 1MB
 
     // These really don't need to be.
-    private static final int PRODUCTION_SMALL_BUFFER_COUNT = 1000;
     private static final int PRODUCTION_MEDIUM_BUFFER_COUNT = 100;
     private static final int PRODUCTION_XFER_BUFFER_COUNT = 10;
 
-    private static final int INTEGRATION_SMALL_BUFFER_COUNT = 10;
     private static final int INTEGRATION_MEDIUM_BUFFER_COUNT = 10;
     private static final int INTEGRATION_XFER_BUFFER_COUNT = 100;
 
     /* In sorted order */
     private static final int[] poolBufferSizes = {
-        SMALL_BUFFER_SIZE,
         MEDIUM_BUFFER_SIZE,
         XFER_BUFFER_SIZE,
     };
@@ -46,11 +42,11 @@ public class MemoryManager {
     /*
     ** TODO: This should be the number of ConnectionState objects
      */
-    private static final int MAX_WAITING_MEMORY_CONNECTIONS = 1000;
+    private static final int MAX_WAITING_MEMORY_CONNECTIONS = 100;
 
     // Or we could infer this from an array of {count, size} tuples, if we didn't
     // need to expose the threshold values.
-    private static final int numPools = 3;
+    private static final int numPools = 2;
     private FixedSizeBufferPool[] thePool;
 
     public MemoryManager(WebServerFlavor flavor) {
@@ -64,24 +60,22 @@ public class MemoryManager {
         **    desktop.
          */
         if (flavor == WebServerFlavor.STANDARD) {
-            smallBufferCount = PRODUCTION_SMALL_BUFFER_COUNT;
             mediumBufferCount = PRODUCTION_MEDIUM_BUFFER_COUNT;
             xferBufferCount = PRODUCTION_XFER_BUFFER_COUNT;
         } else {
-            smallBufferCount = INTEGRATION_SMALL_BUFFER_COUNT;
             mediumBufferCount = INTEGRATION_MEDIUM_BUFFER_COUNT;
             xferBufferCount = INTEGRATION_XFER_BUFFER_COUNT;
         }
 
         thePool = new FixedSizeBufferPool[numPools];
-        thePool[0] = new FixedSizeBufferPool( SMALL_BUFFER_SIZE,  smallBufferCount );
-        thePool[1] = new FixedSizeBufferPool( MEDIUM_BUFFER_SIZE, mediumBufferCount );
-        thePool[2] = new FixedSizeBufferPool( XFER_BUFFER_SIZE,   xferBufferCount );
+        thePool[0] = new FixedSizeBufferPool( MEDIUM_BUFFER_SIZE, mediumBufferCount );
+        thePool[1] = new FixedSizeBufferPool( XFER_BUFFER_SIZE, xferBufferCount );
 
         waitingForBuffersQueue = new LinkedBlockingQueue<>(MAX_WAITING_MEMORY_CONNECTIONS);
     }
 
-    public ByteBuffer poolMemAlloc(final int requestedSize, MemoryAvailableCallback memFreeCb) {
+    public ByteBuffer poolMemAlloc(final int requestedSize, MemoryAvailableCallback memFreeCb,
+                                   final BufferManager bufferManager) {
 
         /*
         ** TODO: If there are already ConnectionState waiting for memory, need to wait for those to
@@ -91,7 +85,7 @@ public class MemoryManager {
             if (requestedSize <= thePool[i].getBufferSize()) {
 
                 LOG.debug("poolMemAlloc [" + i + "] requestedSize: " + requestedSize);
-                ByteBuffer buffer = thePool[i].poolMemAlloc( requestedSize );
+                ByteBuffer buffer = thePool[i].poolMemAlloc(requestedSize, bufferManager);
                 if (buffer != null) {
                     return buffer;
                 } else if (memFreeCb != null) {
@@ -145,8 +139,10 @@ public class MemoryManager {
 
         for (int i = 0; i < numPools; ++i) {
             if (thePool[i].getBufferCount() != thePool[i].getUnusedBufferCount()) {
-                System.out.println(caller + " BufferPool error pool[" + i + "] COUNT: " + thePool[i].getBufferCount() +
+                LOG.warn(caller + " BufferPool error pool[" + i + "] COUNT: " + thePool[i].getBufferCount() +
                         " unused: " + thePool[i].getUnusedBufferCount());
+
+                thePool[i].dumpMap();
                 memoryPoolsOkay = false;
             }
         }

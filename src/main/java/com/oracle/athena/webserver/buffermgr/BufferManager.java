@@ -236,4 +236,8 @@ public class BufferManager {
         return pointer.reset();
     }
 
+    public void dumpInformation() {
+        LOG.info("BufferManager " + bufferManagerName + " id: " + identifier.get());
+    }
+
 }
