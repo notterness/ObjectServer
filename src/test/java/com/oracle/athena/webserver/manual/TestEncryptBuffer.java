@@ -29,15 +29,11 @@ public class TestEncryptBuffer {
 
         this.requestContext = new RequestContext(webServerFlavor, memoryManager, nioEventThread);
 
-        IoInterface connection = nioEventThread.allocateConnection(null);
-        this.requestContext.initializeServer(connection, 55);
-
         CasperHttpInfo casperHttpInfo = new CasperHttpInfo(requestContext);
-
         this.parser = new ByteBufferHttpParser(casperHttpInfo);
 
         /*
-        ** clientReadPointer is setup in the testEncryption() method for EncryptBuffer. So, for
+        ** encryptInputPointer is setup in the testEncryption() method for EncryptBuffer. So, for
         **   this test passing in null is acceptable.
          */
         encryptBuffer = new EncryptBuffer(requestContext, memoryManager, null, null);
@@ -48,7 +44,7 @@ public class TestEncryptBuffer {
 
         requestContext.dumpOperations();
 
-        requestContext.cleanupServerRequest();
+        requestContext.reset();
 
         nioEventThread.stop();
     }

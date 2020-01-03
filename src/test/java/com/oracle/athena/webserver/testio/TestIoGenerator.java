@@ -96,11 +96,17 @@ public class TestIoGenerator implements IoInterface {
      */
     public void registerReadBufferManager(final BufferManager readBufferMgr, final BufferManagerPointer readPtr) {
 
+        LOG.info(" readPtr register (" + readPtr.getIdentifier() + ":" + readPtr.getOperationType() + ") bufferIndex: " +
+                readPtr.getCurrIndex());
+
         this.readBufferManager = readBufferMgr;
         this.readPointer = readPtr;
     }
 
     public void registerWriteBufferManager(final BufferManager writeBufferMgr, final BufferManagerPointer writePtr) {
+
+        LOG.info(" writePtr register (" + writePtr.getIdentifier() + ":" + writePtr.getOperationType() + ") bufferIndex: " +
+                writePtr.getCurrIndex());
 
         this.writeBufferManager = writeBufferMgr;
         this.writePointer = writePtr;
@@ -108,11 +114,17 @@ public class TestIoGenerator implements IoInterface {
 
     public void unregisterReadBufferManager() {
 
+        LOG.warn(" readPtr unregister (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                readPointer.getCurrIndex());
+
         this.readBufferManager = null;
         this.readPointer = null;
     }
 
     public void unregisterWriteBufferManager() {
+
+        LOG.warn(" writePtr unregister (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+                writePointer.getCurrIndex());
 
         this.writeBufferManager = null;
         this.writePointer = null;
@@ -125,8 +137,10 @@ public class TestIoGenerator implements IoInterface {
     public void readBufferAvailable() {
         ByteBuffer readFillBuffer = readBufferManager.peek(readPointer);
         if (readFillBuffer != null) {
-            LOG.info("readBufferAvailable");
             webServerTest.read(readFillBuffer);
+
+            LOG.info("readBufferAvailable position: "+ readFillBuffer.position() + " limit: " +
+                    readFillBuffer.limit());
 
             /*
              ** Now that the HTTP Request is in the buffer, update the read pointer

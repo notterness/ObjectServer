@@ -7,6 +7,7 @@ import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.operations.Operation;
 import com.oracle.athena.webserver.operations.OperationTypeEnum;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.athena.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,17 +49,17 @@ public class ClientHttpRequestWrite implements Operation {
     **
      */
     private final ClientObjectWrite clientObjectWrite;
-    private final int targetTcpPort;
+    private final ServerIdentifier serverIdentifier;
 
     public ClientHttpRequestWrite(final RequestContext requestContext,
                                  final ClientTest clientTest, final BufferManagerPointer writeInfillPtr,
-                                 final ClientObjectWrite writeObject, final int targetTcpPort) {
+                                 final ClientObjectWrite writeObject, final ServerIdentifier serverIdentifier) {
 
         this.requestContext = requestContext;
         this.clientTest = clientTest;
         this.writeInfillPointer = writeInfillPtr;
         this.clientObjectWrite = writeObject;
-        this.targetTcpPort = targetTcpPort;
+        this.serverIdentifier = serverIdentifier;
 
         this.clientWriteBufferMgr = requestContext.getClientWriteBufferManager();
 
@@ -123,7 +124,7 @@ public class ClientHttpRequestWrite implements Operation {
             ** Need to set that the HTTP Request has been sent to the Web Server to allow the writes of the
             **   object data can take place.
              */
-            requestContext.setHttpRequestSent(targetTcpPort);
+            requestContext.setHttpRequestSent(serverIdentifier);
             clientObjectWrite.event();
         }
 

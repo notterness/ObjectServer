@@ -7,9 +7,11 @@ import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.niosockets.EventPollThread;
 import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.athena.webserver.requestcontext.ServerIdentifier;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.eclipse.jetty.http.HttpParser;
 
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
@@ -37,9 +39,6 @@ public abstract class ClientTest {
     private final Object writeDone;
 
     protected MemoryManager memoryManager;
-
-    private HttpResponseListener responseListener;
-    private HttpParser httpParser;
 
     protected final NioTestClient client;
     protected final EventPollThread eventThread;
@@ -102,8 +101,10 @@ public abstract class ClientTest {
         **   generator
          */
         memoryManager = new MemoryManager(webServerFlavor);
+
+        ServerIdentifier serverId = new ServerIdentifier(InetAddress.getLoopbackAddress(), serverTcpPort, 0);
         SetupClientConnection setupClientConnection = new SetupClientConnection(webServerFlavor, clientContext, memoryManager,
-                this, connection, serverTcpPort);
+                this, connection, serverId);
         setupClientConnection.initialize();
 
         /*

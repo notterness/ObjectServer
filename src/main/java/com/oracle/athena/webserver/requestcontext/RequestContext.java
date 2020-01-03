@@ -173,16 +173,16 @@ public class RequestContext {
 
     /*
     ** The following Map is used to keep track of when the HTTP Request is sent to the
-    **   Storage Server for the Web Server and it is used by the test code to know that
-    **   the HTTP Request has been sent by the client
-    ** The map is based upon the port of the target.
+    **   Storage Server from the Web Server and it is used by the test code to know that
+    **   the HTTP Request has been sent by the client to the Web Server.
+    ** The map is based upon the IP address and the TCP Port of the target plus the chunk number.
      */
-    private Map<Integer, AtomicBoolean> httpRequestSent;
+    private Map<ServerIdentifier, AtomicBoolean> httpRequestSent;
 
     /*
     ** The following Map is used to indicate that a Storage Server has responded.
      */
-    private Map<Integer, Integer> storageServerResponse;
+    private Map<ServerIdentifier, Integer> storageServerResponse;
 
     /*
     ** The httpParseError is set if there is something the parser does not like or a header
@@ -227,9 +227,9 @@ public class RequestContext {
 
         httpInfo = new CasperHttpInfo(this);
 
-        this.clientReadBufferManager = new BufferManager(BUFFER_MGR_RING_SIZE);
-        this.clientWriteBufferManager = new BufferManager(BUFFER_MGR_RING_SIZE);
-        this.storageServerWriteBufferManager = new BufferManager(BUFFER_MGR_RING_SIZE);
+        this.clientReadBufferManager = new BufferManager(BUFFER_MGR_RING_SIZE, "ClientRead", 100);
+        this.clientWriteBufferManager = new BufferManager(BUFFER_MGR_RING_SIZE, "ClientWrite", 200);
+        this.storageServerWriteBufferManager = new BufferManager(BUFFER_MGR_RING_SIZE, "StorageServerWrite", 300);
 
         /*
         ** Build the list of all supported HTTP Request and the handler
@@ -707,8 +707,8 @@ public class RequestContext {
     **   to it. The setter (setHttpResponseSent() is called by WriteHeaderToStorageServer after the buffer has been
     **   written to the SocketChannel.
      */
-    public boolean hasHttpRequestBeenSent(final int targetPort) {
-        AtomicBoolean responseSent = httpRequestSent.get(targetPort);
+    public boolean hasHttpRequestBeenSent(final ServerIdentifier storageServerId) {
+        AtomicBoolean responseSent = httpRequestSent.get(storageServerId);
         if (responseSent != null) {
             if (responseSent.get()) {
                 return true;
@@ -717,47 +717,52 @@ public class RequestContext {
         return false;
     }
 
-    public void setHttpRequestSent(final int targetPort) {
+    public void setHttpRequestSent(final ServerIdentifier storageServerId) {
         AtomicBoolean httpSent = new AtomicBoolean(true);
-        httpRequestSent.put(targetPort, httpSent);
+        httpRequestSent.put(storageServerId, httpSent);
     }
 
     /*
     ** This is used to remove the Map<> entry for the Storage Server after it has completed it's writes
      */
-    public void removeHttpRequestSent(final int targetPort) {
-        if (httpRequestSent.remove(targetPort) == null) {
-            LOG.warn("RequestContext[" + getRequestId() + "] HTTP Request remove failed targetPort: " + targetPort);
+    public void removeHttpRequestSent(final ServerIdentifier storageServerId) {
+        if (httpRequestSent.remove(storageServerId) == null) {
+            LOG.warn("RequestContext[" + getRequestId() + "] HTTP Request remove failed targetPort: " +
+                    storageServerId.getStorageServerIpAddress() + ":" + storageServerId.getStorageServerTcpPort() +
+                    ":" + storageServerId.getChunkNumber());
+
         }
     }
 
     /*
     ** The following are used to keep track of the HTTP Response from the Storage Server.
      */
-    public boolean hasStorageServerResponseArrived(final int targetPort) {
-        Integer responseSent = storageServerResponse.get(targetPort);
+    public boolean hasStorageServerResponseArrived(final ServerIdentifier storageServerId) {
+        Integer responseSent = storageServerResponse.get(storageServerId);
         if (responseSent != null) {
             return true;
         }
         return false;
     }
 
-    public int getStorageResponseResult(final int targetPort) {
-        Integer responseSent = storageServerResponse.get(targetPort);
+    public int getStorageResponseResult(final ServerIdentifier storageServerId) {
+        Integer responseSent = storageServerResponse.get(storageServerId);
         if (responseSent != null) {
             return responseSent;
         }
         return -1;
     }
 
-    public void setStorageServerResponse(final int targetPort, final int result) {
+    public void setStorageServerResponse(final ServerIdentifier storageServerId, final int result) {
         Integer storageServerResult = new Integer(result);
-        storageServerResponse.put(targetPort, storageServerResult);
+        storageServerResponse.put(storageServerId, storageServerResult);
     }
 
-    public void removeStorageServerResponse(final int targetPort) {
-        if (storageServerResponse.remove(targetPort) == null) {
-            LOG.warn("RequestContext[" + getRequestId() + "] HTTP Response remove failed targetPort: " + targetPort);
+    public void removeStorageServerResponse(final ServerIdentifier storageServerId) {
+        if (storageServerResponse.remove(storageServerId) == null) {
+            LOG.warn("RequestContext[" + getRequestId() + "] HTTP Response remove failed targetPort: " +
+                    storageServerId.getStorageServerIpAddress() + ":" + storageServerId.getStorageServerTcpPort() +
+                    ":" + storageServerId.getChunkNumber());
         }
     }
 

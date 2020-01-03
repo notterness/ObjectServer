@@ -4,9 +4,11 @@ import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.athena.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 
 public class EncryptBuffer implements Operation {
@@ -50,7 +52,8 @@ public class EncryptBuffer implements Operation {
     ** The encyptInputPointer tracks the clientReadBufferManager where data is placed following reads from
     **   the client connection's SocketChannel.
      */
-    private BufferManagerPointer encyptInputPointer;
+    private final BufferManagerPointer clientReadPointer;
+    private BufferManagerPointer encryptInputPointer;
 
     private final int chunkSize;
 
@@ -76,12 +79,14 @@ public class EncryptBuffer implements Operation {
      */
     private boolean buffersAllEncrypted;
 
+    private ServerIdentifier chunkId;
+
     /*
      ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
      **   up the calls to obtain the VON information and the meta-data write to the database.
      */
     public EncryptBuffer(final RequestContext requestContext, final MemoryManager memoryManager,
-                         final BufferManagerPointer encryptInputPtr,
+                         final BufferManagerPointer readPtr,
                          final Operation completeCb) {
 
         this.requestContext = requestContext;
@@ -91,7 +96,7 @@ public class EncryptBuffer implements Operation {
 
         this.storageServerWriteBufferMgr = this.requestContext.getStorageServerWriteBufferManager();
 
-        this.encyptInputPointer = encryptInputPtr;
+        this.clientReadPointer = readPtr;
 
         this.readBufferMetering = requestContext.getOperation(OperationTypeEnum.METER_READ_BUFFERS);
 
@@ -116,6 +121,8 @@ public class EncryptBuffer implements Operation {
      **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
+        encryptInputPointer = clientReadBufferMgr.register(this, clientReadPointer);
+
         /*
          ** This keeps track of the number of bytes that have been encrypted. When it reaches a chunk
          **   boundary, it then starts off a new chunk write sequence.
@@ -128,7 +135,12 @@ public class EncryptBuffer implements Operation {
         ** savedSrcPosition is used to handle the case where there are no buffers available to place
         **   encrypted data into, so this operation will need to wait until buffers are available.
          */
-        savedSrcPosition = 0;
+        ByteBuffer readBuffer;
+        if ((readBuffer = clientReadBufferMgr.peek(encryptInputPointer)) != null) {
+            savedSrcPosition = readBuffer.position();
+        } else {
+            savedSrcPosition = 0;
+        }
 
         /*
          ** The storageServerWritePtr is a producer of ByteBuffers in the storage server write BufferManager.
@@ -147,7 +159,7 @@ public class EncryptBuffer implements Operation {
 
         LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] initialize done");
 
-        return storageServerWritePtr;
+        return encryptInputPointer;
     }
 
     /*
@@ -179,7 +191,7 @@ public class EncryptBuffer implements Operation {
             boolean outOfBuffers = false;
 
             while (!outOfBuffers) {
-                if ((readBuffer = clientReadBufferMgr.peek(encyptInputPointer)) != null) {
+                if ((readBuffer = clientReadBufferMgr.peek(encryptInputPointer)) != null) {
                     /*
                      ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
                      **  affecting the position() and limit() indexes
@@ -204,7 +216,7 @@ public class EncryptBuffer implements Operation {
                     LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] out of read buffers chunkBytesEncrypted: " +
                             chunkBytesEncrypted + " chunkBytesEncrypted: " + chunkBytesEncrypted);
 
-                    if (chunkBytesEncrypted < chunkBytesEncrypted) {
+                    if (chunkBytesEncrypted < chunkBytesToEncrypt) {
                         readBufferMetering.event();
                     } else if (chunkBytesEncrypted == chunkBytesToEncrypt) {
                         /*
@@ -220,12 +232,16 @@ public class EncryptBuffer implements Operation {
             /*
             ** Need to cleanup here from the Encrypt operation
              */
-            if (requestContext.hasStorageServerResponseArrived(RequestContext.STORAGE_SERVER_PORT_BASE)) {
-                int result = requestContext.getStorageResponseResult(RequestContext.STORAGE_SERVER_PORT_BASE);
+            if (requestContext.hasStorageServerResponseArrived(chunkId)) {
+                int result = requestContext.getStorageResponseResult(chunkId);
                 LOG.info("ChunkWriteComplete result: " + result);
 
                 complete();
+            } else {
+                LOG.info("ChunkWriteComplete waiting for result");
             }
+
+            chunkId = null;
         }
     }
 
@@ -238,7 +254,7 @@ public class EncryptBuffer implements Operation {
         /*
         ** Remove the reference to the passed in encryptInputPointer (it is not owned by this Operation)
          */
-        encyptInputPointer = null;
+        encryptInputPointer = null;
 
         storageServerWriteBufferMgr.unregister(storageServerWritePtr);
         storageServerWritePtr = null;
@@ -338,8 +354,13 @@ public class EncryptBuffer implements Operation {
     **   buffers to be used multiple times.
      */
     private void encryptBuffer(ByteBuffer srcBuffer, ByteBuffer tgtBuffer) {
-        int bytesToEncrypt = srcBuffer.limit() - srcBuffer.position();
-        int bytesInTgtBuffer = tgtBuffer.limit() - tgtBuffer.position();
+        int bytesToEncrypt = srcBuffer.remaining();
+        int bytesInTgtBuffer = tgtBuffer.remaining();
+
+        LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] src position: " + srcBuffer.position() +
+                " remaining: " + srcBuffer.remaining() + " limit: " + srcBuffer.limit());
+        LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] tgt position: " + tgtBuffer.position() +
+                " remaining: " + tgtBuffer.remaining() + " limit: " + tgtBuffer.limit());
 
         /*
         ** The easiest case is when the tgtBuffer can hold all of the bytes in the srcBuffer
@@ -354,32 +375,17 @@ public class EncryptBuffer implements Operation {
             **   completely fills the tgtBuffer.
              */
             if ((tgtBuffer.remaining() == 0) || ((tgtBuffer.remaining() + chunkBytesEncrypted) == chunkBytesToEncrypt)) {
-                /*
-                ** If this buffer is the first one for a chunk, add a bookmark and also kick off the
-                **   SetupWriteChunk operation
-                 */
-                if ((chunkBytesEncrypted % chunkSize) == 0) {
-                    /*
-                    ** This bookmark will be used by the WriteToStorageServer operations. The WriteStorageServer
-                    **   operations will be created by the SetupChunkWrite once it has determined the
-                    **   VON information.
-                     */
-                    storageServerWriteBufferMgr.bookmark(storageServerWritePtr);
 
-                    /*
-                    ** Now create the SetupChunkWrite and start it running
-                     */
-                    SetupChunkWrite setupChunkWrite = new SetupChunkWrite(requestContext, memoryManager,
-                            storageServerWritePtr, chunkBytesToEncrypt, this);
-                    setupChunkWrite.initialize();
-                    setupChunkWrite.event();
-                }
+                /*
+                ** The buffer is either full or all the data has been received for the client object
+                 */
+                checkForNewChunkStart();
 
                 /*
                 ** Update the number of bytes that have been encrypted
                  */
                 chunkBytesEncrypted += tgtBuffer.limit();
-                LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] chunkBytesToEncrypt: " + chunkBytesToEncrypt +
+                LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] 1 - chunkBytesToEncrypt: " + chunkBytesToEncrypt +
                         " chunkBytesEncrypted: " + chunkBytesEncrypted);
 
                 /*
@@ -396,9 +402,11 @@ public class EncryptBuffer implements Operation {
             **   obtained.
              */
             savedSrcPosition = 0;
-            clientReadBufferMgr.updateConsumerReadPointer(encyptInputPointer);
+            clientReadBufferMgr.updateConsumerReadPointer(encryptInputPointer);
 
         } else {
+            LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] full src: " + srcBuffer.remaining() +
+                    " tgt: " + tgtBuffer.remaining());
 
             /*
              ** This is the case where the srcBuffer has more data to encrypt than the tgtBuffer can accept.
@@ -412,12 +420,53 @@ public class EncryptBuffer implements Operation {
             savedSrcPosition = srcBuffer.position() + bytesInTgtBuffer;
 
             /*
+            ** The target buffer is full, so check for a chunk start
+             */
+            checkForNewChunkStart();
+
+            /*
+            ** Increment the encrypted bytes since this tgt buffer is full
+             */
+            chunkBytesEncrypted += tgtBuffer.limit();
+            LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] 2 - chunkBytesToEncrypt: " + chunkBytesToEncrypt +
+                    " chunkBytesEncrypted: " + chunkBytesEncrypted);
+
+            /*
             ** The tgtBuffer is now full.
              */
             tgtBuffer.flip();
             storageServerWriteBufferMgr.updateProducerWritePointer(storageServerWritePtr);
         }
     }
+
+    /*
+     ** If this buffer is the first one for a chunk, add a bookmark and also kick off the
+     **   SetupWriteChunk operation
+     */
+    private void checkForNewChunkStart() {
+        /*
+         ** The buffer is full, so check if it is time to start a new chunk
+         */
+        if ((chunkBytesEncrypted % chunkSize) == 0) {
+            /*
+             ** This bookmark will be used by the WriteToStorageServer operations. The WriteStorageServer
+             **   operations will be created by the SetupChunkWrite once it has determined the
+             **   VON information.
+             */
+            storageServerWriteBufferMgr.bookmarkThis(storageServerWritePtr);
+
+            /*
+             ** Now create the SetupChunkWrite and start it running
+             */
+            chunkId = new ServerIdentifier(InetAddress.getLoopbackAddress(),
+                    RequestContext.STORAGE_SERVER_PORT_BASE, 0);
+            SetupChunkWrite setupChunkWrite = new SetupChunkWrite(requestContext, chunkId,
+                    memoryManager, storageServerWritePtr, chunkBytesToEncrypt, this);
+            setupChunkWrite.initialize();
+            setupChunkWrite.event();
+        }
+    }
+
 
     /*
     ** This is designed to test the boundary cases where the following happens:
@@ -431,7 +480,7 @@ public class EncryptBuffer implements Operation {
     **   StorageServerWriteBufferMgr - 2k    , 1.5k,   , 0.5k, 1k, 0.5k
      */
     public void testEncryption() {
-        int allocations[][] = {
+        int[][] allocations = {
                 {1024, 2048},
                 {1024, 1536},
                 {1024, 512},
@@ -456,8 +505,8 @@ public class EncryptBuffer implements Operation {
          ** NOTE: This needs to be done prior to adding buffers to the BufferManager as the dependent
          **   BufferManagerPointer picks up the producers current write index as its starting read index.
          */
-        BufferManagerPointer clientReadPtr = clientReadBufferMgr.register(this, readFillPtr);
-        storageServerWritePtr = storageServerWriteBufferMgr.register(this);
+        encryptInputPointer = clientReadBufferMgr.register(this, readFillPtr);
+        storageServerWritePtr = storageServerWriteBufferMgr.register(this, writeFillPtr);
 
         /*
          ** Now create one more dependent BufferManagerPointer on the storageServerWritePtr to read all of
@@ -480,6 +529,7 @@ public class EncryptBuffer implements Operation {
             }
 
             buffer.flip();
+            LOG.info("Encrypt test offer readFillPtr position: " + buffer.position() + " limit: " + buffer.limit());
             clientReadBufferMgr.offer(readFillPtr, buffer);
 
             /*
@@ -487,7 +537,16 @@ public class EncryptBuffer implements Operation {
              */
             capacity = allocations[i][1];
             buffer = ByteBuffer.allocate(capacity);
+            LOG.info("Encrypt test offer writeFillPtr position: " + buffer.position() + " limit: " + buffer.limit());
             storageServerWriteBufferMgr.offer(writeFillPtr, buffer);
+        }
+
+        /*
+        ** Need to set the chunkBytesToEncrypt to prevent the encryption loop from doing odd things
+         */
+        chunkBytesToEncrypt = 0;
+        for (int i = 0; i < allocations.length; i++) {
+            chunkBytesToEncrypt += allocations[i][0];
         }
 
         /*
@@ -523,7 +582,7 @@ public class EncryptBuffer implements Operation {
          */
         storageServerWriteBufferMgr.unregister(validatePtr);
 
-        clientReadBufferMgr.unregister(clientReadPtr);
+        clientReadBufferMgr.unregister(encryptInputPointer);
         storageServerWriteBufferMgr.unregister(storageServerWritePtr);
 
         clientReadBufferMgr.unregister(readFillPtr);
@@ -535,8 +594,13 @@ public class EncryptBuffer implements Operation {
      */
     public void dumpCreatedOperations(final int level) {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
-        storageServerAddPointer.dumpPointerInfo();
-        storageServerWritePtr.dumpPointerInfo();
+        if (storageServerAddPointer != null) {
+            storageServerAddPointer.dumpPointerInfo();
+        }
+
+        if (storageServerWritePtr != null) {
+            storageServerWritePtr.dumpPointerInfo();
+        }
         LOG.info("");
     }
 

@@ -2,20 +2,21 @@ package com.oracle.athena.webserver.http;
 
 import com.oracle.athena.webserver.operations.Operation;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.athena.webserver.requestcontext.ServerIdentifier;
 
 public class StorageServerResponseCallback extends HttpResponseCallback {
 
     private final RequestContext requestContext;
     private final Operation httpResponseReceivedCallback;
 
-    private final int storageServerTcpPort;
+    private final ServerIdentifier serverIdentifier;
 
     public StorageServerResponseCallback(final RequestContext requestContext, final Operation httpResponseReceivedCb,
-                                         final int storageServerTcpPort) {
+                                         final ServerIdentifier serverIdentifier) {
 
         this.requestContext = requestContext;
         this.httpResponseReceivedCallback = httpResponseReceivedCb;
-        this.storageServerTcpPort = storageServerTcpPort;
+        this.serverIdentifier = serverIdentifier;
     }
 
     @Override
@@ -23,7 +24,7 @@ public class StorageServerResponseCallback extends HttpResponseCallback {
         System.out.println("httpResponse() status: " + status + " headerCompleted: " + headerCompleted +
                 " messageCompleted: " + messageCompleted);
 
-        requestContext.setStorageServerResponse(storageServerTcpPort, status);
+        requestContext.setStorageServerResponse(serverIdentifier, status);
         httpResponseReceivedCallback.event();
     }
 }

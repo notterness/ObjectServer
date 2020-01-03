@@ -4,6 +4,7 @@ import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.athena.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,9 +42,9 @@ public class WriteToStorageServer implements Operation {
     private IoInterface connection;
 
     /*
-    ** This is the TCP Port of the Storage Server
+    ** This is the unique identifier for the write of the chunk to the Storage Server
      */
-    private final int storageServerTcpPort;
+    private final ServerIdentifier serverIdentifier;
 
     private final BufferManager storageServerWriteBufferMgr;
     private final BufferManagerPointer encryptedBufferPtr;
@@ -60,13 +61,13 @@ public class WriteToStorageServer implements Operation {
 
     public WriteToStorageServer(final RequestContext requestContext, final IoInterface connection,
                                 final BufferManagerPointer encryptedBufferPtr, final int bytesToWrite,
-                                final int tcpPort) {
+                                final ServerIdentifier serverIdentifier) {
 
         this.requestContext = requestContext;
         this.connection = connection;
         this.encryptedBufferPtr = encryptedBufferPtr;
         this.bytesToWriteToStorageServer = bytesToWrite;
-        this.storageServerTcpPort = tcpPort;
+        this.serverIdentifier = serverIdentifier;
 
         this.storageServerWriteBufferMgr = this.requestContext.getStorageServerWriteBufferManager();
 
@@ -131,7 +132,7 @@ public class WriteToStorageServer implements Operation {
         /*
          ** Add this to the execute queue if the HTTP Request has been sent to the Storage Server
          */
-        if (requestContext.hasHttpRequestBeenSent(storageServerTcpPort) == true) {
+        if (requestContext.hasHttpRequestBeenSent(serverIdentifier) == true) {
             requestContext.addToWorkQueue(this);
         } else {
             LOG.info("WriteToStorageServer[" + requestContext.getRequestId() + "] HTTP request not sent");
@@ -148,7 +149,7 @@ public class WriteToStorageServer implements Operation {
              ** Register this BufferManager and BufferManagerPointer with the IoInterface. This will only be used for
              **   writes out the IoInterface.
              */
-            connection.registerWriteBufferManager(storageServerWriteBufferMgr, encryptedBufferPtr);
+            connection.registerWriteBufferManager(storageServerWriteBufferMgr, writeToStorageServerPtr);
             registeredWriteBufferManager = true;
         }
 

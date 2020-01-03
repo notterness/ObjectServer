@@ -86,7 +86,7 @@ public class BufferManagerPointer {
     **   dependency on another Consumer.
      */
     BufferManagerPointer(final Operation operation, final BufferManagerPointer dependsOnPointer,
-                         final int bufferArraySize, final int maxBytesToConsume, final int identifier) {
+                         final int bufferArraySize, final int identifier, final int maxBytesToConsume) {
 
         this.operation = operation;
         this.bufferArraySize = bufferArraySize;
@@ -137,7 +137,7 @@ public class BufferManagerPointer {
      */
     BufferManagerPointer(final Operation operation, final BufferManagerPointer dependsOnPointer,
                          final int bufferArraySize, final int identifier) {
-        this(operation, dependsOnPointer, bufferArraySize, -1, identifier);
+        this(operation, dependsOnPointer, bufferArraySize, identifier, -1);
     }
 
     /*

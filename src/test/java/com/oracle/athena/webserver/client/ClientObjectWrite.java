@@ -7,6 +7,7 @@ import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.operations.Operation;
 import com.oracle.athena.webserver.operations.OperationTypeEnum;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.athena.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,17 +52,17 @@ public class ClientObjectWrite implements Operation {
 
     /*
      */
-    final int targetTcpPort;
+    private final ServerIdentifier serverIdentifier;
 
     public ClientObjectWrite(final RequestContext requestContext, final IoInterface connection,
                              final ClientTest clientTest, final BufferManagerPointer writeInfillPtr,
-                             final int targetTcpPort) {
+                             final ServerIdentifier serverIdentifier) {
 
         this.requestContext = requestContext;
         this.clientConnection = connection;
         this.clientTest = clientTest;
         this.writeInfillPointer = writeInfillPtr;
-        this.targetTcpPort = targetTcpPort;
+        this.serverIdentifier = serverIdentifier;
 
         this.clientWriteBufferMgr = requestContext.getClientWriteBufferManager();
 
@@ -89,7 +90,7 @@ public class ClientObjectWrite implements Operation {
         /*
          ** Add this to the execute queue if the HTTP Request has been sent.
          */
-        if (requestContext.hasHttpRequestBeenSent(targetTcpPort) == true) {
+        if (requestContext.hasHttpRequestBeenSent(serverIdentifier) == true) {
             requestContext.addToWorkQueue(this);
         }
     }

@@ -5,6 +5,7 @@ import com.oracle.athena.webserver.manual.TestChunkWrite;
 import com.oracle.athena.webserver.operations.Operation;
 import com.oracle.athena.webserver.operations.OperationTypeEnum;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.athena.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,6 +22,8 @@ public class ChunkWriteTestComplete implements Operation {
      */
     private final RequestContext requestContext;
 
+    private final ServerIdentifier serverIdentifier;
+
     private final TestChunkWrite testWriteChunk;
 
     /*
@@ -33,9 +36,11 @@ public class ChunkWriteTestComplete implements Operation {
     private long nextExecuteTime;
 
 
-    public ChunkWriteTestComplete(final RequestContext requestContext, final TestChunkWrite testWriteChunk) {
+    public ChunkWriteTestComplete(final RequestContext requestContext, final ServerIdentifier serverIdentifier,
+                                  final TestChunkWrite testWriteChunk) {
 
         this.requestContext = requestContext;
+        this.serverIdentifier = serverIdentifier;
         this.testWriteChunk = testWriteChunk;
 
         /*
@@ -71,15 +76,15 @@ public class ChunkWriteTestComplete implements Operation {
         /*
          ** Let the caller know that status has been received
          */
-        if (requestContext.hasStorageServerResponseArrived(RequestContext.STORAGE_SERVER_PORT_BASE)) {
-            int result = requestContext.getStorageResponseResult(RequestContext.STORAGE_SERVER_PORT_BASE);
+        if (requestContext.hasStorageServerResponseArrived(serverIdentifier)) {
+            int result = requestContext.getStorageResponseResult(serverIdentifier);
             LOG.info("ChunkWriteTestComplete result: " + result);
             testWriteChunk.statusReceived(result);
 
             /*
              ** Clear the HTTP Response for this Storage Server
              */
-            requestContext.removeStorageServerResponse(RequestContext.STORAGE_SERVER_PORT_BASE);
+            requestContext.removeStorageServerResponse(serverIdentifier);
         }
     }
 

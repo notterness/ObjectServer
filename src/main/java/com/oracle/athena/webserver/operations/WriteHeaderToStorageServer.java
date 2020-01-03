@@ -4,6 +4,7 @@ import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.athena.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,9 +35,9 @@ public class WriteHeaderToStorageServer implements Operation {
     private final List<Operation> operationsToRun;
 
     /*
-    ** This is the TCP Port of the Storage Server this header is being sent to
+    ** This is the unique identifier for the chunk write to the Storage Server this header is being sent to
      */
-    private final int storageServerTcpPort;
+    private final ServerIdentifier serverIdentifier;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -60,7 +61,7 @@ public class WriteHeaderToStorageServer implements Operation {
 
     public WriteHeaderToStorageServer(final RequestContext requestContext, final IoInterface storageServerConnection,
                                       final List<Operation> operationsToRun, final BufferManager storageServerBufferManager,
-                                      final BufferManagerPointer writePtr, final int tcpPort) {
+                                      final BufferManagerPointer writePtr, final ServerIdentifier serverIdentifier) {
 
         this.requestContext = requestContext;
         this.storageServerConnection = storageServerConnection;
@@ -69,7 +70,7 @@ public class WriteHeaderToStorageServer implements Operation {
         this.storageServerBufferManager = storageServerBufferManager;
         this.writePointer = writePtr;
 
-        this.storageServerTcpPort = tcpPort;
+        this.serverIdentifier = serverIdentifier;
 
         /*
          ** This starts out not being on any queue
@@ -148,7 +149,7 @@ public class WriteHeaderToStorageServer implements Operation {
                  ** Set the HTTP Header has been written to the Storage Server flag
                  */
                 LOG.info("WriteHeaderToStorageServer[" + requestContext.getRequestId() + "] all data written");
-                requestContext.setHttpRequestSent(storageServerTcpPort);
+                requestContext.setHttpRequestSent(serverIdentifier);
 
                 /*
                  ** event() all of the operations that are ready to run once the connect() has
