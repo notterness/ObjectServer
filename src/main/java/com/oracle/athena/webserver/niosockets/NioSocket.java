@@ -317,9 +317,14 @@ public class NioSocket implements IoInterface {
 
                 if (bytesRead > 0) {
                     /*
-                    ** Update the pointer
+                    ** Update the pointer and the number of bytes actually read into the buffer.
                      */
+                    readBuffer.limit(bytesRead);
+
                     readBufferManager.updateProducerWritePointer(readPointer);
+                    LOG.info(" read (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                            readPointer.getCurrIndex() + " bytesRead: " + bytesRead);
+
                 } else if (bytesRead == -1) {
                     /*
                     ** Need to close the SocketChannel and event() the error handler.

@@ -5,6 +5,7 @@ import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.http.HttpResponseListener;
 import com.oracle.athena.webserver.http.StorageServerResponseCallback;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.athena.webserver.requestcontext.ServerIdentifier;
 import org.eclipse.jetty.http.HttpParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +25,7 @@ public class StorageServerResponseHandler implements Operation {
      */
     private final RequestContext requestContext;
 
-    private final int storageServerTcpPort;
+    private final ServerIdentifier serverIdentifier;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -57,7 +58,7 @@ public class StorageServerResponseHandler implements Operation {
 
     public StorageServerResponseHandler(final RequestContext requestContext, final BufferManager storageServerResponseBufferMgr,
                                         final BufferManagerPointer readBufferPtr, final Operation completionCb,
-                                        final int storageServerTcpPort) {
+                                        final ServerIdentifier serverIdentifier) {
 
         this.requestContext = requestContext;
 
@@ -66,7 +67,7 @@ public class StorageServerResponseHandler implements Operation {
 
         this.completionCallback = completionCb;
 
-        this.storageServerTcpPort = storageServerTcpPort;
+        this.serverIdentifier = serverIdentifier;
 
         /*
          ** This starts out not being on any queue
@@ -90,7 +91,7 @@ public class StorageServerResponseHandler implements Operation {
         httpResponseBufferPointer = storageServerResponseBufferManager.register(this, readBufferPointer);
 
         StorageServerResponseCallback httpResponseCompleted = new StorageServerResponseCallback(requestContext,
-                completionCallback, storageServerTcpPort);
+                completionCallback, serverIdentifier);
         HttpResponseListener listener = new HttpResponseListener(httpResponseCompleted);
         httpParser = new HttpParser(listener);
 

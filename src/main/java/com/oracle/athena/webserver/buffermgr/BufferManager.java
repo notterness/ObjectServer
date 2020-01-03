@@ -22,56 +22,59 @@ public class BufferManager {
 
     private AtomicInteger identifier;
 
-    public BufferManager(final int bufferCount) {
+    private final String bufferManagerName;
+
+
+    public BufferManager(final int bufferCount, final String bufferMgrName, final int identifier) {
         this.bufferArraySize = bufferCount;
 
         this.bufferArray = new ByteBuffer[this.bufferArraySize];
 
-        this.identifier = new AtomicInteger(1);
+        this.identifier = new AtomicInteger(identifier);
+
+        this.bufferManagerName = bufferMgrName;
     }
 
     public BufferManagerPointer register(final Operation operation) {
 
-        int currIdentifer = identifier.getAndIncrement();
+        int currIdentifier = identifier.getAndIncrement();
 
-        LOG.info("register("  + identifier + ":" + operation.getOperationType() + ") identifier: " + currIdentifer);
-        BufferManagerPointer pointer = new BufferManagerPointer(operation, bufferArraySize, currIdentifer);
+        LOG.info("register " + bufferManagerName + " ("  + currIdentifier + ":" + operation.getOperationType() + ")");
+        BufferManagerPointer pointer = new BufferManagerPointer(operation, bufferArraySize, currIdentifier);
 
         return pointer;
     }
 
     public BufferManagerPointer register(final Operation operation, final BufferManagerPointer dependsOn) {
-        int currIdentifer = identifier.getAndIncrement();
+        int currIdentifier = identifier.getAndIncrement();
 
         if (operation != null) {
-            LOG.info("register(" + identifier + ":" + operation.getOperationType() + ") depends on (" +
-                    + dependsOn.getIdentifier() + ":" + dependsOn.getOperationType() + ") identifier: " +
-                    currIdentifer);
+            LOG.info("register " + bufferManagerName + " (" + currIdentifier + ":" + operation.getOperationType() +
+                    ") depends on (" + dependsOn.getIdentifier() + ":" + dependsOn.getOperationType() + ")");
         } else {
-            LOG.info("register(" + identifier + ": null) depends on (" +
-                    + dependsOn.getIdentifier() + ":" + dependsOn.getOperationType() + ") identifier: " +
-                    currIdentifer);
+            LOG.info("register " + bufferManagerName + " (" + currIdentifier + ": null) depends on (" +
+                    + dependsOn.getIdentifier() + ":" + dependsOn.getOperationType() + ")");
         }
 
-        BufferManagerPointer pointer = new BufferManagerPointer(operation, dependsOn, bufferArraySize, currIdentifer);
+        BufferManagerPointer pointer = new BufferManagerPointer(operation, dependsOn, bufferArraySize, currIdentifier);
 
         return pointer;
     }
 
     public BufferManagerPointer register(final Operation operation, final BufferManagerPointer dependsOn, final int maxBytesToConsume) {
-        int currIdentifer = identifier.getAndIncrement();
+        int currIdentifier = identifier.getAndIncrement();
 
-        LOG.info("register(" + identifier + ":" + operation.getOperationType() + ") depends on (" +
+        LOG.info("register " + bufferManagerName + " (" + currIdentifier + ":" + operation.getOperationType() + ") depends on (" +
                 + dependsOn.getIdentifier() + ":" + dependsOn.getOperationType() + ") maxBytesToConsume: " +
-                maxBytesToConsume + " identifier: " + currIdentifer);
+                maxBytesToConsume);
 
-        BufferManagerPointer pointer = new BufferManagerPointer(operation, dependsOn, bufferArraySize, currIdentifer, maxBytesToConsume);
+        BufferManagerPointer pointer = new BufferManagerPointer(operation, dependsOn, bufferArraySize, currIdentifier, maxBytesToConsume);
 
         return pointer;
     }
 
     public void unregister(final BufferManagerPointer pointer) {
-        LOG.info("unregister(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ")" );
+        LOG.info("unregister " + bufferManagerName + " (" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ")" );
 
         pointer.terminate();
     }
@@ -183,7 +186,8 @@ public class BufferManager {
     public ByteBuffer peek(final BufferManagerPointer pointer) {
         int readIndex = pointer.getReadIndex(false);
 
-        //LOG.info("peek(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
+        //LOG.info("peek " + bufferManagerName + " (" + pointer.getIdentifier() + ":" + pointer.getOperationType() +
+        //        ") readIndex: " + readIndex);
 
         if (readIndex != -1) {
             return bufferArray[readIndex];
@@ -199,6 +203,15 @@ public class BufferManager {
     public void bookmark(final BufferManagerPointer pointer) {
 
         pointer.setBookmark();
+    }
+
+    /*
+     ** This is used to add a new pointer (really an index) to within the BufferManager to allow multiple
+     **   streams to consume data from different places within the buffer ring.
+     */
+    public void bookmarkThis(final BufferManagerPointer pointer) {
+
+        pointer.setBookmark(pointer.getCurrIndex());
     }
 
     /*

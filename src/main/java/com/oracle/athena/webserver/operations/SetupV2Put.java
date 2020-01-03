@@ -30,8 +30,6 @@ public class SetupV2Put implements Operation {
 
     private final Operation completeCallback;
 
-    private BufferManagerPointer clientReadPtr;
-    private BufferManagerPointer encryptInputPointer;
 
 
     /*
@@ -50,6 +48,8 @@ public class SetupV2Put implements Operation {
     ** The following is a map of all of the created Operations to handle this request.
      */
     private Map<OperationTypeEnum, Operation> v2PutHandlerOperations;
+
+    private boolean setupMethodDone;
 
     /*
     ** This is used to setup the initial Operation dependencies required to handle the V2 PUT
@@ -74,6 +74,8 @@ public class SetupV2Put implements Operation {
         onDelayedQueue = false;
         onExecutionQueue = false;
         nextExecuteTime = 0;
+
+        setupMethodDone = false;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -86,14 +88,6 @@ public class SetupV2Put implements Operation {
      */
     public BufferManagerPointer initialize() {
         BufferManager clientReadBufferManager = requestContext.getClientReadBufferManager();
-        clientReadPtr = requestContext.getReadBufferPointer();
-
-        /*
-        ** Need to create two pointer here that are clones of the clientReadPtr, one will be used by the
-        **   Md5 Digest operation and the other will be used by the EncryptBuffer operation
-         */
-        encryptInputPointer = clientReadBufferManager.register(this, clientReadPtr);
-
         return null;
     }
 
@@ -106,39 +100,40 @@ public class SetupV2Put implements Operation {
     }
 
     public void execute() {
-        /*
-        ** Add compute MD5 and encrypt to the dependency on the ClientReadBufferManager read pointer.
-         */
-        EncryptBuffer encryptBuffer = new EncryptBuffer(requestContext, memoryManager, encryptInputPointer,
-                this);
-        v2PutHandlerOperations.put(encryptBuffer.getOperationType(), encryptBuffer);
-        encryptBuffer.initialize();
+        if (!setupMethodDone) {
+            /*
+             ** Add compute MD5 and encrypt to the dependency on the ClientReadBufferManager read pointer.
+             */
+            BufferManagerPointer clientReadPtr = requestContext.getReadBufferPointer();
 
-        /*
-         ** Dole out another buffer to read in the content data if there is not data remaining in
-         **   the buffer from the HTTP Parsing.
-         */
-        BufferManager clientReadBufferManager = requestContext.getClientReadBufferManager();
-        ByteBuffer remainingBuffer = clientReadBufferManager.peek(clientReadPtr);
-        if (remainingBuffer != null) {
-            if (remainingBuffer.remaining() > 0) {
-                encryptBuffer.event();
-            } else {
-                metering.event();
+            EncryptBuffer encryptBuffer = new EncryptBuffer(requestContext, memoryManager, clientReadPtr,
+                    this);
+            v2PutHandlerOperations.put(encryptBuffer.getOperationType(), encryptBuffer);
+            encryptBuffer.initialize();
+
+            /*
+             ** Dole out another buffer to read in the content data if there is not data remaining in
+             **   the buffer from the HTTP Parsing.
+             */
+            BufferManager clientReadBufferManager = requestContext.getClientReadBufferManager();
+            ByteBuffer remainingBuffer = clientReadBufferManager.peek(clientReadPtr);
+            if (remainingBuffer != null) {
+                if (remainingBuffer.remaining() > 0) {
+                    encryptBuffer.event();
+                } else {
+                    metering.event();
+                }
             }
+
+            setupMethodDone = true;
+        } else {
+            /*
+            ** Do nothing. The problem is this has a dependency upon the clientReadPtr
+             */
         }
     }
 
     public void complete() {
-        /*
-        ** Remove the registration for the encryptInputPointer
-         */
-        BufferManager clientReadBufferManager = requestContext.getClientReadBufferManager();
-        clientReadBufferManager.unregister(encryptInputPointer);
-        encryptInputPointer = null;
-
-        clientReadPtr = null;
-
         completeCallback.event();
 
         LOG.info("SetupV2Put[" + requestContext.getRequestId() + "] completed");

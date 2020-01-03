@@ -9,10 +9,12 @@ import com.oracle.athena.webserver.niosockets.EventPollThread;
 import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.operations.SetupChunkWrite;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.athena.webserver.requestcontext.ServerIdentifier;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -89,9 +91,16 @@ public class TestChunkWrite {
         MemoryManager memoryManager = new MemoryManager(webServerFlavor);
 
         /*
+        ** The unqiue identifier for this Chunk write test
+         */
+        ServerIdentifier chunkId = new ServerIdentifier(InetAddress.getLoopbackAddress(),
+                RequestContext.STORAGE_SERVER_PORT_BASE, 0);
+
+
+        /*
          ** The ChunkWriteTest operation is what is called back when the Chunk Write completes
          */
-        ChunkWriteTestComplete testChunkWrite = new ChunkWriteTestComplete(clientContext,this);
+        ChunkWriteTestComplete testChunkWrite = new ChunkWriteTestComplete(clientContext, chunkId,  this);
 
         /*
         ** Fill in some buffers to pass into the chunk write
@@ -116,7 +125,7 @@ public class TestChunkWrite {
 
         BufferManagerPointer storageServerWritePtr = storageServerWriteBufferMgr.register(testChunkWrite, storageServerAddPointer);
 
-        SetupChunkWrite setupChunkWrite = new SetupChunkWrite(clientContext, memoryManager,
+        SetupChunkWrite setupChunkWrite = new SetupChunkWrite(clientContext, chunkId, memoryManager,
                 storageServerWritePtr, NUMBER_OF_BYTES_TO_WRITE, testChunkWrite);
         setupChunkWrite.initialize();
 

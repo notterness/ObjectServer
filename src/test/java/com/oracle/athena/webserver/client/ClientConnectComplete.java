@@ -5,6 +5,7 @@ import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.operations.Operation;
 import com.oracle.athena.webserver.operations.OperationTypeEnum;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.athena.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,21 +39,14 @@ public class ClientConnectComplete implements Operation {
     private boolean onExecutionQueue;
     private long nextExecuteTime;
 
-    /*
-     ** The targetTcpPort is used to inform the requestContext (as the centralized keeper of
-     **   information) that the connect() to the target has succeed.
-     */
-    private final int targetTcpPort;
-
     private final BufferManager clientWriteBufferManager;
     private final BufferManagerPointer addBufferPointer;
 
     public ClientConnectComplete(final RequestContext requestContext, final List<Operation> operationsToRun,
-                           final int targetTcpPort, final BufferManagerPointer addBufferPtr) {
+                                 final BufferManagerPointer addBufferPtr) {
 
         this.requestContext = requestContext;
         this.operationsToRun = operationsToRun;
-        this.targetTcpPort = targetTcpPort;
         this.addBufferPointer = addBufferPtr;
 
         this.clientWriteBufferManager = requestContext.getClientWriteBufferManager();

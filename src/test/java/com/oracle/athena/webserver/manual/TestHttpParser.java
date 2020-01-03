@@ -5,10 +5,15 @@ import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.operations.Operation;
 import com.oracle.athena.webserver.operations.OperationTypeEnum;
+import com.oracle.athena.webserver.testio.TestIoGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
 public class TestHttpParser extends WebServerTest {
+
+    private static final Logger LOG = LoggerFactory.getLogger(TestHttpParser.class);
 
     /*
     ** The following are used to feed data into the HTTP Parser
@@ -129,7 +134,7 @@ public class TestHttpParser extends WebServerTest {
             tempContentBuffer = ByteBuffer.allocate(MemoryManager.MEDIUM_BUFFER_SIZE);
             String md5Digest = buildBufferAndComputeMd5(tempContentBuffer);
 
-            String request = buildRequestString(super.testName, md5Digest, MemoryManager.MEDIUM_BUFFER_SIZE);
+            String request = buildRequestString(super.testName, md5Digest, tempContentBuffer.limit());
             str_to_bb(dst, request);
 
             timesCalled++;
@@ -137,7 +142,10 @@ public class TestHttpParser extends WebServerTest {
             /*
             ** Fill in the PUT object content data
              */
-            dst.put(tempContentBuffer.array(), 0, MemoryManager.MEDIUM_BUFFER_SIZE);
+            dst.put(tempContentBuffer.array(), 0, tempContentBuffer.limit());
+            dst.flip();
+
+            LOG.info("read(1) position: " + dst.position() + " limit: " + dst.limit());
 
             timesCalled++;
         } else {

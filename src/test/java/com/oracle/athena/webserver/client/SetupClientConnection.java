@@ -7,6 +7,7 @@ import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.operations.*;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.athena.webserver.requestcontext.ServerIdentifier;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,9 +54,10 @@ public class SetupClientConnection implements Operation {
     private final MemoryManager memoryManager;
 
     /*
-    ** The targetTcpPort is where the connection is made to talk to the WebServer
+    ** The ServerIdentifier contains the target server IP address and Port number for where the
+    **   connection is made to talk to the WebServer
      */
-    private final int targetTcpPort;
+    private final ServerIdentifier serverIdentifier;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -92,14 +94,14 @@ public class SetupClientConnection implements Operation {
 
     public SetupClientConnection(final WebServerFlavor flavor, final RequestContext requestContext,
                                  final MemoryManager memoryManager, final ClientTest clientTest,
-                                 final IoInterface connection, final int targetTcpPort) {
+                                 final IoInterface connection, final ServerIdentifier serverIdentifier) {
 
         this.webServerFlavor = flavor;
         this.requestContext = requestContext;
         this.clientTest = clientTest;
         this.memoryManager = memoryManager;
         this.clientConnection = connection;
-        this.targetTcpPort = targetTcpPort;
+        this.serverIdentifier = serverIdentifier;
 
         /*
          ** This starts out not being on any queue
@@ -186,7 +188,7 @@ public class SetupClientConnection implements Operation {
         **   the ClientObjectWrite needs to be passed into the ClientHttpHeaderWrite.
          */
         ClientObjectWrite objectWrite = new ClientObjectWrite(requestContext, clientConnection, clientTest,
-                writeInfillPointer, targetTcpPort);
+                writeInfillPointer, serverIdentifier);
         clientOperations.put(objectWrite.getOperationType(), objectWrite);
         objectWrite.initialize();
 
@@ -195,7 +197,7 @@ public class SetupClientConnection implements Operation {
          **   generator
          */
         ClientHttpRequestWrite headerWrite = new ClientHttpRequestWrite(requestContext, clientTest,
-                writeInfillPointer, objectWrite, targetTcpPort);
+                writeInfillPointer, objectWrite, serverIdentifier);
         clientOperations.put(headerWrite.getOperationType(), headerWrite);
         headerWrite.initialize();
 
@@ -244,7 +246,7 @@ public class SetupClientConnection implements Operation {
         List<Operation> operationsToRun = new LinkedList<>();
         operationsToRun.add(headerWrite);
         operationsToRun.add(readMetering);
-        connectComplete = new ClientConnectComplete(requestContext, operationsToRun, targetTcpPort, addBufferPointer);
+        connectComplete = new ClientConnectComplete(requestContext, operationsToRun, addBufferPointer);
         clientOperations.put(connectComplete.getOperationType(), connectComplete);
         connectComplete.initialize();
 
@@ -282,7 +284,8 @@ public class SetupClientConnection implements Operation {
          ** Start the connection to the remote WebServer. When it completes, this Operation's event() method
          **   will be called and the ClientHttpHeaderWrite operation can be started.
          */
-        clientConnection.startInitiator(InetAddress.getLoopbackAddress(), targetTcpPort, connectComplete, initiatorError);
+        clientConnection.startInitiator(serverIdentifier.getStorageServerIpAddress(),
+                serverIdentifier.getStorageServerTcpPort(), connectComplete, initiatorError);
     }
 
     /*

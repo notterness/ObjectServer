@@ -123,8 +123,6 @@ public class ParseHttpRequest implements Operation {
              */
             httpBuffer.flip();
 
-            //displayBuffer(bufferState);
-
             boolean remainingBuffer = httpParser.parseHttpData(httpBuffer, initialHttpBuffer);
             if (remainingBuffer) {
                 /*
@@ -133,12 +131,6 @@ public class ParseHttpRequest implements Operation {
                 LOG.info("ParseHttpRequest[" + requestContext.getRequestId() + "] remaining position: " +
                         httpBuffer.position() + " limit: " + httpBuffer.limit());
 
-                /*
-                ** Need to break out of the loop if the parsing is complete.
-                 */
-                if (casperHttpInfo.getHeaderComplete()) {
-                    break;
-                }
             } else {
                 /*
                 ** Only update the pointer if the data in the buffer was all consumed.
@@ -150,7 +142,16 @@ public class ParseHttpRequest implements Operation {
             }
 
             initialHttpBuffer = false;
+
+            /*
+             ** Need to break out of the loop if the parsing is complete.
+             */
+            if (casperHttpInfo.getHeaderComplete()) {
+                break;
+            }
         }
+
+        LOG.info("ParseHttpRequest[" + requestContext.getRequestId() + "] exit from loop");
 
         /*
          ** Check if there needs to be another read to bring in more of the HTTP request

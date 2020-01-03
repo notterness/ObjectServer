@@ -8,6 +8,8 @@ import com.oracle.athena.webserver.niosockets.IoInterface;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import com.oracle.athena.webserver.testio.TestEventThread;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -16,6 +18,9 @@ import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 
 public abstract class WebServerTest {
+
+    private static final Logger LOG = LoggerFactory.getLogger(WebServerTest.class);
+
 
     private static final WebServerFlavor webServerFlavor = WebServerFlavor.INTEGRATION_TESTS;
 
@@ -84,16 +89,16 @@ public abstract class WebServerTest {
 
         // Fill in a pattern
         long pattern = MemoryManager.MEDIUM_BUFFER_SIZE;
-        for (int i = 0; i < MemoryManager.MEDIUM_BUFFER_SIZE; i = i + 8) {
+        for (int i = 0; i < contentBuffer.limit(); i = i + 8) {
             contentBuffer.putLong(i, pattern);
             pattern++;
         }
 
         digest.digestByteBuffer(contentBuffer);
         objectDigestString = digest.getFinalDigest();
-        contentBuffer.rewind();
 
-        System.out.println("MD5 Digest String: " + objectDigestString);
+        LOG.info("MD5 Digest String: " + objectDigestString + " position: " + contentBuffer.position() +
+                " limit: " + contentBuffer.limit());
 
         return objectDigestString;
     }
@@ -112,6 +117,9 @@ public abstract class WebServerTest {
         } catch (Exception ex) {
             ex.printStackTrace();
         }
+        out.flip();
+
+        LOG.info("str_to_bb position: " + out.position() + " limit: " + out.limit());
     }
 
 }

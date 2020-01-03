@@ -14,11 +14,16 @@ public class TestMain {
 
         AtomicInteger threadCount = new AtomicInteger(1);
 
-        //TestEncryptBuffer testEncryptBuffer = new TestEncryptBuffer();
-        //testEncryptBuffer.execute();
+        TestEncryptBuffer testEncryptBuffer = new TestEncryptBuffer();
+        testEncryptBuffer.execute();
 
+        /*
+        ** The HTTP Parser test is currently not working.
+         */
         //TestHttpParser testHttpParser = new TestHttpParser("TestHttpParser");
         //testHttpParser.execute();
+        //threadCount.incrementAndGet();
+        //waitForTestsToComplete(threadCount);
 
         NioServerHandler nioServer = new NioServerHandler(WebServerFlavor.INTEGRATION_TESTS, serverTcpPort, 1000);
         nioServer.start();
@@ -29,13 +34,13 @@ public class TestMain {
         NioTestClient testClient = new NioTestClient(3000);
         testClient.start();
 
-        TestChunkWrite testChunkWrite = new TestChunkWrite(testClient, storageServerTcpPort, threadCount);
-        testChunkWrite.execute();
+        //TestChunkWrite testChunkWrite = new TestChunkWrite(testClient, storageServerTcpPort, threadCount);
+        //testChunkWrite.execute();
 
         //ClientTest client_1 = new ClientTest_2("ClientTest_2", testClient, serverTcpPort, threadCount);
         //client_1.execute();
-        //ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverTcpPort, threadCount);
-        //checkMd5.execute();
+        ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverTcpPort, threadCount);
+        checkMd5.execute();
 
         /*
         ** Uncomment out the following two lines to let TestMain just act as a server. It can then be used to
