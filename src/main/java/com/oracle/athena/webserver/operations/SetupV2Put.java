@@ -136,8 +136,9 @@ public class SetupV2Put implements Operation {
     public void complete() {
         completeCallback.event();
 
-        LOG.info("SetupV2Put[" + requestContext.getRequestId() + "] completed");
+        v2PutHandlerOperations.clear();
 
+        LOG.info("SetupV2Put[" + requestContext.getRequestId() + "] completed");
     }
 
     /*

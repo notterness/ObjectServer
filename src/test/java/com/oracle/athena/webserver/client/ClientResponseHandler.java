@@ -106,8 +106,6 @@ public class ClientResponseHandler implements Operation {
             /*
              ** Now run the Buffer State through the Http Parser
              */
-            httpBuffer.flip();
-
             httpParser.parseNext(httpBuffer);
             clientReadBufferManager.updateConsumerReadPointer(httpResponseBufferPointer);
         }
@@ -118,6 +116,9 @@ public class ClientResponseHandler implements Operation {
      ** This removes any dependencies that are put upon the BufferManager
      */
     public void complete() {
+
+        LOG.info("ClientResponseHandler[" + requestContext.getRequestId() + "] complete()");
+        httpParser.reset();
         httpParser = null;
 
         clientReadBufferManager.unregister(httpResponseBufferPointer);

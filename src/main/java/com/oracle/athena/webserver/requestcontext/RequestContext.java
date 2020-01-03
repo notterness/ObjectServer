@@ -403,6 +403,15 @@ public class RequestContext {
         operation.complete();
 
         /*
+        ** Clear out the references to the Operations
+         */
+        metering = null;
+        readBuffer = null;
+        sendFinalStatus = null;
+        closeRequest = null;
+        determineRequestType = null;
+
+        /*
         ** Call reset() to make sure the BufferManager(s) have released all the references to
         **   ByteBuffer(s).
          */

@@ -168,7 +168,8 @@ public class SetupClientConnection implements Operation {
         clientWriteBufferManager.bookmark(addBufferPointer);
 
         for (int i = 0; i < WRITE_BUFFERS_TO_ALLOCATE; i++) {
-            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
+            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null,
+                    clientWriteBufferManager);
             if (buffer != null) {
                 clientWriteBufferManager.offer(addBufferPointer, buffer);
             } else {

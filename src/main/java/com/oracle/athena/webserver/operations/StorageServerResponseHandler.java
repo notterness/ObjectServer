@@ -120,8 +120,6 @@ public class StorageServerResponseHandler implements Operation {
             /*
              ** Now run the Buffer State through the Http Parser
              */
-            httpBuffer.flip();
-
             httpParser.parseNext(httpBuffer);
             storageServerResponseBufferManager.updateConsumerReadPointer(httpResponseBufferPointer);
         }

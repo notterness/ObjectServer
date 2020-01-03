@@ -121,8 +121,6 @@ public class ParseHttpRequest implements Operation {
             /*
             ** Now run the Buffer State through the Http Parser
              */
-            httpBuffer.flip();
-
             boolean remainingBuffer = httpParser.parseHttpData(httpBuffer, initialHttpBuffer);
             if (remainingBuffer) {
                 /*

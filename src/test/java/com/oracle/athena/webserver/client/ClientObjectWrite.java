@@ -98,8 +98,8 @@ public class ClientObjectWrite implements Operation {
     /*
      */
     public void execute() {
-        ByteBuffer buffer = clientTest.getObjectBuffer();
-        if (buffer != null) {
+        ByteBuffer buffer;
+        if ((buffer = clientTest.getObjectBuffer()) != null) {
             ByteBuffer infillBuffer = clientWriteBufferMgr.peek(writeInfillPointer);
             if (infillBuffer != null) {
                 infillBuffer.put(buffer.array());

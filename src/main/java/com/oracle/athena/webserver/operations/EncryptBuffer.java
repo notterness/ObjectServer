@@ -151,7 +151,8 @@ public class EncryptBuffer implements Operation {
         storageServerWriteBufferMgr.bookmark(storageServerAddPointer);
 
         for (int i = 0; i < NUM_STORAGE_SERVER_WRITE_BUFFERS; i++) {
-            ByteBuffer writeBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
+            ByteBuffer writeBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null,
+                    storageServerWriteBufferMgr);
             storageServerWriteBufferMgr.offer(storageServerAddPointer, writeBuffer);
         }
 
@@ -250,6 +251,8 @@ public class EncryptBuffer implements Operation {
      **   RequestContext is no longer "running".
      */
     public void complete() {
+
+        LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] complete()");
 
         /*
         ** Remove the reference to the passed in encryptInputPointer (it is not owned by this Operation)

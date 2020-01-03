@@ -147,7 +147,8 @@ public class SetupChunkWrite implements Operation {
             addBufferPointer = storageServerBufferManager.register(this);
             storageServerBufferManager.bookmark(addBufferPointer);
             for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
-                ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
+                ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null,
+                        storageServerBufferManager);
 
                 storageServerBufferManager.offer(addBufferPointer, buffer);
             }
@@ -160,7 +161,8 @@ public class SetupChunkWrite implements Operation {
             respBufferPointer = storageServerResponseBufferManager.register(this);
             storageServerResponseBufferManager.bookmark(respBufferPointer);
             for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
-                ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
+                ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null,
+                        storageServerResponseBufferManager);
 
                 storageServerResponseBufferManager.offer(respBufferPointer, buffer);
             }

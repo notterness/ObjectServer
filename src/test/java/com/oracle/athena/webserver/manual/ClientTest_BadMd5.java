@@ -10,18 +10,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 class ClientTest_BadMd5 extends ClientTest {
 
-    private final int BYTES_IN_CONTENT = 1024;
+    private final int BYTES_IN_CONTENT = MemoryManager.XFER_BUFFER_SIZE;
 
     private final Md5Digest digest;
-
-    private ByteBuffer dataBuffer;
-
 
     ClientTest_BadMd5(final String testName, final NioTestClient client, final int serverTcpPort, AtomicInteger testCount) {
         super(testName, client, serverTcpPort, testCount);
 
         digest = new Md5Digest();
-        dataBuffer = null;
     }
 
     @Override
@@ -31,10 +27,12 @@ class ClientTest_BadMd5 extends ClientTest {
          */
         String objectDigestString = null;
 
+        objectBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null,
+                null);
         if (objectBuffer != null) {
             // Fill in a pattern
-            long pattern = MemoryManager.MEDIUM_BUFFER_SIZE;
-            for (int i = 0; i < MemoryManager.MEDIUM_BUFFER_SIZE; i = i + 8) {
+            long pattern = MemoryManager.XFER_BUFFER_SIZE;
+            for (int i = 0; i < MemoryManager.XFER_BUFFER_SIZE; i = i + 8) {
                 objectBuffer.putLong(i, pattern);
                 pattern++;
             }
@@ -70,30 +68,6 @@ class ClientTest_BadMd5 extends ClientTest {
                 "Content-Length: " + BYTES_IN_CONTENT + "\n\n");
     }
 
-    void clientTestStep_1() {
-        /*
-         ** Wait a 100mS before sending the content. This is to make debugging the state machine
-         ** a bit easier.
-         */
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException int_ex) {
-            int_ex.printStackTrace();
-        }
-
-        /*
-         ** Send out the 1MB data transfer here
-         */
-        if (dataBuffer != null) {
-
-            if (!waitForWriteToComp()) {
-                System.out.println("Request timed out");
-            }
-
-            memoryManager.poolMemFree(dataBuffer);
-        }
-    }
-
     /*
      ** In this test, the full HTTP message is written and then a response is expected from the server.
      ** The response must have a result code of 422, indicating that the Md5 computation
@@ -107,6 +81,8 @@ class ClientTest_BadMd5 extends ClientTest {
             System.out.println(super.clientTestName + " failed httpStatus: " + super.httpStatus);
             super.client.setTestFailed(super.clientTestName);
         }
+
+        memoryManager.poolMemFree(objectBuffer);
 
         statusReceived(result);
     }

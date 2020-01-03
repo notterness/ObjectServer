@@ -31,7 +31,7 @@ class ClientTest_InvalidMd5Header extends ClientTest {
          */
         String objectDigestString = null;
 
-        dataBuffer = memoryManager.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE, null);
+        dataBuffer = memoryManager.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE, null,null);
         if (dataBuffer != null) {
             // Fill in a pattern
             long pattern = MemoryManager.MEDIUM_BUFFER_SIZE;

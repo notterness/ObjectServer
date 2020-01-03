@@ -4,6 +4,7 @@ import com.oracle.athena.webserver.buffermgr.BufferAssociation;
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.operations.Operation;
+import io.grpc.netty.shaded.io.netty.channel.epoll.EpollServerChannelConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -320,10 +321,11 @@ public class NioSocket implements IoInterface {
                     ** Update the pointer and the number of bytes actually read into the buffer.
                      */
                     readBuffer.limit(bytesRead);
+                    readBuffer.rewind();
 
                     readBufferManager.updateProducerWritePointer(readPointer);
                     LOG.info(" read (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
-                            readPointer.getCurrIndex() + " bytesRead: " + bytesRead);
+                            readPointer.getCurrIndex() + " bytesRead: " + bytesRead + " position: " + readBuffer.position());
 
                 } else if (bytesRead == -1) {
                     /*
@@ -379,6 +381,10 @@ public class NioSocket implements IoInterface {
                     /*
                      ** Update the pointer if the entire buffer was written out
                      */
+                    LOG.info(" write (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+                            writePointer.getCurrIndex() + " remaining: " + writeBuffer.remaining() + " bytesWritten: " + bytesWritten +
+                            " position: " + writeBuffer.position());
+
                     if (writeBuffer.remaining() == 0) {
                         writeBufferManager.updateProducerWritePointer(writePointer);
                     } else {
@@ -400,7 +406,6 @@ public class NioSocket implements IoInterface {
                         writePointer.getCurrIndex() + " exception: " + io_ex.getMessage());
                 break;
             }
-
         }
     }
 
