@@ -20,16 +20,17 @@ public class BufferManager {
     private ByteBuffer[] bufferArray;
     private final int bufferArraySize;
 
-    private AtomicInteger identifier;
+    private final int bufferManagerIdentifier;
+    private final AtomicInteger identifier;
 
     private final String bufferManagerName;
 
 
     public BufferManager(final int bufferCount, final String bufferMgrName, final int identifier) {
         this.bufferArraySize = bufferCount;
-
         this.bufferArray = new ByteBuffer[this.bufferArraySize];
 
+        this.bufferManagerIdentifier = identifier;
         this.identifier = new AtomicInteger(identifier);
 
         this.bufferManagerName = bufferMgrName;
@@ -93,7 +94,7 @@ public class BufferManager {
         **   array location does not have one already assigned.
          */
         if (bufferArray[writeIndex] != null) {
-
+            LOG.warn("BufferManager(" + bufferManagerName + ") offer() writeIndex in use writeIndex: " + writeIndex);
         }
 
         bufferArray[writeIndex] = buffer;
@@ -220,11 +221,17 @@ public class BufferManager {
      **   BufferManager.
      */
     public void reset() {
+
+        LOG.info("BufferManager(" + bufferManagerName + ") reset()");
+
         /*
         ** Make sure all the BufferPointer values are null
          */
         for (int i = 0; i < bufferArraySize; i++) {
-            bufferArray[i] = null;
+            if (bufferArray[i] != null) {
+                LOG.warn("BufferManager(" + bufferManagerName + ") reset() non null buffer i: " + i);
+                bufferArray[i] = null;
+            }
         }
     }
 
@@ -237,7 +244,7 @@ public class BufferManager {
     }
 
     public void dumpInformation() {
-        LOG.info("BufferManager " + bufferManagerName + " id: " + identifier.get());
+        LOG.info("BufferManager " + bufferManagerName + " id: " + bufferManagerIdentifier);
     }
 
 }

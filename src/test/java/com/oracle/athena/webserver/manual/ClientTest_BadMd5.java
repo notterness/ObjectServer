@@ -27,8 +27,7 @@ class ClientTest_BadMd5 extends ClientTest {
          */
         String objectDigestString = null;
 
-        objectBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null,
-                null);
+        objectBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
         if (objectBuffer != null) {
             // Fill in a pattern
             long pattern = MemoryManager.XFER_BUFFER_SIZE;

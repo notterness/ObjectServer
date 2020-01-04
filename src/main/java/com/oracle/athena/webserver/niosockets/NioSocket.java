@@ -288,8 +288,8 @@ public class NioSocket implements IoInterface {
      **   the SocketChannel
      */
     public void readBufferAvailable() {
-        LOG.info(" readBufferAvailable (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
-                readPointer.getCurrIndex());
+        //LOG.info(" readBufferAvailable (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+        //        readPointer.getCurrIndex());
 
         if (key == null) {
             key = nioSelectHandler.registerWithSelector(socketChannel, SelectionKey.OP_READ, this);
@@ -324,9 +324,6 @@ public class NioSocket implements IoInterface {
                     readBuffer.rewind();
 
                     readBufferManager.updateProducerWritePointer(readPointer);
-                    LOG.info(" read (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
-                            readPointer.getCurrIndex() + " bytesRead: " + bytesRead + " position: " + readBuffer.position());
-
                 } else if (bytesRead == -1) {
                     /*
                     ** Need to close the SocketChannel and event() the error handler.
@@ -348,8 +345,8 @@ public class NioSocket implements IoInterface {
     **   the SocketChannel
      */
     public void writeBufferReady() {
-        LOG.info(" writeBufferReady (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
-                writePointer.getCurrIndex());
+        //LOG.info(" writeBufferReady (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+        //        writePointer.getCurrIndex());
 
         if (key == null) {
             key = nioSelectHandler.registerWithSelector(socketChannel, SelectionKey.OP_WRITE, this);
@@ -381,10 +378,6 @@ public class NioSocket implements IoInterface {
                     /*
                      ** Update the pointer if the entire buffer was written out
                      */
-                    LOG.info(" write (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
-                            writePointer.getCurrIndex() + " remaining: " + writeBuffer.remaining() + " bytesWritten: " + bytesWritten +
-                            " position: " + writeBuffer.position());
-
                     if (writeBuffer.remaining() == 0) {
                         writeBufferManager.updateProducerWritePointer(writePointer);
                     } else {

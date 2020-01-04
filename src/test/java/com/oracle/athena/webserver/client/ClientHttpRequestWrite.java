@@ -42,7 +42,6 @@ public class ClientHttpRequestWrite implements Operation {
 
     /*
      */
-    private final BufferManager clientWriteBufferMgr;
     private final BufferManagerPointer writeInfillPointer;
 
     /*
@@ -60,8 +59,6 @@ public class ClientHttpRequestWrite implements Operation {
         this.writeInfillPointer = writeInfillPtr;
         this.clientObjectWrite = writeObject;
         this.serverIdentifier = serverIdentifier;
-
-        this.clientWriteBufferMgr = requestContext.getClientWriteBufferManager();
 
         /*
          ** This starts out not being on any queue
@@ -96,6 +93,8 @@ public class ClientHttpRequestWrite implements Operation {
      ** Assuming the B
      */
     public void execute() {
+
+        BufferManager clientWriteBufferMgr = requestContext.getClientWriteBufferManager();
 
         /*
         ** Build the HTTP Header and the Object to be sent

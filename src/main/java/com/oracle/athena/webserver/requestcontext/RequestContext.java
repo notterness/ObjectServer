@@ -531,10 +531,16 @@ public class RequestContext {
     public void addToWorkQueue(final Operation operation) {
         queueMutex.lock();
         try {
-            LOG.info("requestId[" + connectionRequestId + "] addToWorkQueue() operation(" + operation.getOperationType() + ") onExecutionQueue: " +
-                     operation.isOnWorkQueue() + " onTimedWaitQueue: " + operation.isOnTimedWaitQueue());
+            boolean isOnWorkQueue = operation.isOnWorkQueue();
 
-            if (!operation.isOnWorkQueue()) {
+            if (!isOnWorkQueue) {
+                /*
+                 ** Only log if it is not on the work queue already
+                 */
+                LOG.info("requestId[" + connectionRequestId + "] addToWorkQueue() operation(" +
+                        operation.getOperationType() + ") onExecutionQueue: " +
+                        isOnWorkQueue + " onTimedWaitQueue: " + operation.isOnTimedWaitQueue());
+
                 if (operation.isOnTimedWaitQueue()) {
                     if (timedWaitQueue.remove(operation)) {
                         operation.markRemovedFromQueue(true);

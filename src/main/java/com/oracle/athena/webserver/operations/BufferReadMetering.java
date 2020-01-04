@@ -85,8 +85,7 @@ public class BufferReadMetering implements Operation {
          */
         if (webServerFlavor == WebServerFlavor.INTEGRATION_TESTS) {
             for (int i = 0; i < INITIAL_INTEGRATION_BUFFER_ALLOC; i++) {
-                ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null,
-                        clientReadBufferMgr);
+                ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientReadBufferMgr);
 
                 clientReadBufferMgr.offer(bufferMeteringPointer, buffer);
             }
@@ -138,7 +137,7 @@ public class BufferReadMetering implements Operation {
          */
         clientReadBufferMgr.reset(bufferMeteringPointer);
         for (int i = 0; i < INITIAL_INTEGRATION_BUFFER_ALLOC; i++) {
-            ByteBuffer buffer = clientReadBufferMgr.poll(bufferMeteringPointer);
+            ByteBuffer buffer = clientReadBufferMgr.getAndRemove(bufferMeteringPointer);
             if (buffer != null) {
                 memoryManager.poolMemFree(buffer);
             } else {
