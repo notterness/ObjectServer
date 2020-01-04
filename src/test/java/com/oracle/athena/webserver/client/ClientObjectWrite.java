@@ -38,7 +38,6 @@ public class ClientObjectWrite implements Operation {
      */
     private final ClientTest clientTest;
 
-    private final BufferManager clientWriteBufferMgr;
     private final BufferManagerPointer writeInfillPointer;
 
     /*
@@ -63,8 +62,6 @@ public class ClientObjectWrite implements Operation {
         this.clientTest = clientTest;
         this.writeInfillPointer = writeInfillPtr;
         this.serverIdentifier = serverIdentifier;
-
-        this.clientWriteBufferMgr = requestContext.getClientWriteBufferManager();
 
         /*
          ** This starts out not being on any queue
@@ -96,17 +93,20 @@ public class ClientObjectWrite implements Operation {
     }
 
     /*
+    ** This is only called once in this test
      */
     public void execute() {
-        ByteBuffer buffer;
-        if ((buffer = clientTest.getObjectBuffer()) != null) {
+
+        BufferManager clientWriteBufferMgr = requestContext.getClientWriteBufferManager();
+
+        ByteBuffer buffer = clientTest.getObjectBuffer();
+
+        if (buffer != null) {
             ByteBuffer infillBuffer = clientWriteBufferMgr.peek(writeInfillPointer);
             if (infillBuffer != null) {
                 infillBuffer.put(buffer.array());
                 infillBuffer.flip();
 
-                LOG.info("ClientWriteObject position: " + infillBuffer.position() + " limit: " +
-                        infillBuffer.limit());
                 clientWriteBufferMgr.updateProducerWritePointer(writeInfillPointer);
             } else {
                 LOG.info("ClientWriteObject Infill Buffer null");

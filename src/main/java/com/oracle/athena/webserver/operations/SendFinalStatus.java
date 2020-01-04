@@ -129,7 +129,7 @@ public class SendFinalStatus implements Operation {
         if (!httpResponseSent) {
             int resultCode = requestContext.getHttpParseStatus();
 
-            ByteBuffer respBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null, clientWriteBufferMgr);
+            ByteBuffer respBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientWriteBufferMgr);
             if (respBuffer != null) {
                 resultBuilder.buildResponse(respBuffer, resultCode, true, true);
 
@@ -174,7 +174,7 @@ public class SendFinalStatus implements Operation {
 
         clientWriteBufferMgr.reset(writeStatusBufferPtr);
         for (int i = 0; i < bufferCount; i++) {
-            ByteBuffer buffer = clientWriteBufferMgr.poll(writeStatusBufferPtr);
+            ByteBuffer buffer = clientWriteBufferMgr.getAndRemove(writeStatusBufferPtr);
             if (buffer != null) {
                 memoryManager.poolMemFree(buffer);
             } else {

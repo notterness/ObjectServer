@@ -147,8 +147,7 @@ public class SetupChunkWrite implements Operation {
             addBufferPointer = storageServerBufferManager.register(this);
             storageServerBufferManager.bookmark(addBufferPointer);
             for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
-                ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null,
-                        storageServerBufferManager);
+                ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, storageServerBufferManager);
 
                 storageServerBufferManager.offer(addBufferPointer, buffer);
             }
@@ -161,8 +160,7 @@ public class SetupChunkWrite implements Operation {
             respBufferPointer = storageServerResponseBufferManager.register(this);
             storageServerResponseBufferManager.bookmark(respBufferPointer);
             for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
-                ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null,
-                        storageServerResponseBufferManager);
+                ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, storageServerResponseBufferManager);
 
                 storageServerResponseBufferManager.offer(respBufferPointer, buffer);
             }
@@ -302,7 +300,7 @@ public class SetupChunkWrite implements Operation {
          */
         storageServerBufferManager.reset(addBufferPointer);
         for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
-            ByteBuffer buffer = storageServerBufferManager.poll(addBufferPointer);
+            ByteBuffer buffer = storageServerBufferManager.getAndRemove(addBufferPointer);
             if (buffer != null) {
                 memoryManager.poolMemFree(buffer);
             } else {
@@ -320,7 +318,7 @@ public class SetupChunkWrite implements Operation {
          */
         storageServerResponseBufferManager.reset(respBufferPointer);
         for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
-            ByteBuffer buffer = storageServerResponseBufferManager.poll(respBufferPointer);
+            ByteBuffer buffer = storageServerResponseBufferManager.getAndRemove(respBufferPointer);
             if (buffer != null) {
                 memoryManager.poolMemFree(buffer);
             } else {

@@ -168,8 +168,7 @@ public class SetupClientConnection implements Operation {
         clientWriteBufferManager.bookmark(addBufferPointer);
 
         for (int i = 0; i < WRITE_BUFFERS_TO_ALLOCATE; i++) {
-            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null,
-                    clientWriteBufferManager);
+            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientWriteBufferManager);
             if (buffer != null) {
                 clientWriteBufferManager.offer(addBufferPointer, buffer);
             } else {
@@ -337,7 +336,7 @@ public class SetupClientConnection implements Operation {
          */
         clientWriteBufferManager.reset(addBufferPointer);
         for (int i = 0; i < WRITE_BUFFERS_TO_ALLOCATE; i++) {
-            ByteBuffer buffer = clientWriteBufferManager.poll(addBufferPointer);
+            ByteBuffer buffer = clientWriteBufferManager.getAndRemove(addBufferPointer);
             if (buffer != null) {
                 memoryManager.poolMemFree(buffer);
             } else {

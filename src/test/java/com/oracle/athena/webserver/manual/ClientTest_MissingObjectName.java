@@ -27,7 +27,7 @@ class ClientTest_MissingObjectName extends ClientTest {
          */
         String objectDigestString = null;
 
-        objectBuffer = memoryManager.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE, null, null);
+        objectBuffer = memoryManager.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE, null);
         if (objectBuffer != null) {
             // Fill in a pattern
             long pattern = MemoryManager.MEDIUM_BUFFER_SIZE;
