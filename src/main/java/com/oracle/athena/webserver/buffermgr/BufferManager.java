@@ -243,6 +243,12 @@ public class BufferManager {
         return pointer.reset();
     }
 
+    public String getBufferManagerName() {
+        String name = new String(bufferManagerName + " id: " + bufferManagerIdentifier);
+
+        return name;
+    }
+
     public void dumpInformation() {
         LOG.info("BufferManager " + bufferManagerName + " id: " + bufferManagerIdentifier);
     }

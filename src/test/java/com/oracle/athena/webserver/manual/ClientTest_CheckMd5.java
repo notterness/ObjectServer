@@ -78,7 +78,7 @@ class ClientTest_CheckMd5 extends ClientTest {
         /*
         ** Make sure to release the memory
          */
-        memoryManager.poolMemFree(objectBuffer);
+        memoryManager.poolMemFree(objectBuffer, null);
         objectBuffer = null;
 
         statusReceived(result);

@@ -265,7 +265,7 @@ public class EncryptBuffer implements Operation {
         for (int i = 0; i < NUM_STORAGE_SERVER_WRITE_BUFFERS; i++) {
             ByteBuffer buffer = storageServerWriteBufferMgr.getAndRemove(storageServerAddPointer);
             if (buffer != null) {
-                memoryManager.poolMemFree(buffer);
+                memoryManager.poolMemFree(buffer, storageServerWriteBufferMgr);
             }
         }
         storageServerWriteBufferMgr.unregister(storageServerAddPointer);
@@ -581,7 +581,7 @@ public class EncryptBuffer implements Operation {
                 fillValue++;
             }
 
-            memoryManager.poolMemFree(readBuffer);
+            memoryManager.poolMemFree(readBuffer, storageServerWriteBufferMgr);
 
             tgtBuffer++;
         }
@@ -603,7 +603,7 @@ public class EncryptBuffer implements Operation {
         for (int i = 0; i < allocations.length; i++) {
             buffer = clientReadBufferMgr.getAndRemove(readFillPtr);
             if (buffer != null) {
-                memoryManager.poolMemFree(buffer);
+                memoryManager.poolMemFree(buffer, clientReadBufferMgr);
             } else {
                 LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] null buffer readFillPtr index: " + readFillPtr.getCurrIndex());
             }

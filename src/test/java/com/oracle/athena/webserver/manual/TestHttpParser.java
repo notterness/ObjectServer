@@ -131,7 +131,7 @@ public class TestHttpParser extends WebServerTest {
             /*
             ** Fill in the HTTP Request information
              */
-            tempContentBuffer = ByteBuffer.allocate(MemoryManager.MEDIUM_BUFFER_SIZE);
+            tempContentBuffer = ByteBuffer.allocate(MemoryManager.XFER_BUFFER_SIZE);
             String md5Digest = buildBufferAndComputeMd5(tempContentBuffer);
 
             String request = buildRequestString(super.testName, md5Digest, tempContentBuffer.limit());
@@ -146,6 +146,8 @@ public class TestHttpParser extends WebServerTest {
             dst.flip();
 
             LOG.info("read(1) position: " + dst.position() + " limit: " + dst.limit());
+
+            tempContentBuffer = null;
 
             timesCalled++;
         } else {

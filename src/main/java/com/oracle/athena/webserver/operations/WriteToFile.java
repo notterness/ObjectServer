@@ -40,18 +40,12 @@ public class WriteToFile implements Operation {
     private long nextExecuteTime;
 
     /*
-     ** The EncryptBuffer operation is a consumer of ByteBuffers that are filled in response to the ReadBuffer
-     **   operation. This operation encrypts those buffers and places them into the storageServerWriteBufferManager
-     **   as a producer.
      */
     private final BufferManager clientReadBufferMgr;
-    private final BufferManager storageServerWriteBufferMgr;
 
     /*
      ** The clientFullBufferPtr is used to track ByteBuffer(s) that are filled with client object data and are
-     **   ready to be encrypted prior to being written to the Storage Servers.
-     ** The clientFullBufferPtr tracks the clientReadBufferManager where data is placed following reads from
-     **   the client connection's SocketChannel.
+     **   ready to be written out to the file on disk for later comparison.
      */
     private final BufferManagerPointer clientFullBufferPtr;
 
@@ -82,15 +76,12 @@ public class WriteToFile implements Operation {
     private FileChannel writeFileChannel;
 
     /*
-     ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
-     **   up the calls to obtain the VON information and the meta-data write to the database.
      */
     public WriteToFile(final RequestContext requestContext, final MemoryManager memoryManager,
                          final BufferManagerPointer clientReadPointer, final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.clientReadBufferMgr = this.requestContext.getClientReadBufferManager();
-        this.storageServerWriteBufferMgr = this.requestContext.getStorageServerWriteBufferManager();
         this.completeCallback = completeCb;
 
         this.clientFullBufferPtr = clientReadPointer;
@@ -129,8 +120,7 @@ public class WriteToFile implements Operation {
 
         /*
          ** Register this with the Buffer Manager to allow it to be event(ed) when
-         **   buffers are added by the read producer. The buffers added to the clientReadBufferMgr are
-         **   encrypted and placed into the storageServerWriteBufferMgr.
+         **   buffers are added by the read producer.
          **
          ** This operation (EncryptBuffer) is a consumer of ByteBuffer(s) produced by the ReadBuffer operation.
          */
