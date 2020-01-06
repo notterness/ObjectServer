@@ -92,7 +92,7 @@ class ClientTest_InvalidMd5Header extends ClientTest {
                 System.out.println("Request timed out");
             }
 
-            memoryManager.poolMemFree(dataBuffer);
+            memoryManager.poolMemFree(dataBuffer, null);
         }
     }
 

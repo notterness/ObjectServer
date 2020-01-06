@@ -139,7 +139,7 @@ public class BufferReadMetering implements Operation {
         for (int i = 0; i < INITIAL_INTEGRATION_BUFFER_ALLOC; i++) {
             ByteBuffer buffer = clientReadBufferMgr.getAndRemove(bufferMeteringPointer);
             if (buffer != null) {
-                memoryManager.poolMemFree(buffer);
+                memoryManager.poolMemFree(buffer, clientReadBufferMgr);
             } else {
                 LOG.warn("BufferReadMetering[" + requestContext.getRequestId() + "] null buffer i: " + i);
             }

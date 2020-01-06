@@ -132,7 +132,7 @@ public class WriteToStorageServer implements Operation {
         /*
          ** Add this to the execute queue if the HTTP Request has been sent to the Storage Server
          */
-        if (requestContext.hasHttpRequestBeenSent(serverIdentifier) == true) {
+        if (requestContext.hasHttpRequestBeenSent(serverIdentifier)) {
             requestContext.addToWorkQueue(this);
         } else {
             LOG.info("WriteToStorageServer[" + requestContext.getRequestId() + "] HTTP request not sent");
@@ -242,9 +242,7 @@ public class WriteToStorageServer implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        long currTime = System.currentTimeMillis();
-
-        if (currTime < nextExecuteTime) {
+        if (System.currentTimeMillis() < nextExecuteTime) {
             return false;
         }
 

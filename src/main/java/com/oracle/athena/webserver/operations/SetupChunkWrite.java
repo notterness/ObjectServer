@@ -302,7 +302,7 @@ public class SetupChunkWrite implements Operation {
         for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
             ByteBuffer buffer = storageServerBufferManager.getAndRemove(addBufferPointer);
             if (buffer != null) {
-                memoryManager.poolMemFree(buffer);
+                memoryManager.poolMemFree(buffer, storageServerBufferManager);
             } else {
                 LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] null buffer addBufferPointer index: " + addBufferPointer.getCurrIndex());
             }
@@ -320,7 +320,7 @@ public class SetupChunkWrite implements Operation {
         for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
             ByteBuffer buffer = storageServerResponseBufferManager.getAndRemove(respBufferPointer);
             if (buffer != null) {
-                memoryManager.poolMemFree(buffer);
+                memoryManager.poolMemFree(buffer, storageServerResponseBufferManager);
             } else {
                 LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] null buffer respBufferPointer index: " +
                         respBufferPointer.getCurrIndex());

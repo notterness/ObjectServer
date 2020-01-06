@@ -153,7 +153,7 @@ public class TestChunkWrite {
             ByteBuffer buffer = storageServerWriteBufferMgr.getAndRemove(storageServerAddPointer);
 
             if (buffer != null) {
-                memoryManager.poolMemFree(buffer);
+                memoryManager.poolMemFree(buffer, storageServerWriteBufferMgr);
             } else {
                 LOG.info("TestChunkWrite storageServerAddPointer index: " + storageServerAddPointer.getCurrIndex());
             }

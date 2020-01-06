@@ -176,7 +176,7 @@ public class SendFinalStatus implements Operation {
         for (int i = 0; i < bufferCount; i++) {
             ByteBuffer buffer = clientWriteBufferMgr.getAndRemove(writeStatusBufferPtr);
             if (buffer != null) {
-                memoryManager.poolMemFree(buffer);
+                memoryManager.poolMemFree(buffer, clientWriteBufferMgr);
             } else {
                 LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] missing buffer i: " + i);
             }

@@ -338,7 +338,7 @@ public class SetupClientConnection implements Operation {
         for (int i = 0; i < WRITE_BUFFERS_TO_ALLOCATE; i++) {
             ByteBuffer buffer = clientWriteBufferManager.getAndRemove(addBufferPointer);
             if (buffer != null) {
-                memoryManager.poolMemFree(buffer);
+                memoryManager.poolMemFree(buffer, clientWriteBufferManager);
             } else {
                 System.out.println("ClientTest_CheckMd5 missing ByteBuffer i: " + i);
             }

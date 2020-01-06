@@ -81,7 +81,7 @@ class ClientTest_BadMd5 extends ClientTest {
             super.client.setTestFailed(super.clientTestName);
         }
 
-        memoryManager.poolMemFree(objectBuffer);
+        memoryManager.poolMemFree(objectBuffer, null);
 
         statusReceived(result);
     }

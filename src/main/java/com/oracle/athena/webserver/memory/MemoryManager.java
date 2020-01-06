@@ -23,26 +23,15 @@ public class MemoryManager {
     public static final int XFER_BUFFER_SIZE = 0x2000;  // 8 kB
 
     // These really don't need to be.
-    private static final int PRODUCTION_MEDIUM_BUFFER_COUNT = 100;
-    private static final int PRODUCTION_XFER_BUFFER_COUNT = 10;
+    private static final int PRODUCTION_XFER_BUFFER_COUNT = 10000;
 
-    private static final int INTEGRATION_MEDIUM_BUFFER_COUNT = 10;
     private static final int INTEGRATION_XFER_BUFFER_COUNT = 100;
-
-    /* In sorted order */
-    private static final int[] poolBufferSizes = {
-        MEDIUM_BUFFER_SIZE,
-        XFER_BUFFER_SIZE,
-    };
-
 
     // Or we could infer this from an array of {count, size} tuples, if we didn't
     // need to expose the threshold values.
-    private static final int numPools = 2;
-    private FixedSizeBufferPool[] thePool;
+    private FixedSizeBufferPool memoryPool;
 
     public MemoryManager(WebServerFlavor flavor) {
-        int mediumBufferCount;
         int xferBufferCount;
 
         /*
@@ -51,39 +40,21 @@ public class MemoryManager {
         **    desktop.
          */
         if (flavor == WebServerFlavor.STANDARD) {
-            mediumBufferCount = PRODUCTION_MEDIUM_BUFFER_COUNT;
             xferBufferCount = PRODUCTION_XFER_BUFFER_COUNT;
         } else {
-            mediumBufferCount = INTEGRATION_MEDIUM_BUFFER_COUNT;
             xferBufferCount = INTEGRATION_XFER_BUFFER_COUNT;
         }
 
-        thePool = new FixedSizeBufferPool[numPools];
-        thePool[0] = new FixedSizeBufferPool( MEDIUM_BUFFER_SIZE, mediumBufferCount );
-        thePool[1] = new FixedSizeBufferPool( XFER_BUFFER_SIZE, xferBufferCount );
+        memoryPool = new FixedSizeBufferPool(XFER_BUFFER_SIZE, xferBufferCount );
     }
 
     public ByteBuffer poolMemAlloc(final int requestedSize, final BufferManager bufferManager) {
 
-        for (int i = 0; i < numPools;  ++i) {
-            if (requestedSize <= thePool[i].getBufferSize()) {
-
-                LOG.debug("poolMemAlloc [" + i + "] requestedSize: " + requestedSize);
-                ByteBuffer buffer = thePool[i].poolMemAlloc(requestedSize, bufferManager);
-                return buffer;
-            }
-        }
-
-        // Didn't find a matching fixed-size pool for the requested buffer size.
-        throw new IllegalArgumentException("Requested memory buffer size exceeds max: " + requestedSize );
+        return memoryPool.poolMemAlloc(bufferManager);
     }
 
-    public void poolMemFree(ByteBuffer buffer) {
-        for (int i = 0; i < numPools;  ++i) {
-            if (buffer.capacity() <= thePool[i].getBufferSize()) {
-                thePool[i].poolMemFree( buffer );
-            }
-        }
+    public void poolMemFree(ByteBuffer buffer, final BufferManager bufferManager) {
+        memoryPool.poolMemFree(buffer, bufferManager);
     }
 
     /*
@@ -93,26 +64,16 @@ public class MemoryManager {
     public boolean verifyMemoryPools(final String caller) {
         boolean memoryPoolsOkay = true;
 
-        for (int i = 0; i < numPools; ++i) {
-            if (thePool[i].getBufferCount() != thePool[i].getUnusedBufferCount()) {
-                LOG.warn(caller + " BufferPool error pool[" + i + "] COUNT: " + thePool[i].getBufferCount() +
-                        " unused: " + thePool[i].getUnusedBufferCount());
+        if (memoryPool.getBufferCount() != memoryPool.getUnusedBufferCount()) {
+            LOG.warn(caller + " BufferPool error COUNT: " + memoryPool.getBufferCount() +
+                    " unused: " + memoryPool.getUnusedBufferCount());
 
-                thePool[i].dumpMap();
-                memoryPoolsOkay = false;
-            }
+            memoryPool.dumpInUseQueue();
+            memoryPoolsOkay = false;
         }
 
         return memoryPoolsOkay;
     }
 
-    static public int allocatedBufferCapacity(int requestedSize) {
-        for(int i=0; i < poolBufferSizes.length; i++) {
-            if (requestedSize <= poolBufferSizes[i])
-                return poolBufferSizes[i];
-        }
-
-        return poolBufferSizes[poolBufferSizes.length - 1];
-    }
 }
 

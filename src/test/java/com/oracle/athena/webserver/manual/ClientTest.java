@@ -238,7 +238,7 @@ public abstract class ClientTest {
         }
 
         if (objectBuffer != null) {
-            memoryManager.poolMemFree(objectBuffer);
+            memoryManager.poolMemFree(objectBuffer, null);
         }
     }
 }
