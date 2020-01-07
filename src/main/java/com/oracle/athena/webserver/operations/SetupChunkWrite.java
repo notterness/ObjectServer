@@ -236,8 +236,18 @@ public class SetupChunkWrite implements Operation {
             /*
              ** Now open a initiator connection to write encrypted buffers out of.
              */
-            storageServerConnection.startInitiator(serverIdentifier.getStorageServerIpAddress(),
-                    serverIdentifier.getStorageServerTcpPort(), connectComplete, errorHandler);
+            if (!storageServerConnection.startInitiator(serverIdentifier.getStorageServerIpAddress(),
+                    serverIdentifier.getStorageServerTcpPort(), connectComplete, errorHandler)) {
+                /*
+                ** This means the SocketChannel could not be opened. Need to indicate a problem
+                **   with the Storage Server and clean up this SetupChunkWrite.
+                ** Set the error to indicate that the Storage Server cannot be reached.
+                **
+                ** TODO: Add a test case for the startInitiator failing to make sure the cleanup
+                **   is properly handled.
+                 */
+                complete();
+            }
         } else {
 
             complete();
@@ -245,6 +255,8 @@ public class SetupChunkWrite implements Operation {
     }
 
     /*
+    ** This is called to cleanup the SetupChunkWrite and will tear down all the BufferManagerPointers and
+    **   release the ByteBuffer(s) associated with the storageServerBufferManager.
      */
     public void complete() {
 
