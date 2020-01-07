@@ -4,7 +4,6 @@ import com.oracle.athena.webserver.buffermgr.BufferAssociation;
 import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.operations.Operation;
-import io.grpc.netty.shaded.io.netty.channel.epoll.EpollServerChannelConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,8 +72,8 @@ public class NioSocket implements IoInterface {
     /*
     ** The Stack is used to allow different BufferManagers to be used to perform reads and writes
      */
-    Stack<BufferAssociation> readBufferAssociations;
-    Stack<BufferAssociation> writeBufferAssociations;
+    private final Stack<BufferAssociation> readBufferAssociations;
+    private final Stack<BufferAssociation> writeBufferAssociations;
 
 
     public NioSocket(final NioSelectHandler nioSelectHandler) {
@@ -130,6 +129,7 @@ public class NioSocket implements IoInterface {
             /*
             ** What to do if the socket cannot be opened
              */
+            LOG.warn("Unable to open SocketChannel " + io_ex.getMessage());
             errorHandler.event();
             return false;
         }
@@ -168,6 +168,7 @@ public class NioSocket implements IoInterface {
                 /*
                  ** Unable to close the socket as it might have already been closed
                  */
+                LOG.warn("close(1) exception: " + ex.getMessage());
             }
             socketChannel = null;
             success = false;
@@ -191,6 +192,9 @@ public class NioSocket implements IoInterface {
     /*
     ** The following is used to register with the NIO handling layer for reads. When a server connection is made, this
     **   registration is used to know where to pass the information from the socket.
+    ** If there is currently a BufferManager/BufferManagerPointer associated with this NioSocket, it will push that
+    **   combination on the readBufferAssociation stack to be pulled off when this association is removed. The idea
+    **   of a stack is to allow different BufferManager(s) to be used to perform different operations.
      */
     public void registerReadBufferManager(final BufferManager readBufferMgr, final BufferManagerPointer readPtr) {
 
@@ -210,6 +214,19 @@ public class NioSocket implements IoInterface {
         this.readPointer = readPtr;
     }
 
+    /*
+     ** The following is used to register with the NIO handling layer for writes. When a server connection is made, this
+     **   registration is used to know where to obtain the bytes to write out the SocketChannel.
+     ** If there is currently a BufferManager/BufferManagerPointer associated with this NioSocket, it will push that
+     **   combination on the writeBufferAssociation stack to be pulled off when this association is removed. The idea
+     **   of a stack is to allow different BufferManager(s) to be used to perform different write operations.
+     **   The stack is currently used for handling the HTTP Request header write for the Storage Server(s) and the
+     **   write of the encrypted data. In this case, there is a small BufferManager that is used to hold the HTTP
+     **   Request and once that is written, then encrypted data is written from a different BufferManager. This is
+     **   done so that there is no need to interject empty ByteBuffer(s) in the ring buffer managed by the
+     **   BufferManager that could be used for writing the HTTP Request and the Shaw-256 value. This allows unique
+     **   information to be written to different Storage Server(s) if needed.
+     */
     public void registerWriteBufferManager(final BufferManager writeBufferMgr, final BufferManagerPointer writePtr) {
 
         LOG.info(" writePtr register (" + writePtr.getIdentifier() + ":" + writePtr.getOperationType() + ") bufferIndex: " +
@@ -228,6 +245,11 @@ public class NioSocket implements IoInterface {
         this.writePointer = writePtr;
     }
 
+    /*
+    ** This removes the last BufferManager and BufferManagerPointer read registration from the NioSocket. If there is
+    **   a BufferManager/BufferManagerPointer on the stack, then it will start using that combination for
+    **   read buffers.
+     */
     public void unregisterReadBufferManager() {
 
         LOG.warn(" readPtr unregister (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
@@ -256,6 +278,11 @@ public class NioSocket implements IoInterface {
         }
     }
 
+    /*
+     ** This removes the last BufferManager and BufferManagerPointer write registration from the NioSocket. If there is
+     **   a BufferManager/BufferManagerPointer on the stack, then it will start using that combination for
+     **   write buffers.
+     */
     public void unregisterWriteBufferManager() {
         LOG.warn(" writePtr unregister (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
                 writePointer.getCurrIndex());
@@ -285,7 +312,8 @@ public class NioSocket implements IoInterface {
 
     /*
      ** This is called when there is a buffer in the BufferManager that is ready to accept data from
-     **   the SocketChannel
+     **   the SocketChannel.
+     ** It sets the OP_READ flag for the Selector that is managed by the NioSelectHandler object.
      */
     public void readBufferAvailable() {
         //LOG.info(" readBufferAvailable (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
@@ -303,7 +331,10 @@ public class NioSocket implements IoInterface {
     }
 
     /*
-    ** This is called from the Select loop for the OP_READ case.
+    ** This is called from the Select loop for the OP_READ case. The Select loop runs within the NioSelectHandler
+    **   object and runs within the context of one of the NioEventPollThreads. There is one Selector that handles
+    **   multiple NioSocket(s). The NioSocket can be a target or a server (initiator when communicating with the
+    **   Storage Server).
      */
     public void performRead() {
         ByteBuffer readBuffer;
@@ -328,12 +359,17 @@ public class NioSocket implements IoInterface {
                     /*
                     ** Need to close the SocketChannel and event() the error handler.
                      */
+                    LOG.warn(" (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                            readPointer.getCurrIndex() + " bytesRead -1");
                     closeConnection();
+                    sendErrorEvent();
                     break;
                 }
             } catch (IOException io_ex) {
-                LOG.info(" (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                LOG.error(" (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
                         readPointer.getCurrIndex() + " exception: " + io_ex.getMessage());
+                closeConnection();
+                sendErrorEvent();
                 break;
             }
 
@@ -342,7 +378,8 @@ public class NioSocket implements IoInterface {
 
     /*
     ** This is called when there is a buffer in the BufferManager with data that is ready to be written out
-    **   the SocketChannel
+    **   the SocketChannel. It sets the OP_WRITE flag for the Selector that is managed by the NioSelectHandler
+    **   object.
      */
     public void writeBufferReady() {
         //LOG.info(" writeBufferReady (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
@@ -361,7 +398,8 @@ public class NioSocket implements IoInterface {
     }
 
     /*
-     ** This is called from the Select loop for the OP_WRITE case.
+     ** This is called from the Select loop (really the handleSelector method) from within NioSelectHandler for the
+     **   OP_WRITE case.
      */
     public void performWrite() {
         ByteBuffer writeBuffer;
@@ -391,12 +429,17 @@ public class NioSocket implements IoInterface {
                     /*
                      ** Need to close the SocketChannel and event() the error handler.
                      */
+                    LOG.warn(" (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+                            writePointer.getCurrIndex() + " bytesWritten -1");
                     closeConnection();
+                    sendErrorEvent();
                     break;
                 }
             } catch (IOException io_ex) {
-                LOG.info(" (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+                LOG.error(" (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
                         writePointer.getCurrIndex() + " exception: " + io_ex.getMessage());
+                closeConnection();
+                sendErrorEvent();
                 break;
             }
         }
@@ -413,7 +456,7 @@ public class NioSocket implements IoInterface {
         try {
             socketChannel.close();
         } catch (IOException io_ex) {
-
+            LOG.warn("close(2) exception: " + io_ex.getMessage());
         }
 
         socketChannel = null;
@@ -428,11 +471,16 @@ public class NioSocket implements IoInterface {
     }
 
     /*
-    **
+    ** This is called when the OP_CONNECT flag is set within the Selector. This means that the initiator SocketChannel
+    **   has connected to the remote socket and is ready to start handling data transfers. This provides the
+    **   Operation a clean indication that writes or reads on the NioSocket can begin. For the case where the
+    **   initiator is to start sending a Chunk to a Storage Server, this means that the HTTP Request can be sent.
      */
     public void connectComplete() {
         if (connectCompleteHandler != null) {
             connectCompleteHandler.event();
+        } else {
+            LOG.warn("No connect complete handler registered");
         }
     }
 }
