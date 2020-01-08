@@ -321,6 +321,8 @@ public class SetupChunkWrite implements Operation {
         }
 
         storageServerBufferManager.unregister(addBufferPointer);
+        addBufferPointer = null;
+
         storageServerBufferManager.reset();
         storageServerBufferManager = null;
 
