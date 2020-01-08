@@ -83,23 +83,31 @@ public class BufferReadMetering implements Operation {
         **   number of ByteBuffer(s) up front and then reset the metering
         **   pointer.
          */
+        int buffersToAllocate;
+
         if (webServerFlavor == WebServerFlavor.INTEGRATION_TESTS) {
-            for (int i = 0; i < INITIAL_INTEGRATION_BUFFER_ALLOC; i++) {
-                ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientReadBufferMgr);
-
-                clientReadBufferMgr.offer(bufferMeteringPointer, buffer);
-            }
-
             /*
-            ** Set the pointer back to the beginning of the BufferManager
+            ** Allocate a limited number of buffers up front
              */
-            lastAddIndex = clientReadBufferMgr.reset(bufferMeteringPointer);
+            buffersToAllocate = INITIAL_INTEGRATION_BUFFER_ALLOC;
         } else {
             /*
             ** Fill in the entire ClientReadBufferManager and StorageServerWriteBufferManager
             **   with ByteBuffers.
              */
+            buffersToAllocate = RequestContext.BUFFER_MGR_RING_SIZE;
         }
+
+        for (int i = 0; i < buffersToAllocate; i++) {
+            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientReadBufferMgr);
+
+            clientReadBufferMgr.offer(bufferMeteringPointer, buffer);
+        }
+
+        /*
+         ** Set the pointer back to the beginning of the BufferManager
+         */
+        lastAddIndex = clientReadBufferMgr.reset(bufferMeteringPointer);
 
         return bufferMeteringPointer;
     }
@@ -123,9 +131,9 @@ public class BufferReadMetering implements Operation {
         ** Add a free buffer to the ClientReadBufferManager
          */
         int nextLocation = clientReadBufferMgr.updateProducerWritePointer(bufferMeteringPointer);
-        if (nextLocation == lastAddIndex) {
+        if ((nextLocation == lastAddIndex) && (webServerFlavor == WebServerFlavor.INTEGRATION_TESTS)){
             /*
-            ** Need to add another buffer
+            ** Need to add another buffer. This is only for WebServerFlavor.INTEGRATION_TESTS.
              */
         }
     }
