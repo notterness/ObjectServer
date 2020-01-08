@@ -5,6 +5,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class BufferManager {
@@ -25,6 +28,13 @@ public class BufferManager {
 
     private final String bufferManagerName;
 
+    /*
+    ** The following is used to insure that all registered BufferManagerPointer(s) are unregistered
+    **   prior to calling the reset() method. This is to insure that resources are not left hanging
+    **   around.
+     */
+    private final Map<Integer, BufferManagerPointer> registeredPointers;
+
 
     public BufferManager(final int bufferCount, final String bufferMgrName, final int identifier) {
         this.bufferArraySize = bufferCount;
@@ -34,6 +44,8 @@ public class BufferManager {
         this.identifier = new AtomicInteger(identifier);
 
         this.bufferManagerName = bufferMgrName;
+
+        this.registeredPointers = new HashMap<>();
     }
 
     public BufferManagerPointer register(final Operation operation) {
@@ -43,6 +55,7 @@ public class BufferManager {
         LOG.info("register " + bufferManagerName + " ("  + currIdentifier + ":" + operation.getOperationType() + ")");
         BufferManagerPointer pointer = new BufferManagerPointer(operation, bufferArraySize, currIdentifier);
 
+        registeredPointers.put(currIdentifier, pointer);
         return pointer;
     }
 
@@ -59,6 +72,7 @@ public class BufferManager {
 
         BufferManagerPointer pointer = new BufferManagerPointer(operation, dependsOn, bufferArraySize, currIdentifier);
 
+        registeredPointers.put(currIdentifier, pointer);
         return pointer;
     }
 
@@ -71,11 +85,14 @@ public class BufferManager {
 
         BufferManagerPointer pointer = new BufferManagerPointer(operation, dependsOn, bufferArraySize, currIdentifier, maxBytesToConsume);
 
+        registeredPointers.put(currIdentifier, pointer);
         return pointer;
     }
 
     public void unregister(final BufferManagerPointer pointer) {
         LOG.info("unregister " + bufferManagerName + " (" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ")" );
+
+        registeredPointers.remove(pointer.getIdentifier());
 
         pointer.terminate();
     }
@@ -222,14 +239,24 @@ public class BufferManager {
      */
     public void reset() {
 
-        LOG.info("BufferManager(" + bufferManagerName + ") reset()");
+        LOG.info("BufferManager reset(" + bufferManagerName + ")");
+
+        /*
+        ** Make sure there are no registered BufferManagerPointer(s) associated with this
+        **   BufferManager
+         */
+        Collection<BufferManagerPointer> pointers = registeredPointers.values();
+        for (BufferManagerPointer pointer : pointers) {
+            LOG.warn("  - reset(" + bufferManagerName + ") (" + pointer.getIdentifier() + ":" + pointer.getOperationType() +
+                    ") readIndex: " + pointer.getCurrIndex());
+        }
 
         /*
         ** Make sure all the BufferPointer values are null
          */
         for (int i = 0; i < bufferArraySize; i++) {
             if (bufferArray[i] != null) {
-                LOG.warn("BufferManager(" + bufferManagerName + ") reset() non null buffer i: " + i);
+                LOG.warn("BufferManager reset(" + bufferManagerName + ") non null buffer i: " + i);
                 bufferArray[i] = null;
             }
         }

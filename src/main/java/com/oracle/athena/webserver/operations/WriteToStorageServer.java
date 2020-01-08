@@ -183,6 +183,12 @@ public class WriteToStorageServer implements Operation {
              */
             connection.unregisterWriteBufferManager();
 
+            storageServerWriteBufferMgr.unregister(writeDonePointer);
+            writeDonePointer = null;
+
+            storageServerWriteBufferMgr.unregister(writeToStorageServerPtr);
+            writeToStorageServerPtr = null;
+
             completeCalled = true;
         }
     }

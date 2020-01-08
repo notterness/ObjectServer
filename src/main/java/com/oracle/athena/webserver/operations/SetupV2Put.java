@@ -66,7 +66,7 @@ public class SetupV2Put implements Operation {
         /*
          ** Setup the list of Operations currently used to handle the V2 PUT
          */
-        v2PutHandlerOperations = new HashMap<OperationTypeEnum, Operation>();
+        v2PutHandlerOperations = new HashMap<>();
 
         /*
          ** This starts out not being on any queue
@@ -87,7 +87,6 @@ public class SetupV2Put implements Operation {
      **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
-        BufferManager clientReadBufferManager = requestContext.getClientReadBufferManager();
         return null;
     }
 
@@ -104,9 +103,9 @@ public class SetupV2Put implements Operation {
             /*
              ** Add compute MD5 and encrypt to the dependency on the ClientReadBufferManager read pointer.
              */
-            BufferManagerPointer clientReadPtr = requestContext.getReadBufferPointer();
+            BufferManagerPointer readBufferPointer = requestContext.getReadBufferPointer();
 
-            EncryptBuffer encryptBuffer = new EncryptBuffer(requestContext, memoryManager, clientReadPtr,
+            EncryptBuffer encryptBuffer = new EncryptBuffer(requestContext, memoryManager, readBufferPointer,
                     this);
             v2PutHandlerOperations.put(encryptBuffer.getOperationType(), encryptBuffer);
             encryptBuffer.initialize();
@@ -116,7 +115,7 @@ public class SetupV2Put implements Operation {
              **   the buffer from the HTTP Parsing.
              */
             BufferManager clientReadBufferManager = requestContext.getClientReadBufferManager();
-            ByteBuffer remainingBuffer = clientReadBufferManager.peek(clientReadPtr);
+            ByteBuffer remainingBuffer = clientReadBufferManager.peek(readBufferPointer);
             if (remainingBuffer != null) {
                 if (remainingBuffer.remaining() > 0) {
                     encryptBuffer.event();
