@@ -27,6 +27,10 @@ public class EncryptBuffer implements Operation {
      */
     private final RequestContext requestContext;
 
+    /*
+    ** The memoryManager is used to allocate ByteBuffer(s) for storageServerWriteBufferMgr to be used for
+    **   encrypted data. It is also passed into the SetupChunkWrite operation.
+     */
     private final MemoryManager memoryManager;
 
     /*
@@ -47,9 +51,9 @@ public class EncryptBuffer implements Operation {
     private final BufferManager storageServerWriteBufferMgr;
 
     /*
-    ** The encyptInputPointer is used to track ByteBuffer(s) that are filled with client object data and are
+    ** The encryptInputPointer is used to track ByteBuffer(s) that are filled with client object data and are
     **   ready to be encrypted prior to being written to the Storage Servers.
-    ** The encyptInputPointer tracks the clientReadBufferManager where data is placed following reads from
+    ** The encryptInputPointer tracks the clientReadBufferManager where data is placed following reads from
     **   the client connection's SocketChannel.
      */
     private final BufferManagerPointer readBufferPointer;

@@ -44,8 +44,7 @@ public class RequestContext {
     public final int CHUNK_SIZE_IN_BYTES = MemoryManager.XFER_BUFFER_SIZE * 4096;
 
 
-    private static final int BUFFER_MGR_RING_SIZE = 128;
-    private static final int STORAGE_SERVER_RESPONSE_RING_SIZE = 10;
+    public static final int BUFFER_MGR_RING_SIZE = 128;
 
     private static final int MAX_EXEC_WORK_LOOP_COUNT = 10;
 

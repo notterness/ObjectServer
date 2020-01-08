@@ -173,7 +173,7 @@ public class WriteToStorageServer implements Operation {
     }
 
     /*
-    **
+    ** This is called when all of the bytes for the chunk have been written to the Storage Server
      */
     public void complete() {
         if (!completeCalled) {
