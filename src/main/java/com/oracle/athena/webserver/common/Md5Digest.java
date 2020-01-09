@@ -58,9 +58,9 @@ public class Md5Digest {
                 }
             }
 */
-            objectDigestCalculator.update(a);
+            objectDigestCalculator.update(a, dataBuffer.position(), (dataBuffer.limit() - dataBuffer.position()));
         } else {
-            objectDigestCalculator.update(dataBuffer.array());
+            objectDigestCalculator.update(dataBuffer.array(), dataBuffer.position(), (dataBuffer.limit() - dataBuffer.position()));
         }
     }
 

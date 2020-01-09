@@ -64,7 +64,7 @@ public class NioEventPollBalancer {
             pollThread.stop();
         }
 
-        String memoryPoolOwner = new String("NioEventPollBalancer[" + eventPollThreadBaseId + "]");
+        String memoryPoolOwner = "NioEventPollBalancer[" + eventPollThreadBaseId + "]";
         memoryManager.verifyMemoryPools(memoryPoolOwner);
         memoryManager = null;
     }

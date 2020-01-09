@@ -7,18 +7,15 @@ import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.nio.channels.*;
-import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class NioEventPollThread implements Runnable, EventPollThread {
 
     private static final Logger LOG = LoggerFactory.getLogger(NioEventPollThread.class);
 
     private static final int ALLOCATED_NIO_SOCKET = 10;
-
-    private final int SELECT_TIMEOUT = 1000;
 
     private final WebServerFlavor webServerFlavor;
     private final int eventPollThreadBaseId;
@@ -31,15 +28,13 @@ public class NioEventPollThread implements Runnable, EventPollThread {
 
     private volatile boolean threadRunning;
 
-    private Thread eventPollThread;
-
     private NioSelectHandler nioSelectHandler;
 
-
     /*
-    ** This is the Selector used to handle READ and WRITE events for the client SocketChannel.
+    ** uniqueRequestId is used to guarantee that for any client HTTP Request that comes into the Web Server, there is
+    **   a unique key that can be used to track it through all of the trace statements.
      */
-    private Selector clientSocketSelector;
+    private final AtomicInteger uniqueRequestId;
 
 
     public NioEventPollThread(final WebServerFlavor flavor, final int threadBaseId, final MemoryManager memoryManger) {
@@ -48,12 +43,17 @@ public class NioEventPollThread implements Runnable, EventPollThread {
         this.eventPollThreadBaseId = threadBaseId;
         this.memoryManager = memoryManger;
 
-        this.freeConnections = new LinkedList<IoInterface>();
-        this.waitingForConnections = new LinkedList<Operation>();
+        this.freeConnections = new LinkedList<>();
+        this.waitingForConnections = new LinkedList<>();
 
-        this.runningContexts = new LinkedList<RequestContext>();
+        this.runningContexts = new LinkedList<>();
 
         this.threadRunning = true;
+
+        /*
+        ** This is the request ID to track an HTTP Request through the logging.
+         */
+        uniqueRequestId = new AtomicInteger(1);
     }
 
     /*
@@ -69,7 +69,7 @@ public class NioEventPollThread implements Runnable, EventPollThread {
         ** Now setup the Selector for the handler so it can be passed into the pre-allocated NioSocket
         **   connection control objects.
          */
-        Selector selector = nioSelectHandler.setupSelector();
+        nioSelectHandler.setupSelector();
 
         /*
         ** Create a collection of NioSocket to handle communications with the Storage Servers
@@ -80,7 +80,7 @@ public class NioEventPollThread implements Runnable, EventPollThread {
             freeConnections.add(connection);
         }
 
-        eventPollThread = new Thread(this);
+        Thread eventPollThread = new Thread(this);
         eventPollThread.start();
     }
 
@@ -144,14 +144,6 @@ public class NioEventPollThread implements Runnable, EventPollThread {
 
     public void releaseContext(final RequestContext requestContext) {
         runningContexts.remove(requestContext);
-
-        /*
-        ** TODO: Clean up all the Map(s) used
-         */
-    }
-
-    public void addContext(final RequestContext requestContext) {
-        runningContexts.add(requestContext);
     }
 
     /*
@@ -164,14 +156,21 @@ public class NioEventPollThread implements Runnable, EventPollThread {
         boolean success = true;
 
         /*
-        ** TODO: Change this from a new to an allocation from a free pool
+        ** Allocate the RequestContext that is used to track this HTTP Request for its lifetime. The RequestContext is
+        **   the placeholder for the various state and generated information for the request.
          */
         RequestContext requestContext = allocateContext();
 
+        /*
+        ** The IoInterface is the wrapper around the NIO SocketChannel code that allows communication over a socket
+        **   with the client who generated this request.
+         */
         IoInterface connection = allocateConnection(null);
         if (connection != null) {
             connection.startClient(clientChannel);
-            requestContext.initializeServer(connection, 56);
+
+            int requestId = uniqueRequestId.getAndIncrement();
+            requestContext.initializeServer(connection, requestId);
         } else {
             LOG.info("[" + eventPollThreadBaseId + "] no free connections");
             success = false;
@@ -198,9 +197,8 @@ public class NioEventPollThread implements Runnable, EventPollThread {
             ** Now check if there is other work to be performed on the connections that does not deal with the
             **   SocketChanel read and write operations
              */
-            Iterator<RequestContext> iter = runningContexts.listIterator();
-            while (iter.hasNext()) {
-                iter.next().performOperationWork();
+            for (RequestContext runningContext : runningContexts) {
+                runningContext.performOperationWork();
             }
         }
 

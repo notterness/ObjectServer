@@ -202,6 +202,15 @@ public class RequestContext {
     private boolean httpRequestParsed;
 
     /*
+    ** The next two variables are used to keep track of the Md5 Digest calculation. First if it has been
+    **   completed and second if the calculated Md5 digest matches the expected one.
+     */
+    private boolean digestComplete;
+    private boolean contentHasValidMd5Digest;
+
+    private boolean v2PutAllDataWritten;
+
+    /*
      ** Mutex to protect the addition and removal from the work and timed queues
      */
     private final ReentrantLock queueMutex;
@@ -254,6 +263,10 @@ public class RequestContext {
         workQueue = new LinkedBlockingQueue<>(20);
         timedWaitQueue = new LinkedBlockingQueue<>(20);
 
+        digestComplete = false;
+        contentHasValidMd5Digest = false;
+
+        v2PutAllDataWritten = false;
     }
 
     /*
@@ -451,6 +464,10 @@ public class RequestContext {
          */
         dumpOperations();
         requestHandlerOperations.clear();
+
+        digestComplete = false;
+        contentHasValidMd5Digest = false;
+        v2PutAllDataWritten = false;
     }
 
     /*
@@ -780,6 +797,28 @@ public class RequestContext {
         }
     }
 
+    /*
+    ** Accessor methods for the Md5 Digest information
+     */
+    public void setDigestComplete() {
+        digestComplete = true;
+    }
+
+    public void setMd5DigestCompareResult(final boolean valid) {
+        contentHasValidMd5Digest = valid;
+    }
+
+    public boolean getDigestComplete() {
+        return digestComplete;
+    }
+
+    public void setAllV2PutDataWritten() {
+        v2PutAllDataWritten = true;
+    }
+
+    public boolean getAllV2PutDataWritten() {
+        return v2PutAllDataWritten;
+    }
 
     /*
     **

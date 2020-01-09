@@ -25,7 +25,8 @@ public enum OperationTypeEnum {
     CHECK_EMBARGO(122),                 // This is used by the AuthenticatePipelineMgr
     AUTHENTICATE_REQUEST(123),
     AUTHENTICATE_FINISHED(124),
-    ENCRYPT_BUFFER(130),
+    COMPUTE_MD5_DIGEST(130),
+    ENCRYPT_BUFFER(140),
     SETUP_CHUNK_WRITE(150),
     CONNECT_COMPLETE(151),
     HANDLE_STORAGE_SERVER_ERROR(160),
