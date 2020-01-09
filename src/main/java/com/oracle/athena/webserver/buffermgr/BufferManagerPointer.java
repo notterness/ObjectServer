@@ -5,8 +5,10 @@ import com.oracle.athena.webserver.operations.OperationTypeEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.LinkedList;
-import java.util.ListIterator;
+import java.util.Iterator;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntBinaryOperator;
 
 /*
 ** The BufferManagerPointer is used to allow multiple Producers (Operations that produce data) and multiple
@@ -18,6 +20,11 @@ import java.util.ListIterator;
 ** A good example of a Producer/Consumer dependency is the NIO code which reads data off the wire and places
 **   it into a ByteBuffer (that is the Producer) and the HTTP Parser (the Consumer) which uses the data in
 **   in the ByteBuffer to parse out the URI and the HTTP headers.
+*
+** The BufferManagerPointer uses an AtomicInteger for its current location (bufferIndex) in the ring buffer. In
+**   actuality, this is a performance issue as the access to the AtomicInteger is slower than accessing an
+**   int. But, by having an AtomicInteger this allows the BufferManager to be used from different threads to
+**   access the same ring buffer.
  */
 public class BufferManagerPointer {
 
@@ -29,10 +36,16 @@ public class BufferManagerPointer {
     private final int identifier;
 
     /*
-    ** Buffer index is either the readIndex for consumers or the
-    **   writeIndex for producers
+    ** Buffer index is either the readIndex for consumers or the writeIndex for producers.
      */
-    private int bufferIndex;
+    private AtomicInteger bufferIndex;
+
+    /*
+    ** The computeNextIndex is used in the computing of the bufferIndex and handling the wrap condition
+    **   in the ring buffer. This is used in the AtomicInteger.accumulateAndGet() and
+    **   AtomicInteger.getAndAccumulate() methods.
+     */
+    private IntBinaryOperator computeNextIndex = (curr, maxSize) -> (((curr + 1) == maxSize) ? 0 : (curr + 1));
 
     private int bookmark;
 
@@ -49,8 +62,8 @@ public class BufferManagerPointer {
     **   BufferManagerPointer(s)
      */
     BufferManagerPointer ptrThisDependsOn;
-    LinkedList<BufferManagerPointer> dependentPointers;
-    LinkedList<Operation> ptrWhoDependOnThisList;
+    LinkedBlockingQueue<BufferManagerPointer> dependentPointers;
+    LinkedBlockingQueue<Operation> ptrWhoDependOnThisList;
 
     /*
     ** The following constructor is used by Producers.
@@ -64,12 +77,12 @@ public class BufferManagerPointer {
         this.bufferArraySize = bufferArraySize;
         this.identifier = identifier;
 
-        dependentPointers = new LinkedList<>();
-        ptrWhoDependOnThisList = new LinkedList<>();
+        dependentPointers = new LinkedBlockingQueue<>();
+        ptrWhoDependOnThisList = new LinkedBlockingQueue<>();
 
         this.bookmark = -1;
         this.ptrThisDependsOn = null;
-        this.bufferIndex = 0;
+        this.bufferIndex = new AtomicInteger(0);
 
         this.maxBytesToConsume = -1;
         this.bytesConsumed = 0;
@@ -90,8 +103,8 @@ public class BufferManagerPointer {
 
         this.operation = operation;
         this.bufferArraySize = bufferArraySize;
-        dependentPointers = new LinkedList<>();
-        this.ptrWhoDependOnThisList = new LinkedList<>();
+        dependentPointers = new LinkedBlockingQueue<>();
+        this.ptrWhoDependOnThisList = new LinkedBlockingQueue<>();
         this.identifier = identifier;
 
         this.bookmark = -1;
@@ -117,15 +130,15 @@ public class BufferManagerPointer {
 
         int dependsOnBookmark = this.ptrThisDependsOn.getBookmark();
         if (dependsOnBookmark == -1) {
-            this.bufferIndex = this.ptrThisDependsOn.getCurrIndex();
+            this.bufferIndex = new AtomicInteger(this.ptrThisDependsOn.getCurrIndex());
         } else {
-            this.bufferIndex = dependsOnBookmark;
+            this.bufferIndex = new AtomicInteger(dependsOnBookmark);
 
             /*
              ** Since this registration has a dependency, check if the event() for the operation should be
              **   called.
              */
-            if (this.bufferIndex != this.ptrThisDependsOn.getCurrIndex()) {
+            if ((dependsOnBookmark != this.ptrThisDependsOn.getCurrIndex()) && (operation != null)) {
                 operation.event();
             }
         }
@@ -175,7 +188,7 @@ public class BufferManagerPointer {
     **   the producers writeIndex, there is no valid data available.
      */
     public int getCurrIndex() {
-        return bufferIndex;
+        return bufferIndex.get();
     }
 
     /*
@@ -184,11 +197,12 @@ public class BufferManagerPointer {
      */
     int getBookmark() {
         if (bookmark == -1) {
-            LOG.error("Producer("  + identifier + ":" + getOperationType() + ") getBookmark: -1, will use: " + bufferIndex);
+            LOG.error("Producer("  + identifier + ":" + getOperationType() + ") getBookmark: -1, will use: " +
+                    bufferIndex.get());
 
         } else {
             LOG.error("Producer("  + identifier + ":" + getOperationType() + ") getBookmark: " + bookmark +
-                    " bufferIndex: " + bufferIndex);
+                    " bufferIndex: " + bufferIndex.get());
         }
 
         return bookmark;
@@ -209,15 +223,16 @@ public class BufferManagerPointer {
     **   reading (or using) that encrypted data at the beginning of the chunk.
      */
     void setBookmark() {
+        int currIndex = bufferIndex.get();
         if (ptrThisDependsOn != null) {
-            LOG.error("Consumer(" + identifier + ":" + getOperationType() + ") setBookmark: " + bufferIndex + " on Producer(" +
+            LOG.error("Consumer(" + identifier + ":" + getOperationType() + ") setBookmark: " + currIndex + " on Producer(" +
                     ptrThisDependsOn.getIdentifier() + ":" + ptrThisDependsOn.getOperationType() + ")");
 
-            ptrThisDependsOn.setBookmark(bufferIndex);
+            ptrThisDependsOn.setBookmark(currIndex);
         } else {
-            LOG.error("Producer(" + identifier + ":" + getOperationType() + ") setBookmark(1): " + bufferIndex);
+            LOG.error("Producer(" + identifier + ":" + getOperationType() + ") setBookmark(1): " + currIndex);
 
-            bookmark = bufferIndex;
+            bookmark = currIndex;
         }
     }
 
@@ -235,15 +250,12 @@ public class BufferManagerPointer {
     **   there are no buffers available.
      */
     int getReadIndex(final boolean updatePointer) {
+        int readIndex = bufferIndex.get();
         if (ptrThisDependsOn != null) {
-            if (bufferIndex != ptrThisDependsOn.getCurrIndex()) {
-                int readIndex = bufferIndex;
+            if (readIndex != ptrThisDependsOn.getCurrIndex()) {
 
                 if (updatePointer) {
-                    bufferIndex++;
-                    if (bufferIndex == bufferArraySize) {
-                        bufferIndex = 0;
-                    }
+                    bufferIndex.accumulateAndGet(bufferArraySize, computeNextIndex);
                 }
 
                 return readIndex;
@@ -263,23 +275,20 @@ public class BufferManagerPointer {
             ** This is the case for the producer accessing the buffer. It must check that it is not catching up to
             **   to the consumers who are dependent upon it.
              */
-            int nextIndex = bufferIndex + 1;
-            if (nextIndex == bufferArraySize) {
-                nextIndex = 0;
+            readIndex++;
+            if (readIndex == bufferArraySize) {
+                readIndex = 0;
             }
 
             /*
             ** Now check that this will not run into any dependent pointers
              */
-            ListIterator<BufferManagerPointer> iter = dependentPointers.listIterator(0);
-
-            while (iter.hasNext()) {
-                BufferManagerPointer consumer = iter.next();
-                if (consumer.getCurrIndex() == nextIndex) {
+            for (BufferManagerPointer consumer : dependentPointers) {
+                if (consumer.getCurrIndex() == readIndex) {
                     /*
-                    ** This is the wrap condition, cannot proceed
+                     ** This is the wrap condition, cannot proceed
                      */
-                    LOG.warn("Producer("  + identifier + ":" + getOperationType() + ") wrapCondition nextIndex: " + nextIndex +
+                    LOG.warn("Producer(" + identifier + ":" + getOperationType() + ") wrapCondition nextIndex: " + readIndex +
                             " Consumer(" + consumer.getIdentifier() + ":" + consumer.getOperationType() + ") readIndex: " +
                             consumer.getCurrIndex());
                     return -1;
@@ -289,8 +298,7 @@ public class BufferManagerPointer {
             /*
             ** Advance the pointer for the next read since it has not wrapped
              */
-            int returnIndex = bufferIndex;
-            bufferIndex = nextIndex;
+            int returnIndex = bufferIndex.getAndAccumulate(bufferArraySize, computeNextIndex);
 
             //LOG.info("Consumer("  + identifier + ":" + getOperationType() + ") readIndex: " + returnIndex);
             return returnIndex;
@@ -305,17 +313,16 @@ public class BufferManagerPointer {
     **   if the buffer is actually to be made available to the writer.
      */
     int getWriteIndex() {
-        return bufferIndex;
+        return bufferIndex.get();
     }
 
     /*
     ** This is used to reset a BufferManagerPointer back to its initial state.
      */
     int reset() {
-        int tempIndex = bufferIndex;
+        int tempIndex = bufferIndex.getAndSet(0);
 
         LOG.info("reset() Producer("  + identifier + ":" + getOperationType() + ") bufferIndex: " + bufferIndex);
-        bufferIndex = 0;
         bookmark = -1;
 
         return tempIndex;
@@ -332,14 +339,12 @@ public class BufferManagerPointer {
 
         generateDependsOnEvents();
 
-        bufferIndex++;
-        if (bufferIndex == bufferArraySize) {
-            bufferIndex = 0;
-        }
+        int newIndex = bufferIndex.accumulateAndGet(bufferArraySize, computeNextIndex);
 
-        //LOG.info("Producer("  + identifier + ":" + getOperationType() + ") writeIndex: " + bufferIndex);
 
-        return bufferIndex;
+        //LOG.info("Producer("  + identifier + ":" + getOperationType() + ") writeIndex: " + newIndex);
+
+        return newIndex;
     }
 
     /*
@@ -347,12 +352,7 @@ public class BufferManagerPointer {
      */
     int updateReadIndex() {
 
-        bufferIndex++;
-        if (bufferIndex == bufferArraySize) {
-            bufferIndex = 0;
-        }
-
-        return bufferIndex;
+        return bufferIndex.accumulateAndGet(bufferArraySize, computeNextIndex);
     }
 
     /*
@@ -383,10 +383,9 @@ public class BufferManagerPointer {
     **   who are consumers of the data generated by the Producer who owns this BufferManagerPointer.
      */
     void generateDependsOnEvents() {
-        ListIterator<Operation> iter = ptrWhoDependOnThisList.listIterator(0);
 
-        while (iter.hasNext()) {
-            iter.next().event();
+        for (Operation value : ptrWhoDependOnThisList) {
+            value.event();
         }
     }
 
@@ -415,7 +414,7 @@ public class BufferManagerPointer {
         /*
         ** This must not have any dependencies when this is being terminated
          */
-        ListIterator<Operation> iter = ptrWhoDependOnThisList.listIterator(0);
+        Iterator<Operation> iter = ptrWhoDependOnThisList.iterator();
         while (iter.hasNext()) {
             LOG.info("  Producer(" + identifier + ":" + getOperationType() + ") operation: " +  iter.next().getOperationType());
             iter.remove();

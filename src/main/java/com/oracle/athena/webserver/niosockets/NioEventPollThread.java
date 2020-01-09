@@ -3,6 +3,7 @@ package com.oracle.athena.webserver.niosockets;
 import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.operations.Operation;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.athena.webserver.threadpools.ComputeThreadPool;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +19,9 @@ public class NioEventPollThread implements Runnable, EventPollThread {
     private static final int ALLOCATED_NIO_SOCKET = 10;
 
     private final WebServerFlavor webServerFlavor;
+
+    private final NioEventPollBalancer threadPoolOwner;
+
     private final int eventPollThreadBaseId;
     private final MemoryManager memoryManager;
 
@@ -37,9 +41,10 @@ public class NioEventPollThread implements Runnable, EventPollThread {
     private final AtomicInteger uniqueRequestId;
 
 
-    public NioEventPollThread(final WebServerFlavor flavor, final int threadBaseId, final MemoryManager memoryManger) {
+    public NioEventPollThread(final WebServerFlavor flavor, final NioEventPollBalancer poolOwner, final int threadBaseId, final MemoryManager memoryManger) {
 
         this.webServerFlavor = flavor;
+        this.threadPoolOwner = poolOwner;
         this.eventPollThreadBaseId = threadBaseId;
         this.memoryManager = memoryManger;
 
@@ -205,6 +210,20 @@ public class NioEventPollThread implements Runnable, EventPollThread {
         LOG.info("eventThread[" + eventPollThreadBaseId + "] exit");
 
         nioSelectHandler.releaseSelector();
+    }
+
+    /*
+     ** This adds work to the Compute Thread Pool to be picked up by a free compute thread. It currently goes through
+     **   the NioEventPollBalancer to have access to the ComputeThreadPool (which is instantiated in the
+     **   NioEventPollBalancer object).
+     */
+    public boolean runComputeWork(final Operation computeOperation) {
+        if (threadPoolOwner != null) {
+            threadPoolOwner.runComputeWork(computeOperation);
+            return true;
+        }
+
+        return false;
     }
 
 }

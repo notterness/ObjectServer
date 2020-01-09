@@ -619,6 +619,15 @@ public class RequestContext {
     }
 
     /*
+    **
+     */
+    public void runComputeWork(final Operation operation) {
+        if (!threadThisContextRunsOn.runComputeWork(operation)) {
+            addToWorkQueue(operation);
+        }
+    }
+
+    /*
     ** This is a test function to validate a certain Operation is on the execute queue.
     **
     ** NOTE: This uses iterator() so that the contents of the workQueue or not modified.

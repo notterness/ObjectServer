@@ -45,13 +45,17 @@ class ComputeThread implements Runnable {
         } catch (InterruptedException int_ex) {
             System.out.println("ComputeThread[] failed: " + int_ex.getMessage());
         }
+
+        computeThread = null;
     }
 
     public void run() {
         LOG.info("ComputeThread[" + threadId + "] started");
 
         while (running) {
-            running = poolOwner.executeComputeWork();
+            if (!poolOwner.executeComputeWork()) {
+                break;
+            }
         }
 
         LOG.info("ComputeThread[" + threadId + "] finished");

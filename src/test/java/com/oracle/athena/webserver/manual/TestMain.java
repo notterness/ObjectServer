@@ -5,6 +5,7 @@ import com.oracle.athena.webserver.niosockets.NioServerHandler;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntBinaryOperator;
 
 // Server class
 public class TestMain {

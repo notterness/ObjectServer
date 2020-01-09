@@ -2,6 +2,8 @@ package com.oracle.athena.webserver.niosockets;
 
 
 import com.oracle.athena.webserver.memory.MemoryManager;
+import com.oracle.athena.webserver.operations.Operation;
+import com.oracle.athena.webserver.threadpools.ComputeThreadPool;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +17,8 @@ public class NioEventPollBalancer {
 
     private static final Logger LOG = LoggerFactory.getLogger(NioEventPollBalancer.class);
 
+    private static final int COMPUTE_THREAD_ID_OFFSET = 100;
+
     private final int numberPollThreads;
     private final int eventPollThreadBaseId;
 
@@ -22,6 +26,11 @@ public class NioEventPollBalancer {
     private MemoryManager memoryManager;
 
     private NioEventPollThread[] eventPollThreadPool;
+
+    /*
+    ** The following is a set of threads setup to perform compute work
+     */
+    private ComputeThreadPool computeThreads;
 
     private int currNioEventThread;
 
@@ -44,12 +53,15 @@ public class NioEventPollBalancer {
         currNioEventThread = 0;
 
         for (int i = 0; i < numberPollThreads; i++) {
-            NioEventPollThread pollThread = new NioEventPollThread(webServerFlavor, eventPollThreadBaseId + i, memoryManager);
+            NioEventPollThread pollThread = new NioEventPollThread(webServerFlavor, this,
+                    eventPollThreadBaseId + i, memoryManager);
 
             pollThread.start();
             eventPollThreadPool[i] = pollThread;
         }
 
+        computeThreads = new ComputeThreadPool(1, eventPollThreadBaseId + COMPUTE_THREAD_ID_OFFSET);
+        computeThreads.start();
     }
 
     /*
@@ -57,6 +69,9 @@ public class NioEventPollBalancer {
      **   resources.
      */
     public void stop() {
+
+        computeThreads.stop();
+        computeThreads = null;
 
         for (int i = 0; i < numberPollThreads; i++) {
             NioEventPollThread pollThread = eventPollThreadPool[i];
@@ -97,4 +112,12 @@ public class NioEventPollBalancer {
 
         return eventThread;
     }
+
+    /*
+    ** This adds work to the Compute Thread Pool to be picked up by a free compute thread.
+     */
+    void runComputeWork(final Operation computeOperation) {
+        computeThreads.addComputeWorkToThread(computeOperation);
+    }
+
 }
