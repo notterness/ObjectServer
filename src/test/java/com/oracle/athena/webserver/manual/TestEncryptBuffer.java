@@ -24,7 +24,7 @@ public class TestEncryptBuffer {
 
     TestEncryptBuffer() {
         this.memoryManager = new MemoryManager(WebServerFlavor.INTEGRATION_TESTS);
-        this.nioEventThread = new NioEventPollThread(webServerFlavor,0x1001, memoryManager);
+        this.nioEventThread = new NioEventPollThread(webServerFlavor, null,0x1001, memoryManager);
         this.nioEventThread.start();
 
         this.requestContext = new RequestContext(webServerFlavor, memoryManager, nioEventThread);

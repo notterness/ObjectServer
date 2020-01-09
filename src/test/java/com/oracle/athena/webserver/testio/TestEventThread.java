@@ -125,4 +125,5 @@ public class TestEventThread implements EventPollThread {
         return true;
     }
 
+    public boolean runComputeWork(final Operation computeOperation) { return false; }
 }

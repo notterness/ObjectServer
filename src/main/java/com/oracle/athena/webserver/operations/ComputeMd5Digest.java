@@ -103,7 +103,8 @@ public class ComputeMd5Digest implements Operation {
         /*
          ** Add this to the execute queue if it is not already on it.
          */
-        requestContext.addToWorkQueue(this);
+        //requestContext.addToWorkQueue(this);
+        requestContext.runComputeWork(this);
     }
 
     /*

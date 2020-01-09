@@ -32,4 +32,5 @@ public interface EventPollThread {
 
     boolean registerClientSocket(final SocketChannel clientChannel);
 
+    boolean runComputeWork(final Operation computeOperation);
 }

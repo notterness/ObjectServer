@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
-abstract class ComputeThreadPool {
+public class ComputeThreadPool {
 
     private static final Logger LOG = LoggerFactory.getLogger(ComputeThreadPool.class);
 
@@ -31,36 +31,39 @@ abstract class ComputeThreadPool {
     private boolean workQueued;
 
 
-    ComputeThreadPool(final int threadCount, final int baseThreadId){
+    public ComputeThreadPool(final int threadCount, final int baseThreadId){
         this.threadCount = threadCount;
         this.baseThreadId = baseThreadId;
         this.computeThreads = new ComputeThread[this.threadCount];
 
         workQueue = new LinkedBlockingQueue<>(COMPUTE_MAX_QUEUE_SIZE);
 
-        LOG.error("ComputeThreadPool[" + this.baseThreadId + "] threadCount: " + this.threadCount);
+        LOG.info("ComputeThreadPool[" + this.baseThreadId + "] threadCount: " + this.threadCount);
 
         queueMutex = new ReentrantLock();
         queueSignal = queueMutex.newCondition();
         workQueued = false;
     }
 
-    void start () {
+    public void start () {
+        LOG.info("ComputeThreadPool[" + this.baseThreadId + "] start() threadCount: " + this.threadCount);
         for (int i = 0; i < threadCount; i++) {
             computeThreads[i] = new ComputeThread(this, baseThreadId + i);
             computeThreads[i].start();
         }
-    };
+    }
 
-    void stop () {
+    public void stop () {
+        LOG.info("ComputeThreadPool[" + this.baseThreadId + "] stop()");
         for (int i = 0; i < threadCount; i++) {
             computeThreads[i].stop();
+            computeThreads[i] = null;
         }
     }
 
     /*
      */
-    void addComputeWorkToThread(final Operation computeOperation) {
+    public void addComputeWorkToThread(final Operation computeOperation) {
 
         queueMutex.lock();
         try {
@@ -78,9 +81,9 @@ abstract class ComputeThreadPool {
                     LOG.error("requestId[] addToWorkQueue() unable to add");
                 } else {
                     computeOperation.markAddedToQueue(false);
-                    queueSignal.signal();
 
                     workQueued = true;
+                    queueSignal.signal();
                 }
             }
         } finally {
