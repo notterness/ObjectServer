@@ -812,6 +812,9 @@ public class RequestContext {
         return digestComplete;
     }
 
+    /*
+    ** Acccessor methods to keep track of when all the data has been written to the Storage Server(s)
+     */
     public void setAllV2PutDataWritten() {
         v2PutAllDataWritten = true;
     }

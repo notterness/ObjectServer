@@ -17,6 +17,12 @@ public interface Operation {
     OperationTypeEnum getOperationType();
 
     /*
+    ** An accessor method to get at the Request Id that is kept in the RequestContext, but not
+    **   accessible from the Compute and Blocking thread pools
+     */
+    int getRequestId();
+
+    /*
     ** This returns the BufferManagerPointer obtained by this operation, if there is one. If this operation
     **   does not use a BufferManagerPointer, it will return null.
      */

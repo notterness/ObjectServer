@@ -72,6 +72,8 @@ public class BufferReadMetering implements Operation {
         return operationType;
     }
 
+    public int getRequestId() { return requestContext.getRequestId(); }
+
     public BufferManagerPointer initialize() {
         /*
          ** Obtain the pointer used to meter out buffers to the read operation
