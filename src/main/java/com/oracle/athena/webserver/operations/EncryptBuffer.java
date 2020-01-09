@@ -240,6 +240,8 @@ public class EncryptBuffer implements Operation {
                 int result = requestContext.getStorageResponseResult(chunkId);
                 LOG.info("ChunkWriteComplete result: " + result);
 
+                requestContext.setAllV2PutDataWritten();
+
                 complete();
             } else {
                 LOG.warn("ChunkWriteComplete waiting for result");

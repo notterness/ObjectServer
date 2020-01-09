@@ -8,10 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 
 public class SetupV2Put implements Operation {
 
@@ -111,6 +108,19 @@ public class SetupV2Put implements Operation {
             encryptBuffer.initialize();
 
             /*
+            ** The ComputeMd5Digest needs to be completed before the SendFinalStatus operation can be woken up
+            **   to perform its work.
+            **   The SendFinalStatus is dependent upon all the data being written and the Md5 Digest
+            **   having completed.
+             */
+            List<Operation> callbackList = new LinkedList<>();
+            callbackList.add(this);
+
+            ComputeMd5Digest computeMd5Digest = new ComputeMd5Digest(requestContext, callbackList, readBufferPointer);
+            v2PutHandlerOperations.put(computeMd5Digest.getOperationType(), computeMd5Digest);
+            computeMd5Digest.initialize();
+
+            /*
              ** Dole out another buffer to read in the content data if there is not data remaining in
              **   the buffer from the HTTP Parsing.
              */
@@ -132,12 +142,21 @@ public class SetupV2Put implements Operation {
         }
     }
 
+    /*
+    ** This is called from both the EncryptBuffer and ComputeMd5Digest operations when they have completed their
+    **   work.
+     */
     public void complete() {
-        completeCallback.event();
+        if (requestContext.getDigestComplete() && requestContext.getAllV2PutDataWritten()) {
+            completeCallback.event();
 
-        v2PutHandlerOperations.clear();
+            v2PutHandlerOperations.clear();
 
-        LOG.info("SetupV2Put[" + requestContext.getRequestId() + "] completed");
+            LOG.info("SetupV2Put[" + requestContext.getRequestId() + "] completed");
+        } else {
+            LOG.info("SetupV2Put[" + requestContext.getRequestId() + "] not completed digestComplete: " +
+                    requestContext.getDigestComplete() + " all data written: " + requestContext.getAllV2PutDataWritten());
+        }
     }
 
     /*
