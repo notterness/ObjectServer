@@ -40,6 +40,8 @@ public class HandleStorageServerError implements Operation {
         return operationType;
     }
 
+    public int getRequestId() { return requestContext.getRequestId(); }
+
     /*
      ** This returns the BufferManagerPointer obtained by this operation, if there is one. If this operation
      **   does not use a BufferManagerPointer, it will return null.
@@ -84,8 +86,6 @@ public class HandleStorageServerError implements Operation {
      **   isOnTimedWaitQueue - Accessor method
      **   hasWaitTimeElapsed - Is this Operation ready to run again to check some timeout condition
      **
-     ** TODO: Might want to switch to using an enum instead of two different booleans to keep track
-     **   of which queue the connection is on. It will probably clean up the code some.
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
         //LOG.info("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");

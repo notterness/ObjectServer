@@ -47,6 +47,8 @@ public class HandleClientError implements Operation {
         return null;
     }
 
+    public int getRequestId() { return requestContext.getRequestId(); }
+
     public void event() {
 
         /*
@@ -83,8 +85,6 @@ public class HandleClientError implements Operation {
      **   isOnTimedWaitQueue - Accessor method
      **   hasWaitTimeElapsed - Is this Operation ready to run again to check some timeout condition
      **
-     ** TODO: Might want to switch to using an enum instead of two different booleans to keep track
-     **   of which queue the connection is on. It will probably clean up the code some.
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
         //LOG.info("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");

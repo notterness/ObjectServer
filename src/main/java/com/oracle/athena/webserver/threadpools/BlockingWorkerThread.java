@@ -1,5 +1,6 @@
-package com.oracle.athena.webserver.server;
+package com.oracle.athena.webserver.threadpools;
 
+import com.oracle.athena.webserver.operations.Operation;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,10 +21,10 @@ class BlockingWorkerThread implements Runnable {
     private volatile boolean running;
     private Thread blockingThread;
 
-    private final BlockingQueue<RequestContext> blockingWorkQ;
+    private final BlockingQueue<Operation> blockingWorkQ;
 
 
-    BlockingWorkerThread(final BlockingQueue<RequestContext> workQueue, final int blockingThreadId) {
+    BlockingWorkerThread(final BlockingQueue<Operation> workQueue, final int blockingThreadId) {
 
         this.blockingWorkQ = workQueue;
         this.blockingThreadId = blockingThreadId;
@@ -46,26 +47,28 @@ class BlockingWorkerThread implements Runnable {
     }
 
     /*
-     ** This is the method that does the actual work for this thread. It handles multiple
-     **   connections at once. The expectation is that the pipelines that are using this thread
-     **   are running operations that are blocking.
+     ** This is the method that does the actual work for this thread.
+     **   The expectation is that the Operations that are using this thread are running operations that are blocking.
+     **   By blocking, it means they are accessing resources that are off box and may take significant time
+     **   to respond.
      */
     public void run() {
 
         LOG.info("BlockingWorkerThread[" + blockingThreadId + "] start " + Thread.currentThread().getName());
 
         while (running) {
-            RequestContext work;
+            Operation blockingOperation;
 
             try {
-                work = blockingWorkQ.poll(100, TimeUnit.MILLISECONDS);
+                blockingOperation = blockingWorkQ.poll(100, TimeUnit.MILLISECONDS);
             } catch (InterruptedException int_ex) {
                 LOG.warn("BlockingWorkerThread[" + blockingThreadId + "] " + int_ex.getMessage());
-                work = null;
+                blockingOperation = null;
                 running = false;
             }
 
-            if (work != null) {
+            if (blockingOperation != null) {
+                blockingOperation.execute();
             }
         }
 

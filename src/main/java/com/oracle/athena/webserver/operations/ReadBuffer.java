@@ -28,13 +28,9 @@ public class ReadBuffer implements Operation {
     private BufferManagerPointer readBufferPointer;
 
     /*
-     ** The following are used to insure that an Operation is never on more than one queue and that
-     **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
-     **   execution queue (onExecutionQueue) is will always go on the execution queue.
+     ** The following are used to insure that an Operation is never on a queue more than once
      */
-    private boolean onDelayedQueue;
     private boolean onExecutionQueue;
-    private long nextExecuteTime;
 
     public ReadBuffer(final RequestContext requestContext, final BufferManagerPointer meterBufferPtr,
                       final IoInterface connection) {
@@ -47,14 +43,14 @@ public class ReadBuffer implements Operation {
         /*
          ** This starts out not being on any queue
          */
-        onDelayedQueue = false;
         onExecutionQueue = false;
-        nextExecuteTime = 0;
     }
 
     public OperationTypeEnum getOperationType() {
         return operationType;
     }
+
+    public int getRequestId() { return requestContext.getRequestId(); }
 
     /*
      ** This returns the BufferManagerPointer obtained by this operation, if there is one. If this operation
@@ -117,23 +113,12 @@ public class ReadBuffer implements Operation {
      **   isOnTimedWaitQueue - Accessor method
      **   hasWaitTimeElapsed - Is this Operation ready to run again to check some timeout condition
      **
-     ** TODO: Might want to switch to using an enum instead of two different booleans to keep track
-     **   of which queue the connection is on. It will probably clean up the code some.
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
         //LOG.info("ReadBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
-        if (onDelayedQueue) {
-            if (!delayedExecutionQueue) {
-                LOG.warn("ReadBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
-            }
-
-            onDelayedQueue = false;
-            nextExecuteTime = 0;
+        if (delayedExecutionQueue) {
+            LOG.warn("ReadBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
         } else if (onExecutionQueue){
-            if (delayedExecutionQueue) {
-                LOG.warn("ReadBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
-            }
-
             onExecutionQueue = false;
         } else {
             LOG.warn("ReadBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
@@ -142,8 +127,7 @@ public class ReadBuffer implements Operation {
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            nextExecuteTime = System.currentTimeMillis() + TIME_TILL_NEXT_TIMEOUT_CHECK;
-            onDelayedQueue = true;
+            LOG.warn("ReadBuffer[" + requestContext.getRequestId() + "] markAddToQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -154,17 +138,11 @@ public class ReadBuffer implements Operation {
     }
 
     public boolean isOnTimedWaitQueue() {
-        return onDelayedQueue;
+        return false;
     }
 
     public boolean hasWaitTimeElapsed() {
-        long currTime = System.currentTimeMillis();
-
-        if (currTime < nextExecuteTime) {
-            return false;
-        }
-
-        //LOG.info("ReadBuffer[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
+        LOG.warn("ReadBuffer[" + requestContext.getRequestId() + "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
 

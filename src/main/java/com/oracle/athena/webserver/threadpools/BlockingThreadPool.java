@@ -1,6 +1,6 @@
-package com.oracle.athena.webserver.server;
+package com.oracle.athena.webserver.threadpools;
 
-import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.athena.webserver.operations.Operation;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,9 +12,9 @@ import java.util.concurrent.LinkedBlockingQueue;
 ** This thread pool is used for pipelines that have operations that access off box resources and
 **   potentially would block the primary worker thread that is handling a connection.
  */
-public class BlockingPipelineThreadPool {
+public class BlockingThreadPool {
 
-    private static final Logger LOG = LoggerFactory.getLogger(BlockingPipelineThreadPool.class);
+    private static final Logger LOG = LoggerFactory.getLogger(BlockingThreadPool.class);
 
     private final static int MAX_BLOCKING_WORKER_THREADS = 100;
 
@@ -24,10 +24,10 @@ public class BlockingPipelineThreadPool {
     protected final int blockingThreadBaseId;
 
     protected final BlockingWorkerThread[] threadPool;
-    protected final BlockingQueue<RequestContext> blockingWorkQueue;
+    protected final BlockingQueue<Operation> blockingWorkQueue;
 
 
-    BlockingPipelineThreadPool(final WebServerFlavor flavor, final int queueSize, final int numWorkerThreads, final int blockingThreadBaseId) {
+    BlockingThreadPool(final WebServerFlavor flavor, final int queueSize, final int numWorkerThreads, final int blockingThreadBaseId) {
         this.flavor = flavor;
         this.workQueueSize = queueSize;
         this.blockingThreadBaseId = blockingThreadBaseId;
@@ -71,14 +71,13 @@ public class BlockingPipelineThreadPool {
 
     /*
     ** There is a single work queue for all of the BlockingWorkerThread(s). Any thread can pull work off and
-    **   perform work on the ConnectionState.
+    **   run the execute() method for the Operation. This is done rather than trying to make a decision based
+    **   on the amount of work a thread may have queued up.
      */
-    public void addBlockingWorkToThread(RequestContext requestContext) {
+    public void addBlockingWorkToThread(final Operation blockingOperation) {
 
-        if (!blockingWorkQueue.offer(requestContext)) {
-            LOG.error("Unable to offer() [" + requestContext.getRequestId() + "]");
-        } else {
-            LOG.info("addComputeWorkToThread() [" + requestContext.getRequestId() + "]");
+        if (!blockingWorkQueue.offer(blockingOperation)) {
+            LOG.error("Unable to offer() []");
         }
     }
 

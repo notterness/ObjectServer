@@ -28,9 +28,7 @@ public class CloseOutRequest implements Operation {
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
      **   execution queue (onExecutionQueue) is will always go on the execution queue.
      */
-    private boolean onDelayedQueue;
     private boolean onExecutionQueue;
-    private long nextExecuteTime;
 
     private BufferManagerPointer writeStatusPtr;
 
@@ -41,14 +39,14 @@ public class CloseOutRequest implements Operation {
         /*
         ** This starts out not being on any queue
          */
-        onDelayedQueue = false;
         onExecutionQueue = false;
-        nextExecuteTime = 0;
     }
 
     public OperationTypeEnum getOperationType() {
         return operationType;
     }
+
+    public int getRequestId() { return requestContext.getRequestId(); }
 
     /*
      ** This returns the BufferManagerPointer obtained by this operation, if there is one. If this operation
@@ -98,33 +96,24 @@ public class CloseOutRequest implements Operation {
      **   isOnTimedWaitQueue - Accessor method
      **   hasWaitTimeElapsed - Is this Operation ready to run again to check some timeout condition
      **
-     ** TODO: Might want to switch to using an enum instead of two different booleans to keep track
-     **   of which queue the connection is on. It will probably clean up the code some.
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
         //LOG.info("CloseOutRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
-        if (onDelayedQueue) {
-            if (!delayedExecutionQueue) {
-                LOG.warn("CloseOutRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
-            }
-
-            onDelayedQueue = false;
-            nextExecuteTime = 0;
+        if (delayedExecutionQueue) {
+            LOG.warn("CloseOutRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
+                    delayedExecutionQueue + ") not supposed to be on delayed queue");
         } else if (onExecutionQueue){
-            if (delayedExecutionQueue) {
-                LOG.warn("CloseOutRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
-            }
-
             onExecutionQueue = false;
         } else {
-            LOG.warn("CloseOutRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
+            LOG.warn("CloseOutRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
+                    delayedExecutionQueue + ") not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            nextExecuteTime = System.currentTimeMillis() + TIME_TILL_NEXT_TIMEOUT_CHECK;
-            onDelayedQueue = true;
+            LOG.warn("CloseOutRequest[" + requestContext.getRequestId() + "] markAddToQueue(" +
+                    delayedExecutionQueue + ") not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -135,17 +124,12 @@ public class CloseOutRequest implements Operation {
     }
 
     public boolean isOnTimedWaitQueue() {
-        return onDelayedQueue;
+        return false;
     }
 
     public boolean hasWaitTimeElapsed() {
-        long currTime = System.currentTimeMillis();
-
-        if (currTime < nextExecuteTime) {
-            return false;
-        }
-
-        //LOG.info("CloseOutRequest[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
+        LOG.warn("CloseOutRequest[" + requestContext.getRequestId() +
+                "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
 

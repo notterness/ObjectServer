@@ -1,30 +1,31 @@
-package com.oracle.athena.webserver.client;
+package com.oracle.athena.webserver.operations;
 
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
-import com.oracle.athena.webserver.manual.TestChunkWrite;
-import com.oracle.athena.webserver.operations.Operation;
-import com.oracle.athena.webserver.operations.OperationTypeEnum;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
-import com.oracle.athena.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ChunkWriteTestComplete implements Operation {
-    private static final Logger LOG = LoggerFactory.getLogger(ChunkWriteTestComplete.class);
+import java.util.Iterator;
+import java.util.List;
+
+public class VonPicker implements Operation {
+
+    private static final Logger LOG = LoggerFactory.getLogger(VonPicker.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CHUNK_WRITE_TEST_COMPLETE;
+    public final OperationTypeEnum operationType = OperationTypeEnum.VON_PICKER;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
     private final RequestContext requestContext;
 
-    private final ServerIdentifier serverIdentifier;
-
-    private final TestChunkWrite testWriteChunk;
+    /*
+     ** The following is the operation to run (if any) when the VON Pick has completed.
+     */
+    private List<Operation> operationsToRun;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -33,13 +34,10 @@ public class ChunkWriteTestComplete implements Operation {
      */
     private boolean onExecutionQueue;
 
-
-    public ChunkWriteTestComplete(final RequestContext requestContext, final ServerIdentifier serverIdentifier,
-                                  final TestChunkWrite testWriteChunk) {
+    public VonPicker(final RequestContext requestContext, final List<Operation> operationsToRun) {
 
         this.requestContext = requestContext;
-        this.serverIdentifier = serverIdentifier;
-        this.testWriteChunk = testWriteChunk;
+        this.operationsToRun = operationsToRun;
 
         /*
          ** This starts out not being on any queue
@@ -72,18 +70,15 @@ public class ChunkWriteTestComplete implements Operation {
      */
     public void execute() {
         /*
-         ** Let the caller know that status has been received
+         ** event() all of the operations that are ready to run once the VON Pick has
+         **   succeeded.
          */
-        if (requestContext.hasStorageServerResponseArrived(serverIdentifier)) {
-            int result = requestContext.getStorageResponseResult(serverIdentifier);
-            LOG.info("ChunkWriteTestComplete result: " + result);
-            testWriteChunk.statusReceived(result);
-
-            /*
-             ** Clear the HTTP Response for this Storage Server
-             */
-            requestContext.removeStorageServerResponse(serverIdentifier);
+        Iterator<Operation> iter = operationsToRun.iterator();
+        while (iter.hasNext()) {
+            iter.next().event();
         }
+        operationsToRun.clear();
+
     }
 
     /*
@@ -94,9 +89,11 @@ public class ChunkWriteTestComplete implements Operation {
     }
 
     /*
-     ** The following are used to add the Operation to the event thread's event queue. The
-     **   Operation can be added to the immediate execution queue or the delayed
-     **   execution queue.
+     ** The following are used to add the Operation to the event thread's event queue. To simplify the design an
+     **   Operation can be added to the immediate execution queue or the delayed execution queue. An Operation
+     **   cannot be on the delayed queue sometimes and on the work queue other times. Basically, an Operation is
+     **   either designed to perform work as quickly as possible or wait a period of time and try again.
+     **
      **
      ** The following methods are called by the event thread under a queue mutex.
      **   markRemoveFromQueue - This method is used by the event thread to update the queue
@@ -107,24 +104,23 @@ public class ChunkWriteTestComplete implements Operation {
      **   isOnTimedWaitQueue - Accessor method
      **   hasWaitTimeElapsed - Is this Operation ready to run again to check some timeout condition
      **
+     ** TODO: Might want to switch to using an enum instead of two different booleans to keep track
+     **   of which queue the connection is on. It will probably clean up the code some.
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("ChunkWriteTestComplete[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("ChunkWriteTestComplete[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("ChunkWriteTestComplete[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not on a queue");
+            LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("ChunkWriteTestComplete[" + requestContext.getRequestId() + "] markAddToQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.error("requestId[" + requestContext.getRequestId() + "] VonPicker should never be on the timed wait queue");
         } else {
             onExecutionQueue = true;
         }
@@ -134,13 +130,18 @@ public class ChunkWriteTestComplete implements Operation {
         return onExecutionQueue;
     }
 
+    /*
+    ** VonPicker will never be on the timed wait queue
+     */
     public boolean isOnTimedWaitQueue() {
         return false;
     }
 
+    /*
+    ** hasWaitTimeElapsed() should never be called for the VonPicker as it will execute as quickly as it can
+     */
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("ChunkWriteTestComplete[" + requestContext.getRequestId() +
-                "] hasWaitTimeElapsed() not supposed to be on delayed queue");
+        LOG.error("requestId[" + requestContext.getRequestId() + "] VonPicker should never be on the timed wait queue");
         return true;
     }
 
