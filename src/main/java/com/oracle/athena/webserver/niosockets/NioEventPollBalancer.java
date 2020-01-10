@@ -120,4 +120,8 @@ public class NioEventPollBalancer {
         computeThreads.addComputeWorkToThread(computeOperation);
     }
 
+    void removeComputeWork(final Operation computeOperation) {
+        computeThreads.removeFromComputeThread(computeOperation);
+    }
+
 }

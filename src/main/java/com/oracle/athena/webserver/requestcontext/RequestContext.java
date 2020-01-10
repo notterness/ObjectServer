@@ -627,6 +627,10 @@ public class RequestContext {
         }
     }
 
+    public void removeComputeWork(final Operation operation) {
+        threadThisContextRunsOn.removeComputeWork(operation);
+    }
+
     /*
     ** This is a test function to validate a certain Operation is on the execute queue.
     **

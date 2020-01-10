@@ -450,6 +450,8 @@ public class NioSocket implements IoInterface {
     **   socket.
      */
     public void closeConnection() {
+
+        LOG.info("NioSocket closeConnection()");
         key.cancel();
         key = null;
 

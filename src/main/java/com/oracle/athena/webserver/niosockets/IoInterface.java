@@ -32,7 +32,7 @@ public interface IoInterface {
 
 
     /*
-    ** There are two BufferManager(s) and their associated BufferManagerPionter(s) used to either
+    ** There are two BufferManager(s) and their associated BufferManagerPointer(s) used to either
     **    read data into or write data out of.
      */
     void registerReadBufferManager(final BufferManager readBufferManager, final BufferManagerPointer readPtr);

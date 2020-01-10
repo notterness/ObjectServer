@@ -260,13 +260,6 @@ public class SetupChunkWrite implements Operation {
 
         LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] complete");
 
-        /*
-        ** Close out the connection used to communicate with the Storage Server. Then
-        ** clear out the reference to the connection so it may be released back to the pool.
-         */
-        storageServerConnection.closeConnection();
-        requestContext.releaseConnection(storageServerConnection);
-        storageServerConnection = null;
 
         /*
         ** The following must be called in order to make sure that the BufferManagerPointer
@@ -303,6 +296,14 @@ public class SetupChunkWrite implements Operation {
             createdOperation.complete();
         }
         requestHandlerOperations.clear();
+
+        /*
+         ** Close out the connection used to communicate with the Storage Server. Then
+         ** clear out the reference to the connection so it may be released back to the pool.
+         */
+        storageServerConnection.closeConnection();
+        requestContext.releaseConnection(storageServerConnection);
+        storageServerConnection = null;
 
         /*
         ** Return the allocated buffers that were used to send the HTTP Request and the
