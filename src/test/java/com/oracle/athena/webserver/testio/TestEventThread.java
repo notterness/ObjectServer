@@ -126,4 +126,6 @@ public class TestEventThread implements EventPollThread {
     }
 
     public boolean runComputeWork(final Operation computeOperation) { return false; }
+
+    public void removeComputeWork(final Operation computeOperation) {}
 }

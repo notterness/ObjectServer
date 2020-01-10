@@ -31,7 +31,7 @@ public class ComputeThreadPool {
     private boolean workQueued;
 
 
-    public ComputeThreadPool(final int threadCount, final int baseThreadId){
+    public ComputeThreadPool(final int threadCount, final int baseThreadId) {
         this.threadCount = threadCount;
         this.baseThreadId = baseThreadId;
         this.computeThreads = new ComputeThread[this.threadCount];
@@ -45,7 +45,7 @@ public class ComputeThreadPool {
         workQueued = false;
     }
 
-    public void start () {
+    public void start() {
         LOG.info("ComputeThreadPool[" + this.baseThreadId + "] start() threadCount: " + this.threadCount);
         for (int i = 0; i < threadCount; i++) {
             computeThreads[i] = new ComputeThread(this, baseThreadId + i);
@@ -53,7 +53,7 @@ public class ComputeThreadPool {
         }
     }
 
-    public void stop () {
+    public void stop() {
         LOG.info("ComputeThreadPool[" + this.baseThreadId + "] stop()");
         for (int i = 0; i < threadCount; i++) {
             computeThreads[i].stop();
@@ -62,6 +62,9 @@ public class ComputeThreadPool {
     }
 
     /*
+     ** This adds the Compute work to the general queue. The queue is shared by all of the compute worker threads
+     **   so that as they complete a piece of work, they can pick up what is next on the queue. This is done instead
+     **   of trying to figure out a fairness algorithm based upon work that has been assigned to a thread.
      */
     public void addComputeWorkToThread(final Operation computeOperation) {
 
@@ -73,12 +76,12 @@ public class ComputeThreadPool {
                 /*
                  ** Only log if it is not on the work queue already
                  */
-                LOG.info("requestId[] addToWorkQueue() operation(" +
+                LOG.info("requestId[] addComputeWorkToThread() operation(" +
                         computeOperation.getOperationType() + ") onExecutionQueue: " +
                         isOnWorkQueue);
 
                 if (!workQueue.offer(computeOperation)) {
-                    LOG.error("requestId[] addToWorkQueue() unable to add");
+                    LOG.error("requestId[] addComputeWorkToThreadn() unable to add");
                 } else {
                     computeOperation.markAddedToQueue(false);
 
@@ -92,7 +95,7 @@ public class ComputeThreadPool {
     }
 
     /*
-    **
+     ** This is what is called by the different compute worker threads to actually perform the work.
      */
     boolean executeComputeWork() {
         List<Operation> operationsToRun = new ArrayList<>();
@@ -131,6 +134,24 @@ public class ComputeThreadPool {
         }
 
         return true;
+    }
+
+    /*
+     ** This is to remove an item from the queue as there is a race condition where a compute operation can be working
+     **   on a something (i.e. computing the Md5 digest for a buffer) when an additional buffer arrives that can be
+     **   worked on. If the buffer that arrives is the last one for the client object, the compute operation
+     **   can complete all of its work and still be on the queue to be run.
+     ** So, the last thing a compute operation needs to do before finishing it to make sure it is not on the
+     **   execute queue.
+     */
+    public void removeFromComputeThread(final Operation computeOperation) {
+        try {
+            queueMutex.lock();
+            workQueue.remove(computeOperation);
+            computeOperation.markRemovedFromQueue(false);
+        } finally {
+            queueMutex.unlock();
+        }
     }
 
 }

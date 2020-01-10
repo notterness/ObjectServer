@@ -143,6 +143,14 @@ public class ComputeMd5Digest implements Operation {
      ** This removes any dependencies that are put upon the BufferManager
      */
     public void complete() {
+        LOG.info("ComputeMd5Digest(" + requestContext.getRequestId() + ") complete");
+
+        /*
+        ** Make sure this is not on the compute thread pool's execution queue since the
+        **   BufferManagerPointer is going to be made invalid
+         */
+        requestContext.removeComputeWork(this);
+
         clientReadBufferMgr.unregister(md5DigestPointer);
         md5DigestPointer = null;
 

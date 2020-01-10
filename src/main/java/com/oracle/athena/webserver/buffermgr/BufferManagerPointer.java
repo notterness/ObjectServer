@@ -161,7 +161,7 @@ public class BufferManagerPointer {
     }
 
     /*
-    ** Each BufferManagerPointer is given a unique ID by the owning BufferManager. This allows tracking
+    ** Each BufferManagerPointer is given a unique ID by the owning BufferManager. This allows
     **   for an easier tracking of dependencies between the pointers and their owning BufferManager.
      */
     public int getIdentifier() {

@@ -226,4 +226,9 @@ public class NioEventPollThread implements Runnable, EventPollThread {
         return false;
     }
 
+    public void removeComputeWork(final Operation computeOperation) {
+        if (threadPoolOwner != null) {
+            threadPoolOwner.removeComputeWork(computeOperation);
+        }
+    }
 }

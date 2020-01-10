@@ -1,11 +1,7 @@
 package com.oracle.athena.webserver.threadpools;
 
-import com.oracle.athena.webserver.operations.Operation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.TimeUnit;
 
 /*
 ** ComputeThread provides a base class for operations that are CPU intensive and
