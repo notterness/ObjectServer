@@ -102,7 +102,7 @@ public class SetupStorageServerPut implements Operation {
          ** For the current test Storage Server implementation, simply write the bytes to a file and when
          **   that completes, call this Operation's complete() method.
          */
-        WriteToFile writeToFile = new WriteToFile(requestContext, memoryManager, clientReadPtr, this);
+        WriteToFile writeToFile = new WriteToFile(requestContext, clientReadPtr, this);
         storageServerPutHandlerOperations.put(writeToFile.getOperationType(), writeToFile);
         writeToFile.initialize();
 

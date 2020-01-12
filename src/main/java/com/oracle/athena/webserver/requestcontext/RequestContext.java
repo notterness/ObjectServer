@@ -847,6 +847,10 @@ public class RequestContext {
         requestHandlerOperations.put(operation.getOperationType(), operation);
     }
 
+    public String getIoInterfaceIdentifier() {
+        return clientConnection.getIdentifierInfo();
+    }
+
     public void dumpOperations() {
         LOG.info(" RequestContext[" + connectionRequestId + "] Operation dependency");
         Collection<Operation> createdOperations = requestHandlerOperations.values();

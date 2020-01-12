@@ -21,7 +21,7 @@ public class SetupChunkWrite implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_CHUNK_WRITE;
+    public final OperationTypeEnum operationType;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -50,6 +50,11 @@ public class SetupChunkWrite implements Operation {
 
     private final int chunkBytesToEncrypt;
 
+    /*
+    ** An integer that identifies which of the Storage Server writers this is
+     */
+    private final int writerNumber;
+
     private BufferManager storageServerBufferManager;
     private BufferManager storageServerResponseBufferManager;
 
@@ -74,8 +79,9 @@ public class SetupChunkWrite implements Operation {
      */
     public SetupChunkWrite(final RequestContext requestContext, final ServerIdentifier serverIdentifier,
                            final MemoryManager memoryManager, final BufferManagerPointer encryptedBufferPtr,
-                           final int chunkBytesToEncrypt, final Operation completeCb) {
+                           final int chunkBytesToEncrypt, final Operation completeCb, final int writer) {
 
+        this.operationType = OperationTypeEnum.fromInt(OperationTypeEnum.SETUP_CHUNK_WRITE_0.toInt() + writer);
         this.requestContext = requestContext;
         this.serverIdentifier = serverIdentifier;
         this.memoryManager = memoryManager;
@@ -83,6 +89,8 @@ public class SetupChunkWrite implements Operation {
         this.chunkBytesToEncrypt = chunkBytesToEncrypt;
 
         this.completeCallback = completeCb;
+
+        this.writerNumber = writer;
 
         /*
          ** This starts out not being on any queue
@@ -95,6 +103,10 @@ public class SetupChunkWrite implements Operation {
         requestHandlerOperations = new HashMap<>();
 
         chunkWriteSetupComplete = false;
+
+        LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] addr: " +
+                serverIdentifier.getStorageServerIpAddress().toString() + " port: " +
+                serverIdentifier.getStorageServerTcpPort() + " chunkNumber: " + serverIdentifier.getChunkNumber());
     }
 
     public OperationTypeEnum getOperationType() {
@@ -131,13 +143,13 @@ public class SetupChunkWrite implements Operation {
              **   Storage Server and then to send the final Shaw-256 calculation.
              */
             storageServerBufferManager = new BufferManager(STORAGE_SERVER_HEADER_BUFFER_COUNT,
-                    "StorageServer", 1000);
+                    "StorageServer", 1000 + (writerNumber * 10));
 
             /*
              ** Create a BufferManager to accept the HTTP Response from the Storage Server
              */
             storageServerResponseBufferManager = new BufferManager(STORAGE_SERVER_HEADER_BUFFER_COUNT,
-                    "StorageServerResponse", 1100);
+                    "StorageServerResponse", 1100 + (writerNumber * 10));
 
             /*
              ** Allocate ByteBuffer(s) for the header and the Shaw-256
@@ -258,8 +270,9 @@ public class SetupChunkWrite implements Operation {
      */
     public void complete() {
 
-        LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] complete");
-
+        LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] complete addr: " +
+                serverIdentifier.getStorageServerIpAddress().toString() + " port: " +
+                serverIdentifier.getStorageServerTcpPort() + " chunkNumber: " + serverIdentifier.getChunkNumber());
 
         /*
         ** The following must be called in order to make sure that the BufferManagerPointer

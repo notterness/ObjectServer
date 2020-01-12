@@ -5,13 +5,15 @@ import com.oracle.athena.webserver.niosockets.NioServerHandler;
 import com.oracle.pic.casper.webserver.server.WebServerFlavor;
 
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.IntBinaryOperator;
 
 // Server class
 public class TestMain {
     public static void main(String[] args) {
         final int serverTcpPort = 5001;
         final int storageServerTcpPort = 5010;
+
+        final int NUMBER_TEST_STORAGE_SERVERS = 3;
+        final int STORAGE_SERVER_BASE_ID_OFFSET = 100;
 
         AtomicInteger threadCount = new AtomicInteger(1);
 
@@ -29,8 +31,12 @@ public class TestMain {
         NioServerHandler nioServer = new NioServerHandler(WebServerFlavor.INTEGRATION_TESTS, serverTcpPort, 1000);
         nioServer.start();
 
-        NioServerHandler nioStorageServer = new NioServerHandler(WebServerFlavor.INTEGRATION_TESTS, storageServerTcpPort, 2000);
-        nioStorageServer.start();
+        NioServerHandler[] nioStorageServer = new NioServerHandler[NUMBER_TEST_STORAGE_SERVERS];
+        for (int i = 0; i < NUMBER_TEST_STORAGE_SERVERS; i++) {
+            nioStorageServer[i] = new NioServerHandler(WebServerFlavor.INTEGRATION_TESTS, storageServerTcpPort + i,
+                    (2000 + (i * STORAGE_SERVER_BASE_ID_OFFSET)));
+            nioStorageServer[i].start();
+        }
 
         NioTestClient testClient = new NioTestClient(3000);
         testClient.start();
@@ -126,7 +132,9 @@ public class TestMain {
         */
 
         nioServer.stop();
-        nioStorageServer.stop();
+        for (int i = 0; i < NUMBER_TEST_STORAGE_SERVERS; i++) {
+            nioStorageServer[i].stop();
+        }
         testClient.stop();
 
         System.out.println("Server shutting down");

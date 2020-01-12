@@ -4,12 +4,12 @@ import com.oracle.athena.webserver.buffermgr.BufferManager;
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
 import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
-import com.oracle.athena.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.util.LinkedList;
+import java.util.List;
 
 public class EncryptBuffer implements Operation {
 
@@ -81,15 +81,14 @@ public class EncryptBuffer implements Operation {
      */
     private boolean buffersAllEncrypted;
 
-    private ServerIdentifier chunkId;
+    private int chunkNumber;
 
     /*
      ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
      **   up the calls to obtain the VON information and the meta-data write to the database.
      */
     public EncryptBuffer(final RequestContext requestContext, final MemoryManager memoryManager,
-                         final BufferManagerPointer readBufferPtr,
-                         final Operation completeCb) {
+                         final BufferManagerPointer readBufferPtr, final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
@@ -109,6 +108,7 @@ public class EncryptBuffer implements Operation {
 
         chunkSize = this.requestContext.getChunkSize();
 
+        chunkNumber = 0;
         buffersAllEncrypted = false;
     }
 
@@ -234,18 +234,9 @@ public class EncryptBuffer implements Operation {
             /*
             ** Need to cleanup here from the Encrypt operation
              */
-            if (requestContext.hasStorageServerResponseArrived(chunkId)) {
-                int result = requestContext.getStorageResponseResult(chunkId);
-                LOG.info("ChunkWriteComplete result: " + result);
+            requestContext.setAllV2PutDataWritten();
 
-                requestContext.setAllV2PutDataWritten();
-
-                complete();
-            } else {
-                LOG.warn("ChunkWriteComplete waiting for result");
-            }
-
-            chunkId = null;
+            complete();
         }
     }
 
@@ -454,14 +445,18 @@ public class EncryptBuffer implements Operation {
             storageServerWriteBufferMgr.bookmarkThis(storageServerWritePointer);
 
             /*
-             ** Now create the SetupChunkWrite and start it running
+             ** Now create the VonPicker and start it running. Once it obtains the addresses for the Storage Servers,
+             **   it will start of a SetupChunkWrite for each Storage Server.
              */
-            chunkId = new ServerIdentifier(InetAddress.getLoopbackAddress(),
-                    RequestContext.STORAGE_SERVER_PORT_BASE, 0);
-            SetupChunkWrite setupChunkWrite = new SetupChunkWrite(requestContext, chunkId,
-                    memoryManager, storageServerWritePointer, chunkBytesToEncrypt, this);
-            setupChunkWrite.initialize();
-            setupChunkWrite.event();
+            List<Operation> callbackList = new LinkedList<>();
+            callbackList.add(this);
+
+            VonPicker vonPicker = new VonPicker(requestContext, callbackList, chunkNumber,
+                    memoryManager, storageServerWritePointer, chunkBytesToEncrypt);
+            vonPicker.initialize();
+            vonPicker.event();
+
+            chunkNumber++;
         }
     }
 

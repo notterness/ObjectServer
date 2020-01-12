@@ -191,4 +191,5 @@ public class TestIoGenerator implements IoInterface {
         }
     }
 
+    public String getIdentifierInfo() { return "TestIoGenerator";}
 }

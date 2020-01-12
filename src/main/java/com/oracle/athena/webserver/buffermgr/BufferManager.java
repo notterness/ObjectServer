@@ -98,7 +98,7 @@ public class BufferManager {
     }
 
     /*
-    ** This is used to allocate BufferState to the BufferManager. It adds a ByteBuffer and then
+    ** This is used to allocate ByteBuffer(s) to the BufferManager. It adds a ByteBuffer and then
     **   increments the pointer for the available buffers.
      */
     public void offer(final BufferManagerPointer pointer, final ByteBuffer buffer) {
