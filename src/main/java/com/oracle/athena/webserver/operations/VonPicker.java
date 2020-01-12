@@ -1,16 +1,21 @@
 package com.oracle.athena.webserver.operations;
 
 import com.oracle.athena.webserver.buffermgr.BufferManagerPointer;
+import com.oracle.athena.webserver.memory.MemoryManager;
 import com.oracle.athena.webserver.requestcontext.RequestContext;
+import com.oracle.athena.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Iterator;
+import java.net.InetAddress;
+import java.util.LinkedList;
 import java.util.List;
 
 public class VonPicker implements Operation {
 
     private static final Logger LOG = LoggerFactory.getLogger(VonPicker.class);
+
+    private static final int NUMBER_TEST_STORAGE_SERVERS = 2;
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
@@ -28,21 +33,51 @@ public class VonPicker implements Operation {
     private List<Operation> operationsToRun;
 
     /*
+    ** The following identifies the chunk being written to the Storage Servers. The chunk number will
+    **   start at 0 and increment per 128MB being written.
+     */
+    private final int chunkNumber;
+
+    private final int chunkBytesToWrite;
+
+    private final MemoryManager memoryManager;
+
+    private BufferManagerPointer storageServerWritePointer;
+
+    /*
      ** The following are used to insure that an Operation is never on more than one queue and that
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
      **   execution queue (onExecutionQueue) is will always go on the execution queue.
      */
     private boolean onExecutionQueue;
 
-    public VonPicker(final RequestContext requestContext, final List<Operation> operationsToRun) {
+    /*
+    ** The following is a list of the Storage Servers that need to be written to.
+     */
+    private List<ServerIdentifier> serverList;
+
+    private boolean storageServersIdentified;
+
+    public VonPicker(final RequestContext requestContext, final List<Operation> operationsToRun,
+                     final int chunkNumber, final MemoryManager memoryManager,
+                     final BufferManagerPointer writePointer, final int bytesToWrite) {
 
         this.requestContext = requestContext;
         this.operationsToRun = operationsToRun;
+        this.chunkNumber = chunkNumber;
+
+        this.memoryManager = memoryManager;
+        this.storageServerWritePointer = writePointer;
+
+        this.chunkBytesToWrite = bytesToWrite;
 
         /*
          ** This starts out not being on any queue
          */
         onExecutionQueue = false;
+
+        serverList = new LinkedList<>();
+        storageServersIdentified = false;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -69,16 +104,72 @@ public class VonPicker implements Operation {
     /*
      */
     public void execute() {
-        /*
-         ** event() all of the operations that are ready to run once the VON Pick has
-         **   succeeded.
-         */
-        Iterator<Operation> iter = operationsToRun.iterator();
-        while (iter.hasNext()) {
-            iter.next().event();
-        }
-        operationsToRun.clear();
+        if (!storageServersIdentified) {
+            /*
+            ** Call the VON Picker - This is a blocking operation and will take time. For the test purposes,
+            **   add 3 Storage Servers
+             */
+            ServerIdentifier server;
+            for (int i = 0; i < NUMBER_TEST_STORAGE_SERVERS; i++) {
+                server = new ServerIdentifier(InetAddress.getLoopbackAddress(),
+                        RequestContext.STORAGE_SERVER_PORT_BASE + i, chunkNumber);
+                serverList.add(server);
+            }
 
+            /*
+            ** For all of the Storage Servers start a Chunk write sequence
+             */
+            int i = 0;
+            for (ServerIdentifier serverIdentifier : serverList) {
+                SetupChunkWrite setupChunkWrite = new SetupChunkWrite(requestContext, serverIdentifier,
+                        memoryManager, storageServerWritePointer, chunkBytesToWrite, this, i);
+                setupChunkWrite.initialize();
+                setupChunkWrite.event();
+
+                i++;
+            }
+
+            storageServersIdentified = true;
+        } else {
+            /*
+            ** Check if all of the Storage Servers have responded or have had an error (either a bad
+            **   Shaw-256 validation, timed out, or disconnected).
+             */
+            boolean allResponded = true;
+            for (ServerIdentifier serverIdentifier : serverList) {
+                if (!requestContext.hasStorageServerResponseArrived(serverIdentifier)) {
+                    allResponded = false;
+                    break;
+                }
+            }
+
+            if (allResponded) {
+
+                /*
+                ** For debug purposes, dump out the response results from the Storage Servers
+                 */
+                for (ServerIdentifier serverIdentifier : serverList) {
+                    int result = requestContext.getStorageResponseResult(serverIdentifier);
+                    LOG.info("ChunkWriteComplete addr: " + serverIdentifier.getStorageServerIpAddress().toString() +
+                            " port: " + serverIdentifier.getStorageServerTcpPort() + " chunkNumber: " + chunkNumber +
+                            " result: " + result);
+                }
+
+                /*
+                ** Done so cleanup
+                 */
+                serverList.clear();
+
+                /*
+                 ** event() all of the operations that are ready to run once the VON Pick has
+                 **   succeeded.
+                 */
+                for (Operation operation : operationsToRun) {
+                    operation.event();
+                }
+                operationsToRun.clear();
+            }
+        }
     }
 
     /*
@@ -110,11 +201,11 @@ public class VonPicker implements Operation {
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
         //LOG.info("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
+            LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 

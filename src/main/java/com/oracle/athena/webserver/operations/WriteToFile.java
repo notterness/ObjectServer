@@ -75,8 +75,8 @@ public class WriteToFile implements Operation {
 
     /*
      */
-    public WriteToFile(final RequestContext requestContext, final MemoryManager memoryManager,
-                         final BufferManagerPointer clientReadPointer, final Operation completeCb) {
+    public WriteToFile(final RequestContext requestContext, final BufferManagerPointer clientReadPointer,
+                       final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.clientReadBufferMgr = this.requestContext.getClientReadBufferManager();
@@ -127,7 +127,7 @@ public class WriteToFile implements Operation {
         /*
         ** Open up the File for writing
          */
-        outFile = new File("StorageServer.dat");
+        outFile = new File("StorageServer" + requestContext.getIoInterfaceIdentifier() + ".dat");
         try {
             writeFileChannel = new FileOutputStream(outFile, false).getChannel();
         } catch (FileNotFoundException ex) {

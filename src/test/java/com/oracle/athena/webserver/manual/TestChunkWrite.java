@@ -126,7 +126,7 @@ public class TestChunkWrite {
         BufferManagerPointer storageServerWritePtr = storageServerWriteBufferMgr.register(testChunkWrite, storageServerAddPointer);
 
         SetupChunkWrite setupChunkWrite = new SetupChunkWrite(clientContext, chunkId, memoryManager,
-                storageServerWritePtr, NUMBER_OF_BYTES_TO_WRITE, testChunkWrite);
+                storageServerWritePtr, NUMBER_OF_BYTES_TO_WRITE, testChunkWrite, 0);
         setupChunkWrite.initialize();
 
         /*

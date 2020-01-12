@@ -52,4 +52,5 @@ public interface IoInterface {
     void closeConnection();
     void connectComplete();
 
+    String getIdentifierInfo();
 }

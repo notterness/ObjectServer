@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
@@ -75,6 +76,8 @@ public class NioSocket implements IoInterface {
     private final Stack<BufferAssociation> readBufferAssociations;
     private final Stack<BufferAssociation> writeBufferAssociations;
 
+    private int writePostion;
+
 
     public NioSocket(final NioSelectHandler nioSelectHandler) {
 
@@ -88,6 +91,8 @@ public class NioSocket implements IoInterface {
 
         readBufferAssociations = new Stack<>();
         writeBufferAssociations = new Stack<>();
+
+        writePostion = 0;
     }
 
     /*
@@ -96,6 +101,7 @@ public class NioSocket implements IoInterface {
     **   pool if so desired.
      */
     public void startClient(final SocketChannel socket) {
+
         socketChannel = socket;
     }
 
@@ -409,19 +415,27 @@ public class NioSocket implements IoInterface {
             LOG.info(" write (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
                     writePointer.getCurrIndex() + " position: " + writeBuffer.position() + " limit: " + writeBuffer.limit());
 
+            ByteBuffer tempBuffer = writeBuffer.duplicate();
+            tempBuffer.position(writePostion);
+
             try {
-                int bytesWritten = socketChannel.write(writeBuffer);
+                int bytesWritten = socketChannel.write(tempBuffer);
 
                 if (bytesWritten > 0) {
+                    LOG.info(" write (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bytesWritten: " +
+                            bytesWritten + " position: " + tempBuffer.position() + " reamining: " + tempBuffer.remaining());
+
                     /*
                      ** Update the pointer if the entire buffer was written out
                      */
-                    if (writeBuffer.remaining() == 0) {
+                    if (tempBuffer.remaining() == 0) {
+                        writePostion = 0;
                         writeBufferManager.updateProducerWritePointer(writePointer);
                     } else {
                         /*
                         ** Need to set the OP_WRITE flag and try again later when the Select loop fires
                          */
+                        writePostion = tempBuffer.position();
                         writeBufferReady();
                         break;
                     }
@@ -433,6 +447,7 @@ public class NioSocket implements IoInterface {
                             writePointer.getCurrIndex() + " bytesWritten -1");
                     closeConnection();
                     sendErrorEvent();
+                    writePostion = 0;
                     break;
                 }
             } catch (IOException io_ex) {
@@ -440,6 +455,7 @@ public class NioSocket implements IoInterface {
                         writePointer.getCurrIndex() + " exception: " + io_ex.getMessage());
                 closeConnection();
                 sendErrorEvent();
+                writePostion = 0;
                 break;
             }
         }
@@ -485,5 +501,21 @@ public class NioSocket implements IoInterface {
             LOG.warn("No connect complete handler registered");
         }
     }
+
+    public String getIdentifierInfo() {
+
+        int port;
+        try {
+            SocketAddress address = socketChannel.getLocalAddress();
+            port = ((InetSocketAddress) address).getPort();
+        } catch (IOException io_ex) {
+            port = 0;
+        }
+
+        System.out.println("SocketChannel " + socketChannel.toString() + " listeningPort: " + port);
+
+        return Integer.toString(port);
+    }
+
 }
 
