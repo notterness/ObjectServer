@@ -225,9 +225,10 @@ public class BufferManagerPointer {
     void setBookmark() {
         int currIndex = bufferIndex.get();
         if (ptrThisDependsOn != null) {
+            /*
             LOG.error("Consumer(" + identifier + ":" + getOperationType() + ") setBookmark: " + currIndex + " on Producer(" +
                     ptrThisDependsOn.getIdentifier() + ":" + ptrThisDependsOn.getOperationType() + ")");
-
+            */
             ptrThisDependsOn.setBookmark(currIndex);
         } else {
             LOG.error("Producer(" + identifier + ":" + getOperationType() + ") setBookmark(1): " + currIndex);
@@ -252,7 +253,12 @@ public class BufferManagerPointer {
     int getReadIndex(final boolean updatePointer) {
         int readIndex = bufferIndex.get();
         if (ptrThisDependsOn != null) {
-            if (readIndex != ptrThisDependsOn.getCurrIndex()) {
+            int dependsOnIndex = ptrThisDependsOn.getCurrIndex();
+
+            /*
+            ** Handle the normal case where the Consumer is trying to catch up to the Producer
+             */
+            if (readIndex != dependsOnIndex) {
 
                 if (updatePointer) {
                     bufferIndex.accumulateAndGet(bufferArraySize, computeNextIndex);
@@ -264,17 +270,16 @@ public class BufferManagerPointer {
                 ** This is the normal case when the consumer has caught up to the producer so there
                 **   are no more buffers to consume at this moment.
                  */
-                /*
-                LOG.error("Consumer(" + identifier + ":" + getOperationType() + ") bufferIndex: " + bufferIndex +
-                        " Producer(" + ptrThisDependsOn.getIdentifier() + ":" + ptrThisDependsOn.getOperationType() + ") writeIndex: " +
-                        ptrThisDependsOn.getCurrIndex());
-                 */
+                LOG.error("getReadIndex() Consumer(" + identifier + ":" + getOperationType() + ") bufferIndex: " +
+                        bufferIndex + " Producer(" + ptrThisDependsOn.getIdentifier() + ":" +
+                        ptrThisDependsOn.getOperationType() + ") writeIndex: " + ptrThisDependsOn.getCurrIndex());
             }
         } else {
             /*
-            ** This is the case for the producer accessing the buffer. It must check that it is not catching up to
-            **   to the consumers who are dependent upon it.
+            ** This is the case for the Producer accessing the buffer. It must check that it is not catching up to
+            **   to the Consumers who are dependent upon it.
              */
+            int returnIndex = readIndex;
             readIndex++;
             if (readIndex == bufferArraySize) {
                 readIndex = 0;
@@ -298,7 +303,9 @@ public class BufferManagerPointer {
             /*
             ** Advance the pointer for the next read since it has not wrapped
              */
-            int returnIndex = bufferIndex.getAndAccumulate(bufferArraySize, computeNextIndex);
+            if (updatePointer) {
+                bufferIndex.getAndAccumulate(bufferArraySize, computeNextIndex);
+            }
 
             //LOG.info("Consumer("  + identifier + ":" + getOperationType() + ") readIndex: " + returnIndex);
             return returnIndex;

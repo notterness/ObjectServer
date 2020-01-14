@@ -92,8 +92,6 @@ public class WriteToClient implements Operation {
     }
 
     /*
-    ** TODO: There needs to be another Operation or something to handle when the write is actually complete. This
-    **   works if there is only a write of a header, but not for writing data back to the client.
      */
     public void execute() {
         /*
@@ -111,9 +109,6 @@ public class WriteToClient implements Operation {
             /*
             ** Since there are "buffers" available, it means the data was written out the SocketChannel
             **   and from this server's perspective it is done.
-             */
-
-            /*
             ** Done with this client connection as well since this is only being used to write the HTTP Response
              */
             finalOperationToRun.event();

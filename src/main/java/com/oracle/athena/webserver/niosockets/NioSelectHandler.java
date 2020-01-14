@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.nio.channels.*;
 import java.nio.channels.spi.SelectorProvider;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 
 public class NioSelectHandler {
 
@@ -18,11 +20,33 @@ public class NioSelectHandler {
      */
     private Selector nioSelector;
 
+    private final List<NioSocket> openSockets;
+
     /*
     **
      */
     NioSelectHandler() {
 
+        openSockets = new LinkedList<>();
+    }
+
+    /*
+    **
+     */
+    void addNioSocketToSelector(final NioSocket nioSocket) {
+        if (!openSockets.contains(nioSocket)) {
+            LOG.info("Adding NioSocket");
+            openSockets.add(nioSocket);
+        }
+    }
+
+    void removeNioSocketFromSelector(final NioSocket nioSocket) {
+        if (openSockets.contains(nioSocket)) {
+            LOG.info("Removing NioSocket");
+            openSockets.remove(nioSocket);
+        } else {
+            LOG.error("Removing NioSocket but not on openSockets list");
+        }
     }
 
     /*
@@ -33,6 +57,9 @@ public class NioSelectHandler {
         SelectionKey key;
         try {
             key = socketChannel.register(nioSelector, interestOps, nioSocket);
+        } catch (CancelledKeyException ex) {
+            LOG.warn("registerWithSelector CancelledKeyException: " + ex.getMessage());
+            key = null;
         } catch (ClosedChannelException | ClosedSelectorException ex) {
             key = null;
         }
@@ -75,10 +102,25 @@ public class NioSelectHandler {
     void handleSelector() {
         try {
             /*
+            ** First find all the SocketChannels (via the NioSocket) that are registered with this
+            **   NioSelectHandler. Check if any of those SocketChannels need to update their
+            **   select keys information.
+             */
+            boolean work = false;
+            Iterator<NioSocket> currSocketsIter = openSockets.iterator();
+            while (currSocketsIter.hasNext()) {
+                work |= currSocketsIter.next().updateInterestOps();
+            }
+
+            /*
             ** The select() cannot block since this will be called from a thread that will perform
             **   other work.
              */
-            nioSelector.select(1000);
+            if (work) {
+                nioSelector.select(10);
+            } else {
+                nioSelector.select(100);
+            }
 
             Iterator selectedKeys = nioSelector.selectedKeys().iterator();
 
@@ -90,6 +132,7 @@ public class NioSelectHandler {
                     continue;
                 }
 
+                int updatedInterestOps = 0;
                 if (key.isConnectable()) {
                     handleConnect(key);
                 } else {
@@ -98,18 +141,22 @@ public class NioSelectHandler {
                     **   isConnectable() is set and then there is an error processing the the
                     **   handleConnect(), if it falls through and checks the isReadable() it will
                     **   get a CancelledKeyException.
+                    ** Need to make sure and handle the case where the current interest ops have either
+                    **   OP_READ or OP_WRITE set, but there is not a firing for that interest op. Need to
+                    **   retain the interest op for the next time around.
                      */
                     if (key.isReadable()) {
-                        handleRead(key);
+                        updatedInterestOps |= handleRead(key);
                     }
 
                     if (key.isWritable()) {
-                        handleWrite(key);
+                        updatedInterestOps |= handleWrite(key);
                     }
                 }
+
             }
         } catch (IOException io_ex) {
-
+            LOG.warn("NioSelectHandler handleSelector() " + io_ex.getMessage());
         }
     }
 
@@ -145,16 +192,16 @@ public class NioSelectHandler {
         }
     }
 
-    private void handleRead(final SelectionKey key) {
+    private int handleRead(final SelectionKey key) {
         NioSocket nioSocket = (NioSocket) key.attachment();
 
-        nioSocket.performRead();
+        return nioSocket.performRead();
     }
 
-    private void handleWrite(final SelectionKey key) {
+    private int handleWrite(final SelectionKey key) {
         NioSocket nioSocket = (NioSocket) key.attachment();
 
-        nioSocket.performWrite();
+        return nioSocket.performWrite();
     }
 
 }

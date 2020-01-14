@@ -76,6 +76,15 @@ public class DetermineRequestType implements Operation {
         requestContext.addToWorkQueue(this);
     }
 
+    /*
+    ** This execute() method does two distinct things.
+    **    1) First it uses the information in the CasperHttpInfo object to determine the HTTP Request to be handled.
+    **       There is a setup request operation for each type of HTTP Request and that is then initialized() and
+    **       started via the event() method. At that point, the DetermineRequestType operation sits idle until the
+    **       HTTP Request is completed and the DetermineRequestType operation has its event() method called again.
+    **    2) When DetermineRequestType has its event() method called a second time, it then must send the HTTP
+    **       Response (via the SendFinalStatus operation) to the client.
+     */
     public void execute() {
         if (!methodDeterminationDone) {
             if (requestContext.getHttpParseError()) {

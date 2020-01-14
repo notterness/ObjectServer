@@ -25,7 +25,7 @@ public class MemoryManager {
     // These really don't need to be.
     private static final int PRODUCTION_XFER_BUFFER_COUNT = 10000;
 
-    private static final int INTEGRATION_XFER_BUFFER_COUNT = 100;
+    private static final int INTEGRATION_XFER_BUFFER_COUNT = 400;
 
     // Or we could infer this from an array of {count, size} tuples, if we didn't
     // need to expose the threshold values.

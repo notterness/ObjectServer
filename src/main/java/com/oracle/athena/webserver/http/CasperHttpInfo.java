@@ -373,6 +373,9 @@ public class CasperHttpInfo {
         }
     }
 
+    /*
+    ** Determine the HTTP response handler based upon the URI and some header fields.
+     */
     public void setHttpMethodAndVersion(String methodString, String httpParsedVersion) {
         httpMethodString = methodString;
         httpVersion = httpParsedVersion;

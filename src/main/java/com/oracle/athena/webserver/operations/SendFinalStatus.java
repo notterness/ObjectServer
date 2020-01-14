@@ -122,9 +122,7 @@ public class SendFinalStatus implements Operation {
     }
 
     /*
-    ** This will attempt to allocate a ByteBuffer from the free pool and then fill it in with the
-    **   response data.
-    ** Assuming the B
+    ** This will allocate a ByteBuffer from the free pool and then fill it in with the HTTP Response data.
      */
     public void execute() {
 

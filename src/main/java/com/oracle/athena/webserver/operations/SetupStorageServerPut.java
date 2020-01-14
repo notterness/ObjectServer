@@ -119,6 +119,12 @@ public class SetupStorageServerPut implements Operation {
             } else {
                 metering.event();
             }
+        } else {
+            /*
+            ** There are no buffers waiting with data, so need to dole out another buffer to start a read
+            **   operation.
+             */
+            metering.event();
         }
 
         LOG.info("SetupStorageServerPut[" + requestContext.getRequestId() + "] initialized");

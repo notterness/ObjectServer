@@ -152,8 +152,8 @@ public class TestIoGenerator implements IoInterface {
     /*
     **
      */
-    public void performRead() {
-
+    public int performRead() {
+        return 0;
     }
 
     /*
@@ -167,14 +167,29 @@ public class TestIoGenerator implements IoInterface {
     /*
     **
      */
-    public void performWrite() {
+    public int performWrite() {
+        return 0;
+    }
+
+    /*
+    **
+     */
+    public boolean updateInterestOps() {
+        return false;
+    }
+
+
+    /*
+    **
+     */
+    public void removeKey() {
 
     }
 
     /*
      */
     public void closeConnection() {
-
+        removeKey();
     }
 
     /*

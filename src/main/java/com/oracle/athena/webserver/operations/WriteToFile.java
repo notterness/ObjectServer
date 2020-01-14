@@ -18,8 +18,6 @@ public class WriteToFile implements Operation {
 
     private static final Logger LOG = LoggerFactory.getLogger(WriteToFile.class);
 
-    private final int NUM_STORAGE_SERVER_WRITE_BUFFERS = 10;
-
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
@@ -209,7 +207,8 @@ public class WriteToFile implements Operation {
                 }
 
             } else {
-                LOG.info("WriteToFile[" + requestContext.getRequestId() + "] out of read buffers");
+                LOG.info("WriteToFile[" + requestContext.getRequestId() + "] out of read buffers bytesWritten: " +
+                        fileBytesWritten);
 
                 /*
                 ** Check if all the bytes (meaning the amount passed in the content-length in the HTTP header)

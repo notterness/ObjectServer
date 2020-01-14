@@ -15,8 +15,6 @@ public class BufferReadMetering implements Operation {
 
     private static final Logger LOG = LoggerFactory.getLogger(BufferReadMetering.class);
 
-    private final int INITIAL_INTEGRATION_BUFFER_ALLOC = 10;
-
     /*
     ** A unique identifier for this Operation so it can be tracked.
      */
@@ -26,12 +24,6 @@ public class BufferReadMetering implements Operation {
 
     private final MemoryManager memoryManager;
 
-    /*
-    ** This is used to determine how many buffers to allocate in the ClientReadBufferManager up
-    **   front
-     */
-    private final WebServerFlavor webServerFlavor;
-
     private BufferManager clientReadBufferMgr;
     private BufferManagerPointer bufferMeteringPointer;
 
@@ -40,19 +32,15 @@ public class BufferReadMetering implements Operation {
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
      **   execution queue (onExecutionQueue) is will always go on the execution queue.
      */
-    private boolean onDelayedQueue;
     private boolean onExecutionQueue;
-    private long nextExecuteTime;
 
     /*
-    ** The index of the last ByteBuffer allocated
+    ** The BufferReadMetering operation will populate the clientReadBufferManager with the
+    **   ByteBuffer(s) and will set the allocation BufferManagerPointer back to the start of
+    **   the BufferManager (meaning that no ByteBuffer(s) are available to read data into).
      */
-    private int lastAddIndex;
+    public BufferReadMetering(final RequestContext requestContext, final MemoryManager memoryManager) {
 
-    public BufferReadMetering(final WebServerFlavor flavor, final RequestContext requestContext,
-                              final MemoryManager memoryManager) {
-
-        this.webServerFlavor = flavor;
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
 
@@ -61,11 +49,25 @@ public class BufferReadMetering implements Operation {
         /*
          ** This starts out not being on any queue
          */
-        onDelayedQueue = false;
         onExecutionQueue = false;
-        nextExecuteTime = 0;
 
-        lastAddIndex = 0;
+        /*
+         ** Obtain the pointer used to meter out buffers to the read operation
+         */
+        bufferMeteringPointer = this.clientReadBufferMgr.register(this);
+
+        /*
+         ** If this is the WebServerFlavor.INTEGRATION_TESTS then allocate a limited
+         **   number of ByteBuffer(s) up front and then reset the metering
+         **   pointer.
+         */
+        int buffersToAllocate = requestContext.getBufferManagerRingSize();
+
+        for (int i = 0; i < buffersToAllocate; i++) {
+            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientReadBufferMgr);
+
+            clientReadBufferMgr.offer(bufferMeteringPointer, buffer);
+        }
     }
 
     public OperationTypeEnum getOperationType() {
@@ -75,41 +77,12 @@ public class BufferReadMetering implements Operation {
     public int getRequestId() { return requestContext.getRequestId(); }
 
     public BufferManagerPointer initialize() {
-        /*
-         ** Obtain the pointer used to meter out buffers to the read operation
-         */
-        bufferMeteringPointer = this.clientReadBufferMgr.register(this);
 
         /*
-        ** If this is the WebServerFlavor.INTEGRATION_TESTS then allocate a limited
-        **   number of ByteBuffer(s) up front and then reset the metering
-        **   pointer.
+         ** Set the pointer back to the beginning of the BufferManager. The BufferReadMetering operation will need
+         **   to have its execute() method called to dole out ByteBuffer(s) to perform read operations into.
          */
-        int buffersToAllocate;
-
-        if (webServerFlavor == WebServerFlavor.INTEGRATION_TESTS) {
-            /*
-            ** Allocate a limited number of buffers up front
-             */
-            buffersToAllocate = INITIAL_INTEGRATION_BUFFER_ALLOC;
-        } else {
-            /*
-            ** Fill in the entire ClientReadBufferManager and StorageServerWriteBufferManager
-            **   with ByteBuffers.
-             */
-            buffersToAllocate = RequestContext.BUFFER_MGR_RING_SIZE;
-        }
-
-        for (int i = 0; i < buffersToAllocate; i++) {
-            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientReadBufferMgr);
-
-            clientReadBufferMgr.offer(bufferMeteringPointer, buffer);
-        }
-
-        /*
-         ** Set the pointer back to the beginning of the BufferManager
-         */
-        lastAddIndex = clientReadBufferMgr.reset(bufferMeteringPointer);
+        clientReadBufferMgr.reset(bufferMeteringPointer);
 
         return bufferMeteringPointer;
     }
@@ -132,12 +105,7 @@ public class BufferReadMetering implements Operation {
         /*
         ** Add a free buffer to the ClientReadBufferManager
          */
-        int nextLocation = clientReadBufferMgr.updateProducerWritePointer(bufferMeteringPointer);
-        if ((nextLocation == lastAddIndex) && (webServerFlavor == WebServerFlavor.INTEGRATION_TESTS)){
-            /*
-            ** Need to add another buffer. This is only for WebServerFlavor.INTEGRATION_TESTS.
-             */
-        }
+        clientReadBufferMgr.updateProducerWritePointer(bufferMeteringPointer);
     }
 
     public void complete() {
@@ -146,7 +114,10 @@ public class BufferReadMetering implements Operation {
          ** Set the pointer back to the beginning of the BufferManager to release the allocated memory
          */
         clientReadBufferMgr.reset(bufferMeteringPointer);
-        for (int i = 0; i < INITIAL_INTEGRATION_BUFFER_ALLOC; i++) {
+
+        int buffersAllocated = requestContext.getBufferManagerRingSize();
+
+        for (int i = 0; i < buffersAllocated; i++) {
             ByteBuffer buffer = clientReadBufferMgr.getAndRemove(bufferMeteringPointer);
             if (buffer != null) {
                 memoryManager.poolMemFree(buffer, clientReadBufferMgr);
@@ -176,23 +147,12 @@ public class BufferReadMetering implements Operation {
      **   isOnTimedWaitQueue - Accessor method
      **   hasWaitTimeElapsed - Is this Operation ready to run again to check some timeout condition
      **
-     ** TODO: Might want to switch to using an enum instead of two different booleans to keep track
-     **   of which queue the connection is on. It will probably clean up the code some.
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
         //LOG.info("BufferReadMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
-        if (onDelayedQueue) {
-            if (!delayedExecutionQueue) {
-                LOG.warn("BufferReadMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
-            }
-
-            onDelayedQueue = false;
-            nextExecuteTime = 0;
+        if (delayedExecutionQueue) {
+            LOG.warn("BufferReadMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
         } else if (onExecutionQueue){
-            if (delayedExecutionQueue) {
-                LOG.warn("BufferReadMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
-            }
-
             onExecutionQueue = false;
         } else {
             LOG.warn("BufferReadMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
@@ -200,12 +160,7 @@ public class BufferReadMetering implements Operation {
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
-        if (delayedExecutionQueue) {
-            nextExecuteTime = System.currentTimeMillis() + TIME_TILL_NEXT_TIMEOUT_CHECK;
-            onDelayedQueue = true;
-        } else {
-            onExecutionQueue = true;
-        }
+        onExecutionQueue = true;
     }
 
     public boolean isOnWorkQueue() {
@@ -213,17 +168,10 @@ public class BufferReadMetering implements Operation {
     }
 
     public boolean isOnTimedWaitQueue() {
-        return onDelayedQueue;
+        return false;
     }
 
     public boolean hasWaitTimeElapsed() {
-        long currTime = System.currentTimeMillis();
-
-        if (currTime < nextExecuteTime) {
-            return false;
-        }
-
-        //LOG.info("BufferReadMetering[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
         return true;
     }
 
