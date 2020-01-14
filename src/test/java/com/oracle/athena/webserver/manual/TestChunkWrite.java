@@ -123,10 +123,8 @@ public class TestChunkWrite {
             storageServerWriteBufferMgr.offer(storageServerAddPointer, writeBuffer);
         }
 
-        BufferManagerPointer storageServerWritePtr = storageServerWriteBufferMgr.register(testChunkWrite, storageServerAddPointer);
-
         SetupChunkWrite setupChunkWrite = new SetupChunkWrite(clientContext, chunkId, memoryManager,
-                storageServerWritePtr, NUMBER_OF_BYTES_TO_WRITE, testChunkWrite, 0);
+                storageServerAddPointer, NUMBER_OF_BYTES_TO_WRITE, testChunkWrite, 0);
         setupChunkWrite.initialize();
 
         /*
@@ -138,12 +136,6 @@ public class TestChunkWrite {
          ** Now wait for the status to be received and then it can verified with the expected value
          */
         waitForStatus();
-
-        /*
-        ** Remove the write pointer dependency from the add pointer so all the buffers can
-        **   be released.
-         */
-        storageServerWriteBufferMgr.unregister(storageServerWritePtr);
 
         /*
         ** Now free up all the memory allocated for the test

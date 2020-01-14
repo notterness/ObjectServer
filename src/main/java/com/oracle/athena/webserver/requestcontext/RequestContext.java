@@ -44,7 +44,8 @@ public class RequestContext {
     public final int CHUNK_SIZE_IN_BYTES = MemoryManager.XFER_BUFFER_SIZE * 4096;
 
 
-    public static final int BUFFER_MGR_RING_SIZE = 128;
+    public static final int TEST_BUFFER_MGR_RING_SIZE = 32;
+    public static final int PRODUCTION_BUFFER_MGR_RING_SIZE = 4096;
 
     private static final int MAX_EXEC_WORK_LOOP_COUNT = 10;
 
@@ -135,28 +136,10 @@ public class RequestContext {
     private DetermineRequestType determineRequestType;
 
     /*
-    ** The metering pointer is used to meter buffers to the read operation. It is used to indicate
-    **   where buffers are available to read data into. The read operation has a dependency upon
-    **   this pointer.
-     */
-    private BufferManagerPointer meteringPtr;
-
-    /*
     ** The read pointer is used by the code used to read data into buffers to indicate
     **   where valid data is.
      */
     private BufferManagerPointer readPointer;
-
-    /*
-    ** The clientReadDataPtr is where in the data stream consumers are accessing the data. Initially, this is
-    **   where the HTTP Parser is accessing buffers.
-     */
-    private BufferManagerPointer clientDataReadPtr;
-
-    /*
-    **
-     */
-    private BufferManagerPointer clientWritePtr;
 
     /*
     ** The following is a map of all of the created Operations to handle this request.
@@ -235,9 +218,17 @@ public class RequestContext {
 
         httpInfo = new CasperHttpInfo(this);
 
-        this.clientReadBufferManager = new BufferManager(BUFFER_MGR_RING_SIZE, "ClientRead", 100);
-        this.clientWriteBufferManager = new BufferManager(BUFFER_MGR_RING_SIZE, "ClientWrite", 200);
-        this.storageServerWriteBufferManager = new BufferManager(BUFFER_MGR_RING_SIZE, "StorageServerWrite", 300);
+        /*
+        ** The BufferManager(s) that are allocated here are populated in the following Operations:
+        **   clientReadBufferManager - This is populated with ByteBuffer(s) in the BufferReadMetering operation
+        **   clientWriteBufferManager - This is populated in the SendFinalStatus operation, but will need to be changed
+        **     once the GET request is implemented to allowing streaming of data back to the clients.
+        **   storageServerWriteBufferManager - This is populated in the EncryptBuffer operation.
+         */
+        int bufferMgrRingSize = getBufferManagerRingSize();
+        this.clientReadBufferManager = new BufferManager(bufferMgrRingSize, "ClientRead", 100);
+        this.clientWriteBufferManager = new BufferManager(bufferMgrRingSize, "ClientWrite", 200);
+        this.storageServerWriteBufferManager = new BufferManager(bufferMgrRingSize, "StorageServerWrite", 300);
 
         /*
         ** Build the list of all supported HTTP Request and the handler
@@ -272,7 +263,7 @@ public class RequestContext {
     /*
     ** This sets up the RequestContext to handle server requests. When it is operating as a
     **   server, the first thing is expects is an HTTP request to arrive. This should be in
-    **   the first one or so buffer read in from the connection.
+    **   the first one or two buffers read in from the connection.
     **
     ** The reading and parsing of the HTTP request is handled by the following operations:
     **   -> BufferReadMetering - This hands out pre-allocated ByteBuffers to the ClientReadBufferManager.
@@ -302,25 +293,28 @@ public class RequestContext {
          ** Setup the Metering and Read pointers since they are required for the HTTP Parser and for most
          **   HTTP Request handlers.
          */
-        metering = new BufferReadMetering(webServerFlavor, this, memoryManager);
+        metering = new BufferReadMetering(this, memoryManager);
         requestHandlerOperations.put(metering.getOperationType(), metering);
-        meteringPtr = metering.initialize();
+        BufferManagerPointer meteringPtr = metering.initialize();
 
         readBuffer = new ReadBuffer(this, meteringPtr, clientConnection);
         requestHandlerOperations.put(readBuffer.getOperationType(), readBuffer);
         readPointer = readBuffer.initialize();
 
         /*
-         ** The SendFinalStatus and CloseOutRequest are tied together. The SendFinalStatus is
-         **   responsible for writing the final status response to the client. The CloseOutRequest
-         **   is executed after the write to the client completes and it is responsible for
+         ** The SendFinalStatus, WriteToClient and CloseOutRequest are tied together. The SendFinalStatus is
+         **   responsible for building the final HTTP status response to the client. The WriteToClient is
+         **   responsible for kicking the IoInterface to write the data out and waiting for the data
+         **   pointer to be updated to know that the data has been written. Once the data has been all written, then
+         **   the WriteToClient operation will event() the CloseOutRequest operation.
+         **   The CloseOutRequest is executed after the write to the client completes and it is responsible for
          **   cleaning up the Request and its associated connection.
          **   Once the cleanup is performed, then the RequestContext is added back to the free list so
          **   it can be used to handle a new request.
          */
         sendFinalStatus = new SendFinalStatus(this, memoryManager, clientConnection);
         requestHandlerOperations.put(sendFinalStatus.getOperationType(), sendFinalStatus);
-        clientWritePtr = sendFinalStatus.initialize();
+        BufferManagerPointer clientWritePtr = sendFinalStatus.initialize();
 
         closeRequest = new CloseOutRequest(this);
         requestHandlerOperations.put(closeRequest.getOperationType(), closeRequest);
@@ -331,10 +325,18 @@ public class RequestContext {
         requestHandlerOperations.put(writeToClient.getOperationType(), writeToClient);
         writeToClient.initialize();
 
+        /*
+        ** The DetermineRequestType operation is run after the HTTP Request has been parsed and the method
+        **   handler determined via the setHttpMethodAndVersion() method in the CasperHttpInfo object.
+         */
         determineRequestType = new DetermineRequestType(this, supportedHttpRequests);
         requestHandlerOperations.put(determineRequestType.getOperationType(), determineRequestType);
         determineRequestType.initialize();
 
+        /*
+        ** The HTTP Request methods that are supported are added to the supportedHttpRequests Map<> and are used
+        **   by the DetermineRequestType operation to setup and run the appropriate handlers.
+         */
         SetupV2Put v2PutHandler = new SetupV2Put(this, memoryManager, metering, determineRequestType);
         this.supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, v2PutHandler);
 
@@ -367,7 +369,7 @@ public class RequestContext {
          */
         ParseHttpRequest httpParser = new ParseHttpRequest(this, readPointer, metering, determineRequestType);
         requestHandlerOperations.put(httpParser.getOperationType(), httpParser);
-        clientDataReadPtr = httpParser.initialize();
+        httpParser.initialize();
 
         /*
         ** Now Meter out a buffer to read in the HTTP request
@@ -505,7 +507,7 @@ public class RequestContext {
             }
 
             /*
-             ** Check if there are ConnectionState that are on the timedWaitQueue and their
+             ** Check if there are Operations that are on the timedWaitQueue and their
              **   wait time has elapsed. Currently, this is an ordered queue and everything
              **   on the queue has the same wait time so only the head element needs to be
              **   checked for the elapsed timeout.
@@ -547,23 +549,12 @@ public class RequestContext {
     public void addToWorkQueue(final Operation operation) {
         queueMutex.lock();
         try {
-            boolean isOnWorkQueue = operation.isOnWorkQueue();
-
-            if (!isOnWorkQueue) {
+            if (!operation.isOnWorkQueue()) {
                 /*
                  ** Only log if it is not on the work queue already
                  */
                 LOG.info("requestId[" + connectionRequestId + "] addToWorkQueue() operation(" +
-                        operation.getOperationType() + ") onExecutionQueue: " +
-                        isOnWorkQueue + " onTimedWaitQueue: " + operation.isOnTimedWaitQueue());
-
-                if (operation.isOnTimedWaitQueue()) {
-                    if (timedWaitQueue.remove(operation)) {
-                        operation.markRemovedFromQueue(true);
-                    } else {
-                        LOG.error("requestId[" + connectionRequestId + "] addToWorkQueue() not on timedWaitQueue");
-                    }
-                }
+                        operation.getOperationType() + ")");
 
                 if (!workQueue.offer(operation)) {
                     LOG.error("requestId[" + connectionRequestId + "] addToWorkQueue() unable to add");
@@ -642,10 +633,9 @@ public class RequestContext {
 
         queueMutex.lock();
         try {
-            Iterator<Operation> operationsToRun = workQueue.iterator();
 
-            while (operationsToRun.hasNext()) {
-                if (operationsToRun.next().getOperationType() == operationType) {
+            for (Operation operation : workQueue) {
+                if (operation.getOperationType() == operationType) {
                     found = true;
                     break;
                 }
@@ -689,6 +679,10 @@ public class RequestContext {
         return connectionRequestId;
     }
 
+    /*
+    ** The getHttpInfo() getter is used to access the CasperHttpInfo where the details about the HTTP Request are
+    **   kept.
+     */
     public CasperHttpInfo getHttpInfo() {
         return httpInfo;
     }
@@ -740,7 +734,9 @@ public class RequestContext {
     }
 
     /*
-    ** The following are getters for test specific code.
+    ** The following getter is used to get access to the read BufferManagerPointer that is setup to
+    **   read in the HTTP Request initially. For a PUT operation, that same read pointer is used to bring in the
+    **   client object data.
      */
     public BufferManagerPointer getReadBufferPointer() {
         return readPointer;
@@ -754,9 +750,7 @@ public class RequestContext {
     public boolean hasHttpRequestBeenSent(final ServerIdentifier storageServerId) {
         AtomicBoolean responseSent = httpRequestSent.get(storageServerId);
         if (responseSent != null) {
-            if (responseSent.get()) {
-                return true;
-            }
+            return responseSent.get();
         }
         return false;
     }
@@ -783,10 +777,7 @@ public class RequestContext {
      */
     public boolean hasStorageServerResponseArrived(final ServerIdentifier storageServerId) {
         Integer responseSent = storageServerResponse.get(storageServerId);
-        if (responseSent != null) {
-            return true;
-        }
-        return false;
+        return (responseSent != null);
     }
 
     public int getStorageResponseResult(final ServerIdentifier storageServerId) {
@@ -825,6 +816,10 @@ public class RequestContext {
         return digestComplete;
     }
 
+    public boolean getMd5DigestResult() {
+        return contentHasValidMd5Digest;
+    }
+
     /*
     ** Acccessor methods to keep track of when all the data has been written to the Storage Server(s)
      */
@@ -837,7 +832,19 @@ public class RequestContext {
     }
 
     /*
-    **
+    ** Value for the number of ByteBuffer(s) in the BufferManager rings
+     */
+    public int getBufferManagerRingSize() {
+        if (webServerFlavor == WebServerFlavor.INTEGRATION_TESTS) {
+            return TEST_BUFFER_MGR_RING_SIZE;
+        } else {
+            return PRODUCTION_BUFFER_MGR_RING_SIZE;
+        }
+    }
+
+    /*
+    ** The following methods are used to keep track of the Operations that have been started by the RequestContext and
+    **   which ones are currently running.
      */
     public Operation getOperation(final OperationTypeEnum operationType) {
         return requestHandlerOperations.get(operationType);

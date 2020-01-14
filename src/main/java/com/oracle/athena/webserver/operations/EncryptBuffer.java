@@ -15,8 +15,6 @@ public class EncryptBuffer implements Operation {
 
     private static final Logger LOG = LoggerFactory.getLogger(EncryptBuffer.class);
 
-    private final int NUM_STORAGE_SERVER_WRITE_BUFFERS = 10;
-
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
@@ -63,7 +61,6 @@ public class EncryptBuffer implements Operation {
 
     private final Operation completeCallback;
 
-    private BufferManagerPointer storageServerAddPointer;
     private BufferManagerPointer storageServerWritePointer;
 
     /*
@@ -110,6 +107,19 @@ public class EncryptBuffer implements Operation {
 
         chunkNumber = 0;
         buffersAllEncrypted = false;
+
+        /*
+         ** The storageServerWritePointer is a producer of ByteBuffers in the storage server write BufferManager.
+         **   The buffers produced are used by the WriteToStorageServer operation(s) to stream data out to
+         **   the storage servers.
+         */
+        storageServerWritePointer = storageServerWriteBufferMgr.register(this);
+
+        int numberEncryptedWriteBuffer = requestContext.getBufferManagerRingSize();
+        for (int i = 0; i < numberEncryptedWriteBuffer; i++) {
+            ByteBuffer writeBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, storageServerWriteBufferMgr);
+            storageServerWriteBufferMgr.offer(storageServerWritePointer, writeBuffer);
+        }
     }
 
     public OperationTypeEnum getOperationType() {
@@ -144,20 +154,6 @@ public class EncryptBuffer implements Operation {
             savedSrcPosition = 0;
         }
 
-        /*
-         ** The storageServerWritePointer is a producer of ByteBuffers in the storage server write BufferManager.
-         **   The buffers produced are used by the WriteToStorageServer operation(s) to stream data out to
-         **   the storage servers.
-         */
-        storageServerAddPointer = storageServerWriteBufferMgr.register(this);
-        storageServerWriteBufferMgr.bookmark(storageServerAddPointer);
-
-        for (int i = 0; i < NUM_STORAGE_SERVER_WRITE_BUFFERS; i++) {
-            ByteBuffer writeBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, storageServerWriteBufferMgr);
-            storageServerWriteBufferMgr.offer(storageServerAddPointer, writeBuffer);
-        }
-
-        storageServerWritePointer = storageServerWriteBufferMgr.register(this, storageServerAddPointer);
 
         LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] initialize done");
 
@@ -254,18 +250,17 @@ public class EncryptBuffer implements Operation {
         clientReadBufferMgr.unregister(encryptInputPointer);
         encryptInputPointer = null;
 
-        storageServerWriteBufferMgr.unregister(storageServerWritePointer);
-        storageServerWritePointer = null;
+        storageServerWriteBufferMgr.reset(storageServerWritePointer);
 
-        storageServerWriteBufferMgr.reset(storageServerAddPointer);
-        for (int i = 0; i < NUM_STORAGE_SERVER_WRITE_BUFFERS; i++) {
-            ByteBuffer buffer = storageServerWriteBufferMgr.getAndRemove(storageServerAddPointer);
+        int numberEncryptedWriteBuffer = requestContext.getBufferManagerRingSize();
+        for (int i = 0; i < numberEncryptedWriteBuffer; i++) {
+            ByteBuffer buffer = storageServerWriteBufferMgr.getAndRemove(storageServerWritePointer);
             if (buffer != null) {
                 memoryManager.poolMemFree(buffer, storageServerWriteBufferMgr);
             }
         }
-        storageServerWriteBufferMgr.unregister(storageServerAddPointer);
-        storageServerAddPointer = null;
+        storageServerWriteBufferMgr.unregister(storageServerWritePointer);
+        storageServerWritePointer = null;
 
         /*
         ** Now need to send out the final status
@@ -344,12 +339,11 @@ public class EncryptBuffer implements Operation {
 
         /*
         ** Keeping these LOG statements around in case there is a problem later
-        **
+        */
         LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] src position: " + srcBuffer.position() +
                 " remaining: " + srcBuffer.remaining() + " limit: " + srcBuffer.limit());
         LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] tgt position: " + tgtBuffer.position() +
                 " remaining: " + tgtBuffer.remaining() + " limit: " + tgtBuffer.limit());
-         */
 
         /*
         ** The easiest case is when the tgtBuffer can hold all of the bytes in the srcBuffer
@@ -484,12 +478,17 @@ public class EncryptBuffer implements Operation {
         LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] testEncryption() start");
 
         /*
+        ** Setup the BufferReadMetering to populate the clientReadBufferManager with ByteBuffer(s)
+         */
+        BufferReadMetering metering = new BufferReadMetering(requestContext, memoryManager);
+        BufferManagerPointer meteringPtr = metering.initialize();
+
+        /*
          ** Create two BufferManagerPointers to add buffers to the two BufferManagers that will
          **   be used to perform the encryption. The buffers added to the clientReadBufferMgr are
          **   initialized to a known pattern.
          */
-        BufferManagerPointer readFillPtr = clientReadBufferMgr.register(this);
-        BufferManagerPointer writeFillPtr = storageServerWriteBufferMgr.register(this);
+        BufferManagerPointer readFillPtr = clientReadBufferMgr.register(this, meteringPtr);
 
         /*
          ** Create the two dependent pointers to read the ByteBuffers from one BufferManager, encrypt the buffer, and
@@ -499,7 +498,6 @@ public class EncryptBuffer implements Operation {
          **   BufferManagerPointer picks up the producers current write index as its starting read index.
          */
         encryptInputPointer = clientReadBufferMgr.register(this, readFillPtr);
-        storageServerWritePointer = storageServerWriteBufferMgr.register(this, writeFillPtr);
 
         /*
          ** Now create one more dependent BufferManagerPointer on the storageServerWritePointer to read all of
@@ -514,26 +512,31 @@ public class EncryptBuffer implements Operation {
         int fillValue = 0;
         for (int i = 0; i < allocations.length; i++) {
             int capacity = allocations[i][0];
-            buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientReadBufferMgr);
-            buffer.limit(capacity);
 
-            for (int j = 0; j < capacity; j = j + 4) {
-                buffer.putInt(fillValue);
-                fillValue++;
+            metering.execute();
+            buffer = clientReadBufferMgr.poll(readFillPtr);
+            if (buffer != null) {
+                buffer.limit(capacity);
+
+                for (int j = 0; j < capacity; j = j + 4) {
+                    buffer.putInt(fillValue);
+                    fillValue++;
+                }
+
+                buffer.flip();
             }
-
-            buffer.flip();
-            clientReadBufferMgr.offer(readFillPtr, buffer);
 
             /*
              ** Now add in the buffers to encrypt the data into
              */
             capacity = allocations[i][1];
-            buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, storageServerWriteBufferMgr);
-            buffer.limit(capacity);
-
-            storageServerWriteBufferMgr.offer(writeFillPtr, buffer);
+            buffer = storageServerWriteBufferMgr.poll(storageServerWritePointer);
+            if (buffer != null) {
+                buffer.limit(capacity);
+            }
         }
+
+        storageServerWriteBufferMgr.reset(storageServerWritePointer);
 
         /*
         ** Need to set the chunkBytesToEncrypt to prevent the encryption loop from doing odd things
@@ -557,7 +560,7 @@ public class EncryptBuffer implements Operation {
         int encryptedValue;
         int tgtBuffer = 0;
         fillValue = 0;
-        while ((readBuffer = storageServerWriteBufferMgr.getAndRemove(validatePtr)) != null) {
+        while ((readBuffer = storageServerWriteBufferMgr.poll(validatePtr)) != null) {
             for (int j = 0; j < readBuffer.limit(); j = j + 4) {
                 encryptedValue = readBuffer.getInt();
                 if (encryptedValue != fillValue) {
@@ -568,8 +571,6 @@ public class EncryptBuffer implements Operation {
                 fillValue++;
             }
 
-            memoryManager.poolMemFree(readBuffer, storageServerWriteBufferMgr);
-
             tgtBuffer++;
         }
 
@@ -579,25 +580,10 @@ public class EncryptBuffer implements Operation {
         ** Cleanup the test. Start by removing all the BufferManagerPointer(s) from the BufferManager(s)
          */
         storageServerWriteBufferMgr.unregister(validatePtr);
-
-        clientReadBufferMgr.unregister(encryptInputPointer);
-        storageServerWriteBufferMgr.unregister(storageServerWritePointer);
-
-        /*
-        ** Free up the ByteBuffer(s) that were allocated for this test
-         */
-        clientReadBufferMgr.reset(readFillPtr);
-        for (int i = 0; i < allocations.length; i++) {
-            buffer = clientReadBufferMgr.getAndRemove(readFillPtr);
-            if (buffer != null) {
-                memoryManager.poolMemFree(buffer, clientReadBufferMgr);
-            } else {
-                LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] null buffer readFillPtr index: " + readFillPtr.getCurrIndex());
-            }
-        }
+        complete();
 
         clientReadBufferMgr.unregister(readFillPtr);
-        storageServerWriteBufferMgr.unregister(writeFillPtr);
+        metering.complete();
     }
 
     /*
@@ -605,9 +591,6 @@ public class EncryptBuffer implements Operation {
      */
     public void dumpCreatedOperations(final int level) {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
-        if (storageServerAddPointer != null) {
-            storageServerAddPointer.dumpPointerInfo();
-        }
 
         if (storageServerWritePointer != null) {
             storageServerWritePointer.dumpPointerInfo();

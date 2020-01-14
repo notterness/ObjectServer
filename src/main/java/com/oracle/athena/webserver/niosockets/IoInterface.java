@@ -42,13 +42,15 @@ public interface IoInterface {
     void unregisterWriteBufferManager();
 
     void readBufferAvailable();
-    void performRead();
+    int performRead();
 
     void writeBufferReady();
-    void performWrite();
+    int performWrite();
 
     void sendErrorEvent();
 
+    boolean updateInterestOps();
+    void removeKey();
     void closeConnection();
     void connectComplete();
 

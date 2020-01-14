@@ -225,7 +225,7 @@ public class SetupClientConnection implements Operation {
         **   created and managed by the RequestContext.
         ** Setup the Metering and Read pointers since they are required for the HTTP Response Parser.
          */
-        BufferReadMetering readMetering = new BufferReadMetering(webServerFlavor, requestContext, memoryManager);
+        BufferReadMetering readMetering = new BufferReadMetering(requestContext, memoryManager);
         clientOperations.put(readMetering.getOperationType(), readMetering);
         BufferManagerPointer meteringPointer = readMetering.initialize();
 

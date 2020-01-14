@@ -29,7 +29,7 @@ public class NioSocket implements IoInterface {
     **   which in turn means there is a Selector() loop that this must use. The Selector() loop
     **   is controlled via the NioSelectHandler object.
      */
-    private final NioSelectHandler nioSelectHandler;
+    private NioSelectHandler nioSelectHandler;
 
     private SelectionKey key;
 
@@ -78,6 +78,7 @@ public class NioSocket implements IoInterface {
 
     private int writePostion;
 
+    private int currentInterestOps;
 
     public NioSocket(final NioSelectHandler nioSelectHandler) {
 
@@ -93,6 +94,8 @@ public class NioSocket implements IoInterface {
         writeBufferAssociations = new Stack<>();
 
         writePostion = 0;
+
+        currentInterestOps = 0;
     }
 
     /*
@@ -101,8 +104,8 @@ public class NioSocket implements IoInterface {
     **   pool if so desired.
      */
     public void startClient(final SocketChannel socket) {
-
         socketChannel = socket;
+        this.nioSelectHandler.addNioSocketToSelector(this);
     }
 
     public void startClient(final String readFileName, final Operation errorHandler) {
@@ -162,10 +165,13 @@ public class NioSocket implements IoInterface {
             return false;
         }
 
+        this.nioSelectHandler.addNioSocketToSelector(this);
+
         /*
         ** Register with the selector for this thread to know when the connection is available to
         **   perform writes and reads.
          */
+        currentInterestOps = SelectionKey.OP_CONNECT;
         key = nioSelectHandler.registerWithSelector(socketChannel, SelectionKey.OP_CONNECT, this);
         if (key == null) {
             try {
@@ -317,23 +323,36 @@ public class NioSocket implements IoInterface {
     }
 
     /*
+    ** Update the key interest ops
+     */
+    public boolean updateInterestOps() {
+        if (currentInterestOps != 0) {
+            if (key == null) {
+                key = nioSelectHandler.registerWithSelector(socketChannel, currentInterestOps, this);
+            } else {
+                /*
+                 ** Use the key again
+                 */
+                key.interestOps(currentInterestOps);
+            }
+        } else {
+            removeKey();
+            return false;
+        }
+
+        return true;
+    }
+
+    /*
      ** This is called when there is a buffer in the BufferManager that is ready to accept data from
      **   the SocketChannel.
      ** It sets the OP_READ flag for the Selector that is managed by the NioSelectHandler object.
      */
     public void readBufferAvailable() {
-        //LOG.info(" readBufferAvailable (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
-        //        readPointer.getCurrIndex());
+        LOG.info(" readBufferAvailable (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                readPointer.getCurrIndex() + " interestOps: " + currentInterestOps);
 
-        if (key == null) {
-            key = nioSelectHandler.registerWithSelector(socketChannel, SelectionKey.OP_READ, this);
-        } else {
-            /*
-            ** Use the key again
-             */
-            int currentOps = key.interestOps() | SelectionKey.OP_READ;
-            key.interestOps(currentOps);
-        }
+        currentInterestOps |= SelectionKey.OP_READ;
     }
 
     /*
@@ -342,30 +361,38 @@ public class NioSocket implements IoInterface {
     **   multiple NioSocket(s). The NioSocket can be a target or a server (initiator when communicating with the
     **   Storage Server).
      */
-    public void performRead() {
+    public int performRead() {
         ByteBuffer readBuffer;
 
+        /*
+        ** Clear out the OP_READ flag
+         */
+        currentInterestOps &= (SelectionKey.OP_CONNECT | SelectionKey.OP_WRITE);
         while ((readBuffer = readBufferManager.peek(readPointer)) != null) {
 
-            LOG.info(" read (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+            LOG.info(" read(" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
                     readPointer.getCurrIndex() + " position: " + readBuffer.position() + " limit: " + readBuffer.limit());
 
             try {
                 int bytesRead = socketChannel.read(readBuffer);
 
+                LOG.info(" read(" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                        readPointer.getCurrIndex() + " position: " + readBuffer.position() + " bytesRead: " + bytesRead);
                 if (bytesRead > 0) {
                     /*
-                    ** Update the pointer and the number of bytes actually read into the buffer.
+                     ** Update the pointer and the number of bytes actually read into the buffer.
                      */
                     readBuffer.limit(bytesRead);
                     readBuffer.rewind();
 
                     readBufferManager.updateProducerWritePointer(readPointer);
-                } else if (bytesRead == -1) {
+                } else if (bytesRead == 0) {
+                    currentInterestOps |= SelectionKey.OP_READ;
+                } else {
                     /*
                     ** Need to close the SocketChannel and event() the error handler.
                      */
-                    LOG.warn(" (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                    LOG.warn("read(" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
                             readPointer.getCurrIndex() + " bytesRead -1");
                     closeConnection();
                     sendErrorEvent();
@@ -380,6 +407,8 @@ public class NioSocket implements IoInterface {
             }
 
         }
+
+        return currentInterestOps;
     }
 
     /*
@@ -388,33 +417,37 @@ public class NioSocket implements IoInterface {
     **   object.
      */
     public void writeBufferReady() {
-        //LOG.info(" writeBufferReady (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
-        //        writePointer.getCurrIndex());
+        LOG.info(" writeBufferReady (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+                writePointer.getCurrIndex() + " interestOps: " + currentInterestOps);
 
-        if (key == null) {
-            key = nioSelectHandler.registerWithSelector(socketChannel, SelectionKey.OP_WRITE, this);
-        } else {
-            /*
-             ** Use the key again
-             */
-            int currentOps = key.interestOps() | SelectionKey.OP_WRITE;
-            key.interestOps(currentOps);
-        }
-
+        currentInterestOps |= SelectionKey.OP_WRITE;
     }
 
     /*
      ** This is called from the Select loop (really the handleSelector method) from within NioSelectHandler for the
      **   OP_WRITE case.
      */
-    public void performWrite() {
+    public int performWrite() {
         ByteBuffer writeBuffer;
 
+        if (writePointer == null) {
+            LOG.error("null writePointer socketChannel: " + socketChannel.toString());
+        }
+
+        /*
+         ** Clear out the OP_WRITE flag
+         */
+        currentInterestOps &= (SelectionKey.OP_CONNECT | SelectionKey.OP_READ);
         while ((writeBuffer = writeBufferManager.peek(writePointer)) != null) {
 
             LOG.info(" write (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
                     writePointer.getCurrIndex() + " position: " + writeBuffer.position() + " limit: " + writeBuffer.limit());
 
+            /*
+            ** If the same ByteBuffer is going to be written to multiple places, then there must be a duplicate() made
+            **   and the position() must be kept on a per writer basis. Otherwise, the first writer will change the
+            **   "base" ByteBuffer's position() and the following writers will do nothing.
+             */
             ByteBuffer tempBuffer = writeBuffer.duplicate();
             tempBuffer.position(writePostion);
 
@@ -433,13 +466,15 @@ public class NioSocket implements IoInterface {
                         writeBufferManager.updateProducerWritePointer(writePointer);
                     } else {
                         /*
-                        ** Need to set the OP_WRITE flag and try again later when the Select loop fires
+                         ** Need to set the OP_WRITE flag and try again later when the Select loop fires
                          */
                         writePostion = tempBuffer.position();
-                        writeBufferReady();
+                        currentInterestOps |= SelectionKey.OP_WRITE;
                         break;
                     }
-                } else if (bytesWritten == -1) {
+                } else if (bytesWritten == 0) {
+                    currentInterestOps |= SelectionKey.OP_WRITE;
+                } else {
                     /*
                      ** Need to close the SocketChannel and event() the error handler.
                      */
@@ -459,6 +494,21 @@ public class NioSocket implements IoInterface {
                 break;
             }
         }
+
+        return currentInterestOps;
+    }
+
+    /*
+    ** This is used when there are no outstanding SelectionKey interest ops to look at
+     */
+    public void removeKey() {
+        if (key != null) {
+            LOG.info("NioSocket removeKey()");
+
+            key.attach(null);
+            key.cancel();
+            key = null;
+        }
     }
 
     /*
@@ -468,8 +518,7 @@ public class NioSocket implements IoInterface {
     public void closeConnection() {
 
         LOG.info("NioSocket closeConnection()");
-        key.cancel();
-        key = null;
+        removeKey();
 
         try {
             socketChannel.close();
@@ -478,6 +527,9 @@ public class NioSocket implements IoInterface {
         }
 
         socketChannel = null;
+
+        nioSelectHandler.removeNioSocketFromSelector(this);
+        nioSelectHandler = null;
     }
 
     /*
@@ -495,6 +547,10 @@ public class NioSocket implements IoInterface {
     **   initiator is to start sending a Chunk to a Storage Server, this means that the HTTP Request can be sent.
      */
     public void connectComplete() {
+        /*
+        ** Clear out the OP_CONNECT SelectionKey
+         */
+        currentInterestOps &= (SelectionKey.OP_WRITE | SelectionKey.OP_READ);
         if (connectCompleteHandler != null) {
             connectCompleteHandler.event();
         } else {

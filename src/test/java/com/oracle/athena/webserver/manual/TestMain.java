@@ -41,8 +41,8 @@ public class TestMain {
         NioTestClient testClient = new NioTestClient(3000);
         testClient.start();
 
-        //TestChunkWrite testChunkWrite = new TestChunkWrite(testClient, storageServerTcpPort, threadCount);
-        //testChunkWrite.execute();
+        TestChunkWrite testChunkWrite = new TestChunkWrite(testClient, storageServerTcpPort, threadCount);
+        testChunkWrite.execute();
 
         //ClientTest client_1 = new ClientTest_2("ClientTest_2", testClient, serverTcpPort, threadCount);
         //client_1.execute();
