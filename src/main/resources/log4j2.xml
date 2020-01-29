@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Configuration status="WARN" shutdownHook="disable" monitorInterval="30" packages="com.oracle.pic.casper.common.util">
+<Configuration status="WARN" shutdownHook="disable" monitorInterval="30" >
     <Appenders>
         <RollingRandomAccessFile name="app_log" fileName="logs/app.log"
                                  filePattern="logs/app-%d{yyyy-MM-dd'T'HH:mm':00Z'}.%i.log.gz">
@@ -51,26 +51,6 @@
                 <SizeBasedTriggeringPolicy size="250 MB"/>
             </Policies>
             <DefaultRolloverStrategy max="20"/>
-        </RollingRandomAccessFile>
-        <RollingRandomAccessFile name="metering_log" fileName="metering/metering.log"
-                                 filePattern="metering/metering-%d{yyyy-MM-dd'T'HH:mm':00Z'}.%i.log.gz">
-            <PatternLayout>
-                <Pattern>%m%n</Pattern>
-            </PatternLayout>
-            <Policies>
-                <TimeBasedTriggeringPolicy interval="10" modulate="true"/>
-            </Policies>
-            <DefaultRolloverStrategy max="20"
-                                     tempCompressedFilePattern="metering/metering-%d{yyyy-MM-dd'T'HH:mm':00Z'}.%i.log.gz.tmp">
-                <Delete basePath="logs/" followLinks="True">
-                    <IfFileName glob="metering-*.log.gz">
-                        <IfAny>
-                            <IfLastModified age="7d"/>
-                            <IfAccumulatedFileSize exceeds="3 GB"/>
-                        </IfAny>
-                    </IfFileName>
-                </Delete>
-            </DefaultRolloverStrategy>
         </RollingRandomAccessFile>
         <RollingRandomAccessFile name="events_log" fileName="logs/events/events.log"
                                  filePattern="logs/events/events-%d{yyyy-MM-dd'T'HH:mm':00Z'}.%i.log.gz">
@@ -163,64 +143,14 @@
             </Policies>
             <DefaultRolloverStrategy max="20"/>
         </RollingRandomAccessFile>
-        <LogMetrics name="log_metrics"/>
-        <FixedLogMetric name="vertx_thread_blocker" metric="vertx.event_loop.blocked"/>
     </Appenders>
     <Loggers>
         <Root level="INFO">
             <AppenderRef ref="app_log" level="DEBUG"/>
-            <AppenderRef ref="log_metrics" level="WARN"/>
         </Root>
         <Logger name="tracing" level="INFO" additivity="false">
             <AppenderRef ref="tracing_log" level="DEBUG"/>
         </Logger>
 
-        <Logger name="io.vertx.core.impl.BlockedThreadChecker" level="WARN" additivity="true">
-            <AppenderRef ref="vertx_thread_blocker" level="WARN"/>
-        </Logger>
-
-        <!-- We want additional information for helping diagnose when customers hit UNTRUSTED_AUTHENTICATOR -->
-        <Logger name="com.oracle.pic.identity.authentication.signedRequest.RequestVerifierImpl" level="WARN"/>
-        <Logger name="com.oracle.pic.identity.authentication.signedRequest.Verifier" level="WARN"/>
-
-        <Logger name="com.oracle.pic.identity.authentication.signedRequest" level="WARN"/>
-        <Logger name="com.oracle.pic.identity.authentication.AuthenticatorClientImpl" level="ERROR"/>
-        <Logger name="com.oracle.pic.identity.authorization.permissions.ActionKind" level="ERROR"/>
-        <Logger name="com.oracle.pic.identity.authorization.sdk.response.BaseAuthorizationResponse" level="ERROR"/>
-        <Logger name="com.oracle.pic.casper.webserver.api.metering.MeteringHelperImpl" level="INFO"/>
-        <Logger name="com.oracle.pic.limits" level="ERROR"/>
-
-        <Logger name="com.oracle.pic.identity.authorization.sdk.store.AuthorizationDecisionCachingStore" level="ERROR"/>
-        <Logger name="io.vertx.ext.web.handler.impl.LoggerHandlerImpl" level="ERROR"/>
-
-        <Logger name="com.oracle.pic.casper.webserver.api.common.CasperLoggerHandler" level="INFO" additivity="false">
-            <AppenderRef ref="access_log" level="DEBUG"/>
-        </Logger>
-        <Logger name="io.vertx.ext.web.handler.LoggerHandler" level="INFO" additivity="false">
-            <AppenderRef ref="access_log" level="DEBUG"/>
-        </Logger>
-        <Logger name="com.oracle.pic.casper.common.metrics.request_log" level="INFO" additivity="false">
-            <AppenderRef ref="request_log" level="DEBUG"/>
-        </Logger>
-        <Logger name="com.oracle.pic.casper.webserver.traffic_log" level="INFO" additivity="false">
-            <AppenderRef ref="traffic_log" level="INFO"/>
-        </Logger>
-        <Logger name="com.oracle.pic.casper.common.metering.metering_log" level="INFO" additivity="false">
-            <AppenderRef ref="metering_log" level="DEBUG"/>
-        </Logger>
-        <Logger name="com.oracle.pic.casper.event.logging" LEVEL="INFO" additivity="false">
-            <AppenderRef ref="events_log" level="INFO"/>
-        </Logger>
-        <Logger name="org.apache.http.headers" level="INFO" />
-        <Logger name="org.apache.http.wire" level="INFO" />
-        <Logger name="com.oracle.pic.casper.webserver.api.auditing.AuditLogger" level="INFO" additivity="false">
-            <AppenderRef ref="audit_log" level="INFO"/>
-        </Logger>
-        <Logger name="com.oracle.pic.casper.webserver.api.logging.service_log" level="INFO" additivity="false">
-            <AppenderRef ref="service_log" level="INFO"/>
-        </Logger>
-        <Logger name="com.oracle.pic.casper.webserver.api.logging.public_log" level="INFO" additivity="false">
-            <AppenderRef ref="public_log" level="INFO"/>
-        </Logger>
     </Loggers>
 </Configuration>

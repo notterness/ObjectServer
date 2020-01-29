@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN" shutdownHook="disable" monitorInterval="30" >
+    <Appenders>
+        <RollingRandomAccessFile name="app_log" fileName="logs/app.log"
+                                 filePattern="logs/app-%d{yyyy-MM-dd'T'HH:mm':00Z'}.%i.log.gz">
+            <PatternLayout>
+                <Pattern>%d %p %c{1.} [%t] [%X{opc-request-id}] %replace{%m}{[\n\r]+}{} %ex{full}{separator( | )}%n</Pattern>
+            </PatternLayout>
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="10" modulate="true"/>
+                <SizeBasedTriggeringPolicy size="250 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="20">
+                <Delete basePath="logs/" followLinks="True">
+                    <IfFileName glob="app-*.log.gz">
+                        <IfAny>
+                            <IfLastModified age="7d"/>
+                            <IfAccumulatedFileSize exceeds="3 GB"/>
+                        </IfAny>
+                    </IfFileName>
+                </Delete>
+            </DefaultRolloverStrategy>
+        </RollingRandomAccessFile>
+    </Appenders>
+    <Loggers>
+        <Root level="INFO">
+            <AppenderRef ref="app_log" level="DEBUG"/>
+        </Root>
+
+    </Loggers>
+</Configuration>
