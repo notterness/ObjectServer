@@ -125,7 +125,7 @@ public class WriteToFile implements Operation {
         /*
         ** Open up the File for writing
          */
-        outFile = new File("StorageServer" + requestContext.getIoInterfaceIdentifier() + ".dat");
+        outFile = new File("./logs/StorageServer" + requestContext.getIoInterfaceIdentifier() + ".dat");
         try {
             writeFileChannel = new FileOutputStream(outFile, false).getChannel();
         } catch (FileNotFoundException ex) {
