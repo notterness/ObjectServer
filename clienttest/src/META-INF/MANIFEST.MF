@@ -1,0 +1,42 @@
+Manifest-Version: 1.0
+Main-Class: com.webutils.webserver.manual.TestMain
+Class-Path: alpn-boot-8.1.13.v20181017.jar commons-collections4-4.1.jar 
+ client-java-api-7.0.0.jar bcprov-ext-jdk15on-1.61.jar jetty-io-9.4.25.v
+ 20191220.jar joda-convert-1.2.jar jsr305-1.3.9.jar client-java-7.0.0.ja
+ r okio-1.9.0.jar bcpkix-jdk15on-1.61.jar j2objc-annotations-1.1.jar sna
+ keyaml-1.25.jar javax.annotation-api-1.3.2.jar builder-annotations-0.19
+ .2.jar resourcecify-annotations-0.19.2.jar log4j-api-2.7.jar commons-la
+ ng3-3.7.jar jetty-util-9.4.25.v20191220.jar gson-fire-1.8.3.jar mysql-c
+ onnector-java-8.0.19.jar checker-qual-2.0.0.jar commons-codec-1.11.jar 
+ error_prone_annotations-2.0.18.jar gson-2.8.0.jar log4j-core-2.7.jar ja
+ ckson-core-2.10.1.jar commons-compress-1.19.jar jetty-http-9.4.25.v2019
+ 1220.jar joda-time-2.9.3.jar client-java-proto-7.0.0.jar swagger-annota
+ tions-1.5.22.jar animal-sniffer-annotations-1.14.jar guava-23.5-jre.jar
+  slf4j-api-1.7.25.jar servlet-api-3.1.jar jetty-schemas-3.1.jar alpn-ap
+ i-1.1.3.v20160715.jar jetty-io-9.4.25.v20191220.jar jetty-cdi-9.4.25.v2
+ 0191220.jar jetty-jmx-9.4.25.v20191220.jar jetty-xml-9.4.25.v20191220.j
+ ar jetty-http-9.4.25.v20191220.jar jetty-jaas-9.4.25.v20191220.jar jett
+ y-jndi-9.4.25.v20191220.jar jetty-plus-9.4.25.v20191220.jar jetty-util-
+ 9.4.25.v20191220.jar jetty-jaspi-9.4.25.v20191220.jar jetty-nosql-9.4.2
+ 5.v20191220.jar jetty-proxy-9.4.25.v20191220.jar jetty-client-9.4.25.v2
+ 0191220.jar jetty-deploy-9.4.25.v20191220.jar jetty-openid-9.4.25.v2019
+ 1220.jar jetty-server-9.4.25.v20191220.jar jetty-webapp-9.4.25.v2019122
+ 0.jar jetty-rewrite-9.4.25.v20191220.jar jetty-servlet-9.4.25.v20191220
+ .jar jetty-security-9.4.25.v20191220.jar jetty-servlets-9.4.25.v2019122
+ 0.jar jetty-hazelcast-9.4.25.v20191220.jar jetty-util-ajax-9.4.25.v2019
+ 1220.jar jetty-quickstart-9.4.25.v20191220.jar jetty-unixsocket-9.4.25.
+ v20191220.jar infinispan-common-9.4.25.v20191220.jar jetty-alpn-server-
+ 9.4.25.v20191220.jar jetty-annotations-9.4.25.v20191220.jar jetty-conti
+ nuation-9.4.25.v20191220.jar jetty-alpn-java-server-9.4.25.v20191220.ja
+ r infinispan-remote-query-9.4.25.v20191220.jar jetty-memcached-sessions
+ -9.4.25.v20191220.jar infinispan-embedded-query-9.4.25.v20191220.jar je
+ tty-alpn-openjdk8-server-9.4.25.v20191220.jar jetty-alpn-conscrypt-serv
+ er-9.4.25.v20191220.jar jetty-gcloud-session-manager-9.4.25.v20191220.j
+ ar jackson-annotations-2.0.1.jar okhttp-3.4.2.jar sundr-core-0.19.2.jar
+  log4j-slf4j-impl-2.7.jar jetty-alpn-server-9.3.3.v20150827.jar jetty-s
+ erver-9.3.3.v20150827.jar javax.servlet-api-3.1.0.jar jetty-http-9.3.3.
+ v20150827.jar jetty-util-9.3.3.v20150827.jar jetty-io-9.3.3.v20150827.j
+ ar protobuf-java-3.4.0.jar jetty-osgi-alpn-9.3.3.v20150827.jar bcprov-j
+ dk15on-1.61.jar alpn-boot-8.1.13.v20181017.jar sundr-codegen-0.19.2.jar
+  logging-interceptor-3.14.3.jar
+

@@ -1,10 +1,12 @@
 package com.webutils.webserver.manual;
 
 import com.webutils.webserver.client.NioTestClient;
+import com.webutils.webserver.kubernetes.KubernetesInfo;
 import com.webutils.webserver.mysql.DbSetup;
 import com.webutils.webserver.niosockets.NioServerHandler;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -12,6 +14,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 // Server class
 public class TestMain {
     public static void main(String[] args) {
+
+        WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
+
         final int serverTcpPort = 5001;
 
         final int NUMBER_TEST_STORAGE_SERVERS = 3;
@@ -32,15 +37,32 @@ public class TestMain {
          */
         if (args.length == 2) {
             if (args[1].compareTo("docker") == 0) {
-                dockerImage = true;
+                flavor = WebServerFlavor.INTEGRATION_DOCKER_TESTS;
+            } else if (args[1].compareTo("docker-test") == 0) {
+                flavor = WebServerFlavor.INTEGRATION_KUBERNETES_TESTS;
             }
         }
+
+        /*
+        ** Debug stuff to look at Kubernetes Pod information
+         */
+        String kubernetesPodIp = null;
+
+        if ((flavor == WebServerFlavor.INTEGRATION_KUBERNETES_TESTS) || (flavor == WebServerFlavor.INTEGRATION_TESTS)){
+            KubernetesInfo kubeInfo = new KubernetesInfo(flavor);
+            try {
+                kubernetesPodIp = kubeInfo.getKubeInfo();
+            } catch (IOException io_ex) {
+                System.out.println("IOException: " + io_ex.getMessage());
+            }
+        }
+
         AtomicInteger threadCount = new AtomicInteger(1);
 
         NioServerHandler nioServer;
         NioServerHandler[] nioStorageServer = new NioServerHandler[NUMBER_TEST_STORAGE_SERVERS];
 
-        if (!dockerImage) {
+        if (flavor == WebServerFlavor.INTEGRATION_TESTS) {
             TestEncryptBuffer testEncryptBuffer = new TestEncryptBuffer();
             testEncryptBuffer.execute();
 
@@ -70,7 +92,7 @@ public class TestMain {
         NioTestClient testClient = new NioTestClient(3000);
         testClient.start();
 
-        if (dockerImage) {
+        if (flavor == WebServerFlavor.INTEGRATION_DOCKER_TESTS) {
             try {
                 InetAddress addr = InetAddress.getByName("StorageServer");
 
@@ -79,20 +101,45 @@ public class TestMain {
             } catch (UnknownHostException ex) {
                 System.out.println("Unknown host: StorageServer " + ex.getMessage());
             }
+        } else if (flavor == WebServerFlavor.INTEGRATION_KUBERNETES_TESTS){
+            if (kubernetesPodIp != null) {
+                try {
+                    System.out.println("Kubernetes POD IP: " + kubernetesPodIp);
+                    InetAddress addr = InetAddress.getByName(kubernetesPodIp);
+                    TestChunkWrite testChunkWrite = new TestChunkWrite(testClient, addr, baseTcpPort, threadCount);
+                    testChunkWrite.execute();
+                } catch (UnknownHostException ex) {
+                    System.out.println("Kubernetes POD IP: " + kubernetesPodIp + " - " + ex.getMessage());
+                }
+            } else {
+                System.out.println("Kubernetes POD IP null");
+            }
         } else {
+            /*
+            ** flavor == WebServerFlavor.INTEGRATION_TESTS
+             */
             InetAddress addr = InetAddress.getLoopbackAddress();
             TestChunkWrite testChunkWrite = new TestChunkWrite(testClient, addr, baseTcpPort, threadCount);
             testChunkWrite.execute();
         }
 
-        InetAddress serverIpAddr;
+        InetAddress serverIpAddr = null;
 
-        if (dockerImage) {
+        if (flavor == WebServerFlavor.INTEGRATION_DOCKER_TESTS) {
             try {
                 serverIpAddr = InetAddress.getByName("ObjectServer");
             } catch (UnknownHostException ex) {
                 System.out.println("Unknown host: ObjectServer " + ex.getMessage());
-                serverIpAddr = null;
+            }
+        } else if (flavor == WebServerFlavor.INTEGRATION_KUBERNETES_TESTS){
+            if (kubernetesPodIp != null) {
+                try {
+                    serverIpAddr = InetAddress.getByName(kubernetesPodIp);
+                } catch (UnknownHostException ex) {
+                    System.out.println("Kubernetes POD IP: " + kubernetesPodIp + " - " + ex.getMessage());
+                }
+            } else {
+                System.out.println("Kubernetes POD IP null");
             }
         } else {
             serverIpAddr = InetAddress.getLoopbackAddress();

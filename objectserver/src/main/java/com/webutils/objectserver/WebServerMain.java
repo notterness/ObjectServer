@@ -23,9 +23,21 @@ public class WebServerMain {
             serverTcpPort = 5001;
         }
 
+        /*
+         ** Check if this is a Docker or a Kubernetes image. The differences are:
+         **   -> Both the Docker and Kubernetes images use "host.docker.internal" to
+         **      access resources that are running on the same system, but outside of
+         **      the Docker container. In the current code, this is just the MySQL database.
+         **   -> For the Docker image, the "dockerServerIdentifier" MySQL table is used to
+         **      lookup the addresses of the Storage Servers.
+         **   -> For the normal and Kubernetes images, the "localServerIdentifier" MySQL table
+         **      is used to lookup the addresses of the Storage Servers.
+         */
         if (args.length == 2) {
             if (args[1].compareTo("docker") == 0) {
                 flavor = WebServerFlavor.DOCKER_OBJECT_SERVER_TEST;
+            } else if (args[1].compareTo("kubernetes") == 0) {
+                flavor = WebServerFlavor.KUBERNETES_OBJECT_SERVER_TEST;
             }
         }
 

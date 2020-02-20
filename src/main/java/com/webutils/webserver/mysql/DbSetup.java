@@ -2,6 +2,7 @@ package com.webutils.webserver.mysql;
 
 import com.mysql.cj.exceptions.MysqlErrorNumbers;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
+import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,14 +58,20 @@ public class DbSetup {
     /*
     ** Is this running within a Docker Container?
      */
-    private final boolean dockerImage;
+    private final WebServerFlavor flavor;
 
-    public DbSetup(final boolean dockerImage) {
-        this.dockerImage = dockerImage;
+    public DbSetup(final WebServerFlavor flavor) {
+        this.flavor = flavor;
     }
 
     public boolean isDockerImage() {
-        return dockerImage;
+        return ((flavor == WebServerFlavor.DOCKER_OBJECT_SERVER_TEST) ||
+                (flavor == WebServerFlavor.DOCKER_STORAGE_SERVER_TEST));
+    }
+
+    public boolean isKubernetesImage() {
+        return ((flavor == WebServerFlavor.KUBERNETES_OBJECT_SERVER_TEST) ||
+                (flavor == WebServerFlavor.KUBERNETES_STORAGE_SERVER_TEST));
     }
 
     /*
@@ -91,7 +98,7 @@ public class DbSetup {
         Connection conn = null;
 
         try {
-            if (dockerImage) {
+            if (isDockerImage() || isKubernetesImage()) {
                 conn = DriverManager.getConnection("jdbc:mysql://host.docker.internal/StorageServers", storageServerUser,
                         storageServerPassword);
             } else {
@@ -141,7 +148,7 @@ public class DbSetup {
 
         try {
             System.out.println("Trying to connect to MySql");
-            if (dockerImage) {
+            if (isDockerImage() || isKubernetesImage()) {
                 conn = DriverManager.getConnection("jdbc:mysql://host.docker.internal/StorageServers", userName, password);
             } else {
                 conn = DriverManager.getConnection("jdbc:mysql://localhost/StorageServers", userName, password);
@@ -182,7 +189,7 @@ public class DbSetup {
         if (vendorError == MysqlErrorNumbers.ER_BAD_DB_ERROR) {
             System.out.println("createStorageServerDb() create database");
             try {
-                if (dockerImage) {
+                if (isDockerImage() || isKubernetesImage()) {
                     conn = DriverManager.getConnection("jdbc:mysql://host.docker.internal/", userName, password);
                 } else {
                     conn = DriverManager.getConnection("jdbc:mysql://localhost/", userName, password);

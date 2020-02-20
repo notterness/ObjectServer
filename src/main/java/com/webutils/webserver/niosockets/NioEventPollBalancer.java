@@ -47,23 +47,15 @@ public class NioEventPollBalancer {
 
         eventPollThreadPool = new NioEventPollThread[this.numberPollThreads];
 
+        dbSetup = new DbSetup(flavor);
         switch (flavor) {
             case DOCKER_OBJECT_SERVER_TEST:
-                dbSetup = new DbSetup(true);
+            case INTEGRATION_OBJECT_SERVER_TEST:
                 dbSetup.checkAndSetupStorageServers();
                 break;
 
             case DOCKER_STORAGE_SERVER_TEST:
-                dbSetup = new DbSetup(true);
-                break;
-
-            case INTEGRATION_OBJECT_SERVER_TEST:
-                dbSetup = new DbSetup(false);
-                dbSetup.checkAndSetupStorageServers();
-                break;
-
             case INTEGRATION_STORAGE_SERVER_TEST:
-                dbSetup = new DbSetup(false);
                 break;
 
             default:
