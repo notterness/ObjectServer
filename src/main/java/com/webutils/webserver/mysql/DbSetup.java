@@ -1,11 +1,13 @@
 package com.webutils.webserver.mysql;
 
 import com.mysql.cj.exceptions.MysqlErrorNumbers;
+import com.webutils.webserver.kubernetes.KubernetesInfo;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.sql.*;
 import java.util.LinkedList;
 import java.util.List;
@@ -40,6 +42,14 @@ public class DbSetup {
             " PRIMARY KEY (identifier)" +
             ")";
 
+    private static final String kubernetesStorageServerTable = "CREATE TABLE IF NOT EXISTS kubernetesServerIdentifier (" +
+            " identifier INT AUTO_INCREMENT," +
+            " serverName VARCHAR(255) NOT NULL," +
+            " serverIpAddress VARCHAR(32) NOT NULL," +
+            " serverPortNumber INT," +
+            " PRIMARY KEY (identifier)" +
+            ")";
+
     private static final String createStorageServerUser = "CREATE USER '" + storageServerUser + "'@'localhost'" +
             " IDENTIFIED BY '" + storageServerPassword + "'";
 
@@ -55,12 +65,21 @@ public class DbSetup {
             "VALUES('DockerStorageServer_";
     private static final String addDockerStorageServer_2 = "', 'StorageServer', ";
 
+    private static final String addKubernetesStorageServer_1 = "INSERT INTO kubernetesServerIdentifier(serverName, serverIpAddress, serverPortNumber) " +
+            "VALUES('KubernetesStorageServer_";
+
+    private static final String dropLocalServerIdentifierTable = "DROP TABLE IF EXISTS localServerIdentifier";
+    private static final String dropDockerServerIdentifierTable = "DROP TABLE IF EXISTS dockerServerIdentifier" ;
+    private static final String dropKubernetesServerIdentifierTable = "DROP TABLE IF EXISTS kubernetesServerIdentifier" ;
+
+
     /*
     ** Is this running within a Docker Container?
      */
     private final WebServerFlavor flavor;
 
     public DbSetup(final WebServerFlavor flavor) {
+        LOG.info("DBSetup() WebServerFlavor: " + flavor.toString());
         this.flavor = flavor;
     }
 
@@ -82,6 +101,29 @@ public class DbSetup {
         if (createStorageServerDb()) {
             createStorageServerTables();
             populateStorageServers();
+        }
+
+        /*
+        ** Only have the Kubernetes Object Server setup the database to prevent conflicts with access to the database
+         */
+        if (flavor == WebServerFlavor.KUBERNETES_OBJECT_SERVER_TEST) {
+            /*
+             ** Always drop and repopulate the Kubernetes storage server tables since the IP address
+             **   for the POD will likely change between startups.
+             */
+            String kubernetesIpAddr;
+
+            KubernetesInfo kubeInfo = new KubernetesInfo(flavor);
+            try {
+                kubernetesIpAddr = kubeInfo.getInternalKubeIp();
+            } catch (IOException io_ex) {
+                System.out.println("IOException: " + io_ex.getMessage());
+                kubernetesIpAddr = null;
+            }
+
+            dropKubernetesStorageServerTables();
+            createKubernetesStorageServerTables();
+            populateKubernetesStorageServers(kubernetesIpAddr);
         }
 
         StorageServerDbOps ops = new StorageServerDbOps(this);
@@ -253,12 +295,11 @@ public class DbSetup {
     }
 
     /*
-    ** This performs an initial setup of the tables associated with the Storage Servers if they do not already
-    **   exist (meaning they are created if the database did not exist).
+    ** This will drop the docker and the local storage server tables. These are managed separately from the
+    **   Kubernetes storage server tables since those can change with each startup
      */
-    private boolean createStorageServerTables() {
-
-        System.out.println("createStorageServerTables()");
+    public void dropStorageServerTables() {
+        System.out.println("dropStorageServerTables()");
 
         Connection conn = getStorageServerDbConn();
 
@@ -267,7 +308,7 @@ public class DbSetup {
 
             try {
                 stmt = conn.createStatement();
-                stmt.execute(localStorageServerTable);
+                stmt.execute(dropLocalServerIdentifierTable);
             } catch (SQLException sqlEx) {
                 System.out.println("SQLException: " + sqlEx.getMessage());
                 System.out.println("SQLState: " + sqlEx.getSQLState());
@@ -279,6 +320,113 @@ public class DbSetup {
                         stmt.close();
                     } catch (SQLException sqlEx) {
                         System.out.println("SQLException: " + sqlEx.getMessage());
+                        System.out.println("SQLState: " + sqlEx.getSQLState());
+                        System.out.println("VendorError: " + sqlEx.getErrorCode());
+                    }
+
+                    stmt = null;
+                }
+            }
+
+            try {
+                stmt = conn.createStatement();
+                stmt.execute(dropDockerServerIdentifierTable);
+            } catch (SQLException sqlEx) {
+                System.out.println("SQLException: " + sqlEx.getMessage());
+                System.out.println("SQLState: " + sqlEx.getSQLState());
+                System.out.println("VendorError: " + sqlEx.getErrorCode());
+            }
+            finally {
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("SQLException: " + sqlEx.getMessage());
+                        System.out.println("SQLState: " + sqlEx.getSQLState());
+                        System.out.println("VendorError: " + sqlEx.getErrorCode());
+                    }
+
+                    stmt = null;
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database tables.
+             */
+            closeStorageServerDbConn(conn);
+            conn = null;
+        }
+    }
+
+    /*
+     ** This will drop the Kubernetes storage server table. These are managed separately from the
+     **   since those can change with each startup
+     */
+    public void dropKubernetesStorageServerTables() {
+        LOG.info("dropKubernetesStorageServerTables()");
+
+        Connection conn = getStorageServerDbConn();
+
+        if (conn != null) {
+            Statement stmt = null;
+
+            try {
+                stmt = conn.createStatement();
+                stmt.execute(dropKubernetesServerIdentifierTable);
+            } catch (SQLException sqlEx) {
+                LOG.error("SQLException: " + sqlEx.getMessage());
+                System.out.println("SQLState: " + sqlEx.getSQLState());
+                System.out.println("VendorError: " + sqlEx.getErrorCode());
+            }
+            finally {
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("SQLException: " + sqlEx.getMessage());
+                        System.out.println("SQLState: " + sqlEx.getSQLState());
+                        System.out.println("VendorError: " + sqlEx.getErrorCode());
+                    }
+
+                    stmt = null;
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database tables.
+             */
+            closeStorageServerDbConn(conn);
+            conn = null;
+        }
+    }
+
+    /*
+    ** This performs an initial setup of the tables associated with the Storage Servers if they do not already
+    **   exist (meaning they are created if the database did not exist).
+     */
+    private boolean createStorageServerTables() {
+
+        LOG.info("createStorageServerTables()");
+
+        Connection conn = getStorageServerDbConn();
+
+        if (conn != null) {
+            Statement stmt = null;
+
+            try {
+                stmt = conn.createStatement();
+                stmt.execute(localStorageServerTable);
+            } catch (SQLException sqlEx) {
+                LOG.error("SQLException: " + sqlEx.getMessage());
+                System.out.println("SQLState: " + sqlEx.getSQLState());
+                System.out.println("VendorError: " + sqlEx.getErrorCode());
+            }
+            finally {
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("SQLException: " + sqlEx.getMessage());
                         System.out.println("SQLState: " + sqlEx.getSQLState());
                         System.out.println("VendorError: " + sqlEx.getErrorCode());
                     }
@@ -301,6 +449,50 @@ public class DbSetup {
                         stmt.close();
                     } catch (SQLException sqlEx) {
                         System.out.println("SQLException: " + sqlEx.getMessage());
+                        System.out.println("SQLState: " + sqlEx.getSQLState());
+                        System.out.println("VendorError: " + sqlEx.getErrorCode());
+                    }
+
+                    stmt = null;
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database tables.
+             */
+            closeStorageServerDbConn(conn);
+            conn = null;
+        }
+
+        return true;
+    }
+
+    /*
+    ** This is used to create the Kubernetes storage server table.
+     */
+    private boolean createKubernetesStorageServerTables() {
+
+        LOG.info("createKubernetesStorageServerTables()");
+
+        Connection conn = getStorageServerDbConn();
+
+        if (conn != null) {
+            Statement stmt = null;
+
+            try {
+                stmt = conn.createStatement();
+                stmt.execute(kubernetesStorageServerTable);
+            } catch (SQLException sqlEx) {
+                LOG.error("SQLException: " + sqlEx.getMessage());
+                System.out.println("SQLState: " + sqlEx.getSQLState());
+                System.out.println("VendorError: " + sqlEx.getErrorCode());
+            }
+            finally {
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("SQLException: " + sqlEx.getMessage());
                         System.out.println("SQLState: " + sqlEx.getSQLState());
                         System.out.println("VendorError: " + sqlEx.getErrorCode());
                     }
@@ -369,4 +561,56 @@ public class DbSetup {
             conn = null;
         }
     }
+
+    /*
+     ** This populates three initial records for the Storage Servers
+     */
+    private void populateKubernetesStorageServers(final String kubernetesIpAddr) {
+        if (kubernetesIpAddr != null) {
+
+            LOG.info("populateKubernetesStorageServers() IP Address: " + kubernetesIpAddr);
+            Connection conn = getStorageServerDbConn();
+
+            if (conn != null) {
+                Statement stmt = null;
+
+                try {
+                    stmt = conn.createStatement();
+                    for (int i = 0; i < 3; i++) {
+                        String tmp = addKubernetesStorageServer_1 + i + "', '" + kubernetesIpAddr + "', " + (storageServerTcpPort + i) +
+                                addStorageServer_3;
+                        stmt.execute(tmp);
+                    }
+                } catch (SQLException sqlEx) {
+                    LOG.error("SQLException: " + sqlEx.getMessage());
+                    System.out.println("SQLState: " + sqlEx.getSQLState());
+                    System.out.println("VendorError: " + sqlEx.getErrorCode());
+
+                    return;
+                } finally {
+                    if (stmt != null) {
+                        try {
+                            stmt.close();
+                        } catch (SQLException sqlEx) {
+                            LOG.error("SQLException: " + sqlEx.getMessage());
+                            System.out.println("SQLState: " + sqlEx.getSQLState());
+                            System.out.println("VendorError: " + sqlEx.getErrorCode());
+                        }
+
+                        stmt = null;
+                    }
+                }
+
+                /*
+                 ** Close out this connection as it was only used to create the database tables.
+                 */
+                closeStorageServerDbConn(conn);
+                conn = null;
+            }
+        } else {
+            LOG.error("populateKubernetesStorageServers() IP Address is NULL");
+        }
+    }
+
+
 }

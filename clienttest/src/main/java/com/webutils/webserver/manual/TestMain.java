@@ -23,7 +23,6 @@ public class TestMain {
         final int STORAGE_SERVER_BASE_ID_OFFSET = 100;
 
         int baseTcpPort = DbSetup.storageServerTcpPort;
-        boolean dockerImage = false;
 
         if (args.length >= 1) {
             try {
@@ -51,7 +50,7 @@ public class TestMain {
         if ((flavor == WebServerFlavor.INTEGRATION_KUBERNETES_TESTS) || (flavor == WebServerFlavor.INTEGRATION_TESTS)){
             KubernetesInfo kubeInfo = new KubernetesInfo(flavor);
             try {
-                kubernetesPodIp = kubeInfo.getKubeInfo();
+                kubernetesPodIp = kubeInfo.getExternalKubeIp();
             } catch (IOException io_ex) {
                 System.out.println("IOException: " + io_ex.getMessage());
             }
@@ -232,7 +231,7 @@ public class TestMain {
 
         */
 
-        if (!dockerImage) {
+        if (flavor == WebServerFlavor.INTEGRATION_TESTS) {
             nioServer.stop();
             for (int i = 0; i < NUMBER_TEST_STORAGE_SERVERS; i++) {
                 nioStorageServer[i].stop();

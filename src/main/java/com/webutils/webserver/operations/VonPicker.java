@@ -115,7 +115,12 @@ public class VonPicker implements Operation {
 
             StorageServerDbOps storageServerInfo = new StorageServerDbOps(dbSetup);
             if (!storageServerInfo.getStorageServers(serverList, chunkNumber)) {
-
+                LOG.warn("Unable to obtain storageServerInfo chunk: " + chunkNumber);
+                for (ServerIdentifier serverIdentifier : serverList) {
+                    LOG.warn("  serverIdentifier " + serverIdentifier.getStorageServerIpAddress().getHostAddress() +
+                            " port: " + serverIdentifier.getStorageServerTcpPort());
+                }
+                return;
             }
 
             /*

@@ -171,13 +171,14 @@ public class NioSelectHandler {
         try {
             socketChannel.finishConnect();
         } catch (IOException io_ex) {
+            LOG.warn("handleConnect() error: " + io_ex.getMessage());
+
             try {
                 SocketAddress addr = socketChannel.getRemoteAddress();
                 LOG.warn("handleConnect() error - remoteAddress: " + addr.toString());
             } catch (IOException ex) {
-                LOG.warn("handleConnect() error - unable to obtain remoteAddress");
+                LOG.warn("handleConnect() error - unable to obtain remoteAddress " + ex.getMessage());
             }
-            LOG.warn("handleConnect() error: " + io_ex.getMessage());
 
             /*
             ** Need to close out this connection and let the user of the channel know

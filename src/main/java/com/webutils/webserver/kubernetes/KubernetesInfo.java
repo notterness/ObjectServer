@@ -1,5 +1,6 @@
 package com.webutils.webserver.kubernetes;
 
+import com.webutils.webserver.niosockets.NioEventPollBalancer;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import io.kubernetes.client.openapi.ApiClient;
 import io.kubernetes.client.openapi.ApiException;
@@ -8,6 +9,8 @@ import io.kubernetes.client.openapi.apis.CoreV1Api;
 import io.kubernetes.client.openapi.models.*;
 import io.kubernetes.client.util.ClientBuilder;
 import io.kubernetes.client.util.KubeConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileReader;
 import java.io.IOException;
@@ -16,22 +19,26 @@ import java.util.ListIterator;
 
 public class KubernetesInfo {
 
+    private static final Logger LOG = LoggerFactory.getLogger(KubernetesInfo.class);
+
     final WebServerFlavor flavor;
 
     public KubernetesInfo(final WebServerFlavor flavor) {
 
+        LOG.info("KubernetesInfo() WebServerFlavor: " + flavor.toString());
         this.flavor = flavor;
     }
 
-    public String getKubeInfo() throws IOException {
+    public String getExternalKubeIp() throws IOException {
 
-        // file path to your KubeConfig
-        String kubeConfigPath;
-        if ((flavor == WebServerFlavor.INTEGRATION_KUBERNETES_TESTS) || (flavor == WebServerFlavor.INTEGRATION_DOCKER_TESTS)) {
-            kubeConfigPath = "/usr/src/myapp/config/config";
-        } else {
-            kubeConfigPath = "/Users/notterness/.kube/config";
-        }
+        /*
+        ** File path to the KubeConfig - for images running within a Docker container, there must be a mapping between
+        **    /usr/src/myapp/config/config to /Users/notterness/.kube/config
+        **
+        ** For the Kubernetes images this is setup in the deployment-webutils.yaml file.
+        ** For Docker runs, it is in the command line to run the Docker container.
+         */
+        String kubeConfigPath = getKubeConfigPath();
 
         // loading the out-of-cluster config, a kubeconfig from file-system
         //ApiClient client = ClientBuilder.kubeconfig(KubeConfig.loadKubeConfig(new FileReader(kubeConfigPath))).build();
@@ -42,49 +49,59 @@ public class KubernetesInfo {
 
         CoreV1Api api = new CoreV1Api();
         try {
+            /*
+             ** The labels can be found by the following (from the V1Pod below):
+             **    Map<String, String> labels = item.getMetadata().getLabels();
+             ** Use the labelSelector to filter out only the Pod that has app set to webutils-site.
+             */
+            String labelSelector = "app=webutils-site";
             V1PodList list =
-                    api.listPodForAllNamespaces(null, null, null, null, null,
-                            null, null, null, null);
+                    api.listPodForAllNamespaces(null, null, null, labelSelector, 5,
+                            null, null, 100, null);
             for (V1Pod item : list.getItems()) {
                 String podName = item.getMetadata().getName();
-                if (podName.contains("webutils-site")) {
-                    System.out.println("POD: " + podName);
 
-                    List<V1Container> containers = item.getSpec().getContainers();
-                    ListIterator<V1Container> iter = containers.listIterator();
-                    while (iter.hasNext()) {
-                        V1Container container = iter.next();
+                System.out.println("POD: " + podName);
 
-                        System.out.println("  Container - " + container.getName() + " - " + container.getImage());
+                List<V1Container> containers = item.getSpec().getContainers();
+                ListIterator<V1Container> iter = containers.listIterator();
+                while (iter.hasNext()) {
+                    V1Container container = iter.next();
 
-                        List<V1VolumeMount> volumes = container.getVolumeMounts();
-                        ListIterator<V1VolumeMount> contVolIter = volumes.listIterator();
-                        while (contVolIter.hasNext()) {
-                            V1VolumeMount volume = contVolIter.next();
+                    System.out.println("  Container - " + container.getName() + " - " + container.getImage());
 
-                            System.out.println("   volume mount: " + volume.getName() + " " + volume.getMountPath());
-                        }
+                    List<V1VolumeMount> volumes = container.getVolumeMounts();
+                    ListIterator<V1VolumeMount> contVolIter = volumes.listIterator();
+                    while (contVolIter.hasNext()) {
+                        V1VolumeMount volume = contVolIter.next();
 
+                        System.out.println("   volume mount: " + volume.getName() + " " + volume.getMountPath());
                     }
 
-                    List<V1Volume> podVolumes = item.getSpec().getVolumes();
-                    ListIterator<V1Volume> podVolIter = podVolumes.listIterator();
-                    while (podVolIter.hasNext()) {
-                        V1Volume volume = podVolIter.next();
+                }
 
-                        V1EmptyDirVolumeSource emptyDir = volume.getEmptyDir();
-                        V1HostPathVolumeSource hostPath = volume.getHostPath();
+                /*
+                 ** The following lists all the volumes associated with a particular POD. There is probably a
+                 **   way to determine the volume type (i.e. "emptyDir" or "hostPath") directly without
+                 **   checking if the query returns "null".
+                 */
+                List<V1Volume> podVolumes = item.getSpec().getVolumes();
+                ListIterator<V1Volume> podVolIter = podVolumes.listIterator();
+                while (podVolIter.hasNext()) {
+                    V1Volume volume = podVolIter.next();
 
-                        if (emptyDir != null) {
-                            System.out.println("emptyDir - " + volume.getName() +
-                                    " -- " + emptyDir.getMedium() + " " + volume.getClass().toString());
+                    V1EmptyDirVolumeSource emptyDir = volume.getEmptyDir();
+                    V1HostPathVolumeSource hostPath = volume.getHostPath();
 
-                        } else if (hostPath != null) {
-                            System.out.println("HostPath - " + volume.getName() + " -- " +
-                                    hostPath.getPath() + " " + hostPath.getType() + " : " + volume.getClass().toString());
-                        } else {
-                            System.out.println(volume.getName() + ": " + volume.getClass().toString());
-                        }
+                    if (emptyDir != null) {
+                        System.out.println("emptyDir - " + volume.getName() +
+                                " -- " + emptyDir.getMedium() + " " + volume.getClass().toString());
+
+                    } else if (hostPath != null) {
+                        System.out.println("HostPath - " + volume.getName() + " -- " +
+                                hostPath.getPath() + " " + hostPath.getType() + " : " + volume.getClass().toString());
+                    } else {
+                        System.out.println(volume.getName() + ": " + volume.getClass().toString());
                     }
                 }
             }
@@ -106,63 +123,112 @@ public class KubernetesInfo {
             System.out.println("Kubernetes V1 API exception: " + api_ex.getMessage());
         }
 
-        String podIp = null;
+
+        /*
+         ** The following block of code obtains a list of services being run by Kubernetes. This is pretty simple in that
+         **   it doesn't perform any filtering for the results. It does limit the m=number of "services" being returned
+         **   to 5.
+         */
+        String externalPodIp = null;
 
         try {
-            V1ServiceList services = api.listServiceForAllNamespaces(true, null, null, null,
+            /*
+             ** Use the fieldSelector to only search for services associated with webutils-site. There should only
+             **   be a single service that matches the search, but leaving the limit at 5 just to be sure.
+             */
+            String fieldSelector = "metadata.name=webutils-site";
+            V1ServiceList services = api.listServiceForAllNamespaces(true, null, fieldSelector, null,
                     5, null, null, 100, false);
 
             for (V1Service service : services.getItems()) {
-                if (service.getMetadata().getName().contains("webutils")) {
-                    System.out.println("SERVICE:  " + service.getMetadata().getName());
+                System.out.println("SERVICE:  " + service.getMetadata().getName());
 
-                    V1ServiceSpec spec = service.getSpec();
+                V1ServiceSpec spec = service.getSpec();
 
-                    podIp = spec.getClusterIP();
-                    System.out.println("  spec - clusterIP: " + spec.getClusterIP());
+                externalPodIp = spec.getClusterIP();
+                System.out.println("  spec - clusterIP: " + spec.getClusterIP());
 
-                    List<V1ServicePort> ports = spec.getPorts();
-                    ListIterator<V1ServicePort> portIter = ports.listIterator();
-                    while (portIter.hasNext()) {
-                        V1ServicePort port = portIter.next();
-                        System.out.println("    name: " + port.getName() + " port: " + port.getPort() + " protocol: " + port.getProtocol() +
-                                " targetPort: " + port.getTargetPort());
-                    }
+                List<V1ServicePort> ports = spec.getPorts();
+                ListIterator<V1ServicePort> portIter = ports.listIterator();
+                while (portIter.hasNext()) {
+                    V1ServicePort port = portIter.next();
+                    System.out.println("    name: " + port.getName() + " port: " + port.getPort() + " protocol: " + port.getProtocol() +
+                            " targetPort: " + port.getTargetPort());
                 }
             }
-
         } catch (ApiException api_ex) {
             System.out.println("Kubernetes V1 API exception: " + api_ex.getMessage());
         }
 
-        return podIp;
+        return externalPodIp;
     }
 
-    /*
-    public void WatchExample() throws IOException, ApiException
-    {
-        ApiClient client = Config.defaultClient();
-        // infinite timeout
-        OkHttpClient httpClient = client.getHttpClient().newBuilder().readTimeout(0, TimeUnit.SECONDS).build();
-        client.setHttpClient(httpClient);
+    public String getInternalKubeIp() throws IOException {
+
+        // file path to your KubeConfig
+        String kubeConfigPath = getKubeConfigPath();
+
+        // loading the out-of-cluster config, a kubeconfig from file-system
+        ApiClient client = ClientBuilder.kubeconfig(KubeConfig.loadKubeConfig(new FileReader(kubeConfigPath))).build();
         Configuration.setDefaultApiClient(client);
 
         CoreV1Api api = new CoreV1Api();
 
-        Watch<V1Namespace> watch =
-                Watch.createWatch(
-                        client,
-                        api.listNamespaceCall(null, null, null, null, null, 5, null, null, Boolean.TRUE, null),
-                        new TypeToken<Watch.Response<V1Namespace>>() {
-                        }.getType());
+        String internalPodIp = null;
+
+        /*
+        ** Use the fieldSelector to only search for services associated with webutils-site. There should only
+        **   be a single service that matches the search, so the limit is set at 1 just to be sure.
+         */
+        String fieldSelector = "metadata.name=webutils-site";
 
         try {
-            for (Watch.Response<V1Namespace> item : watch) {
-                System.out.printf("%s : %s%n", item.type, item.object.getMetadata().getName());
+            V1EndpointsList endpoints = api.listEndpointsForAllNamespaces(true, null, fieldSelector, null,
+                    1, null, null, 50, false);
+
+            for (V1Endpoints endpoint : endpoints.getItems()) {
+                System.out.println("ENDPOINT:  " + endpoint.getMetadata().getName());
+
+                List<V1EndpointSubset> subsets = endpoint.getSubsets();
+                ListIterator<V1EndpointSubset> subsetIter = subsets.listIterator();
+                while (subsetIter.hasNext()) {
+                    V1EndpointSubset subset = subsetIter.next();
+
+                    List<V1EndpointAddress> endpointAddrList = subset.getAddresses();
+                    ListIterator<V1EndpointAddress> endpointAddrIter = endpointAddrList.listIterator();
+                    while (endpointAddrIter.hasNext()) {
+                        V1EndpointAddress addr = endpointAddrIter.next();
+                        System.out.println("  subset V1EndpointAddr ip: " + addr.getIp());
+
+                        internalPodIp = addr.getIp();
+                        break;
+                    }
+
+                    if (internalPodIp != null) {
+                        break;
+                    }
+                }
             }
-        } finally {
-            watch.close();
+        } catch (ApiException api_ex) {
+            System.out.println("Kubernetes V1 API exception: listEndpointsForAllNamespaces - " + api_ex.getMessage());
         }
+
+        return internalPodIp;
     }
-    */
+
+    private String getKubeConfigPath() {
+        String kubeConfigPath;
+
+        if ((flavor == WebServerFlavor.INTEGRATION_KUBERNETES_TESTS) ||
+                (flavor == WebServerFlavor.INTEGRATION_DOCKER_TESTS) ||
+                (flavor == WebServerFlavor.KUBERNETES_OBJECT_SERVER_TEST)) {
+            kubeConfigPath = "/usr/src/myapp/config/config";
+        } else {
+            kubeConfigPath = "/Users/notterness/.kube/config";
+        }
+
+        LOG.info("kubeConfigPath: " + kubeConfigPath);
+
+        return kubeConfigPath;
+    }
 }

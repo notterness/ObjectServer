@@ -21,15 +21,25 @@ public class StorageServerDbOps {
 
     private static final String getLocalStorageServers = "SELECT * FROM localServerIdentifier";
     private static final String getDockerStorageServers = "SELECT * FROM dockerServerIdentifier";
+    private static final String getKubernetesStorageServers = "SELECT * FROM kubernetesServerIdentifier";
 
     private final DbSetup dbSetup;
 
     public StorageServerDbOps(final DbSetup dbSetup) {
+        if (dbSetup == null) {
+            LOG.error("StorageServerDbOps instantiated with (dbSetup == null)");
+        }
         this.dbSetup = dbSetup;
     }
 
     public boolean getStorageServers(final List<ServerIdentifier> servers, final int chunkNumber) {
         boolean success = false;
+
+        if (dbSetup == null) {
+            LOG.error("StorageServerDbOps getStorageServers() (dbSetup == null)");
+            return false;
+        }
+
         Connection conn = dbSetup.getStorageServerDbConn();
 
         if (conn != null) {
@@ -42,6 +52,8 @@ public class StorageServerDbOps {
                 String queryStr;
                 if (dbSetup.isDockerImage()) {
                     queryStr = getDockerStorageServers;
+                } else if (dbSetup.isKubernetesImage()) {
+                    queryStr = getKubernetesStorageServers;
                 } else {
                     queryStr = getLocalStorageServers;
                 }
