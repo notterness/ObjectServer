@@ -22,24 +22,10 @@
             </DefaultRolloverStrategy>
         </RollingRandomAccessFile>
 
-        <File name="JSONLogfileAppender" fileName="logs/logfile.json">
-            <JSONLayout properties="true" complete="true" compact="true" eventEol="true">
-                <KeyValuePair key="timestamp" value="$${date:yyyy-MM-dd'T'HH:mm:ss.SSSZ}" />
-                <KeyValuePair key="docker.containerId" value="${docker:containerId:-}"/>
-                <KeyValuePair key="containerName" value="${docker:containerName}"/>
-                <KeyValuePair key="imageName" value="${docker:imageName}"/>
-            </JSONLayout>
-            <BurstFilter level="INFO" rate="2" maxBurst="10"/>
-        </File>
-        <Async name="AsyncAppender" bufferSize="80">
-            <AppenderRef ref="JSONLogfileAppender"/>
-        </Async>
-
     </Appenders>
     <Loggers>
         <Root level="INFO">
             <AppenderRef ref="clienttest_log" level="DEBUG"/>
-            <AppenderRef ref="AsyncAppender" level="DEBUG" />
         </Root>
 
     </Loggers>

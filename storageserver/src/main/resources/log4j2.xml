@@ -24,7 +24,7 @@
 
         <File name="JSONLogfileAppender" fileName="logs/storageserver.log">
             <JSONLayout properties="true" complete="true" compact="true" eventEol="true">
-                <KeyValuePair key="timestamp" value="$${date:yyyy-MM-dd'T'HH:mm:ss.SSSZ}" />
+                <KeyValuePair key="timestamp" value="$${date:yyyy-MM-dd'T'HH:mm:ss.SSS}" />
                 <KeyValuePair key="kubernetes.host" value="${k8s:host:-}"/>
                 <KeyValuePair key="kubernetes.labels.app" value="${k8s:labels.app:-}"/>
                 <KeyValuePair key="kubernetes.labels.pod-template-hash" value="${k8s:labels.podTemplateHash:-}"/>

@@ -181,7 +181,7 @@ public class NioEventPollThread implements Runnable, EventPollThread {
             int requestId = uniqueRequestId.getAndIncrement();
             requestContext.initializeServer(connection, requestId);
         } else {
-            LOG.info("[" + eventPollThreadBaseId + "] no free connections");
+            LOG.warn("[" + eventPollThreadBaseId + "] no free connections");
             success = false;
         }
 

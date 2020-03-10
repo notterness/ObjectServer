@@ -201,7 +201,7 @@ public class BufferManagerPointer {
                     bufferIndex.get());
 
         } else {
-            LOG.error("Producer("  + identifier + ":" + getOperationType() + ") getBookmark: " + bookmark +
+            LOG.info("Producer("  + identifier + ":" + getOperationType() + ") getBookmark: " + bookmark +
                     " bufferIndex: " + bufferIndex.get());
         }
 
@@ -241,7 +241,7 @@ public class BufferManagerPointer {
     ** The following is the call to set a bookmark in a Producer.
      */
     void setBookmark(final int consumerBookmarkValue) {
-        LOG.error("Producer("  + identifier + ":" + getOperationType() + ") setBookmark(2): " + consumerBookmarkValue);
+        LOG.info("Producer("  + identifier + ":" + getOperationType() + ") setBookmark(2): " + consumerBookmarkValue);
         bookmark = consumerBookmarkValue;
     }
 
@@ -270,7 +270,7 @@ public class BufferManagerPointer {
                 ** This is the normal case when the consumer has caught up to the producer so there
                 **   are no more buffers to consume at this moment.
                  */
-                LOG.error("getReadIndex() Consumer(" + identifier + ":" + getOperationType() + ") bufferIndex: " +
+                LOG.warn("getReadIndex() Consumer(" + identifier + ":" + getOperationType() + ") bufferIndex: " +
                         bufferIndex + " Producer(" + ptrThisDependsOn.getIdentifier() + ":" +
                         ptrThisDependsOn.getOperationType() + ") writeIndex: " + ptrThisDependsOn.getCurrIndex());
             }

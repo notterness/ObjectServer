@@ -47,7 +47,7 @@ public class TestMain {
          */
         String kubernetesPodIp = null;
 
-        if ((flavor == WebServerFlavor.INTEGRATION_KUBERNETES_TESTS) || (flavor == WebServerFlavor.INTEGRATION_TESTS)){
+        if (flavor == WebServerFlavor.INTEGRATION_KUBERNETES_TESTS) {
             KubernetesInfo kubeInfo = new KubernetesInfo(flavor);
             try {
                 kubernetesPodIp = kubeInfo.getExternalKubeIp();

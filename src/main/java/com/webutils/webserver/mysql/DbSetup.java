@@ -72,6 +72,10 @@ public class DbSetup {
     private static final String dropDockerServerIdentifierTable = "DROP TABLE IF EXISTS dockerServerIdentifier" ;
     private static final String dropKubernetesServerIdentifierTable = "DROP TABLE IF EXISTS kubernetesServerIdentifier" ;
 
+    private static final String kubeJDBCDatabaseConnect = "jdbc:mysql://host.docker.internal/StorageServers?serverTimeZone=US/Mountain";
+    private static final String execJDBCDatabaseConnect = "jdbc:mysql://localhost/StorageServers?serverTimezone=US/Mountain";
+    private static final String kubeJDBCConnect = "jdbc:mysql://host.docker.internal/?serverTimeZone=US/Mountain";
+    private static final String execJDBCConnect = "jdbc:mysql://localhost/?serverTimezone=US/Mountain";
 
     /*
     ** Is this running within a Docker Container?
@@ -118,6 +122,7 @@ public class DbSetup {
                 kubernetesIpAddr = kubeInfo.getInternalKubeIp();
             } catch (IOException io_ex) {
                 System.out.println("IOException: " + io_ex.getMessage());
+                LOG.error("checkAndSetupStorageServers() - IOException: " + io_ex.getMessage());
                 kubernetesIpAddr = null;
             }
 
@@ -138,20 +143,21 @@ public class DbSetup {
      */
     public Connection getStorageServerDbConn() {
         Connection conn = null;
+        String jdbcConnect;
+
+        if (isDockerImage() || isKubernetesImage()) {
+            jdbcConnect = kubeJDBCDatabaseConnect;
+        } else {
+            jdbcConnect = execJDBCDatabaseConnect;
+        }
 
         try {
-            if (isDockerImage() || isKubernetesImage()) {
-                conn = DriverManager.getConnection("jdbc:mysql://host.docker.internal/StorageServers", storageServerUser,
-                        storageServerPassword);
-            } else {
-                conn = DriverManager.getConnection("jdbc:mysql://localhost/StorageServers", storageServerUser,
-                        storageServerPassword);
-            }
+            conn = DriverManager.getConnection(jdbcConnect, storageServerUser, storageServerPassword);
         } catch (SQLException ex) {
             // handle any errors
-            System.out.println("SQLException: " + ex.getMessage());
-            System.out.println("SQLState: " + ex.getSQLState());
-            System.out.println("VendorError: " + ex.getErrorCode());
+            System.out.println("JDBC connect: " + jdbcConnect);
+            System.out.println("getStorageServerDbConn() - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState());
+            LOG.error("getStorageServerDbConn() - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState());
             return null;
         }
 
@@ -172,9 +178,8 @@ public class DbSetup {
                 conn.close();
             } catch (SQLException sqlEx) {
                 // handle any errors
-                System.out.println("SQL conn close(2) SQLException: " + sqlEx.getMessage());
-                System.out.println("SQL conn close(2) SQLState: " + sqlEx.getSQLState());
-                System.out.println("SQL conn close(2) VendorError: " + sqlEx.getErrorCode());
+                System.out.println("closeStorageServerDbConn() - SQL conn close(2) SQLException: " + sqlEx.getMessage() + "  SQLState: " + sqlEx.getSQLState());
+                LOG.error("closeStorageServerDbConn() - SQL conn close(2) SQLException: " + sqlEx.getMessage() + "  SQLState: " + sqlEx.getSQLState());
             }
         }
     }
@@ -188,13 +193,17 @@ public class DbSetup {
 
         int vendorError = 0;
 
+        String jdbcConnect;
+
+        if (isDockerImage() || isKubernetesImage()) {
+            jdbcConnect = kubeJDBCDatabaseConnect;
+        } else {
+            jdbcConnect = execJDBCDatabaseConnect;
+        }
+
         try {
             System.out.println("Trying to connect to MySql");
-            if (isDockerImage() || isKubernetesImage()) {
-                conn = DriverManager.getConnection("jdbc:mysql://host.docker.internal/StorageServers", userName, password);
-            } else {
-                conn = DriverManager.getConnection("jdbc:mysql://localhost/StorageServers", userName, password);
-            }
+            conn = DriverManager.getConnection(jdbcConnect, userName, password);
 
             /*
             ** Not going to use this connection, it is just to check if the database exists and can be
@@ -204,9 +213,8 @@ public class DbSetup {
                 conn.close();
             } catch (SQLException sqlEx) {
                 // handle any errors
-                System.out.println("SQL conn close(1) SQLException: " + sqlEx.getMessage());
-                System.out.println("SQL conn close(1) SQLState: " + sqlEx.getSQLState());
-                System.out.println("SQL conn close(1) VendorError: " + sqlEx.getErrorCode());
+                System.out.println("createStorageServerDb() - SQL conn close(1) SQLException: " + sqlEx.getMessage());
+                LOG.error("createStorageServerDb() - SQL conn close(1) SQLException: " + sqlEx.getMessage());
             }
 
             System.out.println("createStorageServerDb() database found");
@@ -216,9 +224,9 @@ public class DbSetup {
             // handle any errors
 
             vendorError = ex.getErrorCode();
-            System.out.println("SQLException: " + ex.getMessage());
-            System.out.println("SQLState: " + ex.getSQLState());
-            System.out.println("VendorError: " + vendorError);
+            System.out.println("createStorageServerDb(1) - JDBC connect: " + jdbcConnect);
+            System.out.println("createStorageServerDb(1) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState());
+            LOG.error("createStorageServerDb(1) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState());
 
             if (vendorError != MysqlErrorNumbers.ER_BAD_DB_ERROR) {
                 return false;
@@ -230,18 +238,22 @@ public class DbSetup {
          */
         if (vendorError == MysqlErrorNumbers.ER_BAD_DB_ERROR) {
             System.out.println("createStorageServerDb() create database");
+
+            if (isDockerImage() || isKubernetesImage()) {
+                jdbcConnect = kubeJDBCConnect;
+            } else {
+                jdbcConnect = execJDBCConnect;
+            }
+
             try {
-                if (isDockerImage() || isKubernetesImage()) {
-                    conn = DriverManager.getConnection("jdbc:mysql://host.docker.internal/", userName, password);
-                } else {
-                    conn = DriverManager.getConnection("jdbc:mysql://localhost/", userName, password);
-                }
+                conn = DriverManager.getConnection(jdbcConnect, userName, password);
             } catch (SQLException ex) {
                 vendorError = ex.getErrorCode();
-                System.out.println("SQLException: " + ex.getMessage());
-                System.out.println("SQLState: " + ex.getSQLState());
-                System.out.println("VendorError: " + vendorError);
-
+                System.out.println("createStorageServerDb(2) - JDBC connect: " + jdbcConnect);
+                System.out.println("createStorageServerDb(2) - creating database - SQLException: " + ex.getMessage() +
+                        " SQLState: " + ex.getSQLState() + " " + vendorError);
+                LOG.error("createStorageServerDb(2) - creating database - SQLException: " + ex.getMessage() +
+                        " SQLState: " + ex.getSQLState() + " " + vendorError);
                 return false;
             }
 
@@ -256,10 +268,8 @@ public class DbSetup {
 
                     stmt.execute(privilegeStorageServerUser);
                 } catch (SQLException sqlEx) {
-                    System.out.println("SQLException: " + sqlEx.getMessage());
-                    System.out.println("SQLState: " + sqlEx.getSQLState());
-                    System.out.println("VendorError: " + sqlEx.getErrorCode());
-
+                    System.out.println("createStorageServerDb() - create database - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                    LOG.error("createStorageServerDb() - create database - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                     return false;
                 }
                 finally {
@@ -267,9 +277,8 @@ public class DbSetup {
                         try {
                             stmt.close();
                         } catch (SQLException sqlEx) {
-                            System.out.println("SQLException: " + sqlEx.getMessage());
-                            System.out.println("SQLState: " + sqlEx.getSQLState());
-                            System.out.println("VendorError: " + sqlEx.getErrorCode());
+                            System.out.println("createStorageServerDb() - close - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                            LOG.error("createStorageServerDb() - close - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                         }
 
                         stmt = null;
@@ -283,9 +292,8 @@ public class DbSetup {
                     conn.close();
                 } catch (SQLException sqlEx) {
                     // handle any errors
-                    System.out.println("SQL conn close(2) SQLException: " + sqlEx.getMessage());
-                    System.out.println("SQL conn close(2) SQLState: " + sqlEx.getSQLState());
-                    System.out.println("SQL conn close(2) VendorError: " + sqlEx.getErrorCode());
+                    System.out.println("SQL conn close(2) SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                    LOG.error("SQL conn close(2) SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                 }
             }
         }
@@ -299,7 +307,8 @@ public class DbSetup {
     **   Kubernetes storage server tables since those can change with each startup
      */
     public void dropStorageServerTables() {
-        System.out.println("dropStorageServerTables()");
+        System.out.println("dropStorageServerTables() WebServerFlavor: " + flavor.toString());
+        LOG.info("dropStorageServerTables() WebServerFlavor: " + flavor.toString());
 
         Connection conn = getStorageServerDbConn();
 

@@ -114,7 +114,7 @@ public class NioEventPollBalancer {
         EventPollThread eventThread = getNextEventThread();
         boolean success = eventThread.registerClientSocket(clientChannel);
 
-        LOG.error("NioEventPollBalancer[" + eventThread.getEventPollThreadBaseId() + "] handleAccept()");
+        LOG.info("NioEventPollBalancer[" + eventThread.getEventPollThreadBaseId() + "] handleAccept() success: " + success);
 
         return success;
     }

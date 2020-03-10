@@ -1,6 +1,5 @@
 package com.webutils.webserver.kubernetes;
 
-import com.webutils.webserver.niosockets.NioEventPollBalancer;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import io.kubernetes.client.openapi.ApiClient;
 import io.kubernetes.client.openapi.ApiException;
@@ -106,7 +105,8 @@ public class KubernetesInfo {
                 }
             }
         } catch (ApiException api_ex) {
-            System.out.println("Kubernetes V1 API exception: " + api_ex.getMessage());
+            System.out.println("getExternalKubeIp(1) - V1 API exception: " + api_ex.getMessage());
+            LOG.error("getExternalKubeIp(1) - V1 API exception: " + api_ex.getMessage());
         }
 
         try {
@@ -120,7 +120,8 @@ public class KubernetesInfo {
             }
 
         } catch (ApiException api_ex) {
-            System.out.println("Kubernetes V1 API exception: " + api_ex.getMessage());
+            System.out.println("getExternalKubeIp(2) - V1 API exception: " + api_ex.getMessage());
+            LOG.error("getExternalKubeIp(2) - V1 API exception: " + api_ex.getMessage());
         }
 
 
@@ -157,7 +158,8 @@ public class KubernetesInfo {
                 }
             }
         } catch (ApiException api_ex) {
-            System.out.println("Kubernetes V1 API exception: " + api_ex.getMessage());
+            System.out.println("getExternalKubeIp(3) - V1 API exception: " + api_ex.getMessage());
+            LOG.error("getExternalKubeIp(3) - V1 API exception: " + api_ex.getMessage());
         }
 
         return externalPodIp;
@@ -188,6 +190,7 @@ public class KubernetesInfo {
 
             for (V1Endpoints endpoint : endpoints.getItems()) {
                 System.out.println("ENDPOINT:  " + endpoint.getMetadata().getName());
+                LOG.info("ENDPOINT:  " + endpoint.getMetadata().getName());
 
                 List<V1EndpointSubset> subsets = endpoint.getSubsets();
                 ListIterator<V1EndpointSubset> subsetIter = subsets.listIterator();
@@ -199,6 +202,7 @@ public class KubernetesInfo {
                     while (endpointAddrIter.hasNext()) {
                         V1EndpointAddress addr = endpointAddrIter.next();
                         System.out.println("  subset V1EndpointAddr ip: " + addr.getIp());
+                        LOG.info("  subset V1EndpointAddr ip: " + addr.getIp());
 
                         internalPodIp = addr.getIp();
                         break;
@@ -210,7 +214,8 @@ public class KubernetesInfo {
                 }
             }
         } catch (ApiException api_ex) {
-            System.out.println("Kubernetes V1 API exception: listEndpointsForAllNamespaces - " + api_ex.getMessage());
+            System.out.println("getInternalKubeIp() - V1 API exception: listEndpointsForAllNamespaces - " + api_ex.getMessage());
+            LOG.error("getInternalKubeIp() - V1 API exception: listEndpointsForAllNamespaces - " + api_ex.getMessage());
         }
 
         return internalPodIp;
