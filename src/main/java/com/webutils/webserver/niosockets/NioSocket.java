@@ -266,7 +266,7 @@ public class NioSocket implements IoInterface {
      */
     public void unregisterReadBufferManager() {
 
-        LOG.warn(" readPtr unregister (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+        LOG.info(" readPtr unregister (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
                 readPointer.getCurrIndex());
 
         if (!readBufferAssociations.empty()) {
@@ -298,7 +298,7 @@ public class NioSocket implements IoInterface {
      **   write buffers.
      */
     public void unregisterWriteBufferManager() {
-        LOG.warn(" writePtr unregister (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+        LOG.info(" writePtr unregister (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
                 writePointer.getCurrIndex());
 
         if (!writeBufferAssociations.empty()) {

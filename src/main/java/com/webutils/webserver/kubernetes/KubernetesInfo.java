@@ -15,6 +15,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Objects;
 
 public class KubernetesInfo {
 
@@ -116,6 +117,24 @@ public class KubernetesInfo {
             for (V1Endpoints endpoint : endpoints.getItems()) {
                 if (endpoint.getMetadata().getName().contains("webutils")) {
                     System.out.println("ENDPOINT:  " + endpoint.getMetadata().getName());
+
+                    /*
+                    ** Just to display information
+                     */
+                    List<V1EndpointSubset> subsets = endpoint.getSubsets();
+                    ListIterator<V1EndpointSubset> subsetIter = subsets.listIterator();
+                    while (subsetIter.hasNext()) {
+                        V1EndpointSubset subset = subsetIter.next();
+
+                        List<V1EndpointAddress> endpointAddrList = subset.getAddresses();
+                        ListIterator<V1EndpointAddress> endpointAddrIter = endpointAddrList.listIterator();
+                        while (endpointAddrIter.hasNext()) {
+                            V1EndpointAddress addr = endpointAddrIter.next();
+                            System.out.println("  subset V1EndpointAddr ip: " + addr.getIp());
+                            LOG.info("  subset V1EndpointAddr ip: " + addr.getIp());
+                        }
+                    }
+
                 }
             }
 
@@ -165,6 +184,10 @@ public class KubernetesInfo {
         return externalPodIp;
     }
 
+    /*
+    ** This will not return a valid IP until after the service has started. The service will take time to start so, the
+    **   caller of this will need to sleep and retry if null is rreturned.
+     */
     public String getInternalKubeIp() throws IOException {
 
         // file path to your KubeConfig
@@ -221,6 +244,27 @@ public class KubernetesInfo {
         return internalPodIp;
     }
 
+    /*
+    ** This is used to pick the proper path to the .kube/config file. For The Docker images and running within
+    **   the Kubernetes POD, the /usr/src/myapp/config directory is mapped to the local file system directory
+    **   as part of either the Docker run command line:
+    **
+    **   docker run --name ClientTest -v /Users/notterness/WebServer/webserver/logs:/usr/src/myapp/logs -v /Users/notterness/.kube:/usr/src/myapp/config -it clienttest:1
+    **
+    **  Or in the deployment yaml file:
+    **
+    **    volumeMounts:
+    **      -
+    **        name: kube-config-volume
+    **        mountPath: /usr/src/myapp/config
+    **
+    **  --> And in the volumes: section
+    **
+    **      -
+    **        name: kube-config-volume
+    **        hostPath:
+    **          path: /Users/notterness/.kube
+     */
     private String getKubeConfigPath() {
         String kubeConfigPath;
 

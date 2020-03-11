@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Configuration status="WARN" shutdownHook="disable" monitorInterval="30" packages="com.webutils">
+<Configuration status="INFO" shutdownHook="disable" monitorInterval="30" packages="com.webutils">
     <Appenders>
         <RollingRandomAccessFile name="objectserver_log" fileName="logs/objectserver_old.log"
                                  filePattern="logs/objectserver_old-%d{yyyy-MM-dd'T'HH:mm':00Z'}.%i.log.gz">
@@ -35,9 +35,9 @@
                 <KeyValuePair key="kubernetes.podIP" value="${k8s:podIp:-}"/>
                 <KeyValuePair key="kubernetes.podName" value="${k8s:podName:-}"/>
             </JSONLayout>
-            <BurstFilter level="INFO" rate="2" maxBurst="10"/>
+            <BurstFilter level="INFO" rate="500" maxBurst="1000"/>
         </File>
-        <Async name="AsyncAppender" bufferSize="80">
+        <Async name="AsyncAppender" bufferSize="65536">
             <AppenderRef ref="JSONLogfileAppender"/>
         </Async>
 

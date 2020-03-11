@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.sql.*;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 public class DbSetup {
 
@@ -115,15 +116,31 @@ public class DbSetup {
              ** Always drop and repopulate the Kubernetes storage server tables since the IP address
              **   for the POD will likely change between startups.
              */
-            String kubernetesIpAddr;
+            String kubernetesIpAddr = null;
 
             KubernetesInfo kubeInfo = new KubernetesInfo(flavor);
-            try {
-                kubernetesIpAddr = kubeInfo.getInternalKubeIp();
-            } catch (IOException io_ex) {
-                System.out.println("IOException: " + io_ex.getMessage());
-                LOG.error("checkAndSetupStorageServers() - IOException: " + io_ex.getMessage());
-                kubernetesIpAddr = null;
+            int retryCount = 0;
+            final int maxRetryCount = 10;
+
+            while ((kubernetesIpAddr == null) && (retryCount < maxRetryCount)) {
+                try {
+                    kubernetesIpAddr = kubeInfo.getInternalKubeIp();
+                } catch (IOException io_ex) {
+                    System.out.println("IOException: " + io_ex.getMessage());
+                    LOG.error("checkAndSetupStorageServers() - IOException: " + io_ex.getMessage());
+                    kubernetesIpAddr = null;
+                }
+
+                if (kubernetesIpAddr == null) {
+                    try {
+                        TimeUnit.SECONDS.sleep(10);
+                    } catch (InterruptedException intEx) {
+                        LOG.error("Trying to obtain internal Kubernetes IP " + intEx.getMessage());
+                        break;
+                    }
+
+                    retryCount++;
+                }
             }
 
             dropKubernetesStorageServerTables();
@@ -402,7 +419,7 @@ public class DbSetup {
             }
 
             /*
-             ** Close out this connection as it was only used to create the database tables.
+             ** Close out this connection as it was only used to drop the Kubernetes database table.
              */
             closeStorageServerDbConn(conn);
             conn = null;
@@ -511,7 +528,7 @@ public class DbSetup {
             }
 
             /*
-             ** Close out this connection as it was only used to create the database tables.
+             ** Close out this connection as it was only used to create the Kubernetes database table.
              */
             closeStorageServerDbConn(conn);
             conn = null;

@@ -196,8 +196,12 @@ public class BufferManagerPointer {
     **   to have a bookmark as there must never be a Consumer that depends on a Consumer.
      */
     int getBookmark() {
+        /*
+        ** If no bookmark has been set, it will be -1. This is a normal condition and just means to use
+        **   the current index. Generally, this happens when the Producer is being setup.
+         */
         if (bookmark == -1) {
-            LOG.error("Producer("  + identifier + ":" + getOperationType() + ") getBookmark: -1, will use: " +
+            LOG.info("Producer("  + identifier + ":" + getOperationType() + ") getBookmark: -1, will use: " +
                     bufferIndex.get());
 
         } else {
@@ -231,7 +235,7 @@ public class BufferManagerPointer {
             */
             ptrThisDependsOn.setBookmark(currIndex);
         } else {
-            LOG.error("Producer(" + identifier + ":" + getOperationType() + ") setBookmark(1): " + currIndex);
+            LOG.info("Producer(" + identifier + ":" + getOperationType() + ") setBookmark(1): " + currIndex);
 
             bookmark = currIndex;
         }
@@ -270,7 +274,7 @@ public class BufferManagerPointer {
                 ** This is the normal case when the consumer has caught up to the producer so there
                 **   are no more buffers to consume at this moment.
                  */
-                LOG.warn("getReadIndex() Consumer(" + identifier + ":" + getOperationType() + ") bufferIndex: " +
+                LOG.info("getReadIndex() waiting for buffers Consumer(" + identifier + ":" + getOperationType() + ") bufferIndex: " +
                         bufferIndex + " Producer(" + ptrThisDependsOn.getIdentifier() + ":" +
                         ptrThisDependsOn.getOperationType() + ") writeIndex: " + ptrThisDependsOn.getCurrIndex());
             }
