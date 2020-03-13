@@ -87,7 +87,18 @@ public class SetupClientConnection implements Operation {
     private BufferManagerPointer addBufferPointer;
     private BufferManagerPointer writeInfillPointer;
 
+    /*
+    ** The following AtomicBoolean are used to prevent the execute() function from being called
+    **   multiple times and to allow the completion cleanup to be run on the same thread as
+    **   the execute() function. Otherwise, there is a race condition between the execute() function
+    **   running and things being cleaned up.
+     */
     private final AtomicBoolean alreadyExecuted;
+    private final AtomicBoolean clientConnectionComplete;
+
+    private final Object cleanupCompleted;
+    private boolean doneSignalSent;
+
 
     public SetupClientConnection(final WebServerFlavor flavor, final RequestContext requestContext,
                                  final MemoryManager memoryManager, final ClientTest clientTest,
@@ -108,6 +119,10 @@ public class SetupClientConnection implements Operation {
         this.clientOperations = new HashMap<>();
 
         this.alreadyExecuted = new AtomicBoolean(false);
+        this.clientConnectionComplete = new AtomicBoolean(false);
+
+        this.cleanupCompleted = new Object();
+        this.doneSignalSent = false;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -261,6 +276,8 @@ public class SetupClientConnection implements Operation {
          */
         if (!alreadyExecuted.get()) {
             requestContext.addToWorkQueue(this);
+        } else if (clientConnectionComplete.get()) {
+            requestContext.addToWorkQueue(this);
         }
      }
 
@@ -270,26 +287,43 @@ public class SetupClientConnection implements Operation {
 
         LOG.info("execute()");
 
-        /*
-        ** Only run this once, even though it will get kicked everytime a buffer is added to the
-        **   available buffers. The better way would be to add a WriteBufferAdd operation or to
-        **   allocate all of the buffers up front.
-         */
-        alreadyExecuted.set(true);
+        if (!alreadyExecuted.get()) {
+            /*
+             ** Only run this once, even though it will get kicked everytime a buffer is added to the
+             **   available buffers. The better way would be to add a WriteBufferAdd operation or to
+             **   allocate all of the buffers up front.
+             */
+            alreadyExecuted.set(true);
+
+            /*
+             ** Start the connection to the remote WebServer. When it completes, this Operation's event() method
+             **   will be called and the ClientHttpHeaderWrite operation can be started.
+             */
+            clientConnection.startInitiator(serverIdentifier.getStorageServerIpAddress(),
+                    serverIdentifier.getStorageServerTcpPort(), connectComplete, initiatorError);
+        } else if (clientConnectionComplete.get()) {
+            cleanupClient();
+        }
+    }
+
+    /*
+    ** This routine just sets a completed flag and adds this to the execute queue to run in the background.
+     */
+    public void complete() {
+        clientConnectionComplete.set(true);
+
+        event();
 
         /*
-         ** Start the connection to the remote WebServer. When it completes, this Operation's event() method
-         **   will be called and the ClientHttpHeaderWrite operation can be started.
+        ** To maintain the expected behavior, block until the cleanup has been completed.
          */
-        clientConnection.startInitiator(serverIdentifier.getStorageServerIpAddress(),
-                serverIdentifier.getStorageServerTcpPort(), connectComplete, initiatorError);
+        waitForCleanup();
     }
 
     /*
      ** This removes any dependencies that are put upon the BufferManager
      */
-    public void complete() {
-
+    private void cleanupClient() {
         /*
          ** Remove the BufferManager and BufferManagerPointer from the NioSocket (clientConnection)
          */
@@ -342,6 +376,40 @@ public class SetupClientConnection implements Operation {
         }
 
         clientWriteBufferManager.unregister(addBufferPointer);
+
+        cleanupCompleted();
+    }
+
+    void cleanupCompleted() {
+        LOG.info("SetupClientConnection cleanup completed");
+
+        synchronized (cleanupCompleted) {
+            doneSignalSent = true;
+            cleanupCompleted.notify();
+        }
+    }
+
+
+    private boolean waitForCleanup() {
+        boolean status = true;
+
+        synchronized (cleanupCompleted) {
+
+            doneSignalSent = false;
+            while (!doneSignalSent) {
+                try {
+                    cleanupCompleted.wait(100);
+                } catch (InterruptedException int_ex) {
+                    int_ex.printStackTrace();
+                    status = false;
+                    break;
+                }
+            }
+        }
+
+        LOG.info("SetupClientConnection waitForCleanup() done: ");
+
+        return status;
     }
 
     /*
