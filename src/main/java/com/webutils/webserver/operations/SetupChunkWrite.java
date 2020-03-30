@@ -105,8 +105,8 @@ public class SetupChunkWrite implements Operation {
         chunkWriteSetupComplete = false;
 
         LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] addr: " +
-                serverIdentifier.getStorageServerIpAddress().toString() + " port: " +
-                serverIdentifier.getStorageServerTcpPort() + " chunkNumber: " + serverIdentifier.getChunkNumber() +
+                serverIdentifier.getServerIpAddress().toString() + " port: " +
+                serverIdentifier.getServerTcpPort() + " chunkNumber: " + serverIdentifier.getChunkNumber() +
                 " writer: " + this.writerNumber);
     }
 
@@ -247,8 +247,8 @@ public class SetupChunkWrite implements Operation {
             /*
              ** Now open a initiator connection to write encrypted buffers out of.
              */
-            if (!storageServerConnection.startInitiator(serverIdentifier.getStorageServerIpAddress(),
-                    serverIdentifier.getStorageServerTcpPort(), connectComplete, errorHandler)) {
+            if (!storageServerConnection.startInitiator(serverIdentifier.getServerIpAddress(),
+                    serverIdentifier.getServerTcpPort(), connectComplete, errorHandler)) {
                 /*
                 ** This means the SocketChannel could not be opened. Need to indicate a problem
                 **   with the Storage Server and clean up this SetupChunkWrite.
@@ -272,8 +272,8 @@ public class SetupChunkWrite implements Operation {
     public void complete() {
 
         LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] complete addr: " +
-                serverIdentifier.getStorageServerIpAddress().toString() + " port: " +
-                serverIdentifier.getStorageServerTcpPort() + " chunkNumber: " + serverIdentifier.getChunkNumber() +
+                serverIdentifier.getServerIpAddress().toString() + " port: " +
+                serverIdentifier.getServerTcpPort() + " chunkNumber: " + serverIdentifier.getChunkNumber() +
                 " writer: " + writerNumber);
 
         /*

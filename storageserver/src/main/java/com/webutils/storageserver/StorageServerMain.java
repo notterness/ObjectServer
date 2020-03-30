@@ -41,10 +41,13 @@ public class StorageServerMain {
             }
         }
 
+        /*
+        ** For the current time, the mock Storage Servers do not need to access the database records.
+         */
         NioServerHandler[] nioStorageServer = new NioServerHandler[NUMBER_TEST_STORAGE_SERVERS];
         for (int i = 0; i < NUMBER_TEST_STORAGE_SERVERS; i++) {
             nioStorageServer[i] = new NioServerHandler(flavor, baseTcpPort + i,
-                    (2000 + (i * STORAGE_SERVER_BASE_ID_OFFSET)));
+                    (2000 + (i * STORAGE_SERVER_BASE_ID_OFFSET)), null);
             nioStorageServer[i].start();
         }
     }

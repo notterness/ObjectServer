@@ -28,7 +28,7 @@ public class NioEventPollBalancer {
 
     private NioEventPollThread[] eventPollThreadPool;
 
-    private DbSetup dbSetup;
+    private final DbSetup dbSetup;
 
     /*
     ** The following is a set of threads setup to perform compute work
@@ -37,32 +37,17 @@ public class NioEventPollBalancer {
 
     private int currNioEventThread;
 
-    public NioEventPollBalancer(final WebServerFlavor flavor, final int numPollThreads, final int threadBaseId) {
+    public NioEventPollBalancer(final WebServerFlavor flavor, final int numPollThreads, final int threadBaseId,
+                                final DbSetup dbSetup) {
 
         this.webServerFlavor = flavor;
         this.numberPollThreads = numPollThreads;
         this.eventPollThreadBaseId = threadBaseId;
+        this.dbSetup = dbSetup;
 
         this.memoryManager = new MemoryManager(webServerFlavor);
 
         eventPollThreadPool = new NioEventPollThread[this.numberPollThreads];
-
-        switch (flavor) {
-            case DOCKER_OBJECT_SERVER_TEST:
-            case INTEGRATION_OBJECT_SERVER_TEST:
-            case KUBERNETES_OBJECT_SERVER_TEST:
-                dbSetup = new DbSetup(flavor);
-                dbSetup.checkAndSetupStorageServers();
-                break;
-
-            case DOCKER_STORAGE_SERVER_TEST:
-            case INTEGRATION_STORAGE_SERVER_TEST:
-                dbSetup = null;
-                break;
-
-            default:
-                dbSetup = null;
-        }
     }
 
     /*

@@ -16,6 +16,7 @@ public class TestMain {
     public static void main(String[] args) {
 
         WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
+        DbSetup dbSetup;
 
         final int serverTcpPort = 5001;
 
@@ -34,12 +35,36 @@ public class TestMain {
         /*
          ** Check if this is a Docker image
          */
+        boolean accessDatabase = true;
         if (args.length == 2) {
             if (args[1].compareTo("docker") == 0) {
                 flavor = WebServerFlavor.INTEGRATION_DOCKER_TESTS;
+                accessDatabase = false;
             } else if (args[1].compareTo("docker-test") == 0) {
+                /*
+                ** These are the tests run against the Storage Server and Object Server running in a different Kubernetes POD
+                 */
                 flavor = WebServerFlavor.INTEGRATION_KUBERNETES_TESTS;
+            } else {
+                accessDatabase = false;
             }
+        }
+
+        /*
+        ** The INTEGRATION_KUBERNETES_TESTS needs access to the database to obtain the IP address and Port for
+        **   the Object Server and the StorageServers.
+         */
+        if (accessDatabase) {
+            /*
+            ** This is true for:
+            **   WebServerFlavor.INTEGRATION_KUBERNETES_TESTS
+            **   WebServerFlavor.INTEGRATION_TESTS
+             */
+            dbSetup = new DbSetup(flavor);
+
+            dbSetup.checkAndSetupStorageServers();
+        } else {
+            dbSetup = null;
         }
 
         /*
@@ -48,6 +73,13 @@ public class TestMain {
         String kubernetesPodIp = null;
 
         if (flavor == WebServerFlavor.INTEGRATION_KUBERNETES_TESTS) {
+            KubernetesInfo kubeInfo = new KubernetesInfo(flavor);
+            try {
+                kubernetesPodIp = kubeInfo.getExternalKubeIp();
+            } catch (IOException io_ex) {
+                System.out.println("IOException: " + io_ex.getMessage());
+            }
+        } else if (flavor == WebServerFlavor.INTEGRATION_TESTS) {
             KubernetesInfo kubeInfo = new KubernetesInfo(flavor);
             try {
                 kubernetesPodIp = kubeInfo.getExternalKubeIp();
@@ -73,12 +105,16 @@ public class TestMain {
             //threadCount.incrementAndGet();
             //waitForTestsToComplete(threadCount);
 
-            nioServer = new NioServerHandler(WebServerFlavor.INTEGRATION_OBJECT_SERVER_TEST, serverTcpPort, 1000);
+            /*
+            ** The Object Server needs to access the database to obtain the VON information
+             */
+            nioServer = new NioServerHandler(WebServerFlavor.INTEGRATION_OBJECT_SERVER_TEST, serverTcpPort, 1000,
+                    dbSetup);
             nioServer.start();
 
             for (int i = 0; i < NUMBER_TEST_STORAGE_SERVERS; i++) {
                 nioStorageServer[i] = new NioServerHandler(WebServerFlavor.INTEGRATION_STORAGE_SERVER_TEST, baseTcpPort + i,
-                        (2000 + (i * STORAGE_SERVER_BASE_ID_OFFSET)));
+                        (2000 + (i * STORAGE_SERVER_BASE_ID_OFFSET)), null);
                 nioStorageServer[i].start();
             }
         } else {

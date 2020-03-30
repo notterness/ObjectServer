@@ -40,7 +40,8 @@ public class NioTestClient {
         /*
          ** First start the client NIO event poll threads
          */
-        eventPollBalancer = new NioEventPollBalancer(WebServerFlavor.INTEGRATION_TESTS, 1, clientThreadBaseId + 10);
+        eventPollBalancer = new NioEventPollBalancer(WebServerFlavor.INTEGRATION_TESTS, 1,
+                clientThreadBaseId + 10, null);
         eventPollBalancer.start();
     }
 

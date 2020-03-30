@@ -1,29 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Configuration status="WARN" shutdownHook="disable" monitorInterval="30" packages="com.webutils">
     <Appenders>
-        <RollingRandomAccessFile name="storageserver_log" fileName="logs/storageserver_old.log"
-                                 filePattern="logs/storageserver_old-%d{yyyy-MM-dd'T'HH:mm':00Z'}.%i.log.gz">
-            <PatternLayout>
-                <Pattern>%d %-5p %c{1} [%t] [%X{opc-request-id}] %replace{%m}{[\n\r]+}{} %ex{full}{separator( | )}%n</Pattern>
-            </PatternLayout>
-            <Policies>
-                <TimeBasedTriggeringPolicy interval="10" modulate="true"/>
-                <SizeBasedTriggeringPolicy size="250 MB"/>
-            </Policies>
-            <DefaultRolloverStrategy max="20">
-                <Delete basePath="logs/" followLinks="True">
-                    <IfFileName glob="storageserver_old-*.log.gz">
-                        <IfAny>
-                            <IfLastModified age="7d"/>
-                            <IfAccumulatedFileSize exceeds="3 GB"/>
-                        </IfAny>
-                    </IfFileName>
-                </Delete>
-            </DefaultRolloverStrategy>
-        </RollingRandomAccessFile>
-
-        <File name="JSONLogfileAppender" fileName="logs/storageserver.log">
+        <RollingRandomAccessFile name="storageserver_log" fileName="logs/storageserver.log"
+                                 filePattern="logs/storageserver-%d{yyyy-MM-dd'T'HH:mm':00Z'}.%i.log.gz">
             <JSONLayout properties="true" complete="true" compact="true" eventEol="true">
+
                 <KeyValuePair key="timestamp" value="$${date:yyyy-MM-dd'T'HH:mm:ss.SSS}" />
                 <KeyValuePair key="kubernetes.host" value="${k8s:host:-}"/>
                 <KeyValuePair key="kubernetes.labels.app" value="${k8s:labels.app:-}"/>
@@ -35,17 +16,27 @@
                 <KeyValuePair key="kubernetes.podIP" value="${k8s:podIp:-}"/>
                 <KeyValuePair key="kubernetes.podName" value="${k8s:podName:-}"/>
             </JSONLayout>
-            <BurstFilter level="INFO" rate="2" maxBurst="10"/>
-        </File>
-        <Async name="AsyncAppender" bufferSize="80">
-            <AppenderRef ref="JSONLogfileAppender"/>
-        </Async>
+            <BurstFilter level="INFO" rate="500" maxBurst="1000"/>
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="10" modulate="true"/>
+                <SizeBasedTriggeringPolicy size="250 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="20">
+                <Delete basePath="logs/" followLinks="True">
+                    <IfFileName glob="storageserver-*.log.gz">
+                        <IfAny>
+                            <IfLastModified age="7d"/>
+                            <IfAccumulatedFileSize exceeds="3 GB"/>
+                        </IfAny>
+                    </IfFileName>
+                </Delete>
+            </DefaultRolloverStrategy>
+        </RollingRandomAccessFile>
 
     </Appenders>
     <Loggers>
         <Root level="INFO">
             <AppenderRef ref="storageserver_log" level="DEBUG"/>
-            <AppenderRef ref="AsyncAppender" level="DEBUG"/>
         </Root>
 
     </Loggers>

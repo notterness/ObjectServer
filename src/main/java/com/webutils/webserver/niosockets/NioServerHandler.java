@@ -1,5 +1,6 @@
 package com.webutils.webserver.niosockets;
 
+import com.webutils.webserver.mysql.DbSetup;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +26,8 @@ public class NioServerHandler implements Runnable {
 
     private final WebServerFlavor webServerFlavor;
 
+    private final DbSetup dbSetup;
+
     private volatile boolean threadRunning;
 
     private Selector serverSelector;
@@ -33,11 +36,13 @@ public class NioServerHandler implements Runnable {
     private NioEventPollBalancer eventPollBalancer;
     private Thread serverAcceptThread;
 
-    public NioServerHandler(final WebServerFlavor flavor, final int tcpListenPort, final int threadBaseId) {
+    public NioServerHandler(final WebServerFlavor flavor, final int tcpListenPort, final int threadBaseId, final DbSetup dbSetup) {
 
         this.webServerFlavor = flavor;
         this.tcpListenPort = tcpListenPort;
         this.serverThreadBaseId = threadBaseId;
+
+        this.dbSetup = dbSetup;
 
         this.threadRunning = true;
     }
@@ -46,7 +51,7 @@ public class NioServerHandler implements Runnable {
         /*
         ** First start the client NIO event poll threads
          */
-        eventPollBalancer = new NioEventPollBalancer(webServerFlavor, 2, serverThreadBaseId + 10);
+        eventPollBalancer = new NioEventPollBalancer(webServerFlavor, 2, serverThreadBaseId + 10, dbSetup);
         eventPollBalancer.start();
 
         /*

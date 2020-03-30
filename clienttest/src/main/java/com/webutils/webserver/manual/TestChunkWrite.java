@@ -96,7 +96,7 @@ public class TestChunkWrite {
         /*
         ** The unique identifier for this Chunk write test
          */
-        ServerIdentifier chunkId = new ServerIdentifier(storageServerAddr, storageServerTcpPort, 0);
+        ServerIdentifier chunkId = new ServerIdentifier("TestChunkWrite", storageServerAddr, storageServerTcpPort, 0);
 
         /*
          ** The ChunkWriteTest operation is what is called back when the Chunk Write completes

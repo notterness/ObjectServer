@@ -112,31 +112,35 @@ public class VonPicker implements Operation {
             **   add 3 Storage Servers
              */
             DbSetup dbSetup = this.requestContext.getDbSetup();
+            if (dbSetup != null) {
 
-            StorageServerDbOps storageServerInfo = new StorageServerDbOps(dbSetup);
-            if (!storageServerInfo.getStorageServers(serverList, chunkNumber)) {
-                LOG.warn("Unable to obtain storageServerInfo chunk: " + chunkNumber);
-                for (ServerIdentifier serverIdentifier : serverList) {
-                    LOG.warn("  serverIdentifier " + serverIdentifier.getStorageServerIpAddress().getHostAddress() +
-                            " port: " + serverIdentifier.getStorageServerTcpPort());
+                StorageServerDbOps storageServerInfo = new StorageServerDbOps(dbSetup);
+                if (!storageServerInfo.getStorageServers(serverList, chunkNumber)) {
+                    LOG.warn("Unable to obtain storageServerInfo chunk: " + chunkNumber);
+                    for (ServerIdentifier serverIdentifier : serverList) {
+                        LOG.warn("  serverIdentifier " + serverIdentifier.getServerIpAddress().getHostAddress() +
+                                " port: " + serverIdentifier.getServerTcpPort());
+                    }
+                    return;
                 }
-                return;
+
+                /*
+                 ** For all of the Storage Servers start a Chunk write sequence
+                 */
+                int i = 0;
+                for (ServerIdentifier serverIdentifier : serverList) {
+                    SetupChunkWrite setupChunkWrite = new SetupChunkWrite(requestContext, serverIdentifier,
+                            memoryManager, storageServerWritePointer, chunkBytesToWrite, this, i);
+                    setupChunkWrite.initialize();
+                    setupChunkWrite.event();
+
+                    i++;
+                }
+
+                storageServersIdentified = true;
+            } else {
+                LOG.error("DbSetup is null, unable to execute VonPicker");
             }
-
-            /*
-            ** For all of the Storage Servers start a Chunk write sequence
-             */
-            int i = 0;
-            for (ServerIdentifier serverIdentifier : serverList) {
-                SetupChunkWrite setupChunkWrite = new SetupChunkWrite(requestContext, serverIdentifier,
-                        memoryManager, storageServerWritePointer, chunkBytesToWrite, this, i);
-                setupChunkWrite.initialize();
-                setupChunkWrite.event();
-
-                i++;
-            }
-
-            storageServersIdentified = true;
         } else {
             /*
             ** Check if all of the Storage Servers have responded or have had an error (either a bad
@@ -157,8 +161,8 @@ public class VonPicker implements Operation {
                  */
                 for (ServerIdentifier serverIdentifier : serverList) {
                     int result = requestContext.getStorageResponseResult(serverIdentifier);
-                    LOG.info("ChunkWriteComplete addr: " + serverIdentifier.getStorageServerIpAddress().toString() +
-                            " port: " + serverIdentifier.getStorageServerTcpPort() + " chunkNumber: " + chunkNumber +
+                    LOG.info("ChunkWriteComplete addr: " + serverIdentifier.getServerIpAddress().toString() +
+                            " port: " + serverIdentifier.getServerTcpPort() + " chunkNumber: " + chunkNumber +
                             " result: " + result);
                 }
 

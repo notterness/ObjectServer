@@ -1,6 +1,7 @@
 package com.webutils.objectserver;
 
 
+import com.webutils.webserver.mysql.DbSetup;
 import com.webutils.webserver.niosockets.NioServerHandler;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 
@@ -11,6 +12,8 @@ import com.webutils.webserver.requestcontext.WebServerFlavor;
 public class WebServerMain {
     public static void main(String[] args) {
         int serverTcpPort;
+        DbSetup dbSetup;
+
         WebServerFlavor flavor = WebServerFlavor.INTEGRATION_OBJECT_SERVER_TEST;
 
         if (args.length >= 1) {
@@ -33,19 +36,33 @@ public class WebServerMain {
          **   -> For the normal and Kubernetes images, the "localServerIdentifier" MySQL table
          **      is used to lookup the addresses of the Storage Servers.
          */
+        boolean accessDatabase = false;
         if (args.length == 2) {
             if (args[1].compareTo("docker") == 0) {
                 flavor = WebServerFlavor.DOCKER_OBJECT_SERVER_TEST;
+                accessDatabase = true;
             } else if (args[1].compareTo("kubernetes") == 0) {
                 flavor = WebServerFlavor.KUBERNETES_OBJECT_SERVER_TEST;
+                accessDatabase = true;
             }
+        }
+
+        /*
+        ** If this Object Server is running as a Docker Image or within a Kubernetes POD, it will need to access the
+        **   database to obtain IP addresses.
+         */
+        if (accessDatabase) {
+            dbSetup = new DbSetup(flavor);
+            dbSetup.checkAndSetupStorageServers();
+        } else {
+            dbSetup = null;
         }
 
         for (String s: args) {
             System.out.println(s);
         }
 
-        NioServerHandler nioServer = new NioServerHandler(flavor, serverTcpPort, 1000);
+        NioServerHandler nioServer = new NioServerHandler(flavor, serverTcpPort, 1000, dbSetup);
         nioServer.start();
     }
 }

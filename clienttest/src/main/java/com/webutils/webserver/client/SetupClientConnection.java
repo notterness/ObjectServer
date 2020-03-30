@@ -299,8 +299,8 @@ public class SetupClientConnection implements Operation {
              ** Start the connection to the remote WebServer. When it completes, this Operation's event() method
              **   will be called and the ClientHttpHeaderWrite operation can be started.
              */
-            clientConnection.startInitiator(serverIdentifier.getStorageServerIpAddress(),
-                    serverIdentifier.getStorageServerTcpPort(), connectComplete, initiatorError);
+            clientConnection.startInitiator(serverIdentifier.getServerIpAddress(),
+                    serverIdentifier.getServerTcpPort(), connectComplete, initiatorError);
         } else if (clientConnectionComplete.get()) {
             cleanupClient();
         }

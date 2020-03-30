@@ -771,7 +771,7 @@ public class RequestContext {
     public void removeHttpRequestSent(final ServerIdentifier storageServerId) {
         if (httpRequestSent.remove(storageServerId) == null) {
             LOG.warn("RequestContext[" + getRequestId() + "] HTTP Request remove failed targetPort: " +
-                    storageServerId.getStorageServerIpAddress() + ":" + storageServerId.getStorageServerTcpPort() +
+                    storageServerId.getServerIpAddress() + ":" + storageServerId.getServerTcpPort() +
                     ":" + storageServerId.getChunkNumber());
 
         }
@@ -801,7 +801,7 @@ public class RequestContext {
     public void removeStorageServerResponse(final ServerIdentifier storageServerId) {
         if (storageServerResponse.remove(storageServerId) == null) {
             LOG.warn("RequestContext[" + getRequestId() + "] HTTP Response remove failed targetPort: " +
-                    storageServerId.getStorageServerIpAddress() + ":" + storageServerId.getStorageServerTcpPort() +
+                    storageServerId.getServerIpAddress() + ":" + storageServerId.getServerTcpPort() +
                     ":" + storageServerId.getChunkNumber());
         }
     }

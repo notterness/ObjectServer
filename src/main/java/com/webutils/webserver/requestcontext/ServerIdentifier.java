@@ -7,22 +7,26 @@ import java.net.InetAddress;
  */
 public class ServerIdentifier {
 
-    private final InetAddress storageServerIpAddress;
-    private final int storageServerTcpPort;
+    private final String serverName;
+    private final InetAddress serverIpAddress;
+    private final int serverTcpPort;
     private final int chunkNumber;
 
-    public ServerIdentifier(final InetAddress ipAddress, final int tcpPort, final int chunkNumber) {
-        this.storageServerIpAddress = ipAddress;
-        this.storageServerTcpPort = tcpPort;
+    public ServerIdentifier(final String serverName, final InetAddress ipAddress, final int tcpPort, final int chunkNumber) {
+        this.serverName = serverName;
+        this.serverIpAddress = ipAddress;
+        this.serverTcpPort = tcpPort;
         this.chunkNumber = chunkNumber;
     }
 
-    public InetAddress getStorageServerIpAddress() {
-        return storageServerIpAddress;
+    public String getServerName() { return serverName; }
+
+    public InetAddress getServerIpAddress() {
+        return serverIpAddress;
     }
 
-    public int getStorageServerTcpPort() {
-        return storageServerTcpPort;
+    public int getServerTcpPort() {
+        return serverTcpPort;
     }
 
     public int getChunkNumber() {

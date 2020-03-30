@@ -103,7 +103,7 @@ public abstract class ClientTest {
          */
         memoryManager = new MemoryManager(webServerFlavor);
 
-        ServerIdentifier serverId = new ServerIdentifier(serverIpAddr, serverTcpPort, 0);
+        ServerIdentifier serverId = new ServerIdentifier("ClientTest", serverIpAddr, serverTcpPort, 0);
         SetupClientConnection setupClientConnection = new SetupClientConnection(webServerFlavor, clientContext, memoryManager,
                 this, connection, serverId);
         setupClientConnection.initialize();

@@ -15,6 +15,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Map;
 import java.util.Objects;
 
 public class KubernetesInfo {
@@ -156,7 +157,7 @@ public class KubernetesInfo {
              ** Use the fieldSelector to only search for services associated with webutils-site. There should only
              **   be a single service that matches the search, but leaving the limit at 5 just to be sure.
              */
-            String fieldSelector = "metadata.name=webutils-site";
+            String fieldSelector = "metadata.name=webutils-service";
             V1ServiceList services = api.listServiceForAllNamespaces(true, null, fieldSelector, null,
                     5, null, null, 100, false);
 
@@ -173,7 +174,7 @@ public class KubernetesInfo {
                 while (portIter.hasNext()) {
                     V1ServicePort port = portIter.next();
                     System.out.println("    name: " + port.getName() + " port: " + port.getPort() + " protocol: " + port.getProtocol() +
-                            " targetPort: " + port.getTargetPort());
+                            " targetPort: " + port.getTargetPort() + " NodePort: " + port.getNodePort());
                 }
             }
         } catch (ApiException api_ex) {
@@ -205,7 +206,7 @@ public class KubernetesInfo {
         ** Use the fieldSelector to only search for services associated with webutils-site. There should only
         **   be a single service that matches the search, so the limit is set at 1 just to be sure.
          */
-        String fieldSelector = "metadata.name=webutils-site";
+        String fieldSelector = "metadata.name=webutils-service";
 
         try {
             V1EndpointsList endpoints = api.listEndpointsForAllNamespaces(true, null, fieldSelector, null,
@@ -242,6 +243,124 @@ public class KubernetesInfo {
         }
 
         return internalPodIp;
+    }
+
+    /*
+     ** This returns a Map<Storage Server Name or Object Server Name:String, NodePort:Integer> of all of the Object and
+     **   Storage Servers found in the webutils-service.
+     **
+     ** NOTE: NodePort is what is used to communicate with the Docker Image from outside the POD.
+     */
+    public int getNodePorts(Map<String, Integer> serversInfo) throws IOException {
+        /*
+         ** File path to the KubeConfig - for images running within a Docker container, there must be a mapping between
+         **    /usr/src/myapp/config/config to /Users/notterness/.kube/config
+         **
+         ** For the Kubernetes images this is setup in the deployment-webutils.yaml file.
+         ** For Docker runs, it is in the command line to run the Docker container.
+         */
+        String kubeConfigPath = getKubeConfigPath();
+
+        ApiClient client = ClientBuilder.kubeconfig(KubeConfig.loadKubeConfig(new FileReader(kubeConfigPath))).build();
+        Configuration.setDefaultApiClient(client);
+
+        int servicePortCount = 0;
+        CoreV1Api api = new CoreV1Api();
+        try {
+            /*
+             ** Use the fieldSelector to only search for services associated with webutils-site. There should only
+             **   be a single service that matches the search, but leaving the limit at 5 just to be sure.
+             */
+            String fieldSelector = "metadata.name=webutils-service";
+            V1ServiceList services = api.listServiceForAllNamespaces(true, null, fieldSelector, null,
+                    5, null, null, 100, false);
+
+            for (V1Service service : services.getItems()) {
+                System.out.println("SERVICE:  " + service.getMetadata().getName());
+
+                V1ServiceSpec spec = service.getSpec();
+
+                System.out.println("  spec - clusterIP: " + spec.getClusterIP());
+
+                List<V1ServicePort> ports = spec.getPorts();
+                ListIterator<V1ServicePort> portIter = ports.listIterator();
+                while (portIter.hasNext()) {
+                    V1ServicePort port = portIter.next();
+
+                    System.out.println("    name: " + port.getName() + " port: " + port.getPort() + " protocol: " + port.getProtocol() +
+                            " targetPort: " + port.getTargetPort() + " NodePort: " + port.getNodePort());
+
+                    serversInfo.put(port.getName(), port.getNodePort());
+                    servicePortCount++;
+                }
+            }
+        } catch (ApiException api_ex) {
+            System.out.println("getStorageServerNodePorts() - V1 API exception: " + api_ex.getMessage());
+            LOG.error("getStorageServerNodePorts() - V1 API exception: " + api_ex.getMessage());
+        }
+
+        return servicePortCount;
+    }
+
+    /*
+     ** This returns a Map<Storage Server Name:String, TargetPort:Integer> of all of the Storage Servers found in
+     **   the webutils-service.
+     ** It checks to make sure that the name of the Service ports contains "storage-server". This is done to filter out
+     **   the "object-server" ports.
+     **
+     ** NOTE: TargetPort is what is used to communicate with the Docker Image from within the POD.
+     */
+    public int getStorageServerPorts(Map<String, Integer> storageServersInfo) throws IOException {
+        /*
+         ** File path to the KubeConfig - for images running within a Docker container, there must be a mapping between
+         **    /usr/src/myapp/config/config to /Users/notterness/.kube/config
+         **
+         ** For the Kubernetes images this is setup in the deployment-webutils.yaml file.
+         ** For Docker runs, it is in the command line to run the Docker container.
+         */
+        String kubeConfigPath = getKubeConfigPath();
+
+        ApiClient client = ClientBuilder.kubeconfig(KubeConfig.loadKubeConfig(new FileReader(kubeConfigPath))).build();
+        Configuration.setDefaultApiClient(client);
+
+        int storageServerCount = 0;
+        CoreV1Api api = new CoreV1Api();
+        try {
+            /*
+             ** Use the fieldSelector to only search for services associated with webutils-site. There should only
+             **   be a single service that matches the search, but leaving the limit at 5 just to be sure.
+             */
+            String fieldSelector = "metadata.name=webutils-service";
+            V1ServiceList services = api.listServiceForAllNamespaces(true, null, fieldSelector, null,
+                    5, null, null, 100, false);
+
+            for (V1Service service : services.getItems()) {
+                System.out.println("SERVICE:  " + service.getMetadata().getName());
+
+                V1ServiceSpec spec = service.getSpec();
+
+                System.out.println("  spec - clusterIP: " + spec.getClusterIP());
+
+                List<V1ServicePort> ports = spec.getPorts();
+                ListIterator<V1ServicePort> portIter = ports.listIterator();
+                while (portIter.hasNext()) {
+                    V1ServicePort port = portIter.next();
+
+                    if (port.getName().contains("storage-server")) {
+                        System.out.println("    name: " + port.getName() + " port: " + port.getPort() + " protocol: " + port.getProtocol() +
+                                " targetPort: " + port.getTargetPort() + " NodePort: " + port.getNodePort());
+
+                        storageServersInfo.put(port.getName(), port.getPort());
+                        storageServerCount++;
+                    }
+                }
+            }
+        } catch (ApiException api_ex) {
+            System.out.println("getStorageServerNodePorts() - V1 API exception: " + api_ex.getMessage());
+            LOG.error("getStorageServerNodePorts() - V1 API exception: " + api_ex.getMessage());
+        }
+
+        return storageServerCount;
     }
 
     /*
