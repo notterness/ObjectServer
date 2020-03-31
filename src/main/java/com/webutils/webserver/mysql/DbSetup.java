@@ -8,11 +8,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.sql.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
-public class DbSetup {
+public abstract class DbSetup {
 
     private static final Logger LOG = LoggerFactory.getLogger(DbSetup.class);
 
@@ -237,12 +239,6 @@ public class DbSetup {
                 LOG.error("Unable to obtain Storage Server NodePorts - checkAndSetupStorageServers() - IOException: " + io_ex.getMessage());
             }
         }
-
-        StorageServerDbOps ops = new StorageServerDbOps(this);
-
-        List<ServerIdentifier> serverList = new LinkedList<>();
-
-        ops.getStorageServers(serverList, 0);
     }
 
     /*
@@ -816,5 +812,175 @@ public class DbSetup {
             LOG.error("populateK8ServersInfo() IP Address is NULL");
         }
     }
+
+    public boolean retrieveStorageServers(final String sqlQuery, final List<ServerIdentifier> servers, final int chunkNumber) {
+        boolean success = false;
+
+        LOG.info("DbSetup getStorageServers() dockerImage: " + isDockerImage() + " k8Image: " +
+                isKubernetesImage());
+
+        Connection conn = getStorageServerDbConn();
+
+        if (conn != null) {
+            Statement stmt = null;
+            ResultSet rs = null;
+
+            try {
+                stmt = conn.createStatement();
+
+                if (stmt.execute(sqlQuery)) {
+                    rs = stmt.getResultSet();
+                }
+            } catch (SQLException sqlEx) {
+                // handle any errors
+                System.out.println("SQL conn close(2) SQLException: " + sqlEx.getMessage());
+                System.out.println("SQL conn close(2) SQLState: " + sqlEx.getSQLState());
+                System.out.println("SQL conn close(2) VendorError: " + sqlEx.getErrorCode());
+            }
+
+            finally {
+                if (rs != null) {
+
+                    try {
+                        while (rs.next()) {
+                            try {
+                                /*
+                                 ** The rs.getString(3) is the String format of the IP Address.
+                                 */
+                                InetAddress inetAddress = InetAddress.getByName(rs.getString(3));
+
+                                ServerIdentifier server = new ServerIdentifier(rs.getString(2), inetAddress, rs.getInt(4), chunkNumber);
+                                servers.add(server);
+
+                                LOG.info("StorageServer host: " + rs.getString(2) + " " + inetAddress.toString() + " port: " +
+                                        rs.getInt(4));
+                            } catch (UnknownHostException ex) {
+                                LOG.warn("Unknown host: " + rs.getString(2) + " " + ex.getMessage());
+                                System.out.println("Unknown host: " + rs.getString(2) + " " + ex.getMessage());
+                            }
+                        }
+                    } catch (SQLException sqlEx) {
+                        System.out.println("SQL conn rs.next() SQLException: " + sqlEx.getMessage());
+                    }
+
+                    success = true;
+                    try {
+                        rs.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("SQL conn rs close() SQLException: " + sqlEx.getMessage());
+                        System.out.println("SQL conn rs close() SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQL conn rs close() VendorError: " + sqlEx.getErrorCode());
+                    }
+
+                    rs = null;
+                }
+
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("SQL conn stmt close() SQLException: " + sqlEx.getMessage());
+                        System.out.println("SQL conn stmt close() SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQL conn stmt close() VendorError: " + sqlEx.getErrorCode());
+                    }
+
+                    stmt =  null;
+                }
+            }
+
+            closeStorageServerDbConn(conn);
+            conn = null;
+        }
+
+        return success;
+    }
+
+    /*
+     ** This will return a specific server (if one exists) based upon the passed in serverName. Currently, the only
+     **   server names that are valid are:
+     **     "object-server"
+     **     "storage-server-1"
+     **     "storage-server-2"
+     **     "storage-server-3"
+     */
+    protected boolean getServer(final String sqlQuery, final List<ServerIdentifier> serverList) {
+        boolean success = false;
+
+        Connection conn = getStorageServerDbConn();
+
+        if (conn != null) {
+            Statement stmt = null;
+            ResultSet rs = null;
+
+            try {
+                stmt = conn.createStatement();
+
+                if (stmt.execute(sqlQuery)) {
+                    rs = stmt.getResultSet();
+                }
+            } catch (SQLException sqlEx) {
+                // handle any errors
+                System.out.println("SQL conn close(2) SQLException: " + sqlEx.getMessage());
+                System.out.println("SQL conn close(2) SQLState: " + sqlEx.getSQLState());
+                System.out.println("SQL conn close(2) VendorError: " + sqlEx.getErrorCode());
+            }
+
+            finally {
+                if (rs != null) {
+
+                    try {
+                        while (rs.next()) {
+                            try {
+                                /*
+                                 ** The rs.getString(3) is the String format of the IP Address.
+                                 */
+                                InetAddress inetAddress = InetAddress.getByName(rs.getString(3));
+
+                                ServerIdentifier server = new ServerIdentifier(rs.getString(2), inetAddress, rs.getInt(4), 0);
+                                serverList.add(server);
+
+                                LOG.info("StorageServer host: " + rs.getString(2) + " " + inetAddress.toString());
+                            } catch (UnknownHostException ex) {
+                                LOG.warn("Unknown host: " + rs.getString(2) + " " + ex.getMessage());
+                                System.out.println("Unknown host: " + rs.getString(2) + " " + ex.getMessage());
+                            }
+                        }
+                    } catch (SQLException sqlEx) {
+                        System.out.println("SQL conn rs.next() SQLException: " + sqlEx.getMessage());
+                    }
+
+                    success = true;
+                    try {
+                        rs.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("SQL conn rs close() SQLException: " + sqlEx.getMessage());
+                        System.out.println("SQL conn rs close() SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQL conn rs close() VendorError: " + sqlEx.getErrorCode());
+                    }
+
+                    rs = null;
+                }
+
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("SQL conn stmt close() SQLException: " + sqlEx.getMessage());
+                        System.out.println("SQL conn stmt close() SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQL conn stmt close() VendorError: " + sqlEx.getErrorCode());
+                    }
+
+                    stmt =  null;
+                }
+            }
+
+            closeStorageServerDbConn(conn);
+            conn = null;
+        }
+
+        return success;
+    }
+
+    public abstract boolean getStorageServers(final List<ServerIdentifier> servers, final int chunkNumber);
 
 }

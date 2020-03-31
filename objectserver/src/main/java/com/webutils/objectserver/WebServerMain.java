@@ -2,6 +2,8 @@ package com.webutils.objectserver;
 
 
 import com.webutils.webserver.mysql.DbSetup;
+import com.webutils.webserver.mysql.K8LocalDbInfo;
+import com.webutils.webserver.mysql.TestLocalDbInfo;
 import com.webutils.webserver.niosockets.NioServerHandler;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 
@@ -36,27 +38,22 @@ public class WebServerMain {
          **   -> For the normal and Kubernetes images, the "localServerIdentifier" MySQL table
          **      is used to lookup the addresses of the Storage Servers.
          */
-        boolean accessDatabase = false;
         if (args.length == 2) {
             if (args[1].compareTo("docker") == 0) {
                 flavor = WebServerFlavor.DOCKER_OBJECT_SERVER_TEST;
-                accessDatabase = true;
             } else if (args[1].compareTo("kubernetes") == 0) {
                 flavor = WebServerFlavor.KUBERNETES_OBJECT_SERVER_TEST;
-                accessDatabase = true;
             }
+            dbSetup = new K8LocalDbInfo(flavor);
+        } else {
+            dbSetup = new TestLocalDbInfo(flavor);
         }
 
         /*
         ** If this Object Server is running as a Docker Image or within a Kubernetes POD, it will need to access the
         **   database to obtain IP addresses.
          */
-        if (accessDatabase) {
-            dbSetup = new DbSetup(flavor);
-            dbSetup.checkAndSetupStorageServers();
-        } else {
-            dbSetup = null;
-        }
+        dbSetup.checkAndSetupStorageServers();
 
         for (String s: args) {
             System.out.println(s);

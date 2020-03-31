@@ -3,13 +3,11 @@ package com.webutils.webserver.operations;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.DbSetup;
-import com.webutils.webserver.mysql.StorageServerDbOps;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.InetAddress;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -111,11 +109,10 @@ public class VonPicker implements Operation {
             ** Call the VON Picker - This is a blocking operation and will take time. For the test purposes,
             **   add 3 Storage Servers
              */
-            DbSetup dbSetup = this.requestContext.getDbSetup();
+            DbSetup dbSetup = requestContext.getDbSetup();
             if (dbSetup != null) {
 
-                StorageServerDbOps storageServerInfo = new StorageServerDbOps(dbSetup);
-                if (!storageServerInfo.getStorageServers(serverList, chunkNumber)) {
+                if (!dbSetup.getStorageServers(serverList, chunkNumber)) {
                     LOG.warn("Unable to obtain storageServerInfo chunk: " + chunkNumber);
                     for (ServerIdentifier serverIdentifier : serverList) {
                         LOG.warn("  serverIdentifier " + serverIdentifier.getServerIpAddress().getHostAddress() +

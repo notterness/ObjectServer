@@ -3,6 +3,8 @@ package com.webutils.webserver.manual;
 import com.webutils.webserver.client.NioTestClient;
 import com.webutils.webserver.kubernetes.KubernetesInfo;
 import com.webutils.webserver.mysql.DbSetup;
+import com.webutils.webserver.mysql.K8PodDbInfo;
+import com.webutils.webserver.mysql.TestLocalDbInfo;
 import com.webutils.webserver.niosockets.NioServerHandler;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 
@@ -35,37 +37,26 @@ public class TestMain {
         /*
          ** Check if this is a Docker image
          */
-        boolean accessDatabase = true;
         if (args.length == 2) {
             if (args[1].compareTo("docker") == 0) {
                 flavor = WebServerFlavor.INTEGRATION_DOCKER_TESTS;
-                accessDatabase = false;
             } else if (args[1].compareTo("docker-test") == 0) {
                 /*
                 ** These are the tests run against the Storage Server and Object Server running in a different Kubernetes POD
                  */
                 flavor = WebServerFlavor.INTEGRATION_KUBERNETES_TESTS;
-            } else {
-                accessDatabase = false;
             }
-        }
 
-        /*
-        ** The INTEGRATION_KUBERNETES_TESTS needs access to the database to obtain the IP address and Port for
-        **   the Object Server and the StorageServers.
-         */
-        if (accessDatabase) {
-            /*
-            ** This is true for:
-            **   WebServerFlavor.INTEGRATION_KUBERNETES_TESTS
-            **   WebServerFlavor.INTEGRATION_TESTS
-             */
-            dbSetup = new DbSetup(flavor);
-
-            dbSetup.checkAndSetupStorageServers();
+            dbSetup = new K8PodDbInfo(flavor);
         } else {
-            dbSetup = null;
+            /*
+             ** The INTEGRATION_KUBERNETES_TESTS needs access to the database to obtain the IP address and Port for
+             **   the Object Server and the StorageServers.
+             */
+            dbSetup = new TestLocalDbInfo(flavor);
         }
+
+        dbSetup.checkAndSetupStorageServers();
 
         /*
         ** Debug stuff to look at Kubernetes Pod information
