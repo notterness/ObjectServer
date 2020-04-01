@@ -113,7 +113,7 @@ public abstract class RequestContext {
     private final WebServerFlavor webServerFlavor;
 
     /*
-    ** The memory manager used to populate the various BufferManagers
+     ** The memory manager used to populate the various BufferManagers
      */
     protected final MemoryManager memoryManager;
 

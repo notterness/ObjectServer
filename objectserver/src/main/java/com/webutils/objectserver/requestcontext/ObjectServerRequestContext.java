@@ -1,8 +1,8 @@
 package com.webutils.objectserver.requestcontext;
 
+import com.webutils.objectserver.operations.SetupV2Put;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.http.CasperHttpInfo;
 import com.webutils.webserver.http.HttpMethodEnum;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.DbSetup;
@@ -71,7 +71,7 @@ public class ObjectServerRequestContext extends RequestContext {
     private Map<ServerIdentifier, Integer> storageServerResponse;
 
 
-    ObjectServerRequestContext(final WebServerFlavor flavor, final MemoryManager memoryManager,
+    public ObjectServerRequestContext(final WebServerFlavor flavor, final MemoryManager memoryManager,
                                final EventPollThread threadThisRunsOn, final DbSetup dbSetup) {
         super(flavor, memoryManager, threadThisRunsOn, dbSetup);
 
@@ -198,10 +198,6 @@ public class ObjectServerRequestContext extends RequestContext {
          */
         SetupV2Put v2PutHandler = new SetupV2Put(this, memoryManager, metering, determineRequestType);
         this.supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, v2PutHandler);
-
-        SetupStorageServerPut storageServerPutHandler = new SetupStorageServerPut(this, memoryManager, metering,
-                determineRequestType);
-        this.supportedHttpRequests.put(HttpMethodEnum.PUT_STORAGE_SERVER, storageServerPutHandler);
 
         /*
          ** Setup the specific part for parsing the buffers as an HTTP Request.

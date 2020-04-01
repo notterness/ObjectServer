@@ -1,10 +1,8 @@
 package com.webutils.webserver.niosockets;
 
-import com.webutils.webserver.memory.MemoryManager;
-import com.webutils.webserver.mysql.DbSetup;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.requestcontext.RequestContext;
-import com.webutils.webserver.requestcontext.WebServerFlavor;
+import com.webutils.webserver.requestcontext.RequestContextPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,19 +16,14 @@ public class NioEventPollThread implements Runnable, EventPollThread {
 
     private static final int ALLOCATED_NIO_SOCKET = 10;
 
-    private final WebServerFlavor webServerFlavor;
-
     private final NioEventPollBalancer threadPoolOwner;
 
     private final int eventPollThreadBaseId;
-    private final MemoryManager memoryManager;
 
-    private final DbSetup dbSetup;
+    private final RequestContextPool requestContextPool;
 
     private final LinkedList<IoInterface> freeConnections;
     private final LinkedList<Operation> waitingForConnections;
-
-    private final LinkedList<RequestContext> runningContexts;
 
     private volatile boolean threadRunning;
 
@@ -43,19 +36,14 @@ public class NioEventPollThread implements Runnable, EventPollThread {
     private final AtomicInteger uniqueRequestId;
 
 
-    public NioEventPollThread(final WebServerFlavor flavor, final NioEventPollBalancer poolOwner, final int threadBaseId,
-                              final MemoryManager memoryManger, final DbSetup dbSetup) {
-
-        this.webServerFlavor = flavor;
+    public NioEventPollThread(final NioEventPollBalancer poolOwner, final int threadBaseId,
+                              final RequestContextPool requestContextPool) {
         this.threadPoolOwner = poolOwner;
         this.eventPollThreadBaseId = threadBaseId;
-        this.memoryManager = memoryManger;
-        this.dbSetup = dbSetup;
+        this.requestContextPool = requestContextPool;
 
         this.freeConnections = new LinkedList<>();
         this.waitingForConnections = new LinkedList<>();
-
-        this.runningContexts = new LinkedList<>();
 
         this.threadRunning = true;
 
@@ -107,6 +95,8 @@ public class NioEventPollThread implements Runnable, EventPollThread {
         }
         freeConnections.clear();
 
+        requestContextPool.stop(eventPollThreadBaseId);
+
         threadRunning = false;
     }
 
@@ -138,24 +128,6 @@ public class NioEventPollThread implements Runnable, EventPollThread {
     }
 
     /*
-    ** TODO: Change this to use a pool of pre-allocated RequestContext
-     */
-    public RequestContext allocateContext(){
-
-        RequestContext requestContext = new RequestContext(webServerFlavor, memoryManager, this, dbSetup);
-
-        runningContexts.add(requestContext);
-
-        LOG.info("allocateContext [" + eventPollThreadBaseId + "] webServerFlavor: " + webServerFlavor.toString());
-
-        return requestContext;
-    }
-
-    public void releaseContext(final RequestContext requestContext) {
-        runningContexts.remove(requestContext);
-    }
-
-    /*
     ** This is where a RequestContext is acquired for a connection and the association between the connection and
     **   the SocketChannel is made. This is how the NIO layer is linked into the actual RequestContext and its
     **   associated BufferManagers.
@@ -168,7 +140,7 @@ public class NioEventPollThread implements Runnable, EventPollThread {
         ** Allocate the RequestContext that is used to track this HTTP Request for its lifetime. The RequestContext is
         **   the placeholder for the various state and generated information for the request.
          */
-        RequestContext requestContext = allocateContext();
+        RequestContext requestContext = requestContextPool.allocateContext(eventPollThreadBaseId);
 
         /*
         ** The IoInterface is the wrapper around the NIO SocketChannel code that allows communication over a socket
@@ -206,9 +178,7 @@ public class NioEventPollThread implements Runnable, EventPollThread {
             ** Now check if there is other work to be performed on the connections that does not deal with the
             **   SocketChanel read and write operations
              */
-            for (RequestContext runningContext : runningContexts) {
-                runningContext.performOperationWork();
-            }
+            requestContextPool.executeRequestContext(eventPollThreadBaseId);
         }
 
         LOG.info("eventThread[" + eventPollThreadBaseId + "] exit");

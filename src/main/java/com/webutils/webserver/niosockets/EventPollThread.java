@@ -27,9 +27,6 @@ public interface EventPollThread {
 
     void releaseConnection(final IoInterface connection);
 
-    RequestContext allocateContext();
-    void releaseContext(final RequestContext requestContext);
-
     boolean registerClientSocket(final SocketChannel clientChannel);
 
     boolean runComputeWork(final Operation computeOperation);

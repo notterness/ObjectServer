@@ -1,13 +1,12 @@
-package com.webutils.webserver.manual;
+package com.webutils.objectserver.manual;
 
+import com.webutils.objectserver.operations.SetupChunkWrite;
+import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.operations.ChunkWriteTestComplete;
-import com.webutils.webserver.operations.NioTestClient;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.IoInterface;
-import com.webutils.webserver.operations.SetupChunkWrite;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
@@ -69,7 +68,7 @@ public class TestChunkWrite {
         /*
          ** Allocate a RequestContext
          */
-        RequestContext clientContext = eventThread.allocateContext();
+        ObjectServerRequestContext clientContext = eventThread.allocateContext();
 
         /*
          ** Allocate an IoInterface to use

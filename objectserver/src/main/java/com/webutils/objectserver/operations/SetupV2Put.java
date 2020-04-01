@@ -1,8 +1,12 @@
-package com.webutils.webserver.operations;
+package com.webutils.objectserver.operations;
 
+import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.memory.MemoryManager;
+import com.webutils.webserver.operations.ComputeMd5Digest;
+import com.webutils.webserver.operations.Operation;
+import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,7 +23,7 @@ public class SetupV2Put implements Operation {
      */
     public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_V2_PUT;
 
-    private final RequestContext requestContext;
+    private final ObjectServerRequestContext requestContext;
 
     private final MemoryManager memoryManager;
 
@@ -53,7 +57,7 @@ public class SetupV2Put implements Operation {
     **   Currently, the V2 PUT is marked complete when all the V2 PUT object data is written to the Storage Servers
     **   and the Md5 Digest is computed and the comparison against the expected result done.
      */
-    public SetupV2Put(final RequestContext requestContext, final MemoryManager memoryManager, final Operation metering,
+    public SetupV2Put(final ObjectServerRequestContext requestContext, final MemoryManager memoryManager, final Operation metering,
                       final Operation completeCb) {
 
         this.requestContext = requestContext;

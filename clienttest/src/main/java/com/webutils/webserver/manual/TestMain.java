@@ -1,6 +1,8 @@
 package com.webutils.webserver.manual;
 
-import com.webutils.webserver.operations.NioTestClient;
+import com.webutils.objectserver.manual.TestChunkWrite;
+import com.webutils.objectserver.manual.TestEncryptBuffer;
+import com.webutils.webserver.niosockets.NioTestClient;
 import com.webutils.webserver.kubernetes.KubernetesInfo;
 import com.webutils.webserver.mysql.DbSetup;
 import com.webutils.webserver.mysql.K8PodDbInfo;
@@ -99,12 +101,12 @@ public class TestMain {
             /*
             ** The Object Server needs to access the database to obtain the VON information
              */
-            nioServer = new NioServerHandler(WebServerFlavor.INTEGRATION_OBJECT_SERVER_TEST, serverTcpPort, 1000,
+            nioServer = new NioServerHandler(serverTcpPort, 1000,
                     dbSetup);
             nioServer.start();
 
             for (int i = 0; i < NUMBER_TEST_STORAGE_SERVERS; i++) {
-                nioStorageServer[i] = new NioServerHandler(WebServerFlavor.INTEGRATION_STORAGE_SERVER_TEST, baseTcpPort + i,
+                nioStorageServer[i] = new NioServerHandler(baseTcpPort + i,
                         (2000 + (i * STORAGE_SERVER_BASE_ID_OFFSET)), null);
                 nioStorageServer[i].start();
             }

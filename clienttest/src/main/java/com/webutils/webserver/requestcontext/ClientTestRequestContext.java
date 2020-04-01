@@ -3,7 +3,7 @@ package com.webutils.webserver.requestcontext;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.DbSetup;
 import com.webutils.webserver.niosockets.EventPollThread;
-import com.webutils.webserver.operations.StorageServerResponseHandler;
+import com.webutils.webserver.niosockets.IoInterface;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,6 +33,14 @@ public class ClientTestRequestContext extends RequestContext {
          ** Setup the map for the HTTP Request Sent
          */
         this.httpRequestSent = new HashMap<>();
+    }
+
+    public void initializeServer(final IoInterface connection, final int requestId) {
+        super.clientConnection = connection;
+        super.connectionRequestId = requestId;
+    }
+
+    public void cleanupHttpParser() {
     }
 
     /*

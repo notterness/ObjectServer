@@ -1,6 +1,8 @@
 package com.webutils.objectserver;
 
 
+import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
+import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.DbSetup;
 import com.webutils.webserver.mysql.K8LocalDbInfo;
 import com.webutils.webserver.mysql.TestLocalDbInfo;
@@ -59,7 +61,10 @@ public class WebServerMain {
             System.out.println(s);
         }
 
-        NioServerHandler nioServer = new NioServerHandler(flavor, serverTcpPort, 1000, dbSetup);
+        MemoryManager memoryManager = new MemoryManager(flavor);
+        ObjectServerContextPool requestContextPool = new ObjectServerContextPool(flavor, memoryManager, dbSetup);
+
+        NioServerHandler nioServer = new NioServerHandler(serverTcpPort, 1000, requestContextPool);
         nioServer.start();
     }
 }

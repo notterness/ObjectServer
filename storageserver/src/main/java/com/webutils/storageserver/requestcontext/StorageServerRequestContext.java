@@ -1,8 +1,7 @@
 package com.webutils.storageserver.requestcontext;
 
-import com.webutils.webserver.buffermgr.BufferManager;
+import com.webutils.storageserver.operations.SetupStorageServerPut;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.http.CasperHttpInfo;
 import com.webutils.webserver.http.HttpMethodEnum;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.DbSetup;
@@ -107,9 +106,6 @@ public class StorageServerRequestContext extends RequestContext {
          ** The HTTP Request methods that are supported are added to the supportedHttpRequests Map<> and are used
          **   by the DetermineRequestType operation to setup and run the appropriate handlers.
          */
-        SetupV2Put v2PutHandler = new SetupV2Put(this, memoryManager, metering, determineRequestType);
-        this.supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, v2PutHandler);
-
         SetupStorageServerPut storageServerPutHandler = new SetupStorageServerPut(this, memoryManager, metering,
                 determineRequestType);
         this.supportedHttpRequests.put(HttpMethodEnum.PUT_STORAGE_SERVER, storageServerPutHandler);

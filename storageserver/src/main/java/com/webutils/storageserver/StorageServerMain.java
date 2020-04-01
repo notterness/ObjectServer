@@ -1,5 +1,7 @@
 package com.webutils.storageserver;
 
+import com.webutils.storageserver.requestcontext.StorageServerContextPool;
+import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.DbSetup;
 import com.webutils.webserver.niosockets.NioServerHandler;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
@@ -44,10 +46,15 @@ public class StorageServerMain {
         /*
         ** For the current time, the mock Storage Servers do not need to access the database records.
          */
+        MemoryManager memoryManager = new MemoryManager(flavor);
+
         NioServerHandler[] nioStorageServer = new NioServerHandler[NUMBER_TEST_STORAGE_SERVERS];
+        StorageServerContextPool[] requestContextPool = new StorageServerContextPool[NUMBER_TEST_STORAGE_SERVERS];
+
         for (int i = 0; i < NUMBER_TEST_STORAGE_SERVERS; i++) {
-            nioStorageServer[i] = new NioServerHandler(flavor, baseTcpPort + i,
-                    (2000 + (i * STORAGE_SERVER_BASE_ID_OFFSET)), null);
+            requestContextPool[i] = new StorageServerContextPool(flavor, memoryManager, null);
+            nioStorageServer[i] = new NioServerHandler(baseTcpPort + i,
+                    (2000 + (i * STORAGE_SERVER_BASE_ID_OFFSET)), requestContextPool[i]);
             nioStorageServer[i].start();
         }
     }

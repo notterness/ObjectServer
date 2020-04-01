@@ -1,11 +1,11 @@
-package com.webutils.webserver.manual;
+package com.webutils.objectserver.manual;
 
+import com.webutils.objectserver.operations.EncryptBuffer;
+import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.http.CasperHttpInfo;
 import com.webutils.webserver.http.parser.ByteBufferHttpParser;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.NioEventPollThread;
-import com.webutils.webserver.operations.EncryptBuffer;
-import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 
 public class TestEncryptBuffer {
@@ -14,7 +14,7 @@ public class TestEncryptBuffer {
 
     private final NioEventPollThread nioEventThread;
 
-    private final RequestContext requestContext;
+    private final ObjectServerRequestContext requestContext;
     private final MemoryManager memoryManager;
 
     private final EncryptBuffer encryptBuffer;
@@ -23,10 +23,10 @@ public class TestEncryptBuffer {
 
     TestEncryptBuffer() {
         this.memoryManager = new MemoryManager(WebServerFlavor.INTEGRATION_TESTS);
-        this.nioEventThread = new NioEventPollThread(webServerFlavor, null,0x1001, memoryManager, null);
+        this.nioEventThread = new NioEventPollThread(null,0x1001, null);
         this.nioEventThread.start();
 
-        this.requestContext = new RequestContext(webServerFlavor, memoryManager, nioEventThread, null);
+        this.requestContext = new ObjectServerRequestContext(webServerFlavor, memoryManager, nioEventThread, null);
 
         CasperHttpInfo casperHttpInfo = new CasperHttpInfo(requestContext);
         this.parser = new ByteBufferHttpParser(casperHttpInfo);

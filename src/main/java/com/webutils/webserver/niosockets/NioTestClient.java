@@ -1,4 +1,4 @@
-package com.webutils.webserver.operations;
+package com.webutils.webserver.niosockets;
 
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.NioEventPollBalancer;
@@ -40,8 +40,7 @@ public class NioTestClient {
         /*
          ** First start the client NIO event poll threads
          */
-        eventPollBalancer = new NioEventPollBalancer(WebServerFlavor.INTEGRATION_TESTS, 1,
-                clientThreadBaseId + 10, null);
+        eventPollBalancer = new NioEventPollBalancer(1, clientThreadBaseId + 10, null);
         eventPollBalancer.start();
     }
 
