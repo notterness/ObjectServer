@@ -1,30 +1,34 @@
-package com.webutils.webserver.client;
+package com.webutils.webserver.operations;
 
+import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.manual.TestChunkWrite;
-import com.webutils.webserver.operations.Operation;
-import com.webutils.webserver.operations.OperationTypeEnum;
+import com.webutils.webserver.http.HttpResponseListener;
+import com.webutils.webserver.manual.ClientTest;
+import com.webutils.webserver.manual.HttpResponseCompleted;
 import com.webutils.webserver.requestcontext.RequestContext;
-import com.webutils.webserver.requestcontext.ServerIdentifier;
+import org.eclipse.jetty.http.HttpParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ChunkWriteTestComplete implements Operation {
-    private static final Logger LOG = LoggerFactory.getLogger(ChunkWriteTestComplete.class);
+import java.nio.ByteBuffer;
+
+public class ClientResponseHandler implements Operation {
+    private static final Logger LOG = LoggerFactory.getLogger(ClientResponseHandler.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CHUNK_WRITE_TEST_COMPLETE;
+    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_RESPONSE_HANDLER;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
     private final RequestContext requestContext;
 
-    private final ServerIdentifier serverIdentifier;
-
-    private final TestChunkWrite testWriteChunk;
+    /*
+     ** The
+     */
+    private final ClientTest clientTest;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -33,13 +37,20 @@ public class ChunkWriteTestComplete implements Operation {
      */
     private boolean onExecutionQueue;
 
+    private final BufferManager clientReadBufferManager;
+    private final BufferManagerPointer readBufferPointer;
+    private BufferManagerPointer httpResponseBufferPointer;
 
-    public ChunkWriteTestComplete(final RequestContext requestContext, final ServerIdentifier serverIdentifier,
-                                  final TestChunkWrite testWriteChunk) {
+    private HttpParser httpParser;
+
+    public ClientResponseHandler(final RequestContext requestContext, final ClientTest clientTest,
+                                 final BufferManagerPointer readBufferPtr) {
 
         this.requestContext = requestContext;
-        this.serverIdentifier = serverIdentifier;
-        this.testWriteChunk = testWriteChunk;
+        this.clientTest = clientTest;
+        this.readBufferPointer = readBufferPtr;
+
+        this.clientReadBufferManager = requestContext.getClientReadBufferManager();
 
         /*
          ** This starts out not being on any queue
@@ -56,8 +67,22 @@ public class ChunkWriteTestComplete implements Operation {
     /*
      */
     public BufferManagerPointer initialize() {
+        /*
+         ** Register this with the Buffer Manager to allow it to be event(ed) when
+         **   buffers are added by the read producer
+         */
+        httpResponseBufferPointer = clientReadBufferManager.register(this, readBufferPointer);
 
-        return null;
+        HttpResponseCompleted httpResponseCompleted = new HttpResponseCompleted(clientTest);
+        HttpResponseListener listener = new HttpResponseListener(httpResponseCompleted);
+        httpParser = new HttpParser(listener);
+
+        if (httpParser.isState(HttpParser.State.END))
+            httpParser.reset();
+        if (!httpParser.isState(HttpParser.State.START))
+            throw new IllegalStateException("!START");
+
+        return httpResponseBufferPointer;
     }
 
     public void event() {
@@ -71,19 +96,16 @@ public class ChunkWriteTestComplete implements Operation {
     /*
      */
     public void execute() {
-        /*
-         ** Let the caller know that status has been received
-         */
-        if (requestContext.hasStorageServerResponseArrived(serverIdentifier)) {
-            int result = requestContext.getStorageResponseResult(serverIdentifier);
-            LOG.info("ChunkWriteTestComplete result: " + result);
-            testWriteChunk.statusReceived(result);
+        ByteBuffer httpBuffer;
 
+        while ((httpBuffer = clientReadBufferManager.peek(httpResponseBufferPointer)) != null) {
             /*
-             ** Clear the HTTP Response for this Storage Server
+             ** Now run the Buffer State through the Http Parser
              */
-            requestContext.removeStorageServerResponse(serverIdentifier);
+            httpParser.parseNext(httpBuffer);
+            clientReadBufferManager.updateConsumerReadPointer(httpResponseBufferPointer);
         }
+
     }
 
     /*
@@ -91,6 +113,12 @@ public class ChunkWriteTestComplete implements Operation {
      */
     public void complete() {
 
+        LOG.info("ClientResponseHandler[" + requestContext.getRequestId() + "] complete()");
+        httpParser.reset();
+        httpParser = null;
+
+        clientReadBufferManager.unregister(httpResponseBufferPointer);
+        httpResponseBufferPointer = null;
     }
 
     /*
@@ -107,23 +135,25 @@ public class ChunkWriteTestComplete implements Operation {
      **   isOnTimedWaitQueue - Accessor method
      **   hasWaitTimeElapsed - Is this Operation ready to run again to check some timeout condition
      **
+     ** TODO: Might want to switch to using an enum instead of two different booleans to keep track
+     **   of which queue the connection is on. It will probably clean up the code some.
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("ChunkWriteTestComplete[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("ClientResponseHandler[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("ChunkWriteTestComplete[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
+            LOG.warn("ClientResponseHandler[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
                     delayedExecutionQueue + ") not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("ChunkWriteTestComplete[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
+            LOG.warn("ClientResponseHandler[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
                     delayedExecutionQueue + ") not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("ChunkWriteTestComplete[" + requestContext.getRequestId() + "] markAddToQueue(" +
+            LOG.warn("ClientResponseHandler[" + requestContext.getRequestId() + "] markAddToQueue(" +
                     delayedExecutionQueue + ") not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
@@ -139,7 +169,7 @@ public class ChunkWriteTestComplete implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("ChunkWriteTestComplete[" + requestContext.getRequestId() +
+        LOG.warn("ClientResponseHandler[" + requestContext.getRequestId() +
                 "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }

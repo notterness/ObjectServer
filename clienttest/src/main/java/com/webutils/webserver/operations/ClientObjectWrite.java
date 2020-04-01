@@ -1,34 +1,42 @@
-package com.webutils.webserver.client;
+package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.operations.Operation;
-import com.webutils.webserver.operations.OperationTypeEnum;
-import com.webutils.webserver.requestcontext.RequestContext;
+import com.webutils.webserver.manual.ClientTest;
+import com.webutils.webserver.niosockets.IoInterface;
+import com.webutils.webserver.requestcontext.ClientTestRequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Iterator;
-import java.util.List;
+import java.nio.ByteBuffer;
 
-public class ClientConnectComplete implements Operation {
-    private static final Logger LOG = LoggerFactory.getLogger(ClientConnectComplete.class);
+public class ClientObjectWrite implements Operation {
+    private static final Logger LOG = LoggerFactory.getLogger(ClientObjectWrite.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_CONNECT_COMPLETE;
+    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_OBJECT_WRITE;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
-    private final RequestContext requestContext;
+    private final ClientTestRequestContext requestContext;
 
     /*
-     ** The following is the operation to run (if any) when the ConnectComplete is executed.
+     ** This is the IoInterface that the final status will be written out on.
      */
-    private List<Operation> operationsToRun;
+    private final IoInterface clientConnection;
+
+    /*
+    ** ClientTest provides the routines to know what HTTP Request and Object to send to the
+    **   the WebServer and it provides the routines to validate the correct response from
+    **   the WebServer.
+     */
+    private final ClientTest clientTest;
+
+    private final BufferManagerPointer writeInfillPointer;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -37,18 +45,19 @@ public class ClientConnectComplete implements Operation {
      */
     private boolean onExecutionQueue;
 
-    private final BufferManager clientWriteBufferManager;
-    private final BufferManagerPointer addBufferPointer;
+    /*
+     */
+    private final ServerIdentifier serverIdentifier;
 
-    public ClientConnectComplete(final RequestContext requestContext, final List<Operation> operationsToRun,
-                                 final BufferManagerPointer addBufferPtr) {
+    public ClientObjectWrite(final ClientTestRequestContext requestContext, final IoInterface connection,
+                             final ClientTest clientTest, final BufferManagerPointer writeInfillPtr,
+                             final ServerIdentifier serverIdentifier) {
 
         this.requestContext = requestContext;
-        this.operationsToRun = operationsToRun;
-        this.addBufferPointer = addBufferPtr;
-
-        this.clientWriteBufferManager = requestContext.getClientWriteBufferManager();
-
+        this.clientConnection = connection;
+        this.clientTest = clientTest;
+        this.writeInfillPointer = writeInfillPtr;
+        this.serverIdentifier = serverIdentifier;
 
         /*
          ** This starts out not being on any queue
@@ -72,29 +81,35 @@ public class ClientConnectComplete implements Operation {
     public void event() {
 
         /*
-         ** Add this to the execute queue if it is not already on it.
+         ** Add this to the execute queue if the HTTP Request has been sent.
          */
-        requestContext.addToWorkQueue(this);
+        if (requestContext.hasHttpRequestBeenSent(serverIdentifier) == true) {
+            requestContext.addToWorkQueue(this);
+        }
     }
 
     /*
+    ** This is only called once in this test
      */
     public void execute() {
-        /*
-         ** Dole out buffers for use in the HTTP Header write and the Object write
-         */
-        clientWriteBufferManager.updateProducerWritePointer(addBufferPointer);
-        clientWriteBufferManager.updateProducerWritePointer(addBufferPointer);
 
-        /*
-        ** event() all of the operations that are ready to run once the connect() has
-        **   succeeded.
-         */
-        Iterator<Operation> iter = operationsToRun.iterator();
-        while (iter.hasNext()) {
-            iter.next().event();
+        BufferManager clientWriteBufferMgr = requestContext.getClientWriteBufferManager();
+
+        ByteBuffer buffer = clientTest.getObjectBuffer();
+
+        if (buffer != null) {
+            ByteBuffer infillBuffer = clientWriteBufferMgr.peek(writeInfillPointer);
+            if (infillBuffer != null) {
+                infillBuffer.put(buffer.array());
+                infillBuffer.flip();
+
+                clientWriteBufferMgr.updateProducerWritePointer(writeInfillPointer);
+            } else {
+                LOG.info("ClientWriteObject Infill Buffer null");
+            }
+        } else {
+            LOG.info("ClientWriteObject Object Buffer null");
         }
-        operationsToRun.clear();
     }
 
     /*
@@ -118,25 +133,23 @@ public class ClientConnectComplete implements Operation {
      **   isOnTimedWaitQueue - Accessor method
      **   hasWaitTimeElapsed - Is this Operation ready to run again to check some timeout condition
      **
-     ** TODO: Might want to switch to using an enum instead of two different booleans to keep track
-     **   of which queue the connection is on. It will probably clean up the code some.
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("ClientConnectComplete[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("ClientObjectWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("ClientConnectComplete[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
+            LOG.warn("ClientObjectWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
                     delayedExecutionQueue + ") not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("ClientConnectComplete[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
+            LOG.warn("ClientObjectWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
                     delayedExecutionQueue + ") not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("ClientConnectComplete[" + requestContext.getRequestId() + "] markAddToQueue(" +
+            LOG.warn("ClientObjectWrite[" + requestContext.getRequestId() + "] markAddToQueue(" +
                     delayedExecutionQueue + ") not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
@@ -152,7 +165,7 @@ public class ClientConnectComplete implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("ClientConnectComplete[" + requestContext.getRequestId() +
+        LOG.warn("ClientObjectWrite[" + requestContext.getRequestId() +
                 "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }

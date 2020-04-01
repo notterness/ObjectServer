@@ -1,7 +1,7 @@
 package com.webutils.webserver.manual;
 
-import com.webutils.webserver.client.NioTestClient;
-import com.webutils.webserver.client.SetupClientConnection;
+import com.webutils.webserver.operations.NioTestClient;
+import com.webutils.webserver.operations.SetupClientConnection;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.IoInterface;

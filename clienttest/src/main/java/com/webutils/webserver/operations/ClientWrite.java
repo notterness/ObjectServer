@@ -1,26 +1,21 @@
-package com.webutils.webserver.client;
+package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.http.HttpResponseListener;
-import com.webutils.webserver.manual.ClientTest;
-import com.webutils.webserver.manual.HttpResponseCompleted;
-import com.webutils.webserver.operations.Operation;
-import com.webutils.webserver.operations.OperationTypeEnum;
+import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.requestcontext.RequestContext;
-import org.eclipse.jetty.http.HttpParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.ByteBuffer;
 
-public class ClientResponseHandler implements Operation {
-    private static final Logger LOG = LoggerFactory.getLogger(ClientResponseHandler.class);
+public class ClientWrite implements Operation {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ClientObjectWrite.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_RESPONSE_HANDLER;
+    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_WRITE;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -28,9 +23,12 @@ public class ClientResponseHandler implements Operation {
     private final RequestContext requestContext;
 
     /*
-     ** The
+     ** This is the IoInterface that the final status will be written out on.
      */
-    private final ClientTest clientTest;
+    private final IoInterface clientConnection;
+
+    private final BufferManager clientWriteBufferManager;
+    private final BufferManagerPointer writeInfillPointer;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -39,20 +37,16 @@ public class ClientResponseHandler implements Operation {
      */
     private boolean onExecutionQueue;
 
-    private final BufferManager clientReadBufferManager;
-    private final BufferManagerPointer readBufferPointer;
-    private BufferManagerPointer httpResponseBufferPointer;
+    private BufferManagerPointer writePointer;
 
-    private HttpParser httpParser;
-
-    public ClientResponseHandler(final RequestContext requestContext, final ClientTest clientTest,
-                                 final BufferManagerPointer readBufferPtr) {
+    public ClientWrite(final RequestContext requestContext, final IoInterface connection,
+                       final BufferManagerPointer writeInfillPtr) {
 
         this.requestContext = requestContext;
-        this.clientTest = clientTest;
-        this.readBufferPointer = readBufferPtr;
+        this.clientConnection = connection;
+        this.writeInfillPointer = writeInfillPtr;
 
-        this.clientReadBufferManager = requestContext.getClientReadBufferManager();
+        this.clientWriteBufferManager = requestContext.getClientWriteBufferManager();
 
         /*
          ** This starts out not being on any queue
@@ -69,22 +63,8 @@ public class ClientResponseHandler implements Operation {
     /*
      */
     public BufferManagerPointer initialize() {
-        /*
-         ** Register this with the Buffer Manager to allow it to be event(ed) when
-         **   buffers are added by the read producer
-         */
-        httpResponseBufferPointer = clientReadBufferManager.register(this, readBufferPointer);
-
-        HttpResponseCompleted httpResponseCompleted = new HttpResponseCompleted(clientTest);
-        HttpResponseListener listener = new HttpResponseListener(httpResponseCompleted);
-        httpParser = new HttpParser(listener);
-
-        if (httpParser.isState(HttpParser.State.END))
-            httpParser.reset();
-        if (!httpParser.isState(HttpParser.State.START))
-            throw new IllegalStateException("!START");
-
-        return httpResponseBufferPointer;
+        writePointer = clientWriteBufferManager.register(this, writeInfillPointer);
+        return writePointer;
     }
 
     public void event() {
@@ -98,29 +78,17 @@ public class ClientResponseHandler implements Operation {
     /*
      */
     public void execute() {
-        ByteBuffer httpBuffer;
-
-        while ((httpBuffer = clientReadBufferManager.peek(httpResponseBufferPointer)) != null) {
-            /*
-             ** Now run the Buffer State through the Http Parser
-             */
-            httpParser.parseNext(httpBuffer);
-            clientReadBufferManager.updateConsumerReadPointer(httpResponseBufferPointer);
+        if (clientWriteBufferManager.peek(writePointer) != null) {
+            clientConnection.writeBufferReady();
         }
-
     }
 
     /*
      ** This removes any dependencies that are put upon the BufferManager
      */
     public void complete() {
-
-        LOG.info("ClientResponseHandler[" + requestContext.getRequestId() + "] complete()");
-        httpParser.reset();
-        httpParser = null;
-
-        clientReadBufferManager.unregister(httpResponseBufferPointer);
-        httpResponseBufferPointer = null;
+        clientWriteBufferManager.unregister(writePointer);
+        writePointer = null;
     }
 
     /*
@@ -137,25 +105,23 @@ public class ClientResponseHandler implements Operation {
      **   isOnTimedWaitQueue - Accessor method
      **   hasWaitTimeElapsed - Is this Operation ready to run again to check some timeout condition
      **
-     ** TODO: Might want to switch to using an enum instead of two different booleans to keep track
-     **   of which queue the connection is on. It will probably clean up the code some.
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("ClientResponseHandler[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("ClientWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("ClientResponseHandler[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
+            LOG.warn("ClientWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
                     delayedExecutionQueue + ") not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("ClientResponseHandler[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
+            LOG.warn("ClientWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
                     delayedExecutionQueue + ") not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("ClientResponseHandler[" + requestContext.getRequestId() + "] markAddToQueue(" +
+            LOG.warn("ClientWrite[" + requestContext.getRequestId() + "] markAddToQueue(" +
                     delayedExecutionQueue + ") not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
@@ -171,7 +137,7 @@ public class ClientResponseHandler implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("ClientResponseHandler[" + requestContext.getRequestId() +
+        LOG.warn("ClientWrite[" + requestContext.getRequestId() +
                 "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
@@ -184,5 +150,6 @@ public class ClientResponseHandler implements Operation {
         LOG.info("      No BufferManagerPointers");
         LOG.info("");
     }
+
 
 }

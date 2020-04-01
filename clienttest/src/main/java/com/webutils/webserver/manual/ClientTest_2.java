@@ -1,6 +1,6 @@
 package com.webutils.webserver.manual;
 
-import com.webutils.webserver.client.NioTestClient;
+import com.webutils.webserver.operations.NioTestClient;
 import org.eclipse.jetty.http.HttpStatus;
 
 import java.net.InetAddress;

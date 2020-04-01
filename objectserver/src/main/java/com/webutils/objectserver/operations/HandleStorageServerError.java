@@ -1,23 +1,24 @@
-package com.webutils.webserver.client;
+package com.webutils.objectserver.operations;
 
-import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/*
+** This handles errors when communicating over a SocketChannel to a particular Storage Server.
+ */
 
-public class ClientWrite implements Operation {
+public class HandleStorageServerError implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ClientObjectWrite.class);
+    private static final Logger LOG = LoggerFactory.getLogger(HandleStorageServerError.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_WRITE;
+    public final OperationTypeEnum operationType = OperationTypeEnum.HANDLE_STORAGE_SERVER_ERROR;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -25,35 +26,16 @@ public class ClientWrite implements Operation {
     private final RequestContext requestContext;
 
     /*
-     ** This is the IoInterface that the final status will be written out on.
-     */
-    private final IoInterface clientConnection;
-
-    private final BufferManager clientWriteBufferManager;
-    private final BufferManagerPointer writeInfillPointer;
-
-    /*
      ** The following are used to insure that an Operation is never on more than one queue and that
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
      **   execution queue (onExecutionQueue) is will always go on the execution queue.
      */
+    private boolean onDelayedQueue;
     private boolean onExecutionQueue;
+    private long nextExecuteTime;
 
-    private BufferManagerPointer writePointer;
-
-    public ClientWrite(final RequestContext requestContext, final IoInterface connection,
-                       final BufferManagerPointer writeInfillPtr) {
-
+    HandleStorageServerError(final RequestContext requestContext) {
         this.requestContext = requestContext;
-        this.clientConnection = connection;
-        this.writeInfillPointer = writeInfillPtr;
-
-        this.clientWriteBufferManager = requestContext.getClientWriteBufferManager();
-
-        /*
-         ** This starts out not being on any queue
-         */
-        onExecutionQueue = false;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -63,10 +45,11 @@ public class ClientWrite implements Operation {
     public int getRequestId() { return requestContext.getRequestId(); }
 
     /*
+     ** This returns the BufferManagerPointer obtained by this operation, if there is one. If this operation
+     **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
-        writePointer = clientWriteBufferManager.register(this, writeInfillPointer);
-        return writePointer;
+        return null;
     }
 
     public void event() {
@@ -78,19 +61,17 @@ public class ClientWrite implements Operation {
     }
 
     /*
+     **
      */
     public void execute() {
-        if (clientWriteBufferManager.peek(writePointer) != null) {
-            clientConnection.writeBufferReady();
-        }
     }
 
     /*
-     ** This removes any dependencies that are put upon the BufferManager
+     ** This will never be called for the ???. When the execute() method completes, the
+     **   RequestContext is no longer "running".
      */
     public void complete() {
-        clientWriteBufferManager.unregister(writePointer);
-        writePointer = null;
+
     }
 
     /*
@@ -109,22 +90,29 @@ public class ClientWrite implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("ClientWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
-        if (delayedExecutionQueue) {
-            LOG.warn("ClientWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+        //LOG.info("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        if (onDelayedQueue) {
+            if (!delayedExecutionQueue) {
+                LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
+            }
+
+            onDelayedQueue = false;
+            nextExecuteTime = 0;
         } else if (onExecutionQueue){
+            if (delayedExecutionQueue) {
+                LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
+            }
+
             onExecutionQueue = false;
         } else {
-            LOG.warn("ClientWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not on a queue");
+            LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("ClientWrite[" + requestContext.getRequestId() + "] markAddToQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            nextExecuteTime = System.currentTimeMillis() + TIME_TILL_NEXT_TIMEOUT_CHECK;
+            onDelayedQueue = true;
         } else {
             onExecutionQueue = true;
         }
@@ -135,23 +123,26 @@ public class ClientWrite implements Operation {
     }
 
     public boolean isOnTimedWaitQueue() {
-        return false;
+        return onDelayedQueue;
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("ClientWrite[" + requestContext.getRequestId() +
-                "] hasWaitTimeElapsed() not supposed to be on delayed queue");
+        long currTime = System.currentTimeMillis();
+
+        if (currTime < nextExecuteTime) {
+            return false;
+        }
+
+        //LOG.info("requestId[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
         return true;
     }
+
 
     /*
      ** Display what this has created and any BufferManager(s) and BufferManagerPointer(s)
      */
     public void dumpCreatedOperations(final int level) {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
-        LOG.info("      No BufferManagerPointers");
         LOG.info("");
     }
-
-
 }

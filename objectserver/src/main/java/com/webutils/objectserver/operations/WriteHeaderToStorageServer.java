@@ -1,9 +1,11 @@
-package com.webutils.webserver.operations;
+package com.webutils.objectserver.operations;
 
+import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.niosockets.IoInterface;
-import com.webutils.webserver.requestcontext.RequestContext;
+import com.webutils.webserver.operations.Operation;
+import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,7 +24,7 @@ public class WriteHeaderToStorageServer implements Operation {
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
-    private final RequestContext requestContext;
+    private final ObjectServerRequestContext requestContext;
 
     /*
      ** The IoInterface is what is used to communicate with the Storage Server.
@@ -57,7 +59,7 @@ public class WriteHeaderToStorageServer implements Operation {
      */
     private boolean completeCalled;
 
-    public WriteHeaderToStorageServer(final RequestContext requestContext, final IoInterface storageServerConnection,
+    public WriteHeaderToStorageServer(final ObjectServerRequestContext requestContext, final IoInterface storageServerConnection,
                                       final List<Operation> operationsToRun, final BufferManager storageServerBufferManager,
                                       final BufferManagerPointer writePtr, final ServerIdentifier serverIdentifier) {
 

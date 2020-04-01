@@ -1,11 +1,10 @@
-package com.webutils.webserver.client;
+package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.manual.ClientTest;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.IoInterface;
-import com.webutils.webserver.operations.*;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import com.webutils.webserver.requestcontext.WebServerFlavor;

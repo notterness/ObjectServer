@@ -1,6 +1,6 @@
 package com.webutils.webserver.manual;
 
-import com.webutils.webserver.client.NioTestClient;
+import com.webutils.webserver.operations.NioTestClient;
 import com.webutils.webserver.common.Md5Digest;
 import com.webutils.webserver.memory.MemoryManager;
 

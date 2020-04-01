@@ -1,6 +1,6 @@
 package com.webutils.webserver.manual;
 
-import com.webutils.webserver.client.NioTestClient;
+import com.webutils.webserver.operations.NioTestClient;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;

@@ -1,6 +1,6 @@
 package com.webutils.webserver.manual;
 
-import com.webutils.webserver.client.NioTestClient;
+import com.webutils.webserver.operations.NioTestClient;
 import com.webutils.webserver.kubernetes.KubernetesInfo;
 import com.webutils.webserver.mysql.DbSetup;
 import com.webutils.webserver.mysql.K8PodDbInfo;

@@ -1,9 +1,11 @@
-package com.webutils.webserver.operations;
+package com.webutils.objectserver.operations;
 
+import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.DbSetup;
-import com.webutils.webserver.requestcontext.RequestContext;
+import com.webutils.webserver.operations.Operation;
+import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +27,7 @@ public class VonPicker implements Operation {
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
-    private final RequestContext requestContext;
+    private final ObjectServerRequestContext requestContext;
 
     /*
      ** The following is the operation to run (if any) when the VON Pick has completed.
@@ -58,7 +60,7 @@ public class VonPicker implements Operation {
 
     private boolean storageServersIdentified;
 
-    public VonPicker(final RequestContext requestContext, final List<Operation> operationsToRun,
+    public VonPicker(final ObjectServerRequestContext requestContext, final List<Operation> operationsToRun,
                      final int chunkNumber, final MemoryManager memoryManager,
                      final BufferManagerPointer writePointer, final int bytesToWrite) {
 

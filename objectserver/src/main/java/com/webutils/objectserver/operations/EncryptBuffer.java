@@ -1,9 +1,12 @@
-package com.webutils.webserver.operations;
+package com.webutils.objectserver.operations;
 
+import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.memory.MemoryManager;
-import com.webutils.webserver.requestcontext.RequestContext;
+import com.webutils.webserver.operations.BufferReadMetering;
+import com.webutils.webserver.operations.Operation;
+import com.webutils.webserver.operations.OperationTypeEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,7 +26,7 @@ public class EncryptBuffer implements Operation {
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
-    private final RequestContext requestContext;
+    private final ObjectServerRequestContext requestContext;
 
     /*
     ** The memoryManager is used to allocate ByteBuffer(s) for storageServerWriteBufferMgr to be used for
@@ -84,7 +87,7 @@ public class EncryptBuffer implements Operation {
      ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
      **   up the calls to obtain the VON information and the meta-data write to the database.
      */
-    public EncryptBuffer(final RequestContext requestContext, final MemoryManager memoryManager,
+    public EncryptBuffer(final ObjectServerRequestContext requestContext, final MemoryManager memoryManager,
                          final BufferManagerPointer readBufferPtr, final Operation completeCb) {
 
         this.requestContext = requestContext;

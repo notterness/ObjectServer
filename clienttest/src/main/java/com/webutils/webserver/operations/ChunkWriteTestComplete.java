@@ -1,39 +1,48 @@
 package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.manual.TestChunkWrite;
 import com.webutils.webserver.requestcontext.RequestContext;
+import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/*
-** This handles errors when communicating over a SocketChannel to a particular Storage Server.
- */
-
-public class HandleStorageServerError implements Operation {
-
-    private static final Logger LOG = LoggerFactory.getLogger(HandleStorageServerError.class);
+public class ChunkWriteTestComplete implements Operation {
+    private static final Logger LOG = LoggerFactory.getLogger(ChunkWriteTestComplete.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.HANDLE_STORAGE_SERVER_ERROR;
+    public final OperationTypeEnum operationType = OperationTypeEnum.CHUNK_WRITE_TEST_COMPLETE;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
     private final RequestContext requestContext;
 
+    private final ServerIdentifier serverIdentifier;
+
+    private final TestChunkWrite testWriteChunk;
+
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
      **   execution queue (onExecutionQueue) is will always go on the execution queue.
      */
-    private boolean onDelayedQueue;
     private boolean onExecutionQueue;
-    private long nextExecuteTime;
 
-    HandleStorageServerError(final RequestContext requestContext) {
+
+    public ChunkWriteTestComplete(final RequestContext requestContext, final ServerIdentifier serverIdentifier,
+                                  final TestChunkWrite testWriteChunk) {
+
         this.requestContext = requestContext;
+        this.serverIdentifier = serverIdentifier;
+        this.testWriteChunk = testWriteChunk;
+
+        /*
+         ** This starts out not being on any queue
+         */
+        onExecutionQueue = false;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -43,10 +52,9 @@ public class HandleStorageServerError implements Operation {
     public int getRequestId() { return requestContext.getRequestId(); }
 
     /*
-     ** This returns the BufferManagerPointer obtained by this operation, if there is one. If this operation
-     **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
+
         return null;
     }
 
@@ -59,14 +67,25 @@ public class HandleStorageServerError implements Operation {
     }
 
     /*
-     **
      */
     public void execute() {
+        /*
+         ** Let the caller know that status has been received
+         */
+        if (requestContext.hasStorageServerResponseArrived(serverIdentifier)) {
+            int result = requestContext.getStorageResponseResult(serverIdentifier);
+            LOG.info("ChunkWriteTestComplete result: " + result);
+            testWriteChunk.statusReceived(result);
+
+            /*
+             ** Clear the HTTP Response for this Storage Server
+             */
+            requestContext.removeStorageServerResponse(serverIdentifier);
+        }
     }
 
     /*
-     ** This will never be called for the ???. When the execute() method completes, the
-     **   RequestContext is no longer "running".
+     ** This removes any dependencies that are put upon the BufferManager
      */
     public void complete() {
 
@@ -88,29 +107,22 @@ public class HandleStorageServerError implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
-        if (onDelayedQueue) {
-            if (!delayedExecutionQueue) {
-                LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
-            }
-
-            onDelayedQueue = false;
-            nextExecuteTime = 0;
+        //LOG.info("ChunkWriteTestComplete[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        if (delayedExecutionQueue) {
+            LOG.warn("ChunkWriteTestComplete[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
+                    delayedExecutionQueue + ") not supposed to be on delayed queue");
         } else if (onExecutionQueue){
-            if (delayedExecutionQueue) {
-                LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
-            }
-
             onExecutionQueue = false;
         } else {
-            LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
+            LOG.warn("ChunkWriteTestComplete[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
+                    delayedExecutionQueue + ") not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            nextExecuteTime = System.currentTimeMillis() + TIME_TILL_NEXT_TIMEOUT_CHECK;
-            onDelayedQueue = true;
+            LOG.warn("ChunkWriteTestComplete[" + requestContext.getRequestId() + "] markAddToQueue(" +
+                    delayedExecutionQueue + ") not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -121,26 +133,22 @@ public class HandleStorageServerError implements Operation {
     }
 
     public boolean isOnTimedWaitQueue() {
-        return onDelayedQueue;
+        return false;
     }
 
     public boolean hasWaitTimeElapsed() {
-        long currTime = System.currentTimeMillis();
-
-        if (currTime < nextExecuteTime) {
-            return false;
-        }
-
-        //LOG.info("requestId[" + requestContext.getRequestId() + "] waitTimeElapsed " + currTime);
+        LOG.warn("ChunkWriteTestComplete[" + requestContext.getRequestId() +
+                "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
-
 
     /*
      ** Display what this has created and any BufferManager(s) and BufferManagerPointer(s)
      */
     public void dumpCreatedOperations(final int level) {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
+        LOG.info("      No BufferManagerPointers");
         LOG.info("");
     }
+
 }

@@ -1,11 +1,8 @@
-package com.webutils.webserver.client;
+package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.manual.ClientTest;
-import com.webutils.webserver.niosockets.IoInterface;
-import com.webutils.webserver.operations.Operation;
-import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
@@ -13,13 +10,13 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
-public class ClientObjectWrite implements Operation {
-    private static final Logger LOG = LoggerFactory.getLogger(ClientObjectWrite.class);
+public class ClientHttpRequestWrite implements Operation {
+    private static final Logger LOG = LoggerFactory.getLogger(ClientHttpRequestWrite.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_OBJECT_WRITE;
+    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_WRITE_HTTP_HEADER;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -27,44 +24,45 @@ public class ClientObjectWrite implements Operation {
     private final RequestContext requestContext;
 
     /*
-     ** This is the IoInterface that the final status will be written out on.
-     */
-    private final IoInterface clientConnection;
-
-    /*
-    ** ClientTest provides the routines to know what HTTP Request and Object to send to the
-    **   the WebServer and it provides the routines to validate the correct response from
-    **   the WebServer.
+    ** The ClientTest is used to obtain the HTTP Request string
      */
     private final ClientTest clientTest;
-
-    private final BufferManagerPointer writeInfillPointer;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
      **   execution queue (onExecutionQueue) is will always go on the execution queue.
      */
+    private boolean onDelayedQueue;
     private boolean onExecutionQueue;
+    private long nextExecuteTime;
 
     /*
      */
+    private final BufferManagerPointer writeInfillPointer;
+
+    /*
+    **
+     */
+    private final ClientObjectWrite clientObjectWrite;
     private final ServerIdentifier serverIdentifier;
 
-    public ClientObjectWrite(final RequestContext requestContext, final IoInterface connection,
-                             final ClientTest clientTest, final BufferManagerPointer writeInfillPtr,
-                             final ServerIdentifier serverIdentifier) {
+    public ClientHttpRequestWrite(final RequestContext requestContext,
+                                 final ClientTest clientTest, final BufferManagerPointer writeInfillPtr,
+                                 final ClientObjectWrite writeObject, final ServerIdentifier serverIdentifier) {
 
         this.requestContext = requestContext;
-        this.clientConnection = connection;
         this.clientTest = clientTest;
         this.writeInfillPointer = writeInfillPtr;
+        this.clientObjectWrite = writeObject;
         this.serverIdentifier = serverIdentifier;
 
         /*
          ** This starts out not being on any queue
          */
+        onDelayedQueue = false;
         onExecutionQueue = false;
+        nextExecuteTime = 0;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -83,35 +81,51 @@ public class ClientObjectWrite implements Operation {
     public void event() {
 
         /*
-         ** Add this to the execute queue if the HTTP Request has been sent.
+         ** Add this to the execute queue if it is not already on it.
          */
-        if (requestContext.hasHttpRequestBeenSent(serverIdentifier) == true) {
-            requestContext.addToWorkQueue(this);
-        }
+        requestContext.addToWorkQueue(this);
     }
 
     /*
-    ** This is only called once in this test
+     ** This will attempt to allocate a ByteBuffer from the free pool and then fill it in with the
+     **   response data.
+     ** Assuming the B
      */
     public void execute() {
 
         BufferManager clientWriteBufferMgr = requestContext.getClientWriteBufferManager();
 
-        ByteBuffer buffer = clientTest.getObjectBuffer();
+        /*
+        ** Build the HTTP Header and the Object to be sent
+         */
+        ByteBuffer msgHdr = clientWriteBufferMgr.peek(writeInfillPointer);
+        if (msgHdr != null) {
 
-        if (buffer != null) {
-            ByteBuffer infillBuffer = clientWriteBufferMgr.peek(writeInfillPointer);
-            if (infillBuffer != null) {
-                infillBuffer.put(buffer.array());
-                infillBuffer.flip();
+            String tmp;
+            String Md5_Digest = clientTest.buildBufferAndComputeMd5();
+            tmp = clientTest.buildRequestString(Md5_Digest);
 
-                clientWriteBufferMgr.updateProducerWritePointer(writeInfillPointer);
-            } else {
-                LOG.info("ClientWriteObject Infill Buffer null");
-            }
-        } else {
-            LOG.info("ClientWriteObject Object Buffer null");
+            clientTest.str_to_bb(msgHdr, tmp);
+
+            /*
+            ** Need to flip() the buffer so that the limit() is set to the end of where the HTTP Request is
+            **   and the position() reset to 0.
+             */
+            msgHdr.flip();
+
+            /*
+            ** Data is now present in the ByteBuffer so the writeInfillPtr needs to be updated,
+             */
+            clientWriteBufferMgr.updateProducerWritePointer(writeInfillPointer);
+
+            /*
+            ** Need to set that the HTTP Request has been sent to the Web Server to allow the writes of the
+            **   object data can take place.
+             */
+            requestContext.setHttpRequestSent(serverIdentifier);
+            clientObjectWrite.event();
         }
+
     }
 
     /*
@@ -137,21 +151,21 @@ public class ClientObjectWrite implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("ClientObjectWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("ClientHttpRequestWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("ClientObjectWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
+            LOG.warn("ClientHttpRequestWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
                     delayedExecutionQueue + ") not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("ClientObjectWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
+            LOG.warn("ClientHttpRequestWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
                     delayedExecutionQueue + ") not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("ClientObjectWrite[" + requestContext.getRequestId() + "] markAddToQueue(" +
+            LOG.warn("ClientHttpRequestWrite[" + requestContext.getRequestId() + "] markAddToQueue(" +
                     delayedExecutionQueue + ") not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
@@ -167,7 +181,7 @@ public class ClientObjectWrite implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("ClientObjectWrite[" + requestContext.getRequestId() +
+        LOG.warn("ClientHttpRequestWrite[" + requestContext.getRequestId() +
                 "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }

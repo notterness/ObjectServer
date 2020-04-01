@@ -1,9 +1,11 @@
-package com.webutils.webserver.operations;
+package com.webutils.objectserver.operations;
 
+import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.IoInterface;
+import com.webutils.webserver.operations.*;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
@@ -26,7 +28,7 @@ public class SetupChunkWrite implements Operation {
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
-    private final RequestContext requestContext;
+    private final ObjectServerRequestContext requestContext;
 
     /*
     ** The StorageServerIdentifer is this chunk write's unique identifier. It is determined through the VON
@@ -77,7 +79,7 @@ public class SetupChunkWrite implements Operation {
     ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
     **   up the calls to obtain the VON information and the meta-data write to the database.
      */
-    public SetupChunkWrite(final RequestContext requestContext, final ServerIdentifier serverIdentifier,
+    public SetupChunkWrite(final ObjectServerRequestContext requestContext, final ServerIdentifier serverIdentifier,
                            final MemoryManager memoryManager, final BufferManagerPointer encryptedBufferPtr,
                            final int chunkBytesToEncrypt, final Operation completeCb, final int writer) {
 
