@@ -56,7 +56,7 @@ public class ObjectServerContextPool implements RequestContextPool {
             LinkedList<ObjectServerRequestContext> contextList = runningContexts.get(threadId);
 
             if (contextList != null) {
-                requestContext = new ObjectServerRequestContext(flavor, memoryManager, threadThisRequestRunsOn, dbSetup);
+                requestContext = new ObjectServerRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup);
 
                 contextList.add(requestContext);
                 LOG.info("allocateContext [" + threadId + "] webServerFlavor: " + flavor.toString());

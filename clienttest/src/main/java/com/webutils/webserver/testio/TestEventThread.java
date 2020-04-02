@@ -5,8 +5,6 @@ import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.Operation;
-import com.webutils.webserver.requestcontext.RequestContext;
-import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,26 +17,19 @@ public class TestEventThread implements EventPollThread {
 
     private static final int TEST_IO_GENERATORS = 10;
 
-    private final WebServerFlavor webServerFlavor;
-
     private final WebServerTest webServerTest;
 
     private final int eventPollThreadBaseId;
-
-    private final MemoryManager memoryManager;
 
     private final LinkedList<IoInterface> freeConnections;
     private final LinkedList<Operation> waitingForConnections;
 
     private volatile boolean threadRunning;
 
-    public TestEventThread(final WebServerFlavor flavor, final int threadBaseId, final MemoryManager memoryManger,
-                           final WebServerTest webServerTest) {
+    public TestEventThread(final int threadBaseId, final WebServerTest webServerTest) {
 
-        this.webServerFlavor = flavor;
         this.eventPollThreadBaseId = threadBaseId;
         this.webServerTest = webServerTest;
-        this.memoryManager = memoryManger;
 
         this.freeConnections = new LinkedList<>();
         this.waitingForConnections = new LinkedList<>();
@@ -104,17 +95,6 @@ public class TestEventThread implements EventPollThread {
         if (waitingOperation != null) {
             waitingOperation.event();
         }
-    }
-
-    /*
-     ** TODO: Change this to use a pool of pre-allocated RequestContext
-     */
-    public RequestContext allocateContext(){
-        return new RequestContext(webServerFlavor, memoryManager, this, null);
-    }
-
-    public void releaseContext(final RequestContext requestContext) {
-
     }
 
     /*

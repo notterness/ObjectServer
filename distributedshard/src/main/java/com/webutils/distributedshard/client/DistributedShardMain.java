@@ -22,7 +22,7 @@ package com.webutils.distributedshard.client;
 */
 public class DistributedShardMain {
 
-    public static void main(string[] args) {
+    public static void main(String[] args) {
     }
 }
 

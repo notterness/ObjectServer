@@ -28,7 +28,7 @@ public class SetupChunkWrite implements Operation {
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
-    private final ObjectServerRequestContext requestContext;
+    private final RequestContext requestContext;
 
     /*
     ** The StorageServerIdentifer is this chunk write's unique identifier. It is determined through the VON
@@ -79,7 +79,7 @@ public class SetupChunkWrite implements Operation {
     ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
     **   up the calls to obtain the VON information and the meta-data write to the database.
      */
-    public SetupChunkWrite(final ObjectServerRequestContext requestContext, final ServerIdentifier serverIdentifier,
+    public SetupChunkWrite(final RequestContext requestContext, final ServerIdentifier serverIdentifier,
                            final MemoryManager memoryManager, final BufferManagerPointer encryptedBufferPtr,
                            final int chunkBytesToEncrypt, final Operation completeCb, final int writer) {
 

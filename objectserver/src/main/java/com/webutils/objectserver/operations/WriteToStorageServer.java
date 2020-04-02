@@ -1,11 +1,11 @@
 package com.webutils.objectserver.operations;
 
-import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
+import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,7 +27,7 @@ public class WriteToStorageServer implements Operation {
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
-    private final ObjectServerRequestContext requestContext;
+    private final RequestContext requestContext;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -59,7 +59,7 @@ public class WriteToStorageServer implements Operation {
     private boolean registeredWriteBufferManager;
     private boolean completeCalled;
 
-    public WriteToStorageServer(final ObjectServerRequestContext requestContext, final IoInterface connection,
+    public WriteToStorageServer(final RequestContext requestContext, final IoInterface connection,
                                 final BufferManagerPointer encryptedBufferPtr, final int bytesToWrite,
                                 final ServerIdentifier serverIdentifier) {
 

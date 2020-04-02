@@ -118,7 +118,7 @@ public class EncryptBuffer implements Operation {
          */
         storageServerWritePointer = storageServerWriteBufferMgr.register(this);
 
-        int numberEncryptedWriteBuffer = requestContext.getBufferManagerRingSize();
+        int numberEncryptedWriteBuffer = memoryManager.getBufferManagerRingSize();
         for (int i = 0; i < numberEncryptedWriteBuffer; i++) {
             ByteBuffer writeBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, storageServerWriteBufferMgr);
             storageServerWriteBufferMgr.offer(storageServerWritePointer, writeBuffer);
@@ -255,7 +255,7 @@ public class EncryptBuffer implements Operation {
 
         storageServerWriteBufferMgr.reset(storageServerWritePointer);
 
-        int numberEncryptedWriteBuffer = requestContext.getBufferManagerRingSize();
+        int numberEncryptedWriteBuffer = memoryManager.getBufferManagerRingSize();
         for (int i = 0; i < numberEncryptedWriteBuffer; i++) {
             ByteBuffer buffer = storageServerWriteBufferMgr.getAndRemove(storageServerWritePointer);
             if (buffer != null) {

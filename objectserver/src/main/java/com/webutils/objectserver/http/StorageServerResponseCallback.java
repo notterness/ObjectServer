@@ -1,6 +1,5 @@
 package com.webutils.objectserver.http;
 
-import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.http.HttpResponseCallback;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.requestcontext.RequestContext;
@@ -8,12 +7,12 @@ import com.webutils.webserver.requestcontext.ServerIdentifier;
 
 public class StorageServerResponseCallback extends HttpResponseCallback {
 
-    private final ObjectServerRequestContext requestContext;
+    private final RequestContext requestContext;
     private final Operation httpResponseReceivedCallback;
 
     private final ServerIdentifier serverIdentifier;
 
-    public StorageServerResponseCallback(final ObjectServerRequestContext requestContext, final Operation httpResponseReceivedCb,
+    public StorageServerResponseCallback(final RequestContext requestContext, final Operation httpResponseReceivedCb,
                                          final ServerIdentifier serverIdentifier) {
 
         this.requestContext = requestContext;

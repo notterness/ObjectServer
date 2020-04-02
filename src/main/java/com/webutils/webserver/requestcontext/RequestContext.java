@@ -44,9 +44,6 @@ public abstract class RequestContext {
     public final int CHUNK_SIZE_IN_BYTES = MemoryManager.XFER_BUFFER_SIZE * 4096;
 
 
-    public static final int TEST_BUFFER_MGR_RING_SIZE = 32;
-    public static final int PRODUCTION_BUFFER_MGR_RING_SIZE = 4096;
-
     private static final int MAX_EXEC_WORK_LOOP_COUNT = 10;
 
     /*
@@ -106,11 +103,6 @@ public abstract class RequestContext {
     ** For certain test cases, the IoInterface allows a file to be used to read data in from as well.
      */
     protected IoInterface clientConnection;
-
-    /*
-    ** The WebServerFlavor is used to provide different limits and behavior for the Web Server
-     */
-    private final WebServerFlavor webServerFlavor;
 
     /*
      ** The memory manager used to populate the various BufferManagers
@@ -178,10 +170,9 @@ public abstract class RequestContext {
     private BlockingQueue<Operation> timedWaitQueue;
 
 
-    public RequestContext(final WebServerFlavor flavor, final MemoryManager memoryManager,
+    public RequestContext(final MemoryManager memoryManager,
                           final EventPollThread threadThisRunsOn, final DbSetup dbSetup) {
 
-        this.webServerFlavor = flavor;
         this.memoryManager = memoryManager;
         this.threadThisContextRunsOn = threadThisRunsOn;
         this.dbSetup = dbSetup;
@@ -197,7 +188,7 @@ public abstract class RequestContext {
          **   clientWriteBufferManager - This is populated in the SendFinalStatus operation, but will need to be changed
          **     once the GET request is implemented to allowing streaming of data back to the clients.
          */
-        int bufferMgrRingSize = getBufferManagerRingSize();
+        int bufferMgrRingSize = memoryManager.getBufferManagerRingSize();
         this.clientReadBufferManager = new BufferManager(bufferMgrRingSize, "ClientRead", 100);
         this.clientWriteBufferManager = new BufferManager(bufferMgrRingSize, "ClientWrite", 200);
 
@@ -226,10 +217,24 @@ public abstract class RequestContext {
         v2PutAllDataWritten = false;
     }
 
+    /*
+    ** The following need to have at least stubs in all of the sub-classes. There is probably a better way to
+    **   handle the problem without having to use an interface class for the RequestContext resource pool.
+     */
     public abstract void initializeServer(final IoInterface connection, final int requestId);
 
     public abstract void cleanupHttpParser();
 
+
+    public abstract boolean hasHttpRequestBeenSent(final ServerIdentifier storageServerId);
+    public abstract void setHttpRequestSent(final ServerIdentifier storageServerId);
+    public abstract void removeHttpRequestSent(final ServerIdentifier storageServerId);
+
+    public abstract boolean hasStorageServerResponseArrived(final ServerIdentifier storageServerId);
+    public abstract int getStorageResponseResult(final ServerIdentifier storageServerId);
+    public abstract void setStorageServerResponse(final ServerIdentifier storageServerId, final int result);
+    public abstract void removeStorageServerResponse(final ServerIdentifier storageServerId);
+    public abstract BufferManager getStorageServerWriteBufferManager();
 
     /*
     ** This is called when the request has completed and this RequestContext needs to be put back into
@@ -575,18 +580,6 @@ public abstract class RequestContext {
 
     public boolean getAllV2PutDataWritten() {
         return v2PutAllDataWritten;
-    }
-
-    /*
-    ** Value for the number of ByteBuffer(s) in the BufferManager rings
-     */
-    public int getBufferManagerRingSize() {
-        if ((webServerFlavor == WebServerFlavor.DOCKER_OBJECT_SERVER_PRODUCTION) ||
-                (webServerFlavor == WebServerFlavor.DOCKER_STORAGE_SERVER_PRODUCTION)) {
-            return PRODUCTION_BUFFER_MGR_RING_SIZE;
-        } else {
-            return TEST_BUFFER_MGR_RING_SIZE;
-        }
     }
 
     /*

@@ -22,10 +22,16 @@ public class MemoryManager {
     public static final int MEDIUM_BUFFER_SIZE = 0x400;  // 1 kB;
     public static final int XFER_BUFFER_SIZE = 0x2000;  // 8 kB
 
+    public static final int TEST_BUFFER_MGR_RING_SIZE = 32;
+    public static final int PRODUCTION_BUFFER_MGR_RING_SIZE = 4096;
+
+
     // These really don't need to be.
     private static final int PRODUCTION_XFER_BUFFER_COUNT = 10000;
 
     private static final int INTEGRATION_XFER_BUFFER_COUNT = 400;
+
+    private final WebServerFlavor webServerFlavor;
 
     // Or we could infer this from an array of {count, size} tuples, if we didn't
     // need to expose the threshold values.
@@ -34,12 +40,14 @@ public class MemoryManager {
     public MemoryManager(final WebServerFlavor flavor) {
         int xferBufferCount;
 
+        this.webServerFlavor = flavor;
+
         /*
         ** The number of buffers allocated in each pool needs to be smaller for the
         **    WebServerFlavor.INTEGRATION configuration to allow it to run on the
         **    desktop.
          */
-        if (flavor == WebServerFlavor.STANDARD) {
+        if (webServerFlavor == WebServerFlavor.STANDARD) {
             xferBufferCount = PRODUCTION_XFER_BUFFER_COUNT;
         } else {
             xferBufferCount = INTEGRATION_XFER_BUFFER_COUNT;
@@ -73,6 +81,18 @@ public class MemoryManager {
         }
 
         return memoryPoolsOkay;
+    }
+
+    /*
+     ** Value for the number of ByteBuffer(s) in the BufferManager rings
+     */
+    public int getBufferManagerRingSize() {
+        if ((webServerFlavor == WebServerFlavor.DOCKER_OBJECT_SERVER_PRODUCTION) ||
+                (webServerFlavor == WebServerFlavor.DOCKER_STORAGE_SERVER_PRODUCTION)) {
+            return PRODUCTION_BUFFER_MGR_RING_SIZE;
+        } else {
+            return TEST_BUFFER_MGR_RING_SIZE;
+        }
     }
 
 }

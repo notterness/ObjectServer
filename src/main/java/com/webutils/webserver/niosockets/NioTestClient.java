@@ -2,6 +2,8 @@ package com.webutils.webserver.niosockets;
 
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.NioEventPollBalancer;
+import com.webutils.webserver.requestcontext.RequestContext;
+import com.webutils.webserver.requestcontext.RequestContextPool;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -16,7 +18,10 @@ public class NioTestClient {
 
     private static final int WORK_QUEUE_SIZE = 10;
 
+    private static final int EVENT_POLL_BALANCER_OFFSET = 10;
+
     private final int clientThreadBaseId;
+    private final RequestContextPool requestContextPool;
 
     private long nextTransactionId;
 
@@ -26,8 +31,9 @@ public class NioTestClient {
 
     private String failedTestName;
 
-    public NioTestClient(final int clientThreadBaseId) {
+    public NioTestClient(final int clientThreadBaseId, final RequestContextPool contextPool) {
         this.clientThreadBaseId = clientThreadBaseId;
+        this.requestContextPool = contextPool;
 
         nextTransactionId = 1;
         threadExit = new AtomicBoolean(false);
@@ -40,7 +46,8 @@ public class NioTestClient {
         /*
          ** First start the client NIO event poll threads
          */
-        eventPollBalancer = new NioEventPollBalancer(1, clientThreadBaseId + 10, null);
+        eventPollBalancer = new NioEventPollBalancer(1, clientThreadBaseId + EVENT_POLL_BALANCER_OFFSET,
+                requestContextPool);
         eventPollBalancer.start();
     }
 
@@ -82,4 +89,14 @@ public class NioTestClient {
         return failedTestName;
     }
 
+    /*
+    **
+     */
+    public RequestContext allocateContext(final int threadId) {
+        return requestContextPool.allocateContext(threadId);
+    }
+
+    public void releaseContext(final RequestContext requestContext) {
+        requestContextPool.releaseContext(requestContext);
+    }
 }

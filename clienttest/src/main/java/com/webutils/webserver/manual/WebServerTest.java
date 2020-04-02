@@ -5,6 +5,7 @@ import com.webutils.webserver.common.Md5Digest;
 import com.webutils.webserver.http.parser.ByteBufferHttpParser;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.IoInterface;
+import com.webutils.webserver.requestcontext.ClientTestContextPool;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import com.webutils.webserver.testio.TestEventThread;
@@ -21,8 +22,12 @@ public abstract class WebServerTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(WebServerTest.class);
 
-
     private static final WebServerFlavor webServerFlavor = WebServerFlavor.INTEGRATION_TESTS;
+
+    private static final int threadId = 0x1000;
+    private static final int requestId = 56;
+
+    private final ClientTestContextPool contextPool;
 
     protected final String testName;
 
@@ -41,15 +46,16 @@ public abstract class WebServerTest {
     WebServerTest(final String testName) {
 
         this.testName = testName;
-        memoryManager = new MemoryManager(webServerFlavor);
+        this.memoryManager = new MemoryManager(webServerFlavor);
 
-        testEventThread = new TestEventThread(webServerFlavor,0x1000, memoryManager,this);
+        testEventThread = new TestEventThread(threadId, this);
         testEventThread.start();
 
-        requestContext = testEventThread.allocateContext();
+        this.contextPool = new ClientTestContextPool(webServerFlavor, memoryManager, null);
+        this.requestContext = this.contextPool.allocateContext(threadId);
 
         IoInterface connection = testEventThread.allocateConnection(null);
-        requestContext.initializeServer(connection, 56);
+        requestContext.initializeServer(connection, requestId);
 
         CasperHttpInfo casperHttpInfo = new CasperHttpInfo(requestContext);
         parser = new ByteBufferHttpParser(casperHttpInfo);

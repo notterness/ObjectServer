@@ -41,6 +41,7 @@ public abstract class ClientTest {
 
     protected final NioTestClient client;
     protected final EventPollThread eventThread;
+    protected final int eventThreadId;
 
     protected ByteBuffer objectBuffer;
 
@@ -66,6 +67,7 @@ public abstract class ClientTest {
          */
         this.client = testClient;
         this.eventThread = testClient.getEventThread();
+        this.eventThreadId = this.eventThread.getEventPollThreadBaseId();
 
         this.httpStatus = 0;
 
@@ -84,7 +86,7 @@ public abstract class ClientTest {
         /*
          ** Allocate a RequestContext
          */
-        RequestContext clientContext = eventThread.allocateContext();
+        RequestContext clientContext = client.allocateContext(eventThreadId);
 
         /*
         ** Allocate an IoInterface to use
@@ -129,7 +131,7 @@ public abstract class ClientTest {
         connection.closeConnection();
         eventThread.releaseConnection(connection);
 
-        eventThread.releaseContext(clientContext);
+        client.releaseContext(clientContext);
 
         memoryManager.verifyMemoryPools(clientTestName);
 

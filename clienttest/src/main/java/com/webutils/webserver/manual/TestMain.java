@@ -2,12 +2,17 @@ package com.webutils.webserver.manual;
 
 import com.webutils.objectserver.manual.TestChunkWrite;
 import com.webutils.objectserver.manual.TestEncryptBuffer;
+import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
+import com.webutils.storageserver.requestcontext.StorageServerContextPool;
+import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.NioTestClient;
 import com.webutils.webserver.kubernetes.KubernetesInfo;
 import com.webutils.webserver.mysql.DbSetup;
 import com.webutils.webserver.mysql.K8PodDbInfo;
 import com.webutils.webserver.mysql.TestLocalDbInfo;
 import com.webutils.webserver.niosockets.NioServerHandler;
+import com.webutils.webserver.requestcontext.ClientTestContextPool;
+import com.webutils.webserver.requestcontext.ClientTestRequestContext;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 
 import java.io.IOException;
@@ -84,7 +89,12 @@ public class TestMain {
         AtomicInteger threadCount = new AtomicInteger(1);
 
         NioServerHandler nioServer;
+        MemoryManager objectServerMemoryManager = new MemoryManager(flavor);
+        ObjectServerContextPool objectRequestContextPool = new ObjectServerContextPool(flavor, objectServerMemoryManager, dbSetup);
+
+        MemoryManager storageServersMemoryManager = new MemoryManager(flavor);
         NioServerHandler[] nioStorageServer = new NioServerHandler[NUMBER_TEST_STORAGE_SERVERS];
+        StorageServerContextPool[] storageRequestContextPool = new StorageServerContextPool[NUMBER_TEST_STORAGE_SERVERS];
 
         if (flavor == WebServerFlavor.INTEGRATION_TESTS) {
             TestEncryptBuffer testEncryptBuffer = new TestEncryptBuffer();
@@ -101,13 +111,16 @@ public class TestMain {
             /*
             ** The Object Server needs to access the database to obtain the VON information
              */
-            nioServer = new NioServerHandler(serverTcpPort, 1000,
-                    dbSetup);
+            nioServer = new NioServerHandler(serverTcpPort, 1000, objectRequestContextPool);
             nioServer.start();
 
+            /*
+            ** Setup the Storage Servers
+             */
             for (int i = 0; i < NUMBER_TEST_STORAGE_SERVERS; i++) {
+                storageRequestContextPool[i] = new StorageServerContextPool(flavor, storageServersMemoryManager, null);
                 nioStorageServer[i] = new NioServerHandler(baseTcpPort + i,
-                        (2000 + (i * STORAGE_SERVER_BASE_ID_OFFSET)), null);
+                        (2000 + (i * STORAGE_SERVER_BASE_ID_OFFSET)), storageRequestContextPool[i]);
                 nioStorageServer[i].start();
             }
         } else {
@@ -117,14 +130,11 @@ public class TestMain {
             }
         }
 
-        NioTestClient testClient = new NioTestClient(3000);
-        testClient.start();
-
         if (flavor == WebServerFlavor.INTEGRATION_DOCKER_TESTS) {
             try {
                 InetAddress addr = InetAddress.getByName("StorageServer");
 
-                TestChunkWrite testChunkWrite = new TestChunkWrite(testClient, addr, baseTcpPort, threadCount);
+                TestChunkWrite testChunkWrite = new TestChunkWrite(addr, baseTcpPort, threadCount, dbSetup);
                 testChunkWrite.execute();
             } catch (UnknownHostException ex) {
                 System.out.println("Unknown host: StorageServer " + ex.getMessage());
@@ -134,7 +144,7 @@ public class TestMain {
                 try {
                     System.out.println("Kubernetes POD IP: " + kubernetesPodIp);
                     InetAddress addr = InetAddress.getByName(kubernetesPodIp);
-                    TestChunkWrite testChunkWrite = new TestChunkWrite(testClient, addr, baseTcpPort, threadCount);
+                    TestChunkWrite testChunkWrite = new TestChunkWrite(addr, baseTcpPort, threadCount, dbSetup);
                     testChunkWrite.execute();
                 } catch (UnknownHostException ex) {
                     System.out.println("Kubernetes POD IP: " + kubernetesPodIp + " - " + ex.getMessage());
@@ -147,7 +157,7 @@ public class TestMain {
             ** flavor == WebServerFlavor.INTEGRATION_TESTS
              */
             InetAddress addr = InetAddress.getLoopbackAddress();
-            TestChunkWrite testChunkWrite = new TestChunkWrite(testClient, addr, baseTcpPort, threadCount);
+            TestChunkWrite testChunkWrite = new TestChunkWrite(addr, baseTcpPort, threadCount, dbSetup);
             testChunkWrite.execute();
         }
 
@@ -172,6 +182,12 @@ public class TestMain {
         } else {
             serverIpAddr = InetAddress.getLoopbackAddress();
         }
+
+        MemoryManager clientTestMemoryManager = new MemoryManager(flavor);
+
+        ClientTestContextPool clientTestContextPool = new ClientTestContextPool(flavor, clientTestMemoryManager, dbSetup);
+        NioTestClient testClient = new NioTestClient(3000, clientTestContextPool);
+        testClient.start();
 
         //ClientTest client_1 = new ClientTest_2("ClientTest_2", testClient, serverTcpPort, threadCount);
         //client_1.execute();

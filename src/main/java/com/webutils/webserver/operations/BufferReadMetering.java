@@ -59,7 +59,7 @@ public class BufferReadMetering implements Operation {
          **   number of ByteBuffer(s) up front and then reset the metering
          **   pointer.
          */
-        int buffersToAllocate = requestContext.getBufferManagerRingSize();
+        int buffersToAllocate = memoryManager.getBufferManagerRingSize();
 
         for (int i = 0; i < buffersToAllocate; i++) {
             ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientReadBufferMgr);
@@ -113,7 +113,7 @@ public class BufferReadMetering implements Operation {
          */
         clientReadBufferMgr.reset(bufferMeteringPointer);
 
-        int buffersAllocated = requestContext.getBufferManagerRingSize();
+        int buffersAllocated = memoryManager.getBufferManagerRingSize();
 
         for (int i = 0; i < buffersAllocated; i++) {
             ByteBuffer buffer = clientReadBufferMgr.getAndRemove(bufferMeteringPointer);

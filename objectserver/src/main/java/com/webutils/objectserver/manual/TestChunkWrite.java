@@ -1,12 +1,15 @@
 package com.webutils.objectserver.manual;
 
 import com.webutils.objectserver.operations.SetupChunkWrite;
+import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
 import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.memory.MemoryManager;
+import com.webutils.webserver.mysql.DbSetup;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.IoInterface;
+import com.webutils.webserver.niosockets.NioTestClient;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
@@ -21,6 +24,10 @@ public class TestChunkWrite {
 
     private static final Logger LOG = LoggerFactory.getLogger(TestChunkWrite.class);
 
+    private static final WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
+
+    private static final int testClientThreadBaseId = 3000;
+
     private static final WebServerFlavor webServerFlavor = WebServerFlavor.INTEGRATION_TESTS;
 
     private final int NUM_STORAGE_SERVER_WRITE_BUFFERS = 10;
@@ -31,25 +38,37 @@ public class TestChunkWrite {
 
     private final AtomicInteger runningTestCount;
 
-    protected final NioTestClient client;
+    private final DbSetup dbSetup;
+
+    private final MemoryManager objServerMemMgr;
+    private final ObjectServerContextPool objReqContextPool;
+
+    protected final NioTestClient testClient;
     protected final EventPollThread eventThread;
 
     private boolean statusSignalSent;
     private final Object writeDone;
 
 
-    TestChunkWrite(final NioTestClient testClient, final InetAddress addr, final int storageServerTcpPort,
-                   AtomicInteger testCount) {
+    /*
+    ** The addr and storageServerTcpPort are used to identify the Storage Server the ChunkWrite will be directed to.
+     */
+    public TestChunkWrite(final InetAddress addr, final int storageServerTcpPort, AtomicInteger testCount, final DbSetup dbSetup) {
 
         this.storageServerAddr = addr;
         this.storageServerTcpPort = storageServerTcpPort;
         this.runningTestCount = testCount;
 
+        this.dbSetup = dbSetup;
+
         /*
          ** The testClient is responsible for providing the threads the Operation(s) will run on and the
          **   NIO Socket handling.
          */
-        this.client = testClient;
+        this.objServerMemMgr = new MemoryManager(flavor);
+        this.objReqContextPool = new ObjectServerContextPool(flavor, objServerMemMgr, dbSetup);
+
+        this.testClient = new NioTestClient(testClientThreadBaseId, objReqContextPool);
         this.eventThread = testClient.getEventThread();
 
         /*
@@ -64,11 +83,11 @@ public class TestChunkWrite {
         runningTestCount.incrementAndGet();
     }
 
-    void execute() {
+    public void execute() {
         /*
          ** Allocate a RequestContext
          */
-        ObjectServerRequestContext clientContext = eventThread.allocateContext();
+        RequestContext clientContext = objReqContextPool.allocateContext(testClientThreadBaseId);
 
         /*
          ** Allocate an IoInterface to use
@@ -90,7 +109,6 @@ public class TestChunkWrite {
                            final int chunkBytesToEncrypt) {
 
          */
-        MemoryManager memoryManager = new MemoryManager(webServerFlavor);
 
         /*
         ** The unique identifier for this Chunk write test
@@ -111,7 +129,7 @@ public class TestChunkWrite {
 
         int fillPattern = 1;
         for (int i = 0; i < NUM_STORAGE_SERVER_WRITE_BUFFERS; i++) {
-            ByteBuffer writeBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, storageServerWriteBufferMgr);
+            ByteBuffer writeBuffer = objServerMemMgr.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, storageServerWriteBufferMgr);
 
             /*
             ** Write a known pattern into the buffers
@@ -123,7 +141,7 @@ public class TestChunkWrite {
             storageServerWriteBufferMgr.offer(storageServerAddPointer, writeBuffer);
         }
 
-        SetupChunkWrite setupChunkWrite = new SetupChunkWrite(clientContext, chunkId, memoryManager,
+        SetupChunkWrite setupChunkWrite = new SetupChunkWrite(clientContext, chunkId, objServerMemMgr,
                 storageServerAddPointer, NUMBER_OF_BYTES_TO_WRITE, testChunkWrite, 0);
         setupChunkWrite.initialize();
 
@@ -145,7 +163,7 @@ public class TestChunkWrite {
             ByteBuffer buffer = storageServerWriteBufferMgr.getAndRemove(storageServerAddPointer);
 
             if (buffer != null) {
-                memoryManager.poolMemFree(buffer, storageServerWriteBufferMgr);
+                objServerMemMgr.poolMemFree(buffer, storageServerWriteBufferMgr);
             } else {
                 LOG.info("TestChunkWrite storageServerAddPointer index: " + storageServerAddPointer.getCurrIndex());
             }
@@ -156,12 +174,12 @@ public class TestChunkWrite {
         eventThread.releaseConnection(connection);
 
         clientContext.reset();
-        eventThread.releaseContext(clientContext);
+        objReqContextPool.releaseContext(clientContext);
 
         /*
         ** Verify all the ByteBuffer(s) were returned to the MemoryManager
          */
-        memoryManager.verifyMemoryPools("TestChunkWrite");
+        objServerMemMgr.verifyMemoryPools("TestChunkWrite");
 
         /*
         ** Let the higher level know this test is complete

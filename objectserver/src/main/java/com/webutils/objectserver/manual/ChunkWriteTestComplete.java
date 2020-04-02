@@ -4,6 +4,7 @@ import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
+import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,7 +20,7 @@ public class ChunkWriteTestComplete implements Operation {
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
-    private final ObjectServerRequestContext requestContext;
+    private final RequestContext requestContext;
 
     private final ServerIdentifier serverIdentifier;
 
@@ -33,7 +34,7 @@ public class ChunkWriteTestComplete implements Operation {
     private boolean onExecutionQueue;
 
 
-    public ChunkWriteTestComplete(final ObjectServerRequestContext requestContext, final ServerIdentifier serverIdentifier,
+    public ChunkWriteTestComplete(final RequestContext requestContext, final ServerIdentifier serverIdentifier,
                                   final TestChunkWrite testWriteChunk) {
 
         this.requestContext = requestContext;

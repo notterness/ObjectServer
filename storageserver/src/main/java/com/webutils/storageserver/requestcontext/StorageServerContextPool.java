@@ -56,7 +56,7 @@ public class StorageServerContextPool implements RequestContextPool {
             LinkedList<StorageServerRequestContext> contextList = runningContexts.get(threadId);
 
             if (contextList != null) {
-                requestContext = new StorageServerRequestContext(flavor, memoryManager, threadThisRequestRunsOn, dbSetup);
+                requestContext = new StorageServerRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup);
 
                 contextList.add(requestContext);
                 LOG.info("allocateContext [" + threadId + "] webServerFlavor: " + flavor.toString());

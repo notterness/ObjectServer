@@ -21,12 +21,12 @@ public class TestEncryptBuffer {
 
     private final ByteBufferHttpParser parser;
 
-    TestEncryptBuffer() {
+    public TestEncryptBuffer() {
         this.memoryManager = new MemoryManager(WebServerFlavor.INTEGRATION_TESTS);
         this.nioEventThread = new NioEventPollThread(null,0x1001, null);
         this.nioEventThread.start();
 
-        this.requestContext = new ObjectServerRequestContext(webServerFlavor, memoryManager, nioEventThread, null);
+        this.requestContext = new ObjectServerRequestContext(memoryManager, nioEventThread, null);
 
         CasperHttpInfo casperHttpInfo = new CasperHttpInfo(requestContext);
         this.parser = new ByteBufferHttpParser(casperHttpInfo);
@@ -38,7 +38,7 @@ public class TestEncryptBuffer {
         encryptBuffer = new EncryptBuffer(requestContext, memoryManager, null, null);
     }
 
-    void execute() {
+    public void execute() {
         encryptBuffer.testEncryption();
 
         requestContext.dumpOperations();

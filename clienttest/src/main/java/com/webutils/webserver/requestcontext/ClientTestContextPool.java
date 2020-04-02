@@ -53,7 +53,7 @@ public class ClientTestContextPool implements RequestContextPool {
             LinkedList<ClientTestRequestContext> contextList = runningContexts.get(threadId);
 
             if (contextList != null) {
-                requestContext = new ClientTestRequestContext(flavor, memoryManager, threadThisRequestRunsOn, dbSetup);
+                requestContext = new ClientTestRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup);
 
                 contextList.add(requestContext);
                 LOG.info("allocateContext [" + threadId + "] webServerFlavor: " + flavor.toString());

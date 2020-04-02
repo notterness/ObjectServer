@@ -4,7 +4,7 @@ import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.manual.ClientTest;
 import com.webutils.webserver.niosockets.IoInterface;
-import com.webutils.webserver.requestcontext.ClientTestRequestContext;
+import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,7 +22,7 @@ public class ClientObjectWrite implements Operation {
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
-    private final ClientTestRequestContext requestContext;
+    private final RequestContext requestContext;
 
     /*
      ** This is the IoInterface that the final status will be written out on.
@@ -49,7 +49,7 @@ public class ClientObjectWrite implements Operation {
      */
     private final ServerIdentifier serverIdentifier;
 
-    public ClientObjectWrite(final ClientTestRequestContext requestContext, final IoInterface connection,
+    public ClientObjectWrite(final RequestContext requestContext, final IoInterface connection,
                              final ClientTest clientTest, final BufferManagerPointer writeInfillPtr,
                              final ServerIdentifier serverIdentifier) {
 

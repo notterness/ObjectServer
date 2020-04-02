@@ -71,9 +71,9 @@ public class ObjectServerRequestContext extends RequestContext {
     private Map<ServerIdentifier, Integer> storageServerResponse;
 
 
-    public ObjectServerRequestContext(final WebServerFlavor flavor, final MemoryManager memoryManager,
-                               final EventPollThread threadThisRunsOn, final DbSetup dbSetup) {
-        super(flavor, memoryManager, threadThisRunsOn, dbSetup);
+    public ObjectServerRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn, final DbSetup dbSetup) {
+
+        super(memoryManager, threadThisRunsOn, dbSetup);
 
         /*
          ** The BufferManager(s) that are allocated here are populated in the following Operations:
@@ -82,7 +82,7 @@ public class ObjectServerRequestContext extends RequestContext {
          **     once the GET request is implemented to allowing streaming of data back to the clients.
          **   storageServerWriteBufferManager - This is populated in the EncryptBuffer operation.
          */
-        int bufferMgrRingSize = getBufferManagerRingSize();
+        int bufferMgrRingSize = memoryManager.getBufferManagerRingSize();
         this.storageServerWriteBufferManager = new BufferManager(bufferMgrRingSize, "StorageServerWrite", 300);
 
 

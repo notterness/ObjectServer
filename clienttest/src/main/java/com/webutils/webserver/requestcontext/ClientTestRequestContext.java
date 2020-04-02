@@ -1,5 +1,6 @@
 package com.webutils.webserver.requestcontext;
 
+import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.DbSetup;
 import com.webutils.webserver.niosockets.EventPollThread;
@@ -25,9 +26,8 @@ public class ClientTestRequestContext extends RequestContext {
     private Map<ServerIdentifier, AtomicBoolean> httpRequestSent;
 
 
-    ClientTestRequestContext(final WebServerFlavor flavor, final MemoryManager memoryManager,
-                                final EventPollThread threadThisRunsOn, final DbSetup dbSetup) {
-        super(flavor, memoryManager, threadThisRunsOn, dbSetup);
+    ClientTestRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn, final DbSetup dbSetup) {
+        super(memoryManager, threadThisRunsOn, dbSetup);
 
         /*
          ** Setup the map for the HTTP Request Sent
@@ -54,6 +54,41 @@ public class ClientTestRequestContext extends RequestContext {
             return responseSent.get();
         }
         return false;
+    }
+
+    /*
+    ** The following are stubs until I sort out how the RequestContext and RequestContext pool objects should be
+    **   properly handled.
+     */
+    public void setHttpRequestSent(final ServerIdentifier storageServerId) {
+        LOG.error("Invalid function");
+    }
+
+    public void removeHttpRequestSent(final ServerIdentifier storageServerId) {
+        LOG.error("Invalid function");
+    }
+
+    public boolean hasStorageServerResponseArrived(final ServerIdentifier storageServerId) {
+        LOG.error("Invalid function");
+        return false;
+    }
+
+    public int getStorageResponseResult(final ServerIdentifier storageServerId) {
+        LOG.error("Invalid function");
+        return -1;
+    }
+
+    public void setStorageServerResponse(final ServerIdentifier storageServerId, final int result) {
+        LOG.error("Invalid function");
+    }
+
+    public void removeStorageServerResponse(final ServerIdentifier storageServerId) {
+        LOG.error("Invalid function");
+    }
+
+    public BufferManager getStorageServerWriteBufferManager() {
+        LOG.error("Invalid function");
+        return null;
     }
 
 }

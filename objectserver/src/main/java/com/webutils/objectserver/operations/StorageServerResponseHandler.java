@@ -1,12 +1,12 @@
 package com.webutils.objectserver.operations;
 
 import com.webutils.objectserver.http.StorageServerResponseCallback;
-import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpResponseListener;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
+import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.eclipse.jetty.http.HttpParser;
 import org.slf4j.Logger;
@@ -25,7 +25,7 @@ public class StorageServerResponseHandler implements Operation {
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
-    private final ObjectServerRequestContext requestContext;
+    private final RequestContext requestContext;
 
     private final ServerIdentifier serverIdentifier;
 
@@ -56,7 +56,7 @@ public class StorageServerResponseHandler implements Operation {
     private final Operation completionCallback;
 
 
-    public StorageServerResponseHandler(final ObjectServerRequestContext requestContext, final BufferManager storageServerResponseBufferMgr,
+    public StorageServerResponseHandler(final RequestContext requestContext, final BufferManager storageServerResponseBufferMgr,
                                         final BufferManagerPointer readBufferPtr, final Operation completionCb,
                                         final ServerIdentifier serverIdentifier) {
 
