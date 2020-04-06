@@ -20,6 +20,11 @@ public class NioServerHandler implements Runnable {
 
     private final int SELECT_TIMEOUT = 1000;
 
+    public static final int OBJECT_SERVER_BASE_ID = 1000;
+    public static final int STORAGE_SERVER_BASE_ID = 2000;
+
+    private static final int NUM_POLL_THREADS = 2;
+
     private final int tcpListenPort;
     private final int serverThreadBaseId;
 
@@ -47,7 +52,7 @@ public class NioServerHandler implements Runnable {
         /*
         ** First start the client NIO event poll threads
          */
-        eventPollBalancer = new NioEventPollBalancer(2, serverThreadBaseId + 10, requestContextPool);
+        eventPollBalancer = new NioEventPollBalancer(NUM_POLL_THREADS, serverThreadBaseId + 10, requestContextPool);
         eventPollBalancer.start();
 
         /*

@@ -1,10 +1,9 @@
 package com.webutils.webserver.niosockets;
 
-import com.webutils.webserver.niosockets.EventPollThread;
-import com.webutils.webserver.niosockets.NioEventPollBalancer;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.RequestContextPool;
-import com.webutils.webserver.requestcontext.WebServerFlavor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -16,11 +15,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 */
 public class NioTestClient {
 
-    private static final int WORK_QUEUE_SIZE = 10;
+    private static final Logger LOG = LoggerFactory.getLogger(NioTestClient.class);
 
+    private static final int CLIENT_TEST_BASE_ID = 3000;
     private static final int EVENT_POLL_BALANCER_OFFSET = 10;
 
-    private final int clientThreadBaseId;
     private final RequestContextPool requestContextPool;
 
     private long nextTransactionId;
@@ -31,8 +30,7 @@ public class NioTestClient {
 
     private String failedTestName;
 
-    public NioTestClient(final int clientThreadBaseId, final RequestContextPool contextPool) {
-        this.clientThreadBaseId = clientThreadBaseId;
+    public NioTestClient(final RequestContextPool contextPool) {
         this.requestContextPool = contextPool;
 
         nextTransactionId = 1;
@@ -43,10 +41,15 @@ public class NioTestClient {
 
     public void start() {
 
+        final int NUM_POLL_THREADS = 1;
+
+        LOG.info("start() NUM_POLL_THREADS: " + NUM_POLL_THREADS + " threadBaseId: " + CLIENT_TEST_BASE_ID +
+                " offset: " + EVENT_POLL_BALANCER_OFFSET);
+
         /*
          ** First start the client NIO event poll threads
          */
-        eventPollBalancer = new NioEventPollBalancer(1, clientThreadBaseId + EVENT_POLL_BALANCER_OFFSET,
+        eventPollBalancer = new NioEventPollBalancer(NUM_POLL_THREADS, CLIENT_TEST_BASE_ID + EVENT_POLL_BALANCER_OFFSET,
                 requestContextPool);
         eventPollBalancer.start();
     }

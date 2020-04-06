@@ -57,38 +57,39 @@ public class ClientTestRequestContext extends RequestContext {
         return false;
     }
 
-    /*
-    ** The following are stubs until I sort out how the RequestContext and RequestContext pool objects should be
-    **   properly handled.
-     */
     public void setHttpRequestSent(final ServerIdentifier storageServerId) {
-        LOG.error("Invalid function");
+        AtomicBoolean httpSent = new AtomicBoolean(true);
+        httpRequestSent.put(storageServerId, httpSent);
     }
 
+    /*
+     ** The following are stubs until I sort out how the RequestContext and RequestContext pool objects should be
+     **   properly handled.
+     */
     public void removeHttpRequestSent(final ServerIdentifier storageServerId) {
-        LOG.error("Invalid function");
+        LOG.error("removeHttpRequestSent() Invalid function");
     }
 
     public boolean hasStorageServerResponseArrived(final ServerIdentifier storageServerId) {
-        LOG.error("Invalid function");
+        LOG.error("hasStorageServerResponseArrived() Invalid function");
         return false;
     }
 
     public int getStorageResponseResult(final ServerIdentifier storageServerId) {
-        LOG.error("Invalid function");
+        LOG.error("getStorageResponseResult() Invalid function");
         return -1;
     }
 
     public void setStorageServerResponse(final ServerIdentifier storageServerId, final int result) {
-        LOG.error("Invalid function");
+        LOG.error("setStorageServerResponse() Invalid function");
     }
 
     public void removeStorageServerResponse(final ServerIdentifier storageServerId) {
-        LOG.error("Invalid function");
+        LOG.error("removeStorageServerResponse() Invalid function");
     }
 
     public BufferManager getStorageServerWriteBufferManager() {
-        LOG.error("Invalid function");
+        LOG.error("getStorageServerWriteBufferManager() Invalid function");
         return null;
     }
 

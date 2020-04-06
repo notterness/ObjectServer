@@ -38,8 +38,6 @@ public class ComputeThreadPool {
 
         workQueue = new LinkedBlockingQueue<>(COMPUTE_MAX_QUEUE_SIZE);
 
-        LOG.info("ComputeThreadPool[" + this.baseThreadId + "] threadCount: " + this.threadCount);
-
         queueMutex = new ReentrantLock();
         queueSignal = queueMutex.newCondition();
         workQueued = false;

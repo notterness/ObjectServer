@@ -145,98 +145,100 @@ public abstract class DbSetup {
             populateLocalStorageServers();
         }
 
-        /*
-        ** This simply waits until the IP address can be obtained to insure that the POD is up and running.
-        **
-        ** NOTE: There must be a better way to determine if the POD has been started...
-         */
-        String k8IpAddr = null;
+        if ((flavor == WebServerFlavor.KUBERNETES_OBJECT_SERVER_TEST) || (flavor == WebServerFlavor.INTEGRATION_KUBERNETES_TESTS)) {
+            /*
+             ** This simply waits until the IP address can be obtained to insure that the POD is up and running.
+             **
+             ** NOTE: There must be a better way to determine if the POD has been started...
+             */
+            String k8IpAddr = null;
 
-        KubernetesInfo kubeInfo = new KubernetesInfo(flavor);
-        int retryCount = 0;
-        int maxRetryCount;
-        if (flavor == WebServerFlavor.KUBERNETES_OBJECT_SERVER_TEST) {
-            maxRetryCount = 10;
-        } else {
-            maxRetryCount = 3;
-        }
-
-        while ((k8IpAddr == null) && (retryCount < maxRetryCount)) {
-            try {
-                k8IpAddr = kubeInfo.getInternalKubeIp();
-            } catch (IOException io_ex) {
-                System.out.println("IOException: " + io_ex.getMessage());
-                LOG.error("checkAndSetupStorageServers() - IOException: " + io_ex.getMessage());
-                k8IpAddr = null;
+            KubernetesInfo kubeInfo = new KubernetesInfo(flavor);
+            int retryCount = 0;
+            int maxRetryCount;
+            if (flavor == WebServerFlavor.KUBERNETES_OBJECT_SERVER_TEST) {
+                maxRetryCount = 10;
+            } else {
+                maxRetryCount = 3;
             }
 
-            if (k8IpAddr == null) {
+            while ((k8IpAddr == null) && (retryCount < maxRetryCount)) {
                 try {
-                    TimeUnit.SECONDS.sleep(10);
-                } catch (InterruptedException intEx) {
-                    LOG.error("Trying to obtain internal Kubernetes IP " + intEx.getMessage());
-                    break;
+                    k8IpAddr = kubeInfo.getInternalKubeIp();
+                } catch (IOException io_ex) {
+                    System.out.println("IOException: " + io_ex.getMessage());
+                    LOG.error("checkAndSetupStorageServers() - IOException: " + io_ex.getMessage());
+                    k8IpAddr = null;
                 }
 
-                retryCount++;
+                if (k8IpAddr == null) {
+                    try {
+                        TimeUnit.SECONDS.sleep(10);
+                    } catch (InterruptedException intEx) {
+                        LOG.error("Trying to obtain internal Kubernetes IP " + intEx.getMessage());
+                        break;
+                    }
+
+                    retryCount++;
+                }
             }
-        }
-
-        /*
-        ** Only have the Kubernetes Object Server setup the k8 internal table to prevent conflicts with access
-        **   to the database. Also, since the Object Server running within the POD is the only executable that
-        **   needs access to that table, it is implicity the owner as well.
-         */
-        if (flavor == WebServerFlavor.KUBERNETES_OBJECT_SERVER_TEST) {
-            /*
-            ** Always drop and repopulate the Kubernetes storage server tables since the IP address
-            **   for the POD will likely change between startups.
-            ** Recreate the tables that provide the IP address and Port mappings for the Storage Servers when accessed
-            **   from within the POD.
-             */
-            dropK8InternalStorageServerTables();
 
             /*
-            ** Obtain the list of Storage Servers and their NodePorts (this is the port number that is exposed outside the
-            **   POD).
+             ** Only have the Kubernetes Object Server setup the k8 internal table to prevent conflicts with access
+             **   to the database. Also, since the Object Server running within the POD is the only executable that
+             **   needs access to that table, it is implicity the owner as well.
              */
-            Map<String, Integer> storageServersInfo = new Hashtable<>();
-            try {
-                int count = kubeInfo.getStorageServerPorts(storageServersInfo);
-                if (count != 0) {
-                    createK8InternalStorageServerTables();
-                    populateK8InternalStorageServers(k8IpAddr, storageServersInfo);
-                } else {
-                    System.out.println("No Storage Server NodePorts - checkAndSetupStorageServers()");
-                    LOG.error("No Storage Server NodePorts - checkAndSetupStorageServers()");
+            if (flavor == WebServerFlavor.KUBERNETES_OBJECT_SERVER_TEST) {
+                /*
+                 ** Always drop and repopulate the Kubernetes storage server tables since the IP address
+                 **   for the POD will likely change between startups.
+                 ** Recreate the tables that provide the IP address and Port mappings for the Storage Servers when accessed
+                 **   from within the POD.
+                 */
+                dropK8InternalStorageServerTables();
+
+                /*
+                 ** Obtain the list of Storage Servers and their NodePorts (this is the port number that is exposed outside the
+                 **   POD).
+                 */
+                Map<String, Integer> storageServersInfo = new Hashtable<>();
+                try {
+                    int count = kubeInfo.getStorageServerPorts(storageServersInfo);
+                    if (count != 0) {
+                        createK8InternalStorageServerTables();
+                        populateK8InternalStorageServers(k8IpAddr, storageServersInfo);
+                    } else {
+                        System.out.println("No Storage Server NodePorts - checkAndSetupStorageServers()");
+                        LOG.error("No Storage Server NodePorts - checkAndSetupStorageServers()");
+                    }
+                } catch (IOException io_ex) {
+                    System.out.println("Unable to obtain Storage Server NodePorts - IOException: " + io_ex.getMessage());
+                    LOG.error("Unable to obtain Storage Server NodePorts - checkAndSetupStorageServers() - IOException: " + io_ex.getMessage());
                 }
-            } catch (IOException io_ex) {
-                System.out.println("Unable to obtain Storage Server NodePorts - IOException: " + io_ex.getMessage());
-                LOG.error("Unable to obtain Storage Server NodePorts - checkAndSetupStorageServers() - IOException: " + io_ex.getMessage());
-            }
-        } else if (flavor == WebServerFlavor.INTEGRATION_KUBERNETES_TESTS) {
-            /*
-            ** Drop the table since the IP addresses and Port number may change between startups.
-             */
-            dropK8ServiceInfoTable();
+            } else if (flavor == WebServerFlavor.INTEGRATION_KUBERNETES_TESTS) {
+                /*
+                 ** Drop the table since the IP addresses and Port number may change between startups.
+                 */
+                dropK8ServiceInfoTable();
 
-            /*
-             ** Obtain the list of Object Server and Storage Servers and their NodePorts (this is the port number that is exposed outside the
-             **   POD).
-             */
-            Map<String, Integer> serversInfo = new Hashtable<>();
-            try {
-                int count = kubeInfo.getNodePorts(serversInfo);
-                if (count != 0) {
-                    createK8ServerInfoTable();
-                    populateK8ServersInfo(k8IpAddr, serversInfo);
-                } else {
-                    System.out.println("No Storage Server NodePorts - checkAndSetupStorageServers()");
-                    LOG.error("No Storage Server NodePorts - checkAndSetupStorageServers()");
+                /*
+                 ** Obtain the list of Object Server and Storage Servers and their NodePorts (this is the port number that is exposed outside the
+                 **   POD).
+                 */
+                Map<String, Integer> serversInfo = new Hashtable<>();
+                try {
+                    int count = kubeInfo.getNodePorts(serversInfo);
+                    if (count != 0) {
+                        createK8ServerInfoTable();
+                        populateK8ServersInfo(k8IpAddr, serversInfo);
+                    } else {
+                        System.out.println("No Storage Server NodePorts - checkAndSetupStorageServers()");
+                        LOG.error("No Storage Server NodePorts - checkAndSetupStorageServers()");
+                    }
+                } catch (IOException io_ex) {
+                    System.out.println("Unable to obtain Storage Server NodePorts - IOException: " + io_ex.getMessage());
+                    LOG.error("Unable to obtain Storage Server NodePorts - checkAndSetupStorageServers() - IOException: " + io_ex.getMessage());
                 }
-            } catch (IOException io_ex) {
-                System.out.println("Unable to obtain Storage Server NodePorts - IOException: " + io_ex.getMessage());
-                LOG.error("Unable to obtain Storage Server NodePorts - checkAndSetupStorageServers() - IOException: " + io_ex.getMessage());
             }
         }
     }

@@ -54,7 +54,7 @@ public class StorageServerMain {
         for (int i = 0; i < NUMBER_TEST_STORAGE_SERVERS; i++) {
             requestContextPool[i] = new StorageServerContextPool(flavor, memoryManager, null);
             nioStorageServer[i] = new NioServerHandler(baseTcpPort + i,
-                    (2000 + (i * STORAGE_SERVER_BASE_ID_OFFSET)), requestContextPool[i]);
+                    (NioServerHandler.STORAGE_SERVER_BASE_ID + (i * STORAGE_SERVER_BASE_ID_OFFSET)), requestContextPool[i]);
             nioStorageServer[i].start();
         }
     }

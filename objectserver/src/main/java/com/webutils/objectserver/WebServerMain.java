@@ -64,7 +64,7 @@ public class WebServerMain {
         MemoryManager memoryManager = new MemoryManager(flavor);
         ObjectServerContextPool requestContextPool = new ObjectServerContextPool(flavor, memoryManager, dbSetup);
 
-        NioServerHandler nioServer = new NioServerHandler(serverTcpPort, 1000, requestContextPool);
+        NioServerHandler nioServer = new NioServerHandler(serverTcpPort, NioServerHandler.OBJECT_SERVER_BASE_ID, requestContextPool);
         nioServer.start();
     }
 }

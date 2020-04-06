@@ -16,7 +16,15 @@ public class NioEventPollBalancer {
 
     private static final Logger LOG = LoggerFactory.getLogger(NioEventPollBalancer.class);
 
-    private static final int COMPUTE_THREAD_ID_OFFSET = 100;
+    /*
+    ** The maximum number of ComputeThreads is limited to 20. If more than 20 compute threads are allocated then the
+    **   threadBaseId + COMPUTE_THREAD_ID_OFFSET + numCompiuteThreads will corss over the boundary that is impossed
+    **   by the STORAGE_SERVER_BASE_ID_OFFSET.
+    ** Since the Storage Servers are allocated using a base ID and then are separated by the STORAGE_SERVER_BASE_ID_OFFSET,
+    **   the number of worker threads plus the number of compute threads cannot exceed the OFFSET.
+     */
+    private static final int NUM_COMPUTE_THREADS = 1;
+    private static final int COMPUTE_THREAD_ID_OFFSET = 80;
 
     private final int numberPollThreads;
     private final int eventPollThreadBaseId;
@@ -32,8 +40,9 @@ public class NioEventPollBalancer {
 
     private int currNioEventThread;
 
-    public NioEventPollBalancer(final int numPollThreads, final int threadBaseId,
-                                final RequestContextPool requestContextPool) {
+    public NioEventPollBalancer(final int numPollThreads, final int threadBaseId, final RequestContextPool requestContextPool) {
+
+        LOG.info("NioEventPollBalancer[" + threadBaseId + "] numPollThreads: " + numPollThreads);
 
         this.numberPollThreads = numPollThreads;
         this.eventPollThreadBaseId = threadBaseId;
@@ -56,7 +65,7 @@ public class NioEventPollBalancer {
             eventPollThreadPool[i] = pollThread;
         }
 
-        computeThreads = new ComputeThreadPool(1, eventPollThreadBaseId + COMPUTE_THREAD_ID_OFFSET);
+        computeThreads = new ComputeThreadPool(NUM_COMPUTE_THREADS, eventPollThreadBaseId + COMPUTE_THREAD_ID_OFFSET);
         computeThreads.start();
     }
 

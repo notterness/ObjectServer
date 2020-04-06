@@ -2,7 +2,6 @@ package com.webutils.objectserver.manual;
 
 import com.webutils.objectserver.operations.SetupChunkWrite;
 import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
-import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.memory.MemoryManager;
@@ -26,10 +25,6 @@ public class TestChunkWrite {
 
     private static final WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
 
-    private static final int testClientThreadBaseId = 3000;
-
-    private static final WebServerFlavor webServerFlavor = WebServerFlavor.INTEGRATION_TESTS;
-
     private final int NUM_STORAGE_SERVER_WRITE_BUFFERS = 10;
     private final int NUMBER_OF_BYTES_TO_WRITE = MemoryManager.XFER_BUFFER_SIZE * 10;
 
@@ -37,8 +32,6 @@ public class TestChunkWrite {
     private final int storageServerTcpPort;
 
     private final AtomicInteger runningTestCount;
-
-    private final DbSetup dbSetup;
 
     private final MemoryManager objServerMemMgr;
     private final ObjectServerContextPool objReqContextPool;
@@ -60,8 +53,6 @@ public class TestChunkWrite {
         this.storageServerTcpPort = storageServerTcpPort;
         this.runningTestCount = testCount;
 
-        this.dbSetup = dbSetup;
-
         /*
          ** The testClient is responsible for providing the threads the Operation(s) will run on and the
          **   NIO Socket handling.
@@ -69,7 +60,7 @@ public class TestChunkWrite {
         this.objServerMemMgr = new MemoryManager(flavor);
         this.objReqContextPool = new ObjectServerContextPool(flavor, objServerMemMgr, dbSetup);
 
-        this.testClient = new NioTestClient(testClientThreadBaseId, objReqContextPool);
+        this.testClient = new NioTestClient(objReqContextPool);
         this.testClient.start();
 
         this.eventThread = testClient.getEventThread();
@@ -157,7 +148,9 @@ public class TestChunkWrite {
         /*
          ** Now wait for the status to be received and then it can verified with the expected value
          */
-        waitForStatus();
+        if (!waitForStatus()) {
+            LOG.error("Status was not received and wait timed out");
+        }
 
         /*
         ** Now free up all the memory allocated for the test

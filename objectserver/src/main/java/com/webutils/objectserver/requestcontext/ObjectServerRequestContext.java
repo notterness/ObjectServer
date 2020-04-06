@@ -294,7 +294,7 @@ public class ObjectServerRequestContext extends RequestContext {
 
     /*
      ** The following are used to keep track of Storage Servers and if the HTTP Request has been sent successfully
-     **   to it. The setter (setHttpResponseSent() is called by WriteHeaderToStorageServer after the buffer has been
+     **   to it. The setter (setHttpResponseSent() is called by ClientHttpRequestWite after the buffer has been
      **   written to the SocketChannel.
      */
     public boolean hasHttpRequestBeenSent(final ServerIdentifier storageServerId) {
