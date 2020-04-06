@@ -53,17 +53,17 @@ public class ClientTestContextPool implements RequestContextPool {
             LinkedList<ClientTestRequestContext> contextList = runningContexts.get(threadId);
 
             if (contextList != null) {
-                requestContext = new ClientTestRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup);
+                requestContext = new ClientTestRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup, threadId);
 
                 contextList.add(requestContext);
-                LOG.info("allocateContext [" + threadId + "] webServerFlavor: " + flavor.toString());
+                LOG.info("allocateContext(ClientTest) [" + threadId + "] webServerFlavor: " + flavor.toString());
             } else {
-                LOG.error("allocateContext [" + threadId + "] webServerFlavor: " + flavor.toString() + "contextList not found");
+                LOG.error("allocateContext(ClientTest) [" + threadId + "] webServerFlavor: " + flavor.toString() + "contextList not found");
 
                 requestContext = null;
             }
         } else {
-            LOG.error("allocateContext [" + threadId + "] webServerFlavor: " + flavor.toString() + "thread not found");
+            LOG.error("allocateContext(ClientTest) [" + threadId + "] webServerFlavor: " + flavor.toString() + "thread not found");
 
             requestContext = null;
         }
@@ -72,7 +72,17 @@ public class ClientTestContextPool implements RequestContextPool {
     }
 
     public void releaseContext(final RequestContext requestContext) {
-        runningContexts.remove(requestContext);
+        int threadId = requestContext.getThreadId();
+
+        LinkedList<ClientTestRequestContext> contextList = runningContexts.get(threadId);
+        if (contextList != null) {
+            if (!contextList.remove(requestContext)) {
+                LOG.error("releaseContext(ClientTest) [" + threadId + "] webServerFlavor: " + flavor.toString() + " requestContext not found");
+            }
+        } else {
+            LOG.error("releaseContext(ClientTest) [" + threadId + "] webServerFlavor: " + flavor.toString() + " contextList not found");
+        }
+
     }
 
 

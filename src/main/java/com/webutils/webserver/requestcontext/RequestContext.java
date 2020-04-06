@@ -88,6 +88,10 @@ public abstract class RequestContext {
      */
     protected BufferReadMetering metering;
 
+    /*
+    ** This is used to know which thread made the request to allocate the RequestContext
+     */
+    private final int threadId;
 
     /*
     ** A connection may have multiple requests within it. For example:
@@ -170,12 +174,13 @@ public abstract class RequestContext {
     private BlockingQueue<Operation> timedWaitQueue;
 
 
-    public RequestContext(final MemoryManager memoryManager,
-                          final EventPollThread threadThisRunsOn, final DbSetup dbSetup) {
+    public RequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn, final DbSetup dbSetup,
+                          final int threadId) {
 
         this.memoryManager = memoryManager;
         this.threadThisContextRunsOn = threadThisRunsOn;
         this.dbSetup = dbSetup;
+        this.threadId = threadId;
 
         /*
          ** Setup the chunk size to use. It is dependent upon if this is running in production or simulation
@@ -275,6 +280,14 @@ public abstract class RequestContext {
         digestComplete = false;
         contentHasValidMd5Digest = false;
         v2PutAllDataWritten = false;
+    }
+
+    /*
+    ** Accessor function to obtain the threadId. This is used in the RequstContext pool allocation classes so that the
+    **   threadId does not need to be passwd into the releaseContext() method.
+     */
+    public int getThreadId() {
+        return threadId;
     }
 
     /*

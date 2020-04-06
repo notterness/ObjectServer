@@ -26,8 +26,9 @@ public class ClientTestRequestContext extends RequestContext {
     private Map<ServerIdentifier, AtomicBoolean> httpRequestSent;
 
 
-    ClientTestRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn, final DbSetup dbSetup) {
-        super(memoryManager, threadThisRunsOn, dbSetup);
+    ClientTestRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn, final DbSetup dbSetup,
+                             final int threadId) {
+        super(memoryManager, threadThisRunsOn, dbSetup, threadId);
 
         /*
          ** Setup the map for the HTTP Request Sent

@@ -71,9 +71,10 @@ public class ObjectServerRequestContext extends RequestContext {
     private Map<ServerIdentifier, Integer> storageServerResponse;
 
 
-    public ObjectServerRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn, final DbSetup dbSetup) {
+    public ObjectServerRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn,
+                                      final DbSetup dbSetup, final int threadId) {
 
-        super(memoryManager, threadThisRunsOn, dbSetup);
+        super(memoryManager, threadThisRunsOn, dbSetup, threadId);
 
         /*
          ** The BufferManager(s) that are allocated here are populated in the following Operations:

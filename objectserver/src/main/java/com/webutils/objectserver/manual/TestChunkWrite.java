@@ -45,6 +45,7 @@ public class TestChunkWrite {
 
     protected final NioTestClient testClient;
     protected final EventPollThread eventThread;
+    private final int eventThreadId;
 
     private boolean statusSignalSent;
     private final Object writeDone;
@@ -69,7 +70,10 @@ public class TestChunkWrite {
         this.objReqContextPool = new ObjectServerContextPool(flavor, objServerMemMgr, dbSetup);
 
         this.testClient = new NioTestClient(testClientThreadBaseId, objReqContextPool);
+        this.testClient.start();
+
         this.eventThread = testClient.getEventThread();
+        this.eventThreadId = this.eventThread.getEventPollThreadBaseId();
 
         /*
         ** This is used to manage the callback when the test is complete
@@ -87,7 +91,7 @@ public class TestChunkWrite {
         /*
          ** Allocate a RequestContext
          */
-        RequestContext clientContext = objReqContextPool.allocateContext(testClientThreadBaseId);
+        RequestContext clientContext = objReqContextPool.allocateContext(eventThreadId);
 
         /*
          ** Allocate an IoInterface to use

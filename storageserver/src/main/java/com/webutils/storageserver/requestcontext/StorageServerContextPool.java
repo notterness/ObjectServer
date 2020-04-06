@@ -56,17 +56,17 @@ public class StorageServerContextPool implements RequestContextPool {
             LinkedList<StorageServerRequestContext> contextList = runningContexts.get(threadId);
 
             if (contextList != null) {
-                requestContext = new StorageServerRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup);
+                requestContext = new StorageServerRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup, threadId);
 
                 contextList.add(requestContext);
-                LOG.info("allocateContext [" + threadId + "] webServerFlavor: " + flavor.toString());
+                LOG.info("allocateContext(StorageServer) [" + threadId + "] webServerFlavor: " + flavor.toString());
             } else {
-                LOG.error("allocateContext [" + threadId + "] webServerFlavor: " + flavor.toString() + "contextList not found");
+                LOG.error("allocateContext(StorageServer) [" + threadId + "] webServerFlavor: " + flavor.toString() + "contextList not found");
 
                 requestContext = null;
             }
         } else {
-            LOG.error("allocateContext [" + threadId + "] webServerFlavor: " + flavor.toString() + "thread not found");
+            LOG.error("allocateContext(StorageServer) [" + threadId + "] webServerFlavor: " + flavor.toString() + "thread not found");
 
             requestContext = null;
         }
@@ -74,8 +74,17 @@ public class StorageServerContextPool implements RequestContextPool {
         return requestContext;
     }
 
-    public void releaseContext(final RequestContext requestContext) {
-        runningContexts.remove(requestContext);
+    public void releaseContext(RequestContext requestContext) {
+        int threadId = requestContext.getThreadId();
+
+        LinkedList<StorageServerRequestContext> contextList = runningContexts.get(threadId);
+        if (contextList != null) {
+            if (!contextList.remove(requestContext)) {
+                LOG.error("releaseContext(StorageServer) [" + threadId + "] webServerFlavor: " + flavor.toString() + " requestContext not found");
+            }
+        } else {
+            LOG.error("releaseContext(StorageServer) [" + threadId + "] webServerFlavor: " + flavor.toString() + " contextList not found");
+        }
     }
 
 

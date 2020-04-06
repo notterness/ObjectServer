@@ -56,17 +56,18 @@ public class ObjectServerContextPool implements RequestContextPool {
             LinkedList<ObjectServerRequestContext> contextList = runningContexts.get(threadId);
 
             if (contextList != null) {
-                requestContext = new ObjectServerRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup);
+                requestContext = new ObjectServerRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup, threadId);
 
                 contextList.add(requestContext);
-                LOG.info("allocateContext [" + threadId + "] webServerFlavor: " + flavor.toString());
+                LOG.info("allocateContext(ObjectServer) [" + threadId + "] webServerFlavor: " + flavor.toString());
             } else {
-                LOG.error("allocateContext [" + threadId + "] webServerFlavor: " + flavor.toString() + "contextList not found");
+                LOG.error("allocateContext(ObjectServer) [" + threadId + "] webServerFlavor: " + flavor.toString() + " threadId: " +
+                                threadId + " contextList not found");
 
                 requestContext = null;
             }
         } else {
-            LOG.error("allocateContext [" + threadId + "] webServerFlavor: " + flavor.toString() + "thread not found");
+            LOG.error("allocateContext(ObjectServer) [" + threadId + "] webServerFlavor: " + flavor.toString() + " thread not found");
 
             requestContext = null;
         }
@@ -74,8 +75,42 @@ public class ObjectServerContextPool implements RequestContextPool {
         return requestContext;
     }
 
+    /*
+     ** This will allocate an ObjectServerRequestContext and is used for the test cases where there is not an
+     **   EventPollThread used to run the test case. These test cases are when testing is done on a particular
+     **   operation or sequence of operations.
+     */
+    public RequestContext allocateContextNoCheck(final int threadId) {
+
+        ObjectServerRequestContext requestContext;
+
+        requestContext = new ObjectServerRequestContext(memoryManager, null, dbSetup, threadId);
+
+        LinkedList<ObjectServerRequestContext> contextList = runningContexts.get(threadId);
+        if (contextList != null) {
+            LOG.info("allocateContextNoCheck(ObjectServer) [" + threadId + "] webServerFlavor: " + flavor.toString());
+        } else {
+            LOG.info("allocateContextNoCheck(ObjectServer) [" + threadId + "] webServerFlavor: " + flavor.toString() + " contextList not found");
+            contextList = new LinkedList<>();
+            runningContexts.put(threadId, contextList);
+        }
+
+        contextList.add(requestContext);
+
+        return requestContext;
+    }
+
     public void releaseContext(final RequestContext requestContext) {
-        runningContexts.remove(requestContext);
+        int threadId = requestContext.getThreadId();
+
+        LinkedList<ObjectServerRequestContext> contextList = runningContexts.get(threadId);
+        if (contextList != null) {
+            if (!contextList.remove(requestContext)) {
+                LOG.error("releaseContext(ObjectServer) [" + threadId + "] webServerFlavor: " + flavor.toString() + " requestContext not found");
+            }
+        } else {
+            LOG.error("releaseContext(ObjectServer) [" + threadId + "] webServerFlavor: " + flavor.toString() + " contextList not found");
+        }
     }
 
 

@@ -1,20 +1,22 @@
 package com.webutils.objectserver.manual;
 
 import com.webutils.objectserver.operations.EncryptBuffer;
-import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
+import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
 import com.webutils.webserver.http.CasperHttpInfo;
 import com.webutils.webserver.http.parser.ByteBufferHttpParser;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.NioEventPollThread;
+import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 
 public class TestEncryptBuffer {
 
     private final WebServerFlavor webServerFlavor = WebServerFlavor.INTEGRATION_TESTS;
 
-    private final NioEventPollThread nioEventThread;
+    private static final int THREAD_BASE_ID = 0x1001;
 
-    private final ObjectServerRequestContext requestContext;
+    private final ObjectServerContextPool contextPool;
+    private final RequestContext requestContext;
     private final MemoryManager memoryManager;
 
     private final EncryptBuffer encryptBuffer;
@@ -22,11 +24,10 @@ public class TestEncryptBuffer {
     private final ByteBufferHttpParser parser;
 
     public TestEncryptBuffer() {
-        this.memoryManager = new MemoryManager(WebServerFlavor.INTEGRATION_TESTS);
-        this.nioEventThread = new NioEventPollThread(null,0x1001, null);
-        this.nioEventThread.start();
+        this.memoryManager = new MemoryManager(webServerFlavor);
+        this.contextPool = new ObjectServerContextPool(webServerFlavor, memoryManager, null);
 
-        this.requestContext = new ObjectServerRequestContext(memoryManager, nioEventThread, null);
+        this.requestContext = this.contextPool.allocateContextNoCheck(THREAD_BASE_ID);
 
         CasperHttpInfo casperHttpInfo = new CasperHttpInfo(requestContext);
         this.parser = new ByteBufferHttpParser(casperHttpInfo);
@@ -45,6 +46,7 @@ public class TestEncryptBuffer {
 
         requestContext.reset();
 
-        nioEventThread.stop();
+        contextPool.releaseContext(requestContext);
+        contextPool.stop(THREAD_BASE_ID);
     }
 }

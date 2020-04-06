@@ -76,6 +76,11 @@ public class NioEventPollThread implements Runnable, EventPollThread {
 
             freeConnections.add(connection);
         }
+        /*
+         ** Register with the RequestContextPool (need to do this prior to starting the thread otherwise
+         **   the call to run the outstanding RequestContext for the thread will spit out an error).
+         */
+        requestContextPool.setThreadAndBaseId(this, eventPollThreadBaseId);
 
         Thread eventPollThread = new Thread(this);
         eventPollThread.start();

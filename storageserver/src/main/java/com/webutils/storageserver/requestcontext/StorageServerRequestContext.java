@@ -31,9 +31,10 @@ public class StorageServerRequestContext extends RequestContext {
     private SendFinalStatus sendFinalStatus;
 
 
-    StorageServerRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn, final DbSetup dbSetup) {
+    StorageServerRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn,
+                                final DbSetup dbSetup, final int threadId) {
 
-        super(memoryManager, threadThisRunsOn, dbSetup);
+        super(memoryManager, threadThisRunsOn, dbSetup, threadId);
 
     }
 
