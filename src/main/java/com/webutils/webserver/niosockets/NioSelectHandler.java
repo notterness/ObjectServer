@@ -184,12 +184,13 @@ public class NioSelectHandler {
             ** Need to close out this connection and let the user of the channel know
             **   that the connection is no longer valid.
              */
-            key.cancel();
-
             NioSocket nioSocket = (NioSocket) key.attachment();
             if (nioSocket != null) {
                 nioSocket.sendErrorEvent();
+                key.attach(null);
             }
+            key.cancel();
+
 
             return;
         }

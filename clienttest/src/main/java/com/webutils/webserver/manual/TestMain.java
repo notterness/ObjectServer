@@ -101,8 +101,8 @@ public class TestMain {
         StorageServerContextPool[] storageRequestContextPool = new StorageServerContextPool[NUMBER_TEST_STORAGE_SERVERS];
 
         if (flavor == WebServerFlavor.INTEGRATION_TESTS) {
-            //TestEncryptBuffer testEncryptBuffer = new TestEncryptBuffer();
-            //testEncryptBuffer.execute();
+            TestEncryptBuffer testEncryptBuffer = new TestEncryptBuffer();
+            testEncryptBuffer.execute();
 
             /*
              ** The HTTP Parser test is currently not working.
@@ -161,8 +161,8 @@ public class TestMain {
         }
 
         if (addr != null) {
-            //TestChunkWrite testChunkWrite = new TestChunkWrite(addr, baseTcpPort, threadCount, dbSetup);
-            //testChunkWrite.execute();
+            TestChunkWrite testChunkWrite = new TestChunkWrite(addr, baseTcpPort, threadCount, dbSetup);
+            testChunkWrite.execute();
         } else {
             System.out.println("ERROR: addr for TestChunkWrite() null");
         }

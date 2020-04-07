@@ -1,6 +1,5 @@
 package com.webutils.objectserver.operations;
 
-import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.memory.MemoryManager;
@@ -61,6 +60,8 @@ public class SetupChunkWrite implements Operation {
     private BufferManager storageServerResponseBufferManager;
 
     private BufferManagerPointer addBufferPointer;
+
+    private StorageServerResponseBufferMetering responseBufferMetering;
     private BufferManagerPointer respBufferPointer;
 
     /*
@@ -168,17 +169,13 @@ public class SetupChunkWrite implements Operation {
             storageServerBufferManager.reset(addBufferPointer);
 
             /*
-             ** Allocate ByteBuffer(s) to read in the HTTP Response from the Storage Server
+             ** Allocate ByteBuffer(s) to read in the HTTP Response from the Storage Server. By using a metering operation, the
+             **   setup for the reading of the Storage Server response header can be be deferred until the TCP connection to the
+             **   Storage Server is successful.
              */
-            respBufferPointer = storageServerResponseBufferManager.register(this);
-            storageServerResponseBufferManager.bookmark(respBufferPointer);
-            for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
-                ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, storageServerResponseBufferManager);
-
-                storageServerResponseBufferManager.offer(respBufferPointer, buffer);
-            }
-
-            storageServerResponseBufferManager.reset(respBufferPointer);
+            responseBufferMetering = new StorageServerResponseBufferMetering(requestContext, memoryManager, storageServerResponseBufferManager,
+                    STORAGE_SERVER_HEADER_BUFFER_COUNT);
+            respBufferPointer = responseBufferMetering.initialize();
 
             /*
              ** For each Storage Server, setup a HandleStorageServerError operation that is used when there
@@ -223,6 +220,7 @@ public class SetupChunkWrite implements Operation {
              */
             List<Operation> operationList = new LinkedList<>();
             operationList.add(headerBuilder);
+            operationList.add(responseBufferMetering);
             ConnectComplete connectComplete = new ConnectComplete(requestContext, operationList,
                     RequestContext.STORAGE_SERVER_PORT_BASE);
             requestHandlerOperations.put(connectComplete.getOperationType(), connectComplete);
@@ -240,11 +238,6 @@ public class SetupChunkWrite implements Operation {
                     serverIdentifier);
             requestHandlerOperations.put(httpRespHandler.getOperationType(), httpRespHandler);
             httpRespHandler.initialize();
-
-            /*
-             ** Meter out a buffer to allow the Storage Server HTTP response to be read in
-             */
-            storageServerResponseBufferManager.updateProducerWritePointer(respBufferPointer);
 
             /*
              ** Now open a initiator connection to write encrypted buffers out of.
@@ -346,19 +339,7 @@ public class SetupChunkWrite implements Operation {
          ** Return the allocated buffers that were used to receive the HTTP Response
          **   from the Storage Server
          */
-        storageServerResponseBufferManager.reset(respBufferPointer);
-        for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
-            ByteBuffer buffer = storageServerResponseBufferManager.getAndRemove(respBufferPointer);
-            if (buffer != null) {
-                memoryManager.poolMemFree(buffer, storageServerResponseBufferManager);
-            } else {
-                LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] null buffer respBufferPointer index: " +
-                        respBufferPointer.getCurrIndex());
-            }
-        }
-
-        storageServerResponseBufferManager.unregister(respBufferPointer);
-        storageServerResponseBufferManager.reset();
+        responseBufferMetering.complete();
         storageServerResponseBufferManager = null;
 
         /*
