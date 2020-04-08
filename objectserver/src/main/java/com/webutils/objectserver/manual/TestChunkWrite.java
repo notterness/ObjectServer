@@ -33,6 +33,8 @@ public class TestChunkWrite {
 
     private final AtomicInteger runningTestCount;
 
+    private final String errorInjectString;
+
     private final MemoryManager objServerMemMgr;
     private final ObjectServerContextPool objReqContextPool;
 
@@ -47,11 +49,13 @@ public class TestChunkWrite {
     /*
     ** The addr and storageServerTcpPort are used to identify the Storage Server the ChunkWrite will be directed to.
      */
-    public TestChunkWrite(final InetAddress addr, final int storageServerTcpPort, AtomicInteger testCount, final DbSetup dbSetup) {
+    public TestChunkWrite(final InetAddress addr, final int storageServerTcpPort, AtomicInteger testCount, final DbSetup dbSetup,
+                          final String errorInjectString) {
 
         this.storageServerAddr = addr;
         this.storageServerTcpPort = storageServerTcpPort;
         this.runningTestCount = testCount;
+        this.errorInjectString = errorInjectString;
 
         /*
          ** The testClient is responsible for providing the threads the Operation(s) will run on and the
@@ -137,7 +141,7 @@ public class TestChunkWrite {
         }
 
         SetupChunkWrite setupChunkWrite = new SetupChunkWrite(clientContext, chunkId, objServerMemMgr,
-                storageServerAddPointer, NUMBER_OF_BYTES_TO_WRITE, testChunkWrite, 0);
+                storageServerAddPointer, NUMBER_OF_BYTES_TO_WRITE, testChunkWrite, 0, errorInjectString);
         setupChunkWrite.initialize();
 
         /*

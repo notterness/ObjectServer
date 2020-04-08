@@ -39,6 +39,7 @@ public class CasperHttpInfo {
     private static final String TENANCY_NAME = "/n/";
     private static final String BUCKET_NAME = "/b/";
     private static final String COMMAND_TYPE = "/v/";
+    private static final String TEST_TYPE = "/t/";
 
 
     /*
@@ -225,16 +226,12 @@ public class CasperHttpInfo {
      */
     private String vcnDebugId;
 
-    private String objectName;
-    private String tenancyName;
-    private String bucketName;
-
     /*
      ** Used to keep track of the Header fields in a generic manner
      */
     private final Map<String, List<String>> headers;
 
-    private String[] uriFields = {OBJECT_NAME, BUCKET_NAME, TENANCY_NAME, COMMAND_TYPE};
+    private String[] uriFields = {OBJECT_NAME, BUCKET_NAME, TENANCY_NAME, COMMAND_TYPE, TEST_TYPE};
 
 
     /*
@@ -243,7 +240,9 @@ public class CasperHttpInfo {
     private Map<HttpMethodEnum, String> httpMethodMap;
 
     /*
-    ** This map is used to hold the Object Name, Bucket Name and Tenancy Name for the created objected
+    ** This map is used to hold the Object Name, Bucket Name and Tenancy Name for the created objected.
+    ** For Storage Servers, there is also a Test Type that is used to force certain behaviors in the
+    **   Storage Server's responses (i.e. disconnect the connection).
      */
     private Map<String, String> putObjectInfoMap;
 
@@ -649,6 +648,16 @@ public class CasperHttpInfo {
     public String getObject() {
         return putObjectInfoMap.get(OBJECT_NAME);
     }
+
+    /*
+    ** Return the "Test Type" (TEST_TYPE) that was parsed from the HTTP uri (This is prefixed with the "/t/").
+    **
+    ** Currently, TestType is only used by Storage Servers
+    **
+    ** The current valid TestTypes are:
+    **    - DisconnectAfterHeader
+     */
+    public String getTestType() { return putObjectInfoMap.get(TEST_TYPE); }
 
     /**
      * Return the VCN ID, if any, in the request.

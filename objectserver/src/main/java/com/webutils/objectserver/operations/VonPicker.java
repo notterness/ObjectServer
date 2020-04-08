@@ -129,7 +129,8 @@ public class VonPicker implements Operation {
                 int i = 0;
                 for (ServerIdentifier serverIdentifier : serverList) {
                     SetupChunkWrite setupChunkWrite = new SetupChunkWrite(requestContext, serverIdentifier,
-                            memoryManager, storageServerWritePointer, chunkBytesToWrite, this, i);
+                            memoryManager, storageServerWritePointer, chunkBytesToWrite, this, i,
+                            null);
                     setupChunkWrite.initialize();
                     setupChunkWrite.event();
 

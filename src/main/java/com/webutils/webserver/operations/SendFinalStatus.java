@@ -52,20 +52,12 @@ public class SendFinalStatus implements Operation {
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
      **   execution queue (onExecutionQueue) is will always go on the execution queue.
      */
-    private boolean onDelayedQueue;
     private boolean onExecutionQueue;
-    private long nextExecuteTime;
 
     /*
     ** This is used to construct the final response to send to the client.
      */
     private final BuildHttpResult resultBuilder;
-
-    /*
-    ** The respBuffer is used to hold to HTTP Response that is built prior to it being added to the
-    **   clientWriteBufferMgr.
-     */
-    private ByteBuffer respBuffer;
 
     private boolean httpResponseSent;
 
@@ -84,9 +76,7 @@ public class SendFinalStatus implements Operation {
         /*
          ** This starts out not being on any queue
          */
-        onDelayedQueue = false;
         onExecutionQueue = false;
-        nextExecuteTime = 0;
 
         httpResponseSent = false;
     }
@@ -139,7 +129,7 @@ public class SendFinalStatus implements Operation {
                 if (result != null) {
                     LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] resultCode: " + result.getCode() + " " + result.getMessage());
                 } else {
-                    LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] resultCode: " + result.getCode());
+                    LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] resultCode: INVALID (" + resultCode +")");
                 }
 
                 /*
@@ -206,20 +196,17 @@ public class SendFinalStatus implements Operation {
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
         //LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("SendFinalStatus[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("SendFinalStatus[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("SendFinalStatus[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not on a queue");
+            LOG.warn("SendFinalStatus[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("SendFinalStatus[" + requestContext.getRequestId() + "] markAddToQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("SendFinalStatus[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }

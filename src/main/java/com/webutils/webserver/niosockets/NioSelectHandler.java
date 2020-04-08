@@ -91,7 +91,7 @@ public class NioSelectHandler {
         try {
             nioSelector.close();
         } catch (IOException io_ex) {
-
+            LOG.error("releaseSelector() exception: " + io_ex);
         }
 
         nioSelector = null;
@@ -124,17 +124,17 @@ public class NioSelectHandler {
                 nioSelector.select(100);
             }
 
-            Iterator selectedKeys = nioSelector.selectedKeys().iterator();
+            Iterator<SelectionKey> selectedKeys = nioSelector.selectedKeys().iterator();
 
             while (selectedKeys.hasNext()) {
-                SelectionKey key = (SelectionKey) selectedKeys.next();
+                SelectionKey key = selectedKeys.next();
                 selectedKeys.remove();
 
                 if (!key.isValid()) {
                     continue;
                 }
 
-                int updatedInterestOps = 0;
+                int currentInterestOps;
                 if (key.isConnectable()) {
                     handleConnect(key);
                 } else {
@@ -148,11 +148,17 @@ public class NioSelectHandler {
                     **   retain the interest op for the next time around.
                      */
                     if (key.isReadable()) {
-                        updatedInterestOps |= handleRead(key);
+                        currentInterestOps = handleRead(key);
+                    } else {
+                        currentInterestOps = SelectionKey.OP_WRITE;
                     }
 
-                    if (key.isWritable()) {
-                        updatedInterestOps |= handleWrite(key);
+                    /*
+                    ** If there was an error during the handleRead() call, then the currentInterestOps will be set to
+                    **   zero.
+                     */
+                    if ((currentInterestOps == SelectionKey.OP_WRITE) && key.isWritable()) {
+                        handleWrite(key);
                     }
                 }
 

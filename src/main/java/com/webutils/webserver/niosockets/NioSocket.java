@@ -404,15 +404,15 @@ public class NioSocket implements IoInterface {
                      */
                     LOG.warn("read(" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
                             readPointer.getCurrIndex() + " bytesRead -1");
-                    closeConnection();
-                    sendErrorEvent();
+                    closeAndSendErrorEvent();
+                    currentInterestOps = 0;
                     break;
                 }
             } catch (IOException io_ex) {
                 LOG.error(" (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
                         readPointer.getCurrIndex() + " exception: " + io_ex.getMessage());
-                closeConnection();
-                sendErrorEvent();
+                closeAndSendErrorEvent();
+                currentInterestOps = 0;
                 break;
             }
 
@@ -490,16 +490,14 @@ public class NioSocket implements IoInterface {
                      */
                     LOG.warn(" (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
                             writePointer.getCurrIndex() + " bytesWritten -1");
-                    closeConnection();
-                    sendErrorEvent();
+                    closeAndSendErrorEvent();
                     writePostion = 0;
                     break;
                 }
             } catch (IOException io_ex) {
                 LOG.error(" (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
                         writePointer.getCurrIndex() + " exception: " + io_ex.getMessage());
-                closeConnection();
-                sendErrorEvent();
+                closeAndSendErrorEvent();
                 writePostion = 0;
                 break;
             }
@@ -543,20 +541,50 @@ public class NioSocket implements IoInterface {
     }
 
     /*
-    ** Accessor method to call the Operation that is setup to handle when there is an error on
-    **   the SocketChannel.
+     ** Accessor method to call the Operation that is setup to handle when there is an error on
+     **   the SocketChannel.
      */
     public void sendErrorEvent() {
         /*
-        ** First remove the Key so it can no longer be used.
+         ** First remove the Key so it can no longer be used.
          */
         removeKey();
 
         socketChannel = null;
 
         /*
-        ** Then make sure this NioSocket is not on the lsit to have work performed. It it is not removed, there will
-        **   likely be a CancelledKeyException when trying to us it.
+         ** Then make sure this NioSocket is not on the list to have work performed. It it is not removed, there will
+         **   likely be a CancelledKeyException when trying to us it.
+         */
+        nioSelectHandler.removeNioSocketFromSelector(this);
+        nioSelectHandler = null;
+
+        socketErrorHandler.event();
+    }
+
+    /*
+     ** Private method to call the Operation that is setup to handle when there is an error on
+     **   the SocketChannel. This does everything the sendErrorEvent() does, but also tries to close the socket.
+     */
+    private void closeAndSendErrorEvent() {
+        LOG.info("NioSocket closeAndSendErrorEvent()");
+
+        /*
+         ** First remove the Key so it can no longer be used.
+         */
+        removeKey();
+
+        try {
+            socketChannel.close();
+        } catch (IOException io_ex) {
+            LOG.warn("close(3) exception: " + io_ex.getMessage());
+        }
+
+        socketChannel = null;
+
+        /*
+         ** Then make sure this NioSocket is not on the list to have work performed. It it is not removed, there will
+         **   likely be a CancelledKeyException when trying to us it.
          */
         nioSelectHandler.removeNioSocketFromSelector(this);
         nioSelectHandler = null;

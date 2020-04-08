@@ -2,7 +2,6 @@ package com.webutils.storageserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.operations.WriteToFile;
@@ -20,13 +19,18 @@ public class SetupStorageServerPut implements Operation {
     private static final Logger LOG = LoggerFactory.getLogger(SetupStorageServerPut.class);
 
     /*
+    ** The following are the Error Types that this Mock Storage Server can inject into the
+    **   responses.
+    **
+     */
+    private static final String CLOSE_CONNECTION_AFTER_HEADER = "DisconnectAfterHeader";
+
+    /*
      ** A unique identifier for this Operation so it can be tracked.
      */
     public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_STORAGE_SERVER_PUT;
 
     private final RequestContext requestContext;
-
-    private final MemoryManager memoryManager;
 
     private final Operation metering;
 
@@ -54,14 +58,17 @@ public class SetupStorageServerPut implements Operation {
     private Map<OperationTypeEnum, Operation> storageServerPutHandlerOperations;
 
     /*
+    **
+     */
+    private boolean skipSendingStatus;
+
+    /*
      ** This is used to setup the initial Operation dependencies required to handle the V2 PUT
      **   request.
      */
-    public SetupStorageServerPut(final RequestContext requestContext, final MemoryManager memoryManager,
-                                 final Operation metering, final Operation completeCb) {
+    public SetupStorageServerPut(final RequestContext requestContext, final Operation metering, final Operation completeCb) {
 
         this.requestContext = requestContext;
-        this.memoryManager = memoryManager;
         this.metering = metering;
         this.completeCallback = completeCb;
 
@@ -74,6 +81,11 @@ public class SetupStorageServerPut implements Operation {
          ** This starts out not being on any queue
          */
         onExecutionQueue = false;
+
+        /*
+        **
+         */
+        skipSendingStatus = false;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -102,35 +114,49 @@ public class SetupStorageServerPut implements Operation {
 
     public void execute() {
         /*
-         ** For the current test Storage Server implementation, simply write the bytes to a file and when
-         **   that completes, call this Operation's complete() method.
+        ** Check if there is some error to be injected into the test
          */
-        WriteToFile writeToFile = new WriteToFile(requestContext, clientReadPtr, this);
-        storageServerPutHandlerOperations.put(writeToFile.getOperationType(), writeToFile);
-        writeToFile.initialize();
+        String errorType = requestContext.getHttpInfo().getTestType();
+        if (errorType == null) {
+            /*
+             ** For the current test Storage Server implementation, simply write the bytes to a file and when
+             **   that completes, call this Operation's complete() method.
+             */
+            WriteToFile writeToFile = new WriteToFile(requestContext, clientReadPtr, this);
+            storageServerPutHandlerOperations.put(writeToFile.getOperationType(), writeToFile);
+            writeToFile.initialize();
 
-        /*
-         ** Dole out another buffer to read in the content data if there is not data remaining in
-         **   the buffer from the HTTP Parsing. This is only done once and all further doling out
-         **   of buffers is done within the WriteToFile operation.
-         */
-        BufferManager clientReadBufferManager = requestContext.getClientReadBufferManager();
-        ByteBuffer remainingBuffer = clientReadBufferManager.peek(clientReadPtr);
-        if (remainingBuffer != null) {
-            if (remainingBuffer.remaining() > 0) {
-                writeToFile.event();
+            /*
+             ** Dole out another buffer to read in the content data if there is not data remaining in
+             **   the buffer from the HTTP Parsing. This is only done once and all further doling out
+             **   of buffers is done within the WriteToFile operation.
+             */
+            BufferManager clientReadBufferManager = requestContext.getClientReadBufferManager();
+            ByteBuffer remainingBuffer = clientReadBufferManager.peek(clientReadPtr);
+            if (remainingBuffer != null) {
+                if (remainingBuffer.remaining() > 0) {
+                    writeToFile.event();
+                } else {
+                    metering.event();
+                }
             } else {
+                /*
+                 ** There are no buffers waiting with data, so need to dole out another buffer to start a read
+                 **   operation.
+                 */
                 metering.event();
             }
+
+            LOG.info("SetupStorageServerPut[" + requestContext.getRequestId() + "] initialized");
         } else {
             /*
-            ** There are no buffers waiting with data, so need to dole out another buffer to start a read
-            **   operation.
+            ** Need to perform whatever is requested by the errorType
              */
-            metering.event();
+            if (errorType.compareTo(CLOSE_CONNECTION_AFTER_HEADER) == 0) {
+                skipSendingStatus = true;
+                complete();
+            }
         }
-
-        LOG.info("SetupStorageServerPut[" + requestContext.getRequestId() + "] initialized");
     }
 
     /*
@@ -150,7 +176,14 @@ public class SetupStorageServerPut implements Operation {
         }
         storageServerPutHandlerOperations.clear();
 
-        completeCallback.event();
+        if (!skipSendingStatus) {
+            completeCallback.event();
+        } else {
+            /*
+            ** This is only for test error conditions. Go right to the cleanup for this request
+             */
+            requestContext.cleanupServerRequest();
+        }
 
         LOG.info("SetupStorageServerPut[" + requestContext.getRequestId() + "] completed");
     }
@@ -220,6 +253,5 @@ public class SetupStorageServerPut implements Operation {
         }
         LOG.info("");
     }
-
 
 }

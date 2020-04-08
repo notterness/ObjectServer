@@ -56,13 +56,18 @@ public class SetupChunkWrite implements Operation {
      */
     private final int writerNumber;
 
+    /*
+    ** The following is set to null in normal cases or it is set to a value when the ChunkWrite want the target Storage
+    **   Server to respond with an error or to close the TCP connection at certain times during the transfer.
+     */
+    private final String errorInjectString;
+
     private BufferManager storageServerBufferManager;
     private BufferManager storageServerResponseBufferManager;
 
     private BufferManagerPointer addBufferPointer;
 
     private StorageServerResponseBufferMetering responseBufferMetering;
-    private BufferManagerPointer respBufferPointer;
 
     /*
      ** The following is a map of all of the created Operations to handle this request.
@@ -84,7 +89,8 @@ public class SetupChunkWrite implements Operation {
      */
     public SetupChunkWrite(final RequestContext requestContext, final ServerIdentifier serverIdentifier,
                            final MemoryManager memoryManager, final BufferManagerPointer encryptedBufferPtr,
-                           final int chunkBytesToEncrypt, final Operation completeCb, final int writer) {
+                           final int chunkBytesToEncrypt, final Operation completeCb, final int writer,
+                           final String errorInjectString) {
 
         this.operationType = OperationTypeEnum.fromInt(OperationTypeEnum.SETUP_CHUNK_WRITE_0.toInt() + writer);
         this.requestContext = requestContext;
@@ -96,6 +102,8 @@ public class SetupChunkWrite implements Operation {
         this.completeCallback = completeCb;
 
         this.writerNumber = writer;
+
+        this.errorInjectString = errorInjectString;
 
         /*
          ** This starts out not being on any queue
@@ -144,6 +152,8 @@ public class SetupChunkWrite implements Operation {
      */
     public void execute() {
         if (!chunkWriteSetupComplete) {
+            BufferManagerPointer respBufferPointer;
+
             chunkWriteSetupComplete = true;
 
             /*
@@ -206,8 +216,8 @@ public class SetupChunkWrite implements Operation {
             /*
              ** The PUT Header must be written to the Storage Server prior to sending the data
              */
-            BuildHeaderToStorageServer headerBuilder = new BuildHeaderToStorageServer(requestContext, storageServerConnection,
-                    storageServerBufferManager, addBufferPointer, chunkBytesToEncrypt);
+            BuildHeaderToStorageServer headerBuilder = new BuildHeaderToStorageServer(requestContext, storageServerBufferManager,
+                    addBufferPointer, chunkBytesToEncrypt, errorInjectString);
             requestHandlerOperations.put(headerBuilder.getOperationType(), headerBuilder);
             BufferManagerPointer writePointer = headerBuilder.initialize();
 
@@ -300,6 +310,12 @@ public class SetupChunkWrite implements Operation {
         Operation readRespBuffer = requestHandlerOperations.get(OperationTypeEnum.READ_STORAGE_SERVER_RESPONSE_BUFFER);
         readRespBuffer.complete();
         requestHandlerOperations.remove(OperationTypeEnum.READ_STORAGE_SERVER_RESPONSE_BUFFER);
+
+        /*
+        ** Remove the HandleStorageServerError operation from the createdOperations list. This never has its
+        **   complete() method called, so it is best just to remove it.
+         */
+        requestHandlerOperations.remove(OperationTypeEnum.HANDLE_STORAGE_SERVER_ERROR);
 
         /*
         ** Call the complete() methods for all of the Operations created to handle the chunk write that did not have

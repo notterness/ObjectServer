@@ -115,8 +115,7 @@ public class StorageServerRequestContext extends RequestContext {
          ** The HTTP Request methods that are supported are added to the supportedHttpRequests Map<> and are used
          **   by the DetermineRequestType operation to setup and run the appropriate handlers.
          */
-        SetupStorageServerPut storageServerPutHandler = new SetupStorageServerPut(this, memoryManager, metering,
-                determineRequestType);
+        SetupStorageServerPut storageServerPutHandler = new SetupStorageServerPut(this, metering, determineRequestType);
         this.supportedHttpRequests.put(HttpMethodEnum.PUT_STORAGE_SERVER, storageServerPutHandler);
 
         /*
@@ -188,6 +187,11 @@ public class StorageServerRequestContext extends RequestContext {
 
         operation = requestHandlerOperations.remove(OperationTypeEnum.DETERMINE_REQUEST_TYPE);
         operation.complete();
+
+        /*
+        ** Remove the supported HTTP request types
+         */
+        requestHandlerOperations.remove(OperationTypeEnum.SETUP_STORAGE_SERVER_PUT);
 
         /*
          ** Clear out the references to the Operations

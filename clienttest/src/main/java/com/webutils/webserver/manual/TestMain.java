@@ -24,6 +24,8 @@ public class TestMain {
     public static void main(String[] args) {
 
         WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
+        final String CLOSE_CONNECTION_AFTER_HEADER = "DisconnectAfterHeader";
+
         DbSetup dbSetup;
 
         final int serverTcpPort = 5001;
@@ -157,22 +159,36 @@ public class TestMain {
             /*
             ** flavor == WebServerFlavor.INTEGRATION_TESTS
              */
-            addr = InetAddress.getLoopbackAddress();
+            try {
+                addr = InetAddress.getLocalHost();
+            } catch (UnknownHostException ex) {
+                System.out.println("Unknown LocalHost");
+            }
+            //addr = InetAddress.getLoopbackAddress();
         }
 
         if (addr != null) {
             /*
             ** First check with a valid Storage Server (this is the baseTcpPort)
              */
-            TestChunkWrite testChunkWrite = new TestChunkWrite(addr, baseTcpPort, threadCount, dbSetup);
+            TestChunkWrite testChunkWrite = new TestChunkWrite(addr, baseTcpPort, threadCount, dbSetup, null);
             testChunkWrite.execute();
 
             /*
             ** Now check with an invalid Storage Server (there is nothing listening at the baseTcpPort + 20) so the connection
             **   to the Storage Server will fail.
              */
-            TestChunkWrite testChunkWrite_badStorageServer = new TestChunkWrite(addr, baseTcpPort + 20, threadCount, dbSetup);
+            TestChunkWrite testChunkWrite_badStorageServer = new TestChunkWrite(addr, baseTcpPort + 20,
+                    threadCount, dbSetup, null);
             testChunkWrite_badStorageServer.execute();
+
+            /*
+             ** Now check with an invalid Storage Server (there is nothing listening at the baseTcpPort + 20) so the connection
+             **   to the Storage Server will fail.
+             */
+            TestChunkWrite testChunkWrite_disconnectAfterHeader = new TestChunkWrite(addr, baseTcpPort,
+                    threadCount, dbSetup, CLOSE_CONNECTION_AFTER_HEADER);
+            testChunkWrite_disconnectAfterHeader.execute();
         } else {
             System.out.println("ERROR: addr for TestChunkWrite() null");
         }
@@ -196,7 +212,15 @@ public class TestMain {
                 System.out.println("Kubernetes POD IP null");
             }
         } else {
-            serverIpAddr = InetAddress.getLoopbackAddress();
+            /*
+             ** flavor == WebServerFlavor.INTEGRATION_TESTS
+             */
+            try {
+                serverIpAddr = InetAddress.getLocalHost();
+            } catch (UnknownHostException ex) {
+                System.out.println("Unknown LocalHost");
+                serverIpAddr = InetAddress.getLoopbackAddress();
+            }
         }
 
         MemoryManager clientTestMemoryManager = new MemoryManager(flavor);

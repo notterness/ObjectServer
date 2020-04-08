@@ -2,7 +2,6 @@ package com.webutils.objectserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
@@ -28,12 +27,10 @@ public class BuildHeaderToStorageServer implements Operation {
      */
     private final RequestContext requestContext;
 
-    /*
-    ** The IoInterface is what is used to communicate with the Storage Server.
-     */
-    private final IoInterface storageServerConnection;
-
     private final int chunkBytesToEncrypt;
+
+    private final String errorInjectString;
+
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -48,17 +45,18 @@ public class BuildHeaderToStorageServer implements Operation {
 
     private boolean headerNotBuilt;
 
-    public BuildHeaderToStorageServer(final RequestContext requestContext, final IoInterface storageServerConnection,
-                                      final BufferManager storageServerBufferManager, final BufferManagerPointer addBufferPtr,
-                                      final int chunkBytesToEncrypt) {
+    public BuildHeaderToStorageServer(final RequestContext requestContext, final BufferManager storageServerBufferManager,
+                                      final BufferManagerPointer addBufferPtr, final int chunkBytesToEncrypt, final String errorInjectString) {
 
         this.requestContext = requestContext;
-        this.storageServerConnection = storageServerConnection;
 
         this.storageServerBufferManager = storageServerBufferManager;
         this.addBufferPointer = addBufferPtr;
 
         this.chunkBytesToEncrypt = chunkBytesToEncrypt;
+
+        this.errorInjectString = errorInjectString;
+
 
         /*
          ** This starts out not being on any queue
@@ -201,18 +199,35 @@ public class BuildHeaderToStorageServer implements Operation {
     }
 
     private String buildRequestString(final int bytesInContent) {
-        return new String("PUT /n/faketenantname" + "" +
-                "/b/bucket-5e1910d0-ea13-11e9-851d-234132e0fb02" +
-                "/v/StorageServer" +
-                "/o/5e223890-ea13-11e9-851d-234132e0fb02  HTTP/1.1\n" +
-                "Host: StorageServerWrite\n" +
-                "Content-Type: application/json\n" +
-                "Connection: keep-alive\n" +
-                "Accept: */*\n" +
-                "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
-                "Accept-Language: en-us\n" +
-                "Accept-Encoding: gzip, deflate\n" +
-                "Content-Length: " + bytesInContent + "\n\n");
+        if (errorInjectString == null) {
+            return new String("PUT /n/faketenantname" + "" +
+                    "/b/bucket-5e1910d0-ea13-11e9-851d-234132e0fb02" +
+                    "/v/StorageServer" +
+                    "/o/5e223890-ea13-11e9-851d-234132e0fb02  HTTP/1.1\n" +
+                    "Host: StorageServerWrite\n" +
+                    "Content-Type: application/json\n" +
+                    "Connection: keep-alive\n" +
+                    "Accept: */*\n" +
+                    "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
+                    "Accept-Language: en-us\n" +
+                    "Accept-Encoding: gzip, deflate\n" +
+                    "Content-Length: " + bytesInContent + "\n\n");
+
+        } else {
+            return new String("PUT /n/faketenantname" + "" +
+                    "/b/bucket-5e1910d0-ea13-11e9-851d-234132e0fb02" +
+                    "/v/StorageServer" +
+                    "/t/" + errorInjectString +
+                    "/o/5e223890-ea13-11e9-851d-234132e0fb02  HTTP/1.1\n" +
+                    "Host: StorageServerWrite\n" +
+                    "Content-Type: application/json\n" +
+                    "Connection: keep-alive\n" +
+                    "Accept: */*\n" +
+                    "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
+                    "Accept-Language: en-us\n" +
+                    "Accept-Encoding: gzip, deflate\n" +
+                    "Content-Length: " + bytesInContent + "\n\n");
+        }
     }
 
     private void str_to_bb(ByteBuffer out, String in) {
