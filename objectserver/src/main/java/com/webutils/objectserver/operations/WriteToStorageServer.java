@@ -180,8 +180,12 @@ public class WriteToStorageServer implements Operation {
             /*
              ** Unregister the BufferManager and the BufferManagerPointer so that the IoInterface
              **   can be used cleanly by another connection later.
+             ** In the case where the execute() method was not called (due to the inability to perform the initial
+             **   connection to the Storage Server, the writeBufferManager will not have been registered.
              */
-            connection.unregisterWriteBufferManager();
+            if (registeredWriteBufferManager) {
+                connection.unregisterWriteBufferManager();
+            }
 
             storageServerWriteBufferMgr.unregister(writeDonePointer);
             writeDonePointer = null;

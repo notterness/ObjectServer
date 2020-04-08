@@ -76,6 +76,8 @@ public class SetupChunkWrite implements Operation {
 
     private boolean chunkWriteSetupComplete;
 
+    private boolean serverConnectionClosedDueToError;
+
     /*
     ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
     **   up the calls to obtain the VON information and the meta-data write to the database.
@@ -106,6 +108,8 @@ public class SetupChunkWrite implements Operation {
         requestHandlerOperations = new HashMap<>();
 
         chunkWriteSetupComplete = false;
+
+        serverConnectionClosedDueToError = false;
 
         LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] addr: " +
                 serverIdentifier.getServerIpAddress().toString() + " port: " +
@@ -181,7 +185,7 @@ public class SetupChunkWrite implements Operation {
              ** For each Storage Server, setup a HandleStorageServerError operation that is used when there
              **   is an error communicating with the StorageServer.
              */
-            HandleStorageServerError errorHandler = new HandleStorageServerError(requestContext);
+            HandleStorageServerError errorHandler = new HandleStorageServerError(requestContext, this, serverIdentifier);
             requestHandlerOperations.put(errorHandler.getOperationType(), errorHandler);
 
             /*
@@ -311,7 +315,9 @@ public class SetupChunkWrite implements Operation {
          ** Close out the connection used to communicate with the Storage Server. Then
          ** clear out the reference to the connection so it may be released back to the pool.
          */
-        storageServerConnection.closeConnection();
+        if (!serverConnectionClosedDueToError) {
+            storageServerConnection.closeConnection();
+        }
         requestContext.releaseConnection(storageServerConnection);
         storageServerConnection = null;
 
@@ -353,6 +359,10 @@ public class SetupChunkWrite implements Operation {
         completeCallback.event();
     }
 
+    public void connectionCloseDueToError() {
+        serverConnectionClosedDueToError = true;
+    }
+
     /*
      ** The following are used to add the Operation to the event thread's event queue. The
      **   Operation can be added to the immediate execution queue or the delayed
@@ -371,20 +381,17 @@ public class SetupChunkWrite implements Operation {
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
         //LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("SetupChunkWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("SetupChunkWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("SetupChunkWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not on a queue");
+            LOG.warn("SetupChunkWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("SetupChunkWrite[" + requestContext.getRequestId() + "] markAddToQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("SetupChunkWrite[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }

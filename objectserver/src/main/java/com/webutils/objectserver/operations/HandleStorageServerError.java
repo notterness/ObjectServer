@@ -4,6 +4,8 @@ import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
+import com.webutils.webserver.requestcontext.ServerIdentifier;
+import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +28,18 @@ public class HandleStorageServerError implements Operation {
     private final RequestContext requestContext;
 
     /*
+    ** The owner of this operation is the SetupChunkWrite class. It is responsible for cleaning up when the wrtie to
+    **   the Storage Server has either completed successfully or failed.
+     */
+    private final SetupChunkWrite chunkWrite;
+
+    /*
+    ** The ServerIdentifier is required to set the failure status for the Storage Server that is either inaccessible or
+    **   dropped the connection during the transfer.
+     */
+    private final ServerIdentifier serverIdentifier;
+
+    /*
      ** The following are used to insure that an Operation is never on more than one queue and that
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
      **   execution queue (onExecutionQueue) is will always go on the execution queue.
@@ -34,8 +48,10 @@ public class HandleStorageServerError implements Operation {
     private boolean onExecutionQueue;
     private long nextExecuteTime;
 
-    HandleStorageServerError(final RequestContext requestContext) {
+    HandleStorageServerError(final RequestContext requestContext, final SetupChunkWrite chunkWrite, final ServerIdentifier serverIdentifier) {
         this.requestContext = requestContext;
+        this.chunkWrite = chunkWrite;
+        this.serverIdentifier = serverIdentifier;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -53,6 +69,15 @@ public class HandleStorageServerError implements Operation {
     }
 
     public void event() {
+        /*
+        ** Set the failure status inline, rather than waiting for the execute to come around
+         */
+        requestContext.setStorageServerResponse(serverIdentifier, HttpStatus.SERVICE_UNAVAILABLE_503);
+
+        /*
+        ** Tell the SetupChunkWrite that the NioSocket connection has already been closed.
+         */
+        chunkWrite.connectionCloseDueToError();
 
         /*
          ** Add this to the execute queue if it is not already on it.
@@ -61,17 +86,21 @@ public class HandleStorageServerError implements Operation {
     }
 
     /*
-     **
+     ** Trigger the SetupChunkWrite to cleanup the connection.
      */
     public void execute() {
+        /*
+        ** For now the SetupChunkWrite operation will take care of cleaning everything up.
+         */
+        chunkWrite.event();
     }
 
     /*
-     ** This will never be called for the ???. When the execute() method completes, the
-     **   RequestContext is no longer "running".
+     ** This will never be called for HandleStorageServerError. This class is really just a placeholder to cleanup
+     **   the operations that were setup to perform the Chunk Write to the Storage Server.
      */
     public void complete() {
-
+        LOG.error("HandleStorageServerError complete() should never be here!");
     }
 
     /*
@@ -93,14 +122,14 @@ public class HandleStorageServerError implements Operation {
         //LOG.info("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (onDelayedQueue) {
             if (!delayedExecutionQueue) {
-                LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
+                LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not supposed to be on delayed queue");
             }
 
             onDelayedQueue = false;
             nextExecuteTime = 0;
         } else if (onExecutionQueue){
             if (delayedExecutionQueue) {
-                LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
+                LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on workQueue");
             }
 
             onExecutionQueue = false;

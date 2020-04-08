@@ -252,6 +252,15 @@ public class NioServerHandler implements Runnable {
 
         InetSocketAddress serverAddr;
 
+        /*
+        ** DEBUG code only
+        try {
+            LOG.info("getLocalHost: " + InetAddress.getLocalHost().toString() + " getLoopbackAddress: " + InetAddress.getLoopbackAddress().toString());
+        } catch (UnknownHostException ex) {
+            System.out.println("LocalHost is unknown");
+        }
+        */
+
         try {
             serverAddr = new InetSocketAddress(InetAddress.getLocalHost(), tcpListenPort);
         } catch (UnknownHostException ex) {

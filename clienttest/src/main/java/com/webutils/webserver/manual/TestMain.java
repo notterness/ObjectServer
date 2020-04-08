@@ -161,8 +161,18 @@ public class TestMain {
         }
 
         if (addr != null) {
+            /*
+            ** First check with a valid Storage Server (this is the baseTcpPort)
+             */
             TestChunkWrite testChunkWrite = new TestChunkWrite(addr, baseTcpPort, threadCount, dbSetup);
             testChunkWrite.execute();
+
+            /*
+            ** Now check with an invalid Storage Server (there is nothing listening at the baseTcpPort + 20) so the connection
+            **   to the Storage Server will fail.
+             */
+            TestChunkWrite testChunkWrite_badStorageServer = new TestChunkWrite(addr, baseTcpPort + 20, threadCount, dbSetup);
+            testChunkWrite_badStorageServer.execute();
         } else {
             System.out.println("ERROR: addr for TestChunkWrite() null");
         }

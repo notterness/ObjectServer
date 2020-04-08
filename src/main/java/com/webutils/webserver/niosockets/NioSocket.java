@@ -12,6 +12,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.EmptyStackException;
@@ -335,7 +336,14 @@ public class NioSocket implements IoInterface {
                 /*
                  ** Use the key again
                  */
-                key.interestOps(currentInterestOps);
+                LOG.info("currentInterestOps: " + currentInterestOps);
+                try {
+                    key.interestOps(currentInterestOps);
+                } catch (CancelledKeyException ex) {
+                    LOG.error("NioSocket updateInterestOps() currentInterestOps: " + currentInterestOps + " exception: " +
+                            ex.getMessage());
+                    return false;
+                }
             }
         } else {
             removeKey();
@@ -539,6 +547,20 @@ public class NioSocket implements IoInterface {
     **   the SocketChannel.
      */
     public void sendErrorEvent() {
+        /*
+        ** First remove the Key so it can no longer be used.
+         */
+        removeKey();
+
+        socketChannel = null;
+
+        /*
+        ** Then make sure this NioSocket is not on the lsit to have work performed. It it is not removed, there will
+        **   likely be a CancelledKeyException when trying to us it.
+         */
+        nioSelectHandler.removeNioSocketFromSelector(this);
+        nioSelectHandler = null;
+
         socketErrorHandler.event();
     }
 

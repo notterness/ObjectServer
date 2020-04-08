@@ -187,10 +187,10 @@ public class NioSelectHandler {
             NioSocket nioSocket = (NioSocket) key.attachment();
             if (nioSocket != null) {
                 nioSocket.sendErrorEvent();
-                key.attach(null);
+            } else {
+                LOG.error("handleConnect() expected NioSocket association");
+                key.cancel();
             }
-            key.cancel();
-
 
             return;
         }
