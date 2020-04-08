@@ -9,7 +9,13 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
-
+/*
+** The StorageServerResponseBufferMetering operation is used to hand out buffers that are used to read in the response
+**   header from the Storage Server. This is required to add a dependency between the TCP connection to the Storage Server
+**   being made and setting up the Read Response Header operation. Without the dependency, there is a case where the
+**   connection to the Storage Server could not be made, but an attempt to setup the read was made and that would
+**   result in a bad selection key (this is in the NioSocket updateInterestOps() method).
+ */
 public class StorageServerResponseBufferMetering implements Operation {
 
     private static final Logger LOG = LoggerFactory.getLogger(StorageServerResponseBufferMetering.class);
@@ -111,8 +117,6 @@ public class StorageServerResponseBufferMetering implements Operation {
          ** Set the pointer back to the beginning of the BufferManager to release the allocated memory
          */
         storageServerResponseBufferMgr.reset(respBufferMeteringPointer);
-
-        int buffersAllocated = memoryManager.getBufferManagerRingSize();
 
         for (int i = 0; i < buffersToAllocate; i++) {
             ByteBuffer buffer = storageServerResponseBufferMgr.getAndRemove(respBufferMeteringPointer);
