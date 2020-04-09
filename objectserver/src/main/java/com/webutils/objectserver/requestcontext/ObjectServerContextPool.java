@@ -133,6 +133,8 @@ public class ObjectServerContextPool implements RequestContextPool {
 
     public void stop(final int threadId) {
 
+        LOG.info("ObjectServerContextPool stop()");
+
         String memoryPoolOwner = "ObjectServerContextPool";
 
         LinkedList<ObjectServerRequestContext> contextList = runningContexts.get(threadId);
@@ -153,6 +155,8 @@ public class ObjectServerContextPool implements RequestContextPool {
         threadRequestRunsOn.remove(threadId);
 
         if (threadRequestRunsOn.isEmpty() && runningContexts.isEmpty()) {
+            LOG.info("ObjectServerContextPool stop() memory pool verify");
+
             memoryManager.verifyMemoryPools(memoryPoolOwner);
             memoryManager = null;
         }

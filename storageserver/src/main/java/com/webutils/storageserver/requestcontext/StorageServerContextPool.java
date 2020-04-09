@@ -77,6 +77,8 @@ public class StorageServerContextPool implements RequestContextPool {
     public void releaseContext(RequestContext requestContext) {
         int threadId = requestContext.getThreadId();
 
+        LOG.info("StorageServerContextPool releaseContext() threadId: " + threadId);
+
         LinkedList<StorageServerRequestContext> contextList = runningContexts.get(threadId);
         if (contextList != null) {
             if (!contextList.remove(requestContext)) {

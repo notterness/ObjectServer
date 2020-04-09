@@ -5,13 +5,12 @@ import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
 import com.webutils.webserver.http.CasperHttpInfo;
 import com.webutils.webserver.http.parser.ByteBufferHttpParser;
 import com.webutils.webserver.memory.MemoryManager;
-import com.webutils.webserver.niosockets.NioEventPollThread;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 
 public class TestEncryptBuffer {
 
-    private final WebServerFlavor webServerFlavor = WebServerFlavor.INTEGRATION_TESTS;
+    private static final WebServerFlavor webServerFlavor = WebServerFlavor.INTEGRATION_TESTS;
 
     private static final int THREAD_BASE_ID = 0x1001;
 
@@ -21,16 +20,11 @@ public class TestEncryptBuffer {
 
     private final EncryptBuffer encryptBuffer;
 
-    private final ByteBufferHttpParser parser;
-
     public TestEncryptBuffer() {
         this.memoryManager = new MemoryManager(webServerFlavor);
         this.contextPool = new ObjectServerContextPool(webServerFlavor, memoryManager, null);
 
         this.requestContext = this.contextPool.allocateContextNoCheck(THREAD_BASE_ID);
-
-        CasperHttpInfo casperHttpInfo = new CasperHttpInfo(requestContext);
-        this.parser = new ByteBufferHttpParser(casperHttpInfo);
 
         /*
         ** encryptInputPointer is setup in the testEncryption() method for EncryptBuffer. So, for
@@ -48,5 +42,7 @@ public class TestEncryptBuffer {
 
         contextPool.releaseContext(requestContext);
         contextPool.stop(THREAD_BASE_ID);
+
+        memoryManager.verifyMemoryPools("TestEncryptBuffer");
     }
 }

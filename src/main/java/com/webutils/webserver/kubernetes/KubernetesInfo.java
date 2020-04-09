@@ -14,9 +14,7 @@ import org.slf4j.LoggerFactory;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Map;
-import java.util.Objects;
 
 public class KubernetesInfo {
 
@@ -42,10 +40,7 @@ public class KubernetesInfo {
         String kubeConfigPath = getKubeConfigPath();
 
         // loading the out-of-cluster config, a kubeconfig from file-system
-        //ApiClient client = ClientBuilder.kubeconfig(KubeConfig.loadKubeConfig(new FileReader(kubeConfigPath))).build();
-
         ApiClient client = ClientBuilder.kubeconfig(KubeConfig.loadKubeConfig(new FileReader(kubeConfigPath))).build();
-        //ApiClient client = Config.defaultClient();
         Configuration.setDefaultApiClient(client);
 
         CoreV1Api api = new CoreV1Api();
@@ -61,48 +56,40 @@ public class KubernetesInfo {
                             null, null, 100, null);
             for (V1Pod item : list.getItems()) {
                 String podName = item.getMetadata().getName();
+                if (podName != null) {
 
-                System.out.println("POD: " + podName);
+                    System.out.println("POD: " + podName);
 
-                List<V1Container> containers = item.getSpec().getContainers();
-                ListIterator<V1Container> iter = containers.listIterator();
-                while (iter.hasNext()) {
-                    V1Container container = iter.next();
+                    List<V1Container> containers = item.getSpec().getContainers();
+                    for (V1Container container : containers) {
+                        System.out.println("  Container - " + container.getName() + " - " + container.getImage());
 
-                    System.out.println("  Container - " + container.getName() + " - " + container.getImage());
-
-                    List<V1VolumeMount> volumes = container.getVolumeMounts();
-                    ListIterator<V1VolumeMount> contVolIter = volumes.listIterator();
-                    while (contVolIter.hasNext()) {
-                        V1VolumeMount volume = contVolIter.next();
-
-                        System.out.println("   volume mount: " + volume.getName() + " " + volume.getMountPath());
+                        List<V1VolumeMount> volumes = container.getVolumeMounts();
+                        for (V1VolumeMount volume : volumes) {
+                            System.out.println("   volume mount: " + volume.getName() + " " + volume.getMountPath());
+                        }
                     }
 
-                }
+                    /*
+                     ** The following lists all the volumes associated with a particular POD. There is probably a
+                     **   way to determine the volume type (i.e. "emptyDir" or "hostPath") directly without
+                     **   checking if the query returns "null".
+                     */
+                    List<V1Volume> podVolumes = item.getSpec().getVolumes();
+                    for (V1Volume volume : podVolumes) {
+                        V1EmptyDirVolumeSource emptyDir = volume.getEmptyDir();
+                        V1HostPathVolumeSource hostPath = volume.getHostPath();
 
-                /*
-                 ** The following lists all the volumes associated with a particular POD. There is probably a
-                 **   way to determine the volume type (i.e. "emptyDir" or "hostPath") directly without
-                 **   checking if the query returns "null".
-                 */
-                List<V1Volume> podVolumes = item.getSpec().getVolumes();
-                ListIterator<V1Volume> podVolIter = podVolumes.listIterator();
-                while (podVolIter.hasNext()) {
-                    V1Volume volume = podVolIter.next();
+                        if (emptyDir != null) {
+                            System.out.println("emptyDir - " + volume.getName() +
+                                    " -- " + emptyDir.getMedium() + " " + volume.getClass().toString());
 
-                    V1EmptyDirVolumeSource emptyDir = volume.getEmptyDir();
-                    V1HostPathVolumeSource hostPath = volume.getHostPath();
-
-                    if (emptyDir != null) {
-                        System.out.println("emptyDir - " + volume.getName() +
-                                " -- " + emptyDir.getMedium() + " " + volume.getClass().toString());
-
-                    } else if (hostPath != null) {
-                        System.out.println("HostPath - " + volume.getName() + " -- " +
-                                hostPath.getPath() + " " + hostPath.getType() + " : " + volume.getClass().toString());
-                    } else {
-                        System.out.println(volume.getName() + ": " + volume.getClass().toString());
+                        } else if (hostPath != null) {
+                            System.out.println("HostPath - " + volume.getName() + " -- " +
+                                    hostPath.getPath() + " " + hostPath.getType() + " : " + volume.getClass().toString());
+                        } else {
+                            System.out.println(volume.getName() + ": " + volume.getClass().toString());
+                        }
                     }
                 }
             }
@@ -123,14 +110,10 @@ public class KubernetesInfo {
                     ** Just to display information
                      */
                     List<V1EndpointSubset> subsets = endpoint.getSubsets();
-                    ListIterator<V1EndpointSubset> subsetIter = subsets.listIterator();
-                    while (subsetIter.hasNext()) {
-                        V1EndpointSubset subset = subsetIter.next();
-
+                    for (V1EndpointSubset subset : subsets) {
                         List<V1EndpointAddress> endpointAddrList = subset.getAddresses();
-                        ListIterator<V1EndpointAddress> endpointAddrIter = endpointAddrList.listIterator();
-                        while (endpointAddrIter.hasNext()) {
-                            V1EndpointAddress addr = endpointAddrIter.next();
+
+                        for (V1EndpointAddress addr : endpointAddrList) {
                             System.out.println("  subset V1EndpointAddr ip: " + addr.getIp());
                             LOG.info("  subset V1EndpointAddr ip: " + addr.getIp());
                         }
@@ -170,9 +153,7 @@ public class KubernetesInfo {
                 System.out.println("  spec - clusterIP: " + spec.getClusterIP());
 
                 List<V1ServicePort> ports = spec.getPorts();
-                ListIterator<V1ServicePort> portIter = ports.listIterator();
-                while (portIter.hasNext()) {
-                    V1ServicePort port = portIter.next();
+                for (V1ServicePort port : ports) {
                     System.out.println("    name: " + port.getName() + " port: " + port.getPort() + " protocol: " + port.getProtocol() +
                             " targetPort: " + port.getTargetPort() + " NodePort: " + port.getNodePort());
                 }
@@ -217,14 +198,10 @@ public class KubernetesInfo {
                 LOG.info("ENDPOINT:  " + endpoint.getMetadata().getName());
 
                 List<V1EndpointSubset> subsets = endpoint.getSubsets();
-                ListIterator<V1EndpointSubset> subsetIter = subsets.listIterator();
-                while (subsetIter.hasNext()) {
-                    V1EndpointSubset subset = subsetIter.next();
-
+                for (V1EndpointSubset subset : subsets) {
                     List<V1EndpointAddress> endpointAddrList = subset.getAddresses();
-                    ListIterator<V1EndpointAddress> endpointAddrIter = endpointAddrList.listIterator();
-                    while (endpointAddrIter.hasNext()) {
-                        V1EndpointAddress addr = endpointAddrIter.next();
+
+                    for (V1EndpointAddress addr : endpointAddrList) {
                         System.out.println("  subset V1EndpointAddr ip: " + addr.getIp());
                         LOG.info("  subset V1EndpointAddr ip: " + addr.getIp());
 
@@ -283,10 +260,7 @@ public class KubernetesInfo {
                 System.out.println("  spec - clusterIP: " + spec.getClusterIP());
 
                 List<V1ServicePort> ports = spec.getPorts();
-                ListIterator<V1ServicePort> portIter = ports.listIterator();
-                while (portIter.hasNext()) {
-                    V1ServicePort port = portIter.next();
-
+                for (V1ServicePort port : ports) {
                     System.out.println("    name: " + port.getName() + " port: " + port.getPort() + " protocol: " + port.getProtocol() +
                             " targetPort: " + port.getTargetPort() + " NodePort: " + port.getNodePort());
 
@@ -342,10 +316,8 @@ public class KubernetesInfo {
                 System.out.println("  spec - clusterIP: " + spec.getClusterIP());
 
                 List<V1ServicePort> ports = spec.getPorts();
-                ListIterator<V1ServicePort> portIter = ports.listIterator();
-                while (portIter.hasNext()) {
-                    V1ServicePort port = portIter.next();
 
+                for (V1ServicePort port : ports) {
                     if (port.getName().contains("storage-server")) {
                         System.out.println("    name: " + port.getName() + " port: " + port.getPort() + " protocol: " + port.getProtocol() +
                                 " targetPort: " + port.getTargetPort() + " NodePort: " + port.getNodePort());

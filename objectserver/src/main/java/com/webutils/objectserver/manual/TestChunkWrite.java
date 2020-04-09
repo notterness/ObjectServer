@@ -182,6 +182,8 @@ public class TestChunkWrite {
          */
         objServerMemMgr.verifyMemoryPools("TestChunkWrite");
 
+        testClient.stop();
+
         /*
         ** Let the higher level know this test is complete
          */
