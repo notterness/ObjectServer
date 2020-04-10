@@ -6,38 +6,17 @@ import com.webutils.webserver.niosockets.EventPollThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.Map;
+import java.util.concurrent.LinkedBlockingQueue;
 
-public class ClientTestContextPool implements RequestContextPool {
+public class ClientTestContextPool extends RequestContextPool {
 
     private static final Logger LOG = LoggerFactory.getLogger(ClientTestContextPool.class);
 
-    private final WebServerFlavor flavor;
     private final DbSetup dbSetup;
 
-    private MemoryManager memoryManager;
-
-
-    private final Map<Integer, LinkedList<ClientTestRequestContext>> runningContexts;
-    private final Map<Integer, EventPollThread> threadRequestRunsOn;
-
-
     public ClientTestContextPool(final WebServerFlavor flavor, final MemoryManager memoryManager, final DbSetup dbSetup) {
-        this.flavor = flavor;
-        this.memoryManager = memoryManager;
+        super(flavor, memoryManager, "ClientTest");
         this.dbSetup = dbSetup;
-
-        this.runningContexts = new HashMap<>();
-        this.threadRequestRunsOn = new HashMap<>();
-    }
-
-    public void setThreadAndBaseId(final EventPollThread threadThisRunsOn, final int threadBaseId) {
-        threadRequestRunsOn.put(threadBaseId, threadThisRunsOn);
-
-        LinkedList<ClientTestRequestContext> contextList = new LinkedList<>();
-        runningContexts.put(threadBaseId, contextList);
     }
 
     /*
@@ -50,13 +29,17 @@ public class ClientTestContextPool implements RequestContextPool {
         EventPollThread threadThisRequestRunsOn = threadRequestRunsOn.get(threadId);
 
         if (threadThisRequestRunsOn != null) {
-            LinkedList<ClientTestRequestContext> contextList = runningContexts.get(threadId);
+            LinkedBlockingQueue<RequestContext> contextList = runningContexts.get(threadId);
 
             if (contextList != null) {
                 requestContext = new ClientTestRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup, threadId);
 
-                contextList.add(requestContext);
-                LOG.info("allocateContext(ClientTest) [" + threadId + "] webServerFlavor: " + flavor.toString());
+                if (contextList.offer(requestContext)) {
+                    LOG.info("allocateContext(ClientTest) [" + threadId + "]");
+                } else {
+                    LOG.error("ERROR - allocateContext(ClientTest) Unable to offer to Queue threadId: " + threadId);
+                    requestContext = null;
+                }
             } else {
                 LOG.error("allocateContext(ClientTest) [" + threadId + "] webServerFlavor: " + flavor.toString() + "contextList not found");
 
@@ -71,62 +54,4 @@ public class ClientTestContextPool implements RequestContextPool {
         return requestContext;
     }
 
-    public void releaseContext(final RequestContext requestContext) {
-        int threadId = requestContext.getThreadId();
-
-        LinkedList<ClientTestRequestContext> contextList = runningContexts.get(threadId);
-        if (contextList != null) {
-            if (!contextList.remove(requestContext)) {
-                LOG.error("releaseContext(ClientTest) [" + threadId + "] webServerFlavor: " + flavor.toString() + " requestContext not found");
-            }
-        } else {
-            LOG.error("releaseContext(ClientTest) [" + threadId + "] webServerFlavor: " + flavor.toString() + " contextList not found");
-        }
-
-    }
-
-
-    /*
-     ** Run all the work that has been queued up
-     */
-    public void executeRequestContext(final int threadId) {
-
-        LinkedList<ClientTestRequestContext> contextList = runningContexts.get(threadId);
-        if (contextList != null) {
-            /*
-             ** Now check if there is other work to be performed on the connections that does not deal with the
-             **   SocketChanel read and write operations
-             */
-            for (ClientTestRequestContext runningContext : contextList) {
-                runningContext.performOperationWork();
-            }
-        }
-    }
-
-    public void stop(final int threadId) {
-
-        String memoryPoolOwner = "ObjectServerContextPool";
-
-        LinkedList<ClientTestRequestContext> contextList = runningContexts.get(threadId);
-        if (contextList != null) {
-            /*
-             ** Now check if there is other work to be performed on the connections that does not deal with the
-             **   SocketChanel read and write operations
-             */
-            for (ClientTestRequestContext runningContext : contextList) {
-                runningContext.dumpOperations();
-            }
-
-            contextList.clear();
-
-            runningContexts.remove(threadId);
-        }
-
-        threadRequestRunsOn.remove(threadId);
-
-        if (threadRequestRunsOn.isEmpty() && runningContexts.isEmpty()) {
-            memoryManager.verifyMemoryPools(memoryPoolOwner);
-            memoryManager = null;
-        }
-    }
 }

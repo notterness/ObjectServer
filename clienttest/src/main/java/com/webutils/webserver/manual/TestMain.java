@@ -85,14 +85,12 @@ public class TestMain {
             **   to already be up and running for it to work. In general, it can simply be commented out as the code
             **   is not needed to run the tests in the IntelliJ environment.
              */
-            /*
             KubernetesInfo kubeInfo = new KubernetesInfo(flavor);
             try {
                 kubernetesPodIp = kubeInfo.getExternalKubeIp();
             } catch (IOException io_ex) {
                 System.out.println("IOException: " + io_ex.getMessage());
             }
-            */
         }
 
         AtomicInteger threadCount = new AtomicInteger(1);

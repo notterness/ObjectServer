@@ -180,7 +180,8 @@ public class TestChunkWrite {
         /*
         ** Verify all the ByteBuffer(s) were returned to the MemoryManager
          */
-        objServerMemMgr.verifyMemoryPools("TestChunkWrite");
+        String caller = "TestChunkWrite-" + eventThreadId;
+        objServerMemMgr.verifyMemoryPools(caller);
 
         testClient.stop();
 

@@ -151,14 +151,19 @@ public class NioEventPollThread implements Runnable, EventPollThread {
         ** The IoInterface is the wrapper around the NIO SocketChannel code that allows communication over a socket
         **   with the client who generated this request.
          */
-        IoInterface connection = allocateConnection(null);
-        if (connection != null) {
-            connection.startClient(clientChannel);
+        if (requestContext != null) {
+            IoInterface connection = allocateConnection(null);
+            if (connection != null) {
+                connection.startClient(clientChannel);
 
-            int requestId = uniqueRequestId.getAndIncrement();
-            requestContext.initializeServer(connection, requestId);
+                int requestId = uniqueRequestId.getAndIncrement();
+                requestContext.initializeServer(connection, requestId);
+            } else {
+                LOG.warn("[" + eventPollThreadBaseId + "] no free connections");
+                success = false;
+            }
         } else {
-            LOG.warn("[" + eventPollThreadBaseId + "] no free connections");
+            LOG.warn("[" + eventPollThreadBaseId + "] no free requests");
             success = false;
         }
 

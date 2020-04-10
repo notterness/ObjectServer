@@ -41,9 +41,8 @@ public class KubernetesInfo {
 
         // loading the out-of-cluster config, a kubeconfig from file-system
         ApiClient client = ClientBuilder.kubeconfig(KubeConfig.loadKubeConfig(new FileReader(kubeConfigPath))).build();
-        Configuration.setDefaultApiClient(client);
+        CoreV1Api api = new CoreV1Api(client);
 
-        CoreV1Api api = new CoreV1Api();
         try {
             /*
              ** The labels can be found by the following (from the V1Pod below):
@@ -121,16 +120,14 @@ public class KubernetesInfo {
 
                 }
             }
-
         } catch (ApiException api_ex) {
             System.out.println("getExternalKubeIp(2) - V1 API exception: " + api_ex.getMessage());
             LOG.error("getExternalKubeIp(2) - V1 API exception: " + api_ex.getMessage());
         }
 
-
         /*
          ** The following block of code obtains a list of services being run by Kubernetes. This is pretty simple in that
-         **   it doesn't perform any filtering for the results. It does limit the m=number of "services" being returned
+         **   it doesn't perform any filtering for the results. It does limit the number of "services" being returned
          **   to 5.
          */
         String externalPodIp = null;
@@ -141,7 +138,7 @@ public class KubernetesInfo {
              **   be a single service that matches the search, but leaving the limit at 5 just to be sure.
              */
             String fieldSelector = "metadata.name=webutils-service";
-            V1ServiceList services = api.listServiceForAllNamespaces(true, null, fieldSelector, null,
+            V1ServiceList services = api.listServiceForAllNamespaces(false, null, fieldSelector, null,
                     5, null, null, 100, false);
 
             for (V1Service service : services.getItems()) {
@@ -177,9 +174,7 @@ public class KubernetesInfo {
 
         // loading the out-of-cluster config, a kubeconfig from file-system
         ApiClient client = ClientBuilder.kubeconfig(KubeConfig.loadKubeConfig(new FileReader(kubeConfigPath))).build();
-        Configuration.setDefaultApiClient(client);
-
-        CoreV1Api api = new CoreV1Api();
+        CoreV1Api api = new CoreV1Api(client);
 
         String internalPodIp = null;
 
@@ -239,10 +234,9 @@ public class KubernetesInfo {
         String kubeConfigPath = getKubeConfigPath();
 
         ApiClient client = ClientBuilder.kubeconfig(KubeConfig.loadKubeConfig(new FileReader(kubeConfigPath))).build();
-        Configuration.setDefaultApiClient(client);
 
         int servicePortCount = 0;
-        CoreV1Api api = new CoreV1Api();
+        CoreV1Api api = new CoreV1Api(client);
         try {
             /*
              ** Use the fieldSelector to only search for services associated with webutils-site. There should only
@@ -295,10 +289,9 @@ public class KubernetesInfo {
         String kubeConfigPath = getKubeConfigPath();
 
         ApiClient client = ClientBuilder.kubeconfig(KubeConfig.loadKubeConfig(new FileReader(kubeConfigPath))).build();
-        Configuration.setDefaultApiClient(client);
 
         int storageServerCount = 0;
-        CoreV1Api api = new CoreV1Api();
+        CoreV1Api api = new CoreV1Api(client);
         try {
             /*
              ** Use the fieldSelector to only search for services associated with webutils-site. There should only

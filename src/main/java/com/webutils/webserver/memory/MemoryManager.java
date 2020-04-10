@@ -71,10 +71,16 @@ public class MemoryManager {
      */
     public boolean verifyMemoryPools(final String caller) {
         boolean memoryPoolsOkay = true;
+        int unusedBufferCount = memoryPool.getUnusedBufferCount();
 
-        if (memoryPool.getBufferCount() != memoryPool.getUnusedBufferCount()) {
+        /*
+        ** Release all the memory in the unused Buffer Pool
+         */
+        memoryPool.releaseBuffers(caller);
+
+        if (memoryPool.getBufferCount() != unusedBufferCount) {
             LOG.warn(caller + " BufferPool error COUNT: " + memoryPool.getBufferCount() +
-                    " unused: " + memoryPool.getUnusedBufferCount());
+                    " unused: " + unusedBufferCount);
 
             memoryPool.dumpInUseQueue();
             memoryPoolsOkay = false;

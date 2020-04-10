@@ -6,8 +6,8 @@ import java.nio.ByteBuffer;
 
 public class MemoryTracking {
 
-    private final ByteBuffer buffer;
     private final int identifier;
+    private ByteBuffer buffer;
     private BufferManager bufferManager;
 
     MemoryTracking(final ByteBuffer buffer, final int identifier) {
@@ -32,4 +32,8 @@ public class MemoryTracking {
         }
     }
 
+    public void clear() {
+        buffer = null;
+        bufferManager = null;
+    }
 }

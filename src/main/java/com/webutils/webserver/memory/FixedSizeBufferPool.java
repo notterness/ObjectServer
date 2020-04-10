@@ -96,6 +96,17 @@ public class FixedSizeBufferPool {
         return null;
     }
 
+    public void releaseBuffers(final String caller) {
+        for (MemoryTracking tracker : freeQueue) {
+            freeQueue.remove(tracker);
+
+            tracker.clear();
+        }
+
+        LOG.info("releaseBuffers() caller: " + caller + " freeQueue size: " + freeQueue.size() + " inUseQueue size: " +
+                inUseQueue.size());
+    }
+
     public void dumpInUseQueue() {
 
         for (MemoryTracking memoryTracking : inUseQueue) {
