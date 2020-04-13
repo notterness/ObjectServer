@@ -1,5 +1,6 @@
 package com.webutils.objectserver.requestcontext;
 
+import com.webutils.objectserver.operations.SetupObjectServerPost;
 import com.webutils.objectserver.operations.SetupV2Put;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
@@ -199,6 +200,9 @@ public class ObjectServerRequestContext extends RequestContext {
          */
         SetupV2Put v2PutHandler = new SetupV2Put(this, memoryManager, metering, determineRequestType);
         this.supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, v2PutHandler);
+
+        SetupObjectServerPost postHandler = new SetupObjectServerPost(this, memoryManager, metering, determineRequestType);
+        this.supportedHttpRequests.put(HttpMethodEnum.POST_METHOD, postHandler);
 
         /*
          ** Setup the specific part for parsing the buffers as an HTTP Request.

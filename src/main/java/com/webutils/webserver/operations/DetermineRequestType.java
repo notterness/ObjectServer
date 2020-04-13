@@ -4,6 +4,7 @@ import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.CasperHttpInfo;
 import com.webutils.webserver.http.HttpMethodEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
+import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -115,6 +116,10 @@ public class DetermineRequestType implements Operation {
                     httpRequestSetup.event();
                 } else {
                     LOG.info("DetermineRequestType[" + requestContext.getRequestId() + "] execute() unsupported request " + method.toString());
+                    casperHttpInfo.setParseFailureCode(HttpStatus.METHOD_NOT_ALLOWED_405);
+
+                    Operation sendFinalStatus = requestContext.getOperation(OperationTypeEnum.SEND_FINAL_STATUS);
+                    sendFinalStatus.event();
                 }
             }
 

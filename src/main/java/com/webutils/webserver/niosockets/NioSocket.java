@@ -155,12 +155,15 @@ public class NioSocket implements IoInterface {
 
             socketChannel.connect(socketAddress);
         } catch (IOException io_ex) {
+            LOG.warn("Unable to configureBlocking() " + io_ex.getMessage());
+
             try {
                 socketChannel.close();
             } catch (IOException ex) {
                 /*
                 ** Unable to close the socket as it might have already been closed
                  */
+                LOG.warn("Unable to close() " + ex.getMessage());
             }
             socketChannel = null;
 
@@ -201,6 +204,7 @@ public class NioSocket implements IoInterface {
         /*
         ** Not used for NIO
          */
+        LOG.error("NioSocket invalid startInitiator() call method");
         return true;
     }
 

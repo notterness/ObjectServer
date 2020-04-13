@@ -2,7 +2,7 @@ package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.common.Md5Digest;
+import com.webutils.webserver.common.Sha256Digest;
 import com.webutils.webserver.http.CasperHttpInfo;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
@@ -11,13 +11,13 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.List;
 
-public class ComputeMd5Digest implements Operation {
-    private static final Logger LOG = LoggerFactory.getLogger(ComputeMd5Digest.class);
+public class ComputeSha256Digest implements Operation {
+    private static final Logger LOG = LoggerFactory.getLogger(ComputeSha256Digest.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.COMPUTE_MD5_DIGEST;
+    public final OperationTypeEnum operationType = OperationTypeEnum.COMPUTE_SHA256_DIGEST;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -37,12 +37,12 @@ public class ComputeMd5Digest implements Operation {
      */
     private final BufferManager clientReadBufferMgr;
     private final BufferManagerPointer readBufferPointer;
-    private BufferManagerPointer md5DigestPointer;
+    private BufferManagerPointer sha256DigestPointer;
 
     private final int clientObjectBytes;
-    private int md5DigestedBytes;
+    private int sha256DigestedBytes;
 
-    private final Md5Digest md5Digest;
+    private final Sha256Digest sha256Digest;
 
     private final CasperHttpInfo casperHttpInfo;
 
@@ -55,8 +55,8 @@ public class ComputeMd5Digest implements Operation {
     private boolean onExecutionQueue;
 
 
-    public ComputeMd5Digest(final RequestContext requestContext, final List<Operation> operationsToRun,
-                           final BufferManagerPointer readBufferPtr) {
+    public ComputeSha256Digest (final RequestContext requestContext, final List<Operation> operationsToRun,
+                            final BufferManagerPointer readBufferPtr) {
 
         this.requestContext = requestContext;
         this.operationsToRun = operationsToRun;
@@ -70,12 +70,12 @@ public class ComputeMd5Digest implements Operation {
         onExecutionQueue = false;
 
         /*
-        ** Setup the total number of bytes being transferred in this client object
+         ** Setup the total number of bytes being transferred in this client object
          */
         clientObjectBytes = requestContext.getRequestContentLength();
-        md5DigestedBytes = 0;
+        sha256DigestedBytes = 0;
 
-        md5Digest = new Md5Digest();
+        sha256Digest = new Sha256Digest();
 
         casperHttpInfo = requestContext.getHttpInfo();
     }
@@ -87,14 +87,14 @@ public class ComputeMd5Digest implements Operation {
     public int getRequestId() { return requestContext.getRequestId(); }
 
     /*
-    ** This sets up the Md5 Digest pointer with a dependency upon the read pointer. This way when new ByteBuffer(s)
-    **   are filled, the Md5 Digest can be updated with the new buffers.
+     ** This sets up the Md5 Digest pointer with a dependency upon the read pointer. This way when new ByteBuffer(s)
+     **   are filled, the Md5 Digest can be updated with the new buffers.
      */
     public BufferManagerPointer initialize() {
 
-        md5DigestPointer = clientReadBufferMgr.register(this, readBufferPointer);
+        sha256DigestPointer = clientReadBufferMgr.register(this, readBufferPointer);
 
-        return md5DigestPointer;
+        return sha256DigestPointer;
     }
 
     public void event() {
@@ -107,30 +107,30 @@ public class ComputeMd5Digest implements Operation {
     }
 
     /*
-    ** This computes the Md5 Digest for ByteBuffer(s) that are read in for the client PUT object data.
+     ** This computes the Md5 Digest for ByteBuffer(s) that are read in for the client PUT object data.
      */
     public void execute() {
         ByteBuffer buffer;
 
-        while ((buffer = clientReadBufferMgr.poll(md5DigestPointer)) != null) {
+        while ((buffer = clientReadBufferMgr.poll(sha256DigestPointer)) != null) {
 
-            LOG.info("md5 digest position: " + buffer.position() + " limit: " + buffer.limit());
+            LOG.info("sha-256 digest position: " + buffer.position() + " limit: " + buffer.limit());
 
-            md5DigestedBytes += (buffer.limit() - buffer.position());
-            md5Digest.digestByteBuffer(buffer);
+            sha256DigestedBytes += (buffer.limit() - buffer.position());
+            sha256Digest.digestByteBuffer(buffer);
 
-            if (md5DigestedBytes == clientObjectBytes) {
+            if (sha256DigestedBytes == clientObjectBytes) {
 
-                String dataDigestString = md5Digest.getFinalDigest();
-                requestContext.setDigestComplete();
+                String dataDigestString = sha256Digest.getFinalDigest();
+                requestContext.setSha256DigestComplete();
 
-                boolean contentHasValidMd5Digest = casperHttpInfo.checkContentMD5(dataDigestString);
-                LOG.info("WebServerConnState[" + requestContext.getRequestId() + "] Computed md5Digest " +
-                        dataDigestString + " is valid: " + contentHasValidMd5Digest);
-                requestContext.setMd5DigestCompareResult(contentHasValidMd5Digest);
+                boolean contentHasValidSha256Digest = casperHttpInfo.checkContentSha256(dataDigestString);
+                LOG.info("WebServerConnState[" + requestContext.getRequestId() + "] Computed sha256Digest " +
+                        dataDigestString + " is valid: " + contentHasValidSha256Digest);
+                requestContext.setSha256DigestCompareResult(contentHasValidSha256Digest);
 
                 /*
-                ** Everything is done for the Md5 Digest calculation and comparison.
+                 ** Everything is done for the Sha-256 Digest calculation and comparison.
                  */
                 complete();
                 break;
@@ -142,19 +142,19 @@ public class ComputeMd5Digest implements Operation {
      ** This removes any dependencies that are put upon the BufferManager
      */
     public void complete() {
-        LOG.info("ComputeMd5Digest(" + requestContext.getRequestId() + ") complete");
+        LOG.info("ComputeSha256Digest(" + requestContext.getRequestId() + ") complete");
 
         /*
-        ** Make sure this is not on the compute thread pool's execution queue since the
-        **   BufferManagerPointer is going to be made invalid
+         ** Make sure this is not on the compute thread pool's execution queue since the
+         **   BufferManagerPointer is going to be made invalid
          */
         requestContext.removeComputeWork(this);
 
-        clientReadBufferMgr.unregister(md5DigestPointer);
-        md5DigestPointer = null;
+        clientReadBufferMgr.unregister(sha256DigestPointer);
+        sha256DigestPointer = null;
 
         /*
-         ** event() all of the operations that are ready to run once the Md5 Digest has
+         ** event() all of the operations that are ready to run once the Sha-256 Digest has
          **   been calculated.
          */
         for (Operation operation : operationsToRun) {
@@ -179,19 +179,19 @@ public class ComputeMd5Digest implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("ComputeMd5Digest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("ComputeSha256Digest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("ComputeMd5Digest[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("ComputeSha256Digest[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("ComputeMd5Digest[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("ComputeSha256Digest[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("ComputeMd5Digest[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("ComputeSha256Digest[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -206,7 +206,7 @@ public class ComputeMd5Digest implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("ComputeMd5Digest[" + requestContext.getRequestId() +
+        LOG.warn("ComputeSha256Digest[" + requestContext.getRequestId() +
                 "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
@@ -219,6 +219,5 @@ public class ComputeMd5Digest implements Operation {
         LOG.info("      No BufferManagerPointers");
         LOG.info("");
     }
-
 
 }

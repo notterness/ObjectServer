@@ -155,11 +155,18 @@ public abstract class RequestContext {
     private boolean httpRequestParsed;
 
     /*
-    ** The next two variables are used to keep track of the Md5 Digest calculation. First if it has been
-    **   completed and second if the calculated Md5 digest matches the expected one.
+     ** The next two variables are used to keep track of the Md5 Digest calculation. First if it has been
+     **   completed and second if the calculated Md5 digest matches the expected one.
      */
     private boolean digestComplete;
     private boolean contentHasValidMd5Digest;
+
+    /*
+     ** The next two variables are used to keep track of the Sha-256 Digest calculation. First if it has been
+     **   completed and second if the calculated Sha-256 digest matches the expected one.
+     */
+    private boolean sha256DigestComplete;
+    private boolean contentHasValidSha256Digest;
 
     private boolean v2PutAllDataWritten;
 
@@ -566,7 +573,7 @@ public abstract class RequestContext {
     }
 
     /*
-    ** Accessor methods for the Md5 Digest information
+     ** Accessor methods for the Md5 Digest information
      */
     public void setDigestComplete() {
         digestComplete = true;
@@ -582,6 +589,25 @@ public abstract class RequestContext {
 
     public boolean getMd5DigestResult() {
         return contentHasValidMd5Digest;
+    }
+
+    /*
+     ** Accessor methods for the Sha-256 Digest information
+     */
+    public void setSha256DigestComplete() {
+        sha256DigestComplete = true;
+    }
+
+    public void setSha256DigestCompareResult(final boolean valid) {
+        contentHasValidSha256Digest = valid;
+    }
+
+    public boolean getSha256DigestComplete() {
+        return sha256DigestComplete;
+    }
+
+    public boolean getSha256DigestResult() {
+        return contentHasValidSha256Digest;
     }
 
     /*

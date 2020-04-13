@@ -48,6 +48,7 @@ public class ByteBufferHttpParser {
 
             while (!httpParser.isState(HttpParser.State.END) && (remaining > 0)) {
                 int was_remaining = remaining;
+
                 httpParser.parseNext(bufferToParse);
                 remaining = bufferToParse.remaining();
                 if (remaining == was_remaining)

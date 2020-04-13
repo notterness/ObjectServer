@@ -32,6 +32,8 @@ public class CasperHttpInfo {
     private static final String CONTENT_LENGTH = "Content-Length";
     private static final String CONTENT_MD5 = "Content-MD5";
 
+    private static final String CONTENT_SHA256 = "x-content-sha256";
+
     private static final String X_VCN_ID = "x-vcn-id";
     private static final String VCN_ID_CASPER_DEBUG_HEADER = "x-vcn-id-casper";
 
@@ -215,6 +217,16 @@ public class CasperHttpInfo {
      */
     private String expectedMD5;
     private boolean md5parsed;
+
+    /*
+     ** This comes from the "x-content-sha256" header (CONTENT_SHA256). If the validation of
+     **   the passed in Content-MD5 header fails, expectedMd5 will be set to null. There
+     **   is the case that there is no "Content-MD5" header in which case, md5parsed will
+     **   be set to false;
+     */
+    private String expectedSha256;
+    private boolean sha256Parsed;
+
 
     /*
     ** This comes from the "x-vcn-id" header (X_VCN_ID)
@@ -514,14 +526,30 @@ public class CasperHttpInfo {
         /*
         ** Verify that there was an Object Name, Bucket Name and Tenant Name passed in
          */
-        if ((getObject() == null) || (getBucket() == null) || (getTenancy() == null)) {
-            parseFailureCode = HttpStatus.BAD_REQUEST_400;
-            parseFailureReason = HttpStatus.getMessage(parseFailureCode);
+        if (httpMethod == HttpMethodEnum.PUT_METHOD) {
+            if ((getObject() == null) || (getBucket() == null) || (getTenancy() == null)) {
+                parseFailureCode = HttpStatus.BAD_REQUEST_400;
+                parseFailureReason = HttpStatus.getMessage(parseFailureCode);
 
-            LOG.warn("Missing Critical Object Info [" + requestContext.getRequestId() +  "] code: " +
-                    parseFailureCode + " reason: " + parseFailureReason);
+                LOG.warn("PUT Missing Critical Object Info [" + requestContext.getRequestId() + "] code: " +
+                        parseFailureCode + " reason: " + parseFailureReason);
 
-            requestContext.setHttpParsingError();
+                requestContext.setHttpParsingError();
+            }
+        } else if (httpMethod == HttpMethodEnum.POST_METHOD) {
+            if ((getBucket().compareTo("") != 0) || (getTenancy() == null)) {
+
+                LOG.error("bucket: " + getBucket() + " compare: " + getBucket().compareTo(""));
+                LOG.error("tenancy: " + getTenancy());
+
+                parseFailureCode = HttpStatus.BAD_REQUEST_400;
+                parseFailureReason = HttpStatus.getMessage(parseFailureCode);
+
+                LOG.warn("POST Missing Critical Object Info [" + requestContext.getRequestId() + "] code: " +
+                        parseFailureCode + " reason: " + parseFailureReason);
+
+                requestContext.setHttpParsingError();
+            }
         }
 
         headerComplete = true;
@@ -555,6 +583,12 @@ public class CasperHttpInfo {
         requestContext.setHttpParsingError();
     }
 
+    public void setParseFailureCode(final int errorCode) {
+        parseFailureCode = errorCode;
+        parseFailureReason = HttpStatus.getMessage(parseFailureCode);
+        requestContext.setHttpParsingError();
+    }
+
     public int getParseFailureCode() {
         return parseFailureCode;
     }
@@ -570,12 +604,13 @@ public class CasperHttpInfo {
     }
 
     /*
-    ** This will parse out various pieces of information needed for the V2 PUT command into easily
+    ** This will parse out various pieces of information needed for the V2 PUT and POST commands into easily
     **   accessible String member variables. This is called when the headers have all been parsed by
     **   the Jetty parser and prior to moving onto reading in the content data.
      */
     public void parseHeaders() {
         expectedMD5 = getContentMD5Header();
+        expectedSha256 = getContentSha256Header();
         md5Override = getHeaderString(MD5_OVERRIDE_HEADER);
         etagOverride = getHeaderString(ETAG_OVERRIDE_HEADER);
         partCountOverrideHeader = getHeaderString(PART_COUNT_OVERRIDE_HEADER);
@@ -619,6 +654,37 @@ public class CasperHttpInfo {
         }
 
         return md5value;
+    }
+
+    /*
+     ** This extracts the expected MD5 checksum from the headers if it exists and then it validates that
+     **   it is the correct length.
+     ** Assuming it is found and the correct length it is then returned.
+     */
+    private String getContentSha256Header() {
+        String sha256Value = getHeaderString(CONTENT_SHA256);
+        if (sha256Value == null || sha256Value.isEmpty()) {
+            sha256Parsed = false;
+            return null;
+        }
+
+        sha256Parsed = true;
+        try {
+            byte[] bytes = BaseEncoding.base64().decode(sha256Value);
+            if (bytes.length != 32) {
+                LOG.warn("The value of the x-content-sha256 header '" + sha256Value +
+                        "' was not the correct length after base-64 decoding");
+                return null;
+            } else {
+                //LOG.info("expectedSha256: " + sha256Value);
+            }
+        } catch (IllegalArgumentException ia_ex) {
+            LOG.warn("The value of the Content-MD5 header '" + sha256Value +
+                    "' was not the correct length after base-64 decoding");
+            return null;
+        }
+
+        return sha256Value;
     }
 
     /*
@@ -704,6 +770,45 @@ public class CasperHttpInfo {
         LOG.warn("checkContentMd5() [" + requestContext.getRequestId() +  "] passed");
         return true;
     }
+
+    /**
+     * Performs an integrity check on the body of an HTTP request if the Content-MD5 header is available.
+     *
+     * If Content-MD5 is not present, this function does nothing, otherwise it computes the MD5 value for the body and
+     * compares it to the value from the header.
+     *
+     * @param computedSha256 - The MD5 value computed from the content data read in.
+     */
+    public boolean checkContentSha256(final String computedSha256) {
+        if (sha256Parsed == false)
+        {
+            LOG.warn("checkContentSha256() [" + requestContext.getRequestId() + "] sha256Parsed: " + sha256Parsed);
+            return true;
+        }
+
+        if (expectedSha256 != null) {
+            if (!expectedSha256.equals(computedSha256)) {
+                LOG.warn("x-content-sha256 [" + requestContext.getRequestId() +  "] did not match computed. expected: " +
+                        expectedSha256 + " computed: " + computedSha256);
+
+                parseFailureCode = HttpStatus.UNPROCESSABLE_ENTITY_422;
+                parseFailureReason = HttpStatus.getMessage(parseFailureCode);
+                requestContext.setHttpParsingError();
+                return false;
+            }
+        } else {
+            LOG.warn("x-content-sha256 [" + requestContext.getRequestId() +  "] passed in was invalid. computed: " +
+                    computedSha256);
+            parseFailureCode = HttpStatus.BAD_REQUEST_400;
+            parseFailureReason = HttpStatus.getMessage(parseFailureCode);
+            requestContext.setHttpParsingError();
+            return false;
+        }
+
+        LOG.warn("checkContentSha256() [" + requestContext.getRequestId() +  "] passed");
+        return true;
+    }
+
 
     /*
     ** This finds all the occurrences of a passed in String in the headers key fields and adds those to the return

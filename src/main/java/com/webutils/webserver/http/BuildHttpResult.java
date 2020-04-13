@@ -24,13 +24,17 @@ public class BuildHttpResult {
 
         HttpStatus.Code result = HttpStatus.getCode(resultCode);
         if (result != null) {
-            if (addContext) {
+            /*
+            ** Special Handling for METHOD_NOT_ALLOWED_$)% since it needs to respond with the supported
+            **   methods
+             */
+            if (addContext && (resultCode != HttpStatus.METHOD_NOT_ALLOWED_405)) {
                 StringBuilder builtContent = new StringBuilder()
-                        .append("\r\n")
-                        .append("{\r\n")
-                        .append("  \"Description\":\"")
-                        .append(result.getMessage())
-                        .append("\"\r\n}");
+                            .append("\r\n")
+                            .append("{\r\n")
+                            .append("  \"Description\":\"")
+                            .append(result.getMessage())
+                            .append("\"\r\n}");
                 content = builtContent.toString();
 
                 // Assuming that the last two pairs of CR/LF do not count towards the content length
@@ -56,6 +60,18 @@ public class BuildHttpResult {
                 tmpBuiltStr
                         .append("\r\n")
                         .append(content);
+            } else if (resultCode == HttpStatus.METHOD_NOT_ALLOWED_405) {
+                tmpBuiltStr = new StringBuilder()
+                        .append("HTTP/1.1 ")
+                        .append(result.getCode())
+                        .append(" Method Not Allowed\r\n")
+                        .append("Content-Type: text/html")
+                        .append("\r\n")
+                        .append("Allow: PUT")
+                        .append("\r\n")
+                        .append("Connection: close\r\n")
+                        .append("\r\n");
+
             } else {
                 tmpBuiltStr = new StringBuilder()
                         .append("HTTP/1.1 ")

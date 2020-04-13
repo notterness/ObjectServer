@@ -173,24 +173,24 @@ public class TestMain {
             /*
             ** First check with a valid Storage Server (this is the baseTcpPort)
              */
-            TestChunkWrite testChunkWrite = new TestChunkWrite(addr, baseTcpPort, threadCount, dbSetup, null);
-            testChunkWrite.execute();
+            //TestChunkWrite testChunkWrite = new TestChunkWrite(addr, baseTcpPort, threadCount, dbSetup, null);
+            //testChunkWrite.execute();
 
             /*
             ** Now check with an invalid Storage Server (there is nothing listening at the baseTcpPort + 20) so the connection
             **   to the Storage Server will fail.
              */
-            TestChunkWrite testChunkWrite_badStorageServer = new TestChunkWrite(addr, baseTcpPort + 20,
-                    threadCount, dbSetup, null);
-            testChunkWrite_badStorageServer.execute();
+            //TestChunkWrite testChunkWrite_badStorageServer = new TestChunkWrite(addr, baseTcpPort + 20,
+            //        threadCount, dbSetup, null);
+            //testChunkWrite_badStorageServer.execute();
 
             /*
              ** Now check with an invalid Storage Server (there is nothing listening at the baseTcpPort + 20) so the connection
              **   to the Storage Server will fail.
              */
-            TestChunkWrite testChunkWrite_disconnectAfterHeader = new TestChunkWrite(addr, baseTcpPort,
-                    threadCount, dbSetup, CLOSE_CONNECTION_AFTER_HEADER);
-            testChunkWrite_disconnectAfterHeader.execute();
+            //TestChunkWrite testChunkWrite_disconnectAfterHeader = new TestChunkWrite(addr, baseTcpPort,
+            //        threadCount, dbSetup, CLOSE_CONNECTION_AFTER_HEADER);
+            //testChunkWrite_disconnectAfterHeader.execute();
         } else {
             System.out.println("ERROR: addr for TestChunkWrite() null");
         }
@@ -230,6 +230,13 @@ public class TestMain {
         ClientTestContextPool clientTestContextPool = new ClientTestContextPool(flavor, clientTestMemoryManager, dbSetup);
         NioTestClient testClient = new NioTestClient(clientTestContextPool);
         testClient.start();
+
+        ClientTest client_CreateBucket_Simple = new ClientTest_CreateBucket_Simple("CreateBucket_Simple", testClient,
+                serverIpAddr, serverTcpPort, threadCount);
+        client_CreateBucket_Simple.execute();
+
+        threadCount.getAndIncrement();
+        waitForTestsToComplete(threadCount);
 
         //ClientTest client_1 = new ClientTest_2("ClientTest_2", testClient, serverTcpPort, threadCount);
         //client_1.execute();

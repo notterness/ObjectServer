@@ -131,7 +131,10 @@ public class NioSelectHandler {
                 selectedKeys.remove();
 
                 if (!key.isValid()) {
+                    LOG.warn("handleSelector() key is invalid");
                     continue;
+                } else {
+                    LOG.info("handleSelector() readyOps: " + key.readyOps());
                 }
 
                 int currentInterestOps;
