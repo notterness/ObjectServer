@@ -3,6 +3,7 @@ package com.webutils.webserver.memory;
 import java.nio.ByteBuffer;
 
 import com.webutils.webserver.buffermgr.BufferManager;
+import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,7 +30,7 @@ public class MemoryManager {
     // These really don't need to be.
     private static final int PRODUCTION_XFER_BUFFER_COUNT = 10000;
 
-    private static final int INTEGRATION_XFER_BUFFER_COUNT = 400;
+    private static final int INTEGRATION_XFER_BUFFER_COUNT = 100;
 
     private final WebServerFlavor webServerFlavor;
 
@@ -56,9 +57,9 @@ public class MemoryManager {
         memoryPool = new FixedSizeBufferPool(XFER_BUFFER_SIZE, xferBufferCount );
     }
 
-    public ByteBuffer poolMemAlloc(final int requestedSize, final BufferManager bufferManager) {
+    public ByteBuffer poolMemAlloc(final int requestedSize, final BufferManager bufferManager, final OperationTypeEnum allocator) {
 
-        return memoryPool.poolMemAlloc(bufferManager);
+        return memoryPool.poolMemAlloc(bufferManager, allocator);
     }
 
     public void poolMemFree(ByteBuffer buffer, final BufferManager bufferManager) {

@@ -3,6 +3,7 @@ package com.webutils.webserver.manual;
 import com.webutils.webserver.niosockets.NioTestClient;
 import com.webutils.webserver.common.Md5Digest;
 import com.webutils.webserver.memory.MemoryManager;
+import com.webutils.webserver.operations.OperationTypeEnum;
 import org.eclipse.jetty.http.HttpStatus;
 
 import java.net.InetAddress;
@@ -11,6 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 class ClientTest_InvalidMd5Header extends ClientTest {
 
+    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_TEST_INVALID_MD5_HEADER;
     private final int BYTES_IN_CONTENT = 1024;
 
     private final Md5Digest digest;
@@ -33,7 +35,7 @@ class ClientTest_InvalidMd5Header extends ClientTest {
          */
         String objectDigestString = null;
 
-        dataBuffer = memoryManager.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE, null);
+        dataBuffer = memoryManager.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE, null, operationType);
         if (dataBuffer != null) {
             // Fill in a pattern
             long pattern = MemoryManager.MEDIUM_BUFFER_SIZE;

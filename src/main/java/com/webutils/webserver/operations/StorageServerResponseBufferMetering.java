@@ -75,7 +75,8 @@ public class StorageServerResponseBufferMetering implements Operation {
         respBufferMeteringPointer = storageServerResponseBufferMgr.register(this);
 
         for (int i = 0; i < buffersToAllocate; i++) {
-            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, storageServerResponseBufferMgr);
+            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, storageServerResponseBufferMgr,
+                    operationType);
 
             storageServerResponseBufferMgr.offer(respBufferMeteringPointer, buffer);
         }

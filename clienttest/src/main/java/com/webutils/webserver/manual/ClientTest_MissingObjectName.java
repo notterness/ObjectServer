@@ -3,6 +3,7 @@ package com.webutils.webserver.manual;
 import com.webutils.webserver.niosockets.NioTestClient;
 import com.webutils.webserver.common.Md5Digest;
 import com.webutils.webserver.memory.MemoryManager;
+import com.webutils.webserver.operations.OperationTypeEnum;
 import org.eclipse.jetty.http.HttpStatus;
 
 import java.net.InetAddress;
@@ -10,6 +11,8 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
 class ClientTest_MissingObjectName extends ClientTest {
+
+    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_TEST_MISSING_OBJECT_NAME;
 
     private final int BYTES_IN_CONTENT = MemoryManager.MEDIUM_BUFFER_SIZE;
 
@@ -29,7 +32,7 @@ class ClientTest_MissingObjectName extends ClientTest {
          */
         String objectDigestString = null;
 
-        objectBuffer = memoryManager.poolMemAlloc(MemoryManager.MEDIUM_BUFFER_SIZE, null);
+        objectBuffer = memoryManager.poolMemAlloc(BYTES_IN_CONTENT,null, operationType);
         if (objectBuffer != null) {
             // Fill in a pattern
             long pattern = MemoryManager.MEDIUM_BUFFER_SIZE;

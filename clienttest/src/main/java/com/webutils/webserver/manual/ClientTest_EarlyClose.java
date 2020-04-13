@@ -1,12 +1,16 @@
 package com.webutils.webserver.manual;
 
 import com.webutils.webserver.niosockets.NioTestClient;
+import com.webutils.webserver.operations.OperationTypeEnum;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
 class ClientTest_EarlyClose extends ClientTest {
+
+    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_TEST_EARLY_CLOSE;
+
 
     ClientTest_EarlyClose(final String testName, final NioTestClient client, final InetAddress serverIpAddr,
                           final int serverTcpPort, AtomicInteger testCount) {

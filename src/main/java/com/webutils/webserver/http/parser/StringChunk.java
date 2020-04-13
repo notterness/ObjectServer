@@ -11,7 +11,7 @@ public class StringChunk {
     
     private static final Logger LOG = LoggerFactory.getLogger(StringChunk.class);
 
-    private ByteBuffer initialBuffer;
+    private final ByteBuffer initialBuffer;
 
     private int currentPosition;
     private int remaining;
@@ -53,7 +53,6 @@ public class StringChunk {
                 /*
                 ** Check if the following character is something besides a CR or LF
                  */
-                boolean done = false;
                 i++;
                 while (i < remaining) {
                     byte ch_next = initialBuffer.get(i);

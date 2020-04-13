@@ -34,7 +34,7 @@ public class DetermineRequestType implements Operation {
      */
     private final Map<HttpMethodEnum, Operation> supportedHttpRequests;
 
-    private CasperHttpInfo casperHttpInfo;
+    private final CasperHttpInfo casperHttpInfo;
 
     private boolean methodDeterminationDone;
 

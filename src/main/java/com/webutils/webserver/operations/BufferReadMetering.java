@@ -62,7 +62,7 @@ public class BufferReadMetering implements Operation {
         int buffersToAllocate = memoryManager.getBufferManagerRingSize();
 
         for (int i = 0; i < buffersToAllocate; i++) {
-            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientReadBufferMgr);
+            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientReadBufferMgr, operationType);
 
             clientReadBufferMgr.offer(bufferMeteringPointer, buffer);
         }

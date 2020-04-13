@@ -96,12 +96,8 @@ public class TestMain {
         AtomicInteger threadCount = new AtomicInteger(1);
 
         NioServerHandler nioServer;
-        MemoryManager objectServerMemoryManager = new MemoryManager(flavor);
-        ObjectServerContextPool objectRequestContextPool = new ObjectServerContextPool(flavor, objectServerMemoryManager, dbSetup);
 
-        MemoryManager storageServersMemoryManager = new MemoryManager(flavor);
         NioServerHandler[] nioStorageServer = new NioServerHandler[NUMBER_TEST_STORAGE_SERVERS];
-        StorageServerContextPool[] storageRequestContextPool = new StorageServerContextPool[NUMBER_TEST_STORAGE_SERVERS];
 
         if (flavor == WebServerFlavor.INTEGRATION_TESTS) {
             TestEncryptBuffer testEncryptBuffer = new TestEncryptBuffer();
@@ -118,6 +114,9 @@ public class TestMain {
             /*
             ** The Object Server needs to access the database to obtain the VON information
              */
+            MemoryManager objectServerMemoryManager = new MemoryManager(flavor);
+            ObjectServerContextPool objectRequestContextPool = new ObjectServerContextPool(flavor, objectServerMemoryManager, dbSetup);
+
             nioServer = new NioServerHandler(serverTcpPort, NioServerHandler.OBJECT_SERVER_BASE_ID, objectRequestContextPool);
             nioServer.start();
 
@@ -125,9 +124,11 @@ public class TestMain {
             ** Setup the Storage Servers
              */
             for (int i = 0; i < NUMBER_TEST_STORAGE_SERVERS; i++) {
-                storageRequestContextPool[i] = new StorageServerContextPool(flavor, storageServersMemoryManager, null);
+                MemoryManager storageServersMemoryManager = new MemoryManager(flavor);
+                StorageServerContextPool storageRequestContextPool = new StorageServerContextPool(flavor, storageServersMemoryManager, null);
+
                 nioStorageServer[i] = new NioServerHandler(baseTcpPort + i,
-                        (NioServerHandler.STORAGE_SERVER_BASE_ID + (i * STORAGE_SERVER_BASE_ID_OFFSET)), storageRequestContextPool[i]);
+                        (NioServerHandler.STORAGE_SERVER_BASE_ID + (i * STORAGE_SERVER_BASE_ID_OFFSET)), storageRequestContextPool);
                 nioStorageServer[i].start();
             }
         } else {

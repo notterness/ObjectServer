@@ -120,7 +120,8 @@ public class EncryptBuffer implements Operation {
 
         int numberEncryptedWriteBuffer = memoryManager.getBufferManagerRingSize();
         for (int i = 0; i < numberEncryptedWriteBuffer; i++) {
-            ByteBuffer writeBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, storageServerWriteBufferMgr);
+            ByteBuffer writeBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, storageServerWriteBufferMgr,
+                    operationType);
             storageServerWriteBufferMgr.offer(storageServerWritePointer, writeBuffer);
         }
     }

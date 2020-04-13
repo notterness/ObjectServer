@@ -9,9 +9,11 @@ import com.webutils.webserver.mysql.DbSetup;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.niosockets.NioTestClient;
+import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
+import io.kubernetes.client.util.ConfigPersister;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,6 +24,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class TestChunkWrite {
 
     private static final Logger LOG = LoggerFactory.getLogger(TestChunkWrite.class);
+
+    /*
+     ** A unique identifier for this Operation so it can be tracked.
+     */
+    public final OperationTypeEnum operationType = OperationTypeEnum.TEST_CHUNK_WRITE;
 
     private static final WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
 
@@ -128,7 +135,8 @@ public class TestChunkWrite {
 
         int fillPattern = 1;
         for (int i = 0; i < NUM_STORAGE_SERVER_WRITE_BUFFERS; i++) {
-            ByteBuffer writeBuffer = objServerMemMgr.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, storageServerWriteBufferMgr);
+            ByteBuffer writeBuffer = objServerMemMgr.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, storageServerWriteBufferMgr,
+                    operationType);
 
             /*
             ** Write a known pattern into the buffers

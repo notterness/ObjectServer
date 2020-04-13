@@ -1,6 +1,7 @@
 package com.webutils.webserver.manual;
 
 import com.webutils.webserver.niosockets.NioTestClient;
+import com.webutils.webserver.operations.OperationTypeEnum;
 import org.eclipse.jetty.http.HttpStatus;
 
 import java.net.InetAddress;
@@ -8,6 +9,9 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
 class ClientTest_MalformedRequest_1 extends ClientTest {
+
+    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_TEST_MALFORMED_REQUEST_1;
+
 
     ClientTest_MalformedRequest_1(final String testName, final NioTestClient client, final InetAddress serverIpAddr,
                                   final int serverTcpPort, AtomicInteger testCount) {

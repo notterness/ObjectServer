@@ -27,7 +27,7 @@ public class WriteToClient implements Operation {
     /*
      ** The following is the operation to run (if any) when the ConnectComplete is executed.
      */
-    private Operation finalOperationToRun;
+    private final Operation finalOperationToRun;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -36,7 +36,7 @@ public class WriteToClient implements Operation {
      */
     private boolean onExecutionQueue;
 
-    private final BufferManager clientWriteBufferManager;
+    private BufferManager clientWriteBufferManager;
     private final BufferManagerPointer bufferInfillPointer;
     private BufferManagerPointer writePointer;
     private BufferManagerPointer writeDonePointer;
@@ -121,12 +121,15 @@ public class WriteToClient implements Operation {
      */
     public void complete() {
         clientConnection.unregisterWriteBufferManager();
+        clientConnection = null;
 
         clientWriteBufferManager.unregister(writeDonePointer);
         writeDonePointer = null;
 
         clientWriteBufferManager.unregister(writePointer);
         writePointer = null;
+
+        clientWriteBufferManager = null;
     }
 
     /*

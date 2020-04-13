@@ -3,6 +3,7 @@ package com.webutils.webserver.manual;
 import com.webutils.webserver.niosockets.NioTestClient;
 import com.webutils.webserver.common.Md5Digest;
 import com.webutils.webserver.memory.MemoryManager;
+import com.webutils.webserver.operations.OperationTypeEnum;
 import org.eclipse.jetty.http.HttpStatus;
 
 import java.net.InetAddress;
@@ -10,6 +11,8 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
 class ClientTest_BadMd5 extends ClientTest {
+
+    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_TEST_BAD_MD5;
 
     private final int BYTES_IN_CONTENT = MemoryManager.XFER_BUFFER_SIZE;
 
@@ -29,7 +32,7 @@ class ClientTest_BadMd5 extends ClientTest {
          */
         String objectDigestString = null;
 
-        objectBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null);
+        objectBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, null, operationType);
         if (objectBuffer != null) {
             // Fill in a pattern
             long pattern = MemoryManager.XFER_BUFFER_SIZE;

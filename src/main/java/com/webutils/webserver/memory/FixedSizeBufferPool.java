@@ -5,6 +5,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import com.webutils.webserver.buffermgr.BufferManager;
+import com.webutils.webserver.operations.OperationTypeEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,14 +17,12 @@ public class FixedSizeBufferPool {
 
     private static final Logger LOG = LoggerFactory.getLogger(FixedSizeBufferPool.class);
 
-    final private int bufferSize;
     final private int bufferCount;
 
     final private BlockingQueue<MemoryTracking> freeQueue;
     final private BlockingQueue<MemoryTracking> inUseQueue;
 
     public FixedSizeBufferPool( int bufferSize, int bufferCount ) {
-        this.bufferSize = bufferSize;
         this.bufferCount = bufferCount;
 
         boolean allocErrorLogged = false;
@@ -56,12 +55,12 @@ public class FixedSizeBufferPool {
 
     public int getUnusedBufferCount() { return freeQueue.size(); }
 
-    public ByteBuffer poolMemAlloc(final BufferManager bufferManager) {
+    public ByteBuffer poolMemAlloc(final BufferManager bufferManager, final OperationTypeEnum allocator) {
         // Instead of calling allocate, perhaps grab a ByteBuffer chunk out of a larger cache
         // If none available, will return null and queue up callback (if supplied) for next free.
         MemoryTracking tracker = freeQueue.poll();
         if (tracker != null) {
-            tracker.setBufferManager(bufferManager);
+            tracker.setBufferManager(bufferManager, allocator);
 
             inUseQueue.add(tracker);
 
@@ -72,9 +71,8 @@ public class FixedSizeBufferPool {
 
     public void poolMemFree(final ByteBuffer buffer, final BufferManager bufferManager) {
 
-        MemoryTracking tracker = removeTracker(buffer);
+        MemoryTracking tracker = removeTracker(buffer, bufferManager);
         if (tracker != null) {
-            buffer.clear();
             freeQueue.add(tracker);
         } else {
             if (bufferManager != null) {
@@ -85,9 +83,9 @@ public class FixedSizeBufferPool {
         }
     }
 
-    private MemoryTracking removeTracker(final ByteBuffer buffer) {
+    private MemoryTracking removeTracker(final ByteBuffer buffer, final BufferManager bufferManager) {
         for (MemoryTracking tracker : inUseQueue) {
-            if (tracker.getBuffer().equals(buffer)) {
+            if (tracker.matches(buffer, bufferManager)) {
                 inUseQueue.remove(tracker);
                 return tracker;
             }

@@ -119,7 +119,8 @@ public class SendFinalStatus implements Operation {
         if (!httpResponseSent) {
             int resultCode = requestContext.getHttpParseStatus();
 
-            ByteBuffer respBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientWriteBufferMgr);
+            ByteBuffer respBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientWriteBufferMgr,
+                    operationType);
             if (respBuffer != null) {
                 resultBuilder.buildResponse(respBuffer, resultCode, true, true);
 
@@ -136,6 +137,7 @@ public class SendFinalStatus implements Operation {
                  ** Add the ByteBuffer to the clientWriteBufferMgr to kick off the write of the response to the client
                  */
                 clientWriteBufferMgr.offer(writeStatusBufferPtr, respBuffer);
+
             } else {
                 /*
                  ** If we are out of memory to allocate a response, might as well close out the connection and give up.
@@ -147,6 +149,10 @@ public class SendFinalStatus implements Operation {
                  */
 
             }
+
+            httpResponseSent = true;
+        } else {
+            LOG.warn("SendFinalStatus[" + requestContext.getRequestId() + "] execute() after status sent");
         }
     }
 

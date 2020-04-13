@@ -1,6 +1,7 @@
 package com.webutils.webserver.manual;
 
 import com.webutils.webserver.niosockets.NioTestClient;
+import com.webutils.webserver.operations.OperationTypeEnum;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
@@ -8,6 +9,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 
 class ClientTest_OneMbPut extends ClientTest {
+
+    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_TEST_ONE_MB_PUT;
 
     private final int BYTES_IN_CONTENT = 10240;
 

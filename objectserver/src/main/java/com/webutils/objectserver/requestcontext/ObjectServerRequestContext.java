@@ -339,7 +339,7 @@ public class ObjectServerRequestContext extends RequestContext {
     }
 
     public void setStorageServerResponse(final ServerIdentifier storageServerId, final int result) {
-        Integer storageServerResult = new Integer(result);
+        Integer storageServerResult = result;
         storageServerResponse.put(storageServerId, storageServerResult);
     }
 
