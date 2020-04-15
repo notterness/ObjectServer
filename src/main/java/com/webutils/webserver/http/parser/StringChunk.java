@@ -14,13 +14,14 @@ public class StringChunk {
     private final ByteBuffer initialBuffer;
 
     private int currentPosition;
-    private int remaining;
+    private int limit;
 
-    StringChunk(ByteBuffer buffer) {
+    StringChunk(final ByteBuffer buffer) {
         initialBuffer = buffer;
 
         currentPosition = buffer.position();
-        remaining = buffer.remaining();
+        limit = buffer.limit();
+        LOG.info(" currentPosition: " + currentPosition + " remaining: " + buffer.remaining() + " limit: " + buffer.limit());
     }
 
     /*
@@ -33,14 +34,14 @@ public class StringChunk {
         /*
         ** End of buffer checking
          */
-        if (currentPosition == remaining) {
+        if (currentPosition == limit) {
             return null;
         }
         //displayChar(initialBuffer);
 
         int i;
         int charCount = 0;
-        for (i = currentPosition; i < remaining; i++) {
+        for (i = currentPosition; i < limit; i++) {
             try {
                 ch = initialBuffer.get(i);
                 charCount++;
@@ -54,7 +55,7 @@ public class StringChunk {
                 ** Check if the following character is something besides a CR or LF
                  */
                 i++;
-                while (i < remaining) {
+                while (i < limit) {
                     byte ch_next = initialBuffer.get(i);
                     if ((ch_next == 13) || (ch_next == 10)) {
                         i++;
@@ -71,8 +72,13 @@ public class StringChunk {
         ByteBuffer bb = initialBuffer.slice();
         bb.limit(charCount);
 
-        //String str = bb_to_str(bb);
-        //LOG.info("StringChunk: " + str);
+        String str = bb_to_str(bb);
+
+        /*
+        ** Uncomment out the following line to display the string that has been extracted from the
+        **   ByteBuffer that is being processed.
+         */
+        //LOG.info("StringChunk: charCount: " + charCount + " - " + str);
 
         currentPosition = i;
         initialBuffer.position(i);
@@ -87,7 +93,7 @@ public class StringChunk {
         /*
          ** End of buffer checking
          */
-        if (currentPosition == remaining) {
+        if (currentPosition == limit) {
             //LOG.info("StringChunk getRemainingBuffer() null");
             return false;
         }
@@ -98,7 +104,10 @@ public class StringChunk {
         return true;
     }
 
-    private String bb_to_str(ByteBuffer buffer) {
+    /*
+    ** Convert a ByteBuffer to a String
+     */
+    public String bb_to_str(ByteBuffer buffer) {
         int position = buffer.position();
         String tmp = StandardCharsets.UTF_8.decode(buffer).toString();
 

@@ -12,7 +12,6 @@ import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.*;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
-import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,35 +40,17 @@ public class ObjectServerRequestContext extends RequestContext {
     private SendFinalStatus sendFinalStatus;
 
     /*
-     ** The httpParseError is set if there is something the parser does not like or a header
-     **   does not match the expected values.
-     */
-    private boolean httpParseError;
-
-    /*
-     ** The requestContentLength is how many bytes are going to be transferred following the
-     **   HTTP request
-     */
-    private int requestContentLength;
-
-    /*
-     ** This is set when there is either a parsing error or the entire HTTP request has been
-     **   parsed and the HTTP Parser has issued the parsing done callback
-     */
-    private boolean httpRequestParsed;
-
-    /*
      ** The following Map is used to keep track of when the HTTP Request is sent to the
      **   Storage Server from the Web Server and it is used by the test code to know that
      **   the HTTP Request has been sent by the client to the Web Server.
      ** The map is based upon the IP address and the TCP Port of the target plus the chunk number.
      */
-    private Map<ServerIdentifier, AtomicBoolean> httpRequestSent;
+    private final Map<ServerIdentifier, AtomicBoolean> httpRequestSent;
 
     /*
      ** The following Map is used to indicate that a Storage Server has responded.
      */
-    private Map<ServerIdentifier, Integer> storageServerResponse;
+    private final Map<ServerIdentifier, Integer> storageServerResponse;
 
 
     public ObjectServerRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn,
@@ -201,7 +182,7 @@ public class ObjectServerRequestContext extends RequestContext {
         SetupV2Put v2PutHandler = new SetupV2Put(this, memoryManager, metering, determineRequestType);
         this.supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, v2PutHandler);
 
-        SetupObjectServerPost postHandler = new SetupObjectServerPost(this, memoryManager, metering, determineRequestType);
+        SetupObjectServerPost postHandler = new SetupObjectServerPost(this, metering, determineRequestType);
         this.supportedHttpRequests.put(HttpMethodEnum.POST_METHOD, postHandler);
 
         /*

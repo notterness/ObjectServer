@@ -30,7 +30,7 @@ public class ByteBufferHttpParser {
     **   content is handled differently.
     **   The content data is not feed through the HTTP Parser to avoid copies.
      */
-    public boolean parseHttpData(ByteBuffer buffer, boolean initialBuffer) {
+    public boolean parseHttpData(final ByteBuffer buffer, final boolean initialBuffer) {
 
         if (initialBuffer) {
             if (httpParser.isState(HttpParser.State.END))

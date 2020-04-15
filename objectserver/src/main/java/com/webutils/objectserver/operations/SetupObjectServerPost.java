@@ -3,8 +3,7 @@ package com.webutils.objectserver.operations;
 import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.memory.MemoryManager;
-import com.webutils.webserver.operations.ComputeMd5Digest;
+import com.webutils.webserver.http.PostContentData;
 import com.webutils.webserver.operations.ComputeSha256Digest;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
@@ -24,12 +23,13 @@ public class SetupObjectServerPost implements Operation {
 
     private final ObjectServerRequestContext requestContext;
 
-    private final MemoryManager memoryManager;
-
     private final Operation metering;
 
     private final Operation completeCallback;
 
+    private final PostContentData postContentData;
+
+    private CreateBucket createBucket;
 
 
     /*
@@ -48,6 +48,7 @@ public class SetupObjectServerPost implements Operation {
     private final Map<OperationTypeEnum, Operation> PostHandlerOperations;
 
     private boolean setupMethodDone;
+    private boolean waitingOnOperations;
 
     /*
      ** This is used to setup the initial Operation dependencies required to handle the V2 PUT
@@ -56,13 +57,14 @@ public class SetupObjectServerPost implements Operation {
      **   Currently, the V2 PUT is marked complete when all the V2 PUT object data is written to the Storage Servers
      **   and the Md5 Digest is computed and the comparison against the expected result done.
      */
-    public SetupObjectServerPost(final ObjectServerRequestContext requestContext, final MemoryManager memoryManager, final Operation metering,
+    public SetupObjectServerPost(final ObjectServerRequestContext requestContext, final Operation metering,
                       final Operation completeCb) {
 
         this.requestContext = requestContext;
-        this.memoryManager = memoryManager;
         this.metering = metering;
         this.completeCallback = completeCb;
+
+        this.postContentData = new PostContentData();
 
         /*
          ** Setup the list of Operations currently used to handle the V2 PUT
@@ -73,8 +75,6 @@ public class SetupObjectServerPost implements Operation {
          ** This starts out not being on any queue
          */
         onExecutionQueue = false;
-
-        setupMethodDone = false;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -88,6 +88,10 @@ public class SetupObjectServerPost implements Operation {
      **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
+
+        setupMethodDone = false;
+        waitingOnOperations = true;
+
         return null;
     }
 
@@ -107,9 +111,27 @@ public class SetupObjectServerPost implements Operation {
             BufferManagerPointer readBufferPointer = requestContext.getReadBufferPointer();
 
             /*
-             ** The ComputeMd5Digest needs to be completed before the SendFinalStatus operation can be woken up
+            ** Once the parsing of the POST content data has taken place and the Sha-256 digest is determined to be valid,
+            **   then the Bucket and its contents need to be created in the databse.
+             */
+            createBucket = new CreateBucket(requestContext, this);
+            PostHandlerOperations.put(createBucket.getOperationType(), createBucket);
+            createBucket.initialize();
+
+            /*
+            ** Setup the Parser to pull the information out of the POST content. This will put the information into
+            **   a temporary structure and once the Sha-256 digest completes (assuming it is succesful) the setup
+            **   of the Bucket will take place.
+             */
+            ParsePostContent parseContent = new ParsePostContent(requestContext, readBufferPointer, metering,
+                    postContentData, this);
+            PostHandlerOperations.put(parseContent.getOperationType(), parseContent);
+            parseContent.initialize();
+
+            /*
+             ** The ComputeSha256Digest needs to be completed before the SendFinalStatus operation can be woken up
              **   to perform its work.
-             **   The SendFinalStatus is dependent upon all the data being written and the Md5 Digest
+             **   The SendFinalStatus is dependent upon all the content data being processed and the Sha-256 Digest
              **   having completed.
              */
             List<Operation> callbackList = new LinkedList<>();
@@ -127,15 +149,53 @@ public class SetupObjectServerPost implements Operation {
             ByteBuffer remainingBuffer = clientReadBufferManager.peek(readBufferPointer);
             if (remainingBuffer != null) {
                 if (remainingBuffer.remaining() > 0) {
+                    parseContent.event();
                 } else {
                     metering.event();
                 }
             }
 
             setupMethodDone = true;
+        } else if (waitingOnOperations){
+            /*
+             ** This will be placed on the execute queue twice, once by the ParsePostContent operation when the
+             **   parsing is complete and a second time when the ComputeSha256Digest has completed.
+             */
+            if (requestContext.getSha256DigestComplete() && requestContext.postMethodContentParsed()) {
+                LOG.info("SetupObjectServerPost[" + requestContext.getRequestId() + "] Sha-256 and Parsing done");
+
+                /*
+                ** Cleanup the operations
+                 */
+                Operation contentParser = PostHandlerOperations.get(OperationTypeEnum.PARSE_POST_CONTENT);
+                contentParser.complete();
+                PostHandlerOperations.remove(OperationTypeEnum.PARSE_POST_CONTENT);
+
+                /*
+                ** Since the Sha-256 digest runs on a compute thread, it handles it's own complete() call. For that
+                **   reason, simply remove it from the PostHandlerOperations map.
+                 */
+                PostHandlerOperations.remove(OperationTypeEnum.COMPUTE_SHA256_DIGEST);
+
+                if (requestContext.getSha256DigestResult()) {
+                    createBucket.event();
+                } else {
+                    /*
+                    ** There was an error with the passed in or computed Sha-256 digest, so an error needs to be
+                    **   returned to the client
+                     */
+                    complete();
+                }
+
+                waitingOnOperations = false;
+            } else {
+                LOG.info("SetupObjectServerPost[" + requestContext.getRequestId() + "] not completed Sha-256 digestComplete: " +
+                        requestContext.getSha256DigestComplete() + " POST content parsed: " + requestContext.postMethodContentParsed());
+            }
         } else {
             /*
-             ** Do nothing. The problem is this has a dependency upon the clientReadPtr
+            ** This execute() method may be called multiple times. This is really just a place holder to show that nothing
+            **   will be done in this case.
              */
         }
     }
@@ -145,16 +205,19 @@ public class SetupObjectServerPost implements Operation {
      **   work.
      */
     public void complete() {
-        if (requestContext.getDigestComplete() && requestContext.getAllV2PutDataWritten()) {
-            completeCallback.event();
-
-            PostHandlerOperations.clear();
-
-            LOG.info("SetupObjectServerPost[" + requestContext.getRequestId() + "] completed");
-        } else {
-            LOG.info("SetupObjectServerPost[" + requestContext.getRequestId() + "] not completed digestComplete: " +
-                    requestContext.getDigestComplete() + " all data written: " + requestContext.getAllV2PutDataWritten());
+        /*
+         ** Call the complete() methods for all of the Operations created to handle the POST method that did not have
+         **   ordering dependencies due to the registrations with the BufferManager(s).
+         */
+        Collection<Operation> createdOperations = PostHandlerOperations.values();
+        for (Operation createdOperation : createdOperations) {
+            createdOperation.complete();
         }
+        PostHandlerOperations.clear();
+
+        completeCallback.event();
+
+        LOG.info("SetupObjectServerPost[" + requestContext.getRequestId() + "] completed");
     }
 
     /*

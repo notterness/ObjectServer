@@ -196,7 +196,9 @@ public class EncryptBuffer implements Operation {
                 if ((readBuffer = clientReadBufferMgr.peek(encryptInputPointer)) != null) {
                     /*
                      ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
-                     **  affecting the position() and limit() indexes
+                     **  affecting the position() and limit() indexes.
+                     **
+                     ** NOTE: savedSrcPosition will be reset in the encryptBuffer() method
                      */
                     ByteBuffer srcBuffer = readBuffer.duplicate();
                     srcBuffer.position(savedSrcPosition);

@@ -66,10 +66,12 @@ class ClientTest_CreateBucket_Simple extends ClientTest {
                 "{\n" +
                         "  \"compartmentId\": \"clienttest.compartment.12345.abcde\",\n" +
                         "  \"namespace\": \"testnamespace\",\n" +
-                        "  \"objectEventsEnabled\": false\n" +
+                        "  \"name\": \"CreateBucket_Simple\",\n" +
+                        "  \"objectEventsEnabled\": false,\n" +
                         "  \"freeformTags\": {\"Test_1\": \"Test_2\"}\", \n" +
                         "  \"definedTags\":\n" +
                         "  {\n" +
+                        "    \"MyTags\":\n" +
                         "    {\n" +
                         "      \"TestTag_1\": \"ABC\", \n" +
                         "      \"TestTag_2\": \"123\", \n" +

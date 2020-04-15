@@ -4,6 +4,7 @@ import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.CasperHttpInfo;
 import com.webutils.webserver.http.parser.ByteBufferHttpParser;
+import com.webutils.webserver.http.parser.PostContentParser;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -117,19 +118,19 @@ public class ParseHttpRequest implements Operation {
 
         while ((httpBuffer = clientReadBufferMgr.peek(httpBufferPointer)) != null) {
             /*
-            ** Now run the Buffer State through the Http Parser
+             ** Now run the Buffer State through the Http Parser
              */
             boolean remainingBuffer = httpParser.parseHttpData(httpBuffer, initialHttpBuffer);
             if (remainingBuffer) {
                 /*
-                ** Leave the pointer in the same place since there is data remaining in the buffer
+                 ** Leave the pointer in the same place since there is data remaining in the buffer
                  */
                 LOG.info("ParseHttpRequest[" + requestContext.getRequestId() + "] remaining position: " +
                         httpBuffer.position() + " limit: " + httpBuffer.limit());
 
             } else {
                 /*
-                ** Only update the pointer if the data in the buffer was all consumed.
+                 ** Only update the pointer if the data in the buffer was all consumed.
                  */
                 LOG.info("ParseHttpRequest[" + requestContext.getRequestId() + "]  position: " +
                         httpBuffer.position() + " limit: " + httpBuffer.limit());
@@ -232,20 +233,17 @@ public class ParseHttpRequest implements Operation {
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
         //LOG.info("ParseHttpRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("ParseHttpRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("ParseHttpRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("ParseHttpRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not on a queue");
+            LOG.warn("ParseHttpRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("ParseHttpRequest[" + requestContext.getRequestId() + "] markAddToQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("ParseHttpRequest[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }

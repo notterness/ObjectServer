@@ -169,6 +169,7 @@ public abstract class RequestContext {
     private boolean contentHasValidSha256Digest;
 
     private boolean v2PutAllDataWritten;
+    private boolean postMethodContentDataParsed;
 
     /*
      ** Mutex to protect the addition and removal from the work and timed queues
@@ -227,6 +228,7 @@ public abstract class RequestContext {
         contentHasValidMd5Digest = false;
 
         v2PutAllDataWritten = false;
+        postMethodContentDataParsed = false;
     }
 
     /*
@@ -286,7 +288,10 @@ public abstract class RequestContext {
 
         digestComplete = false;
         contentHasValidMd5Digest = false;
+        sha256DigestComplete = false;
+        contentHasValidSha256Digest = false;
         v2PutAllDataWritten = false;
+        postMethodContentDataParsed = false;
     }
 
     /*
@@ -580,6 +585,13 @@ public abstract class RequestContext {
     }
 
     public void setMd5DigestCompareResult(final boolean valid) {
+        if (!valid) {
+            /*
+            ** Set the error response (This should probably be more descriptive to indicate that the Md5 digest failed)
+             */
+            httpInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400);
+        }
+
         contentHasValidMd5Digest = valid;
     }
 
@@ -599,6 +611,13 @@ public abstract class RequestContext {
     }
 
     public void setSha256DigestCompareResult(final boolean valid) {
+        if (!valid) {
+            /*
+             ** Set the error response (This should probably be more descriptive to indicate that the Sha-256 digest failed)
+             */
+            httpInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400);
+        }
+
         contentHasValidSha256Digest = valid;
     }
 
@@ -620,6 +639,12 @@ public abstract class RequestContext {
     public boolean getAllV2PutDataWritten() {
         return v2PutAllDataWritten;
     }
+
+    /*
+    **
+     */
+    public void setPostMethodContentParsed() { postMethodContentDataParsed = true; }
+    public boolean postMethodContentParsed() { return postMethodContentDataParsed; }
 
     /*
     ** Used to obtain the DbSetup object which is used to access the Storage Server information in the MySql database
