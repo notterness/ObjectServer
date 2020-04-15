@@ -5,6 +5,7 @@ import com.webutils.objectserver.manual.TestEncryptBuffer;
 import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
 import com.webutils.storageserver.requestcontext.StorageServerContextPool;
 import com.webutils.webserver.memory.MemoryManager;
+import com.webutils.webserver.mysql.CreateObjectStorageTables;
 import com.webutils.webserver.niosockets.NioTestClient;
 import com.webutils.webserver.kubernetes.KubernetesInfo;
 import com.webutils.webserver.mysql.DbSetup;
@@ -66,6 +67,9 @@ public class TestMain {
         }
 
         dbSetup.checkAndSetupStorageServers();
+
+        CreateObjectStorageTables objectStorageDbSetup = new CreateObjectStorageTables(flavor);
+        objectStorageDbSetup.checkAndSetupObjectStorageDb();
 
         /*
         ** Debug stuff to look at Kubernetes Pod information

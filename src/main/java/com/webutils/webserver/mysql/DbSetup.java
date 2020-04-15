@@ -295,7 +295,7 @@ public abstract class DbSetup {
      */
     private boolean createStorageServerDb() {
         Connection conn;
-        int vendorError = 0;
+        int vendorError;
         String jdbcConnect;
 
         if (isDockerImage() || isKubernetesImage()) {
