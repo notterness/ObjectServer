@@ -17,8 +17,9 @@ public class NamespaceTableMgr extends ObjectStorageDb {
     private static final Logger LOG = LoggerFactory.getLogger(NamespaceTableMgr.class);
 
     private final static String CREATE_NAMESPACE_1 = "INSERT INTO customerNamespace VALUES ( NULL, '";
-    private final static String CREATE_NAMESPACE_2 = "', UUID_TO_BIN(UUID()), (SELECT tenancyId FROM customerTenancy WHERE tenancyUID = UUID_TO_BIN('";
-    private final static String CREATE_NAMESPACE_3 = "') ) )";
+    private final static String CREATE_NAMESPACE_2 = "', '";
+    private final static String CREATE_NAMESPACE_3 = "', UUID_TO_BIN(UUID()), (SELECT tenancyId FROM customerTenancy WHERE tenancyUID = UUID_TO_BIN('";
+    private final static String CREATE_NAMESPACE_4 = "') ) )";
 
     private final static String GET_NAMESPACE_UID_1 = "SELECT BIN_TO_UUID(namespaceUID) namespaceUID FROM customerNamespace WHERE name = '";
     private final static String GET_NAMESPACE_UID_2 = "' AND tenancyId = ( SELECT tenancyId FROM customerTenancy WHERE tenancyUID = UUID_TO_BIN('";
@@ -37,11 +38,17 @@ public class NamespaceTableMgr extends ObjectStorageDb {
      **
      **   In the above example, both of the namespaces are unique and can have different characteristics. For this reason,
      **   the Tenancy UID is used to insure uniqueness.
+     **
+     **   Another feature of a Namespace is that it is used only by Object Storage and it serves as a container for all
+     **   Buckets created within a region. There is one namespace per Tenancy and the namespace spans across all of the
+     **   Compartments within a region. Just as an FYI, the Compartments are used to provide access controls to
+     **   resources.
      */
-    public boolean createNamespaceEntry(final String namespace, final String tenancyUID) {
+    public boolean createNamespaceEntry(final String namespace, final String tenancyUID, final String region) {
         boolean success = true;
 
-        String createNamespaceStr = CREATE_NAMESPACE_1 + namespace + CREATE_NAMESPACE_2 + tenancyUID + CREATE_NAMESPACE_3;
+        String createNamespaceStr = CREATE_NAMESPACE_1 + namespace + CREATE_NAMESPACE_2 + region + CREATE_NAMESPACE_3 +
+                tenancyUID + CREATE_NAMESPACE_4;
 
         Connection conn = getObjectStorageDbConn();
 

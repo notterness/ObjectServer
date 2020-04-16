@@ -114,7 +114,7 @@ public class SetupObjectServerPost implements Operation {
             ** Once the parsing of the POST content data has taken place and the Sha-256 digest is determined to be valid,
             **   then the Bucket and its contents need to be created in the databse.
              */
-            createBucket = new CreateBucket(requestContext, this);
+            createBucket = new CreateBucket(requestContext, postContentData, this);
             PostHandlerOperations.put(createBucket.getOperationType(), createBucket);
             createBucket.initialize();
 

@@ -16,6 +16,7 @@ public class PostContentData {
 
     private static final String NAME_ATTRIBUTE = "name";
     private static final String COMPARTMENT_ID_ATTRIBUTE = "compartmentId";
+    private static final String EVENTS_ENABLED_ATTRIBUTE = "objectEventsEnabled";
 
     private final Map<String, String> bucketParams;
 
@@ -254,6 +255,47 @@ public class PostContentData {
                 LOG.info("        " + subCategoryEntry.getKey() + " : " + subCategoryEntry.getValue());
             }
         }
+    }
+
+    public String getBucketName() {
+        return bucketParams.get(NAME_ATTRIBUTE);
+    }
+
+    public String getCompartmentId() {
+        return bucketParams.get(COMPARTMENT_ID_ATTRIBUTE);
+    }
+
+    public int getObjectEventsEnabled() {
+        int enabled;
+
+        String eventsEnabled = bucketParams.get(EVENTS_ENABLED_ATTRIBUTE);
+        if (eventsEnabled == null) {
+            enabled = 0;
+        } else if (eventsEnabled.equals("true")) {
+            enabled = 1;
+        } else {
+            enabled = 0;
+        }
+
+        return enabled;
+    }
+
+    public Set<Map.Entry<String, String>> getFreeFormTags() {
+        return freeformTags.entrySet();
+    }
+
+    public Set<Map.Entry<String, String>> getDefinedTags(final String subTagName) {
+        Map<String, String> subCategory = definedTags.get(subTagName);
+
+        if (subCategory != null) {
+            return subCategory.entrySet();
+        } else {
+            return null;
+        }
+    }
+
+    public Set<String> getDefinedTagsSubTagKeys() {
+        return definedTags.keySet();
     }
 
     /*

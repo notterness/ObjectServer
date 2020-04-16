@@ -1,9 +1,14 @@
 package com.webutils.objectserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.http.PostContentData;
+import com.webutils.webserver.mysql.BucketTableMgr;
+import com.webutils.webserver.mysql.NamespaceTableMgr;
+import com.webutils.webserver.mysql.TenancyTableMgr;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
+import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,6 +22,8 @@ public class CreateBucket implements Operation {
     public final OperationTypeEnum operationType = OperationTypeEnum.CREATE_BUCKET;
 
     private final RequestContext requestContext;
+
+    private final PostContentData postContentData;
 
     private final Operation completeCallback;
 
@@ -32,8 +39,9 @@ public class CreateBucket implements Operation {
      */
     private boolean onExecutionQueue;
 
-    public CreateBucket(final RequestContext requestContext, final Operation completeCb) {
+    public CreateBucket(final RequestContext requestContext, final PostContentData postContentData, final Operation completeCb) {
         this.requestContext = requestContext;
+        this.postContentData = postContentData;
         this.completeCallback = completeCb;
 
         bucketCreated = false;
@@ -67,6 +75,17 @@ public class CreateBucket implements Operation {
      */
     public void execute() {
         if (!bucketCreated) {
+            WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
+
+            TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
+            String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
+
+            NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
+            String namespaceUID = namespaceMgr.getNamespaceUID("Namespace-xyz-987", tenancyUID);
+
+            BucketTableMgr bucketMgr = new BucketTableMgr(flavor);
+            bucketMgr.createBucketEntry(postContentData, namespaceUID);
+
             completeCallback.complete();
 
             bucketCreated = true;

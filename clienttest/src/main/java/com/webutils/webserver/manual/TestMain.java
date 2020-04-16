@@ -68,13 +68,15 @@ public class TestMain {
         CreateObjectStorageTables objectStorageDbSetup = new CreateObjectStorageTables(flavor);
         objectStorageDbSetup.checkAndSetupObjectStorageDb();
 
+        /*
         TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
         tenancyMgr.createTenancyEntry("testCustomer", "Tenancy-12345-abcde");
         String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
 
         NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
-        namespaceMgr.createNamespaceEntry("Namespace-xyz-987", tenancyUID);
+        namespaceMgr.createNamespaceEntry("Namespace-xyz-987", tenancyUID, "Noel-MAC");
         String namespaceUID = namespaceMgr.getNamespaceUID("Namespace-xyz-987", tenancyUID);
+*/
 
         /*
         ** Debug stuff to look at Kubernetes Pod information

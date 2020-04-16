@@ -31,9 +31,14 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             " KEY (tenancyId)" +
             ")";
 
+    /*
+    ** There is one namespace per tenancy per region. The namespace spans all of the Compartments within a particular
+    **    region.
+     */
     private static final String createNamespaceTable = "CREATE TABLE IF NOT EXISTS customerNamespace (" +
             " namespaceId INT AUTO_INCREMENT, " +
             " name VARCHAR(256) NOT NULL," +
+            " region VARCHAR(128) NOT NULL," +
             " namespaceUID BINARY(16) NOT NULL," +
             " tenancyId INT NOT NULL, " +
             " FOREIGN KEY (tenancyId)" +
@@ -42,6 +47,9 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             " PRIMARY KEY (namespaceId)" +
             ")";
 
+    /*
+    **
+     */
     private static final String createBucketTable = "CREATE TABLE IF NOT EXISTS bucket (" +
             " bucketId INT AUTO_INCREMENT, " +
             " bucketName VARCHAR(255) NOT NULL, " +
