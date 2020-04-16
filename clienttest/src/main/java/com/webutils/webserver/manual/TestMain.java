@@ -5,12 +5,9 @@ import com.webutils.objectserver.manual.TestEncryptBuffer;
 import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
 import com.webutils.storageserver.requestcontext.StorageServerContextPool;
 import com.webutils.webserver.memory.MemoryManager;
-import com.webutils.webserver.mysql.CreateObjectStorageTables;
+import com.webutils.webserver.mysql.*;
 import com.webutils.webserver.niosockets.NioTestClient;
 import com.webutils.webserver.kubernetes.KubernetesInfo;
-import com.webutils.webserver.mysql.DbSetup;
-import com.webutils.webserver.mysql.K8PodDbInfo;
-import com.webutils.webserver.mysql.TestLocalDbInfo;
 import com.webutils.webserver.niosockets.NioServerHandler;
 import com.webutils.webserver.requestcontext.ClientTestContextPool;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
@@ -70,6 +67,14 @@ public class TestMain {
 
         CreateObjectStorageTables objectStorageDbSetup = new CreateObjectStorageTables(flavor);
         objectStorageDbSetup.checkAndSetupObjectStorageDb();
+
+        TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
+        tenancyMgr.createTenancyEntry("testCustomer", "Tenancy-12345-abcde");
+        String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
+
+        NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
+        namespaceMgr.createNamespaceEntry("Namespace-xyz-987", tenancyUID);
+        String namespaceUID = namespaceMgr.getNamespaceUID("Namespace-xyz-987", tenancyUID);
 
         /*
         ** Debug stuff to look at Kubernetes Pod information

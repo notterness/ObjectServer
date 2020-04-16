@@ -383,8 +383,6 @@ public abstract class DbSetup {
                             System.out.println("createStorageServerDb() - close - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                             LOG.error("createStorageServerDb() - close - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                         }
-
-                        stmt = null;
                     }
                 }
 
@@ -435,8 +433,6 @@ public abstract class DbSetup {
                         System.out.println("SQLState: " + sqlEx.getSQLState());
                         System.out.println("VendorError: " + sqlEx.getErrorCode());
                     }
-
-                    stmt = null;
                 }
             }
 
@@ -444,7 +440,6 @@ public abstract class DbSetup {
              ** Close out this connection as it was only used to create the database tables.
              */
             closeStorageServerDbConn(conn);
-            conn = null;
         }
     }
 
@@ -477,8 +472,6 @@ public abstract class DbSetup {
                         LOG.error("close SQLException: " + sqlEx.getMessage() + " VendorError: " + sqlEx.getErrorCode());
                         System.out.println("SQLException: " + sqlEx.getMessage());
                     }
-
-                    stmt = null;
                 }
             }
 
@@ -486,7 +479,6 @@ public abstract class DbSetup {
              ** Close out this connection as it was only used to create the database tables.
              */
             closeStorageServerDbConn(conn);
-            conn = null;
         }
     }
 
@@ -519,8 +511,6 @@ public abstract class DbSetup {
                         System.out.println("SQLState: " + sqlEx.getSQLState());
                         System.out.println("VendorError: " + sqlEx.getErrorCode());
                     }
-
-                    stmt = null;
                 }
             }
 
@@ -528,7 +518,6 @@ public abstract class DbSetup {
              ** Close out this connection as it was only used to drop the Kubernetes database table.
              */
             closeStorageServerDbConn(conn);
-            conn = null;
         }
     }
 
@@ -562,8 +551,6 @@ public abstract class DbSetup {
                         System.out.println("SQLState: " + sqlEx.getSQLState());
                         System.out.println("VendorError: " + sqlEx.getErrorCode());
                     }
-
-                    stmt = null;
                 }
             }
 
@@ -571,7 +558,6 @@ public abstract class DbSetup {
              ** Close out this connection as it was only used to create the database tables.
              */
             closeStorageServerDbConn(conn);
-            conn = null;
         }
     }
 
@@ -605,8 +591,6 @@ public abstract class DbSetup {
                         System.out.println("SQLState: " + sqlEx.getSQLState());
                         System.out.println("VendorError: " + sqlEx.getErrorCode());
                     }
-
-                    stmt = null;
                 }
             }
 
@@ -614,7 +598,6 @@ public abstract class DbSetup {
              ** Close out this connection as it was only used to create the database tables.
              */
             closeStorageServerDbConn(conn);
-            conn = null;
         }
     }
 
@@ -648,8 +631,6 @@ public abstract class DbSetup {
                         System.out.println("SQLState: " + sqlEx.getSQLState());
                         System.out.println("VendorError: " + sqlEx.getErrorCode());
                     }
-
-                    stmt = null;
                 }
             }
 
@@ -657,7 +638,6 @@ public abstract class DbSetup {
              ** Close out this connection as it was only used to create the Kubernetes database table.
              */
             closeStorageServerDbConn(conn);
-            conn = null;
         }
     }
 
@@ -694,8 +674,6 @@ public abstract class DbSetup {
                         System.out.println("SQLState: " + sqlEx.getSQLState());
                         System.out.println("VendorError: " + sqlEx.getErrorCode());
                     }
-
-                    stmt = null;
                 }
             }
 
@@ -703,7 +681,6 @@ public abstract class DbSetup {
              ** Close out this connection as it was only used to create the database tables.
              */
             closeStorageServerDbConn(conn);
-            conn = null;
         }
     }
 
@@ -745,8 +722,6 @@ public abstract class DbSetup {
                             System.out.println("SQLState: " + sqlEx.getSQLState());
                             System.out.println("VendorError: " + sqlEx.getErrorCode());
                         }
-
-                        stmt = null;
                     }
                 }
 
@@ -754,7 +729,6 @@ public abstract class DbSetup {
                  ** Close out this connection as it was only used to create the database tables.
                  */
                 closeStorageServerDbConn(conn);
-                conn = null;
             }
         } else {
             LOG.error("populateK8InternalStorageServers() IP Address is NULL");
@@ -799,8 +773,6 @@ public abstract class DbSetup {
                             System.out.println("SQLState: " + sqlEx.getSQLState());
                             System.out.println("VendorError: " + sqlEx.getErrorCode());
                         }
-
-                        stmt = null;
                     }
                 }
 
@@ -808,7 +780,6 @@ public abstract class DbSetup {
                  ** Close out this connection as it was only used to create the database tables.
                  */
                 closeStorageServerDbConn(conn);
-                conn = null;
             }
         } else {
             LOG.error("populateK8ServersInfo() IP Address is NULL");
@@ -873,8 +844,6 @@ public abstract class DbSetup {
                         System.out.println("SQL conn rs close() SQLState: " + sqlEx.getSQLState());
                         System.out.println("SQL conn rs close() VendorError: " + sqlEx.getErrorCode());
                     }
-
-                    rs = null;
                 }
 
                 if (stmt != null) {
@@ -885,13 +854,10 @@ public abstract class DbSetup {
                         System.out.println("SQL conn stmt close() SQLState: " + sqlEx.getSQLState());
                         System.out.println("SQL conn stmt close() VendorError: " + sqlEx.getErrorCode());
                     }
-
-                    stmt =  null;
                 }
             }
 
             closeStorageServerDbConn(conn);
-            conn = null;
         }
 
         return success;
@@ -959,8 +925,6 @@ public abstract class DbSetup {
                         System.out.println("SQL conn rs close() SQLState: " + sqlEx.getSQLState());
                         System.out.println("SQL conn rs close() VendorError: " + sqlEx.getErrorCode());
                     }
-
-                    rs = null;
                 }
 
                 if (stmt != null) {
@@ -971,13 +935,10 @@ public abstract class DbSetup {
                         System.out.println("SQL conn stmt close() SQLState: " + sqlEx.getSQLState());
                         System.out.println("SQL conn stmt close() VendorError: " + sqlEx.getErrorCode());
                     }
-
-                    stmt =  null;
                 }
             }
 
             closeStorageServerDbConn(conn);
-            conn = null;
         }
 
         return success;

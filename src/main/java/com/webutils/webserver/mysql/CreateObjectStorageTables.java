@@ -19,13 +19,14 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
     private static final Logger LOG = LoggerFactory.getLogger(CreateObjectStorageTables.class);
 
     /*
-    ** This is the Tenancy table
+    ** This is the Tenancy table. A tenancy is unique per customer, but the tenancyName does not have to be unique
+    **   across all customers.
      */
     private static final String createTenancyTable = "CREATE TABLE IF NOT EXISTS customerTenancy (" +
             " tenancyId INT AUTO_INCREMENT, " +
             " tenancyName VARCHAR(255) NOT NULL, " +
-            " tenancyUID VARCHAR(64) NOT NULL, " +
             " customerName VARCHAR(255) NOT NULL, " +
+            " tenancyUID BINARY(16) NOT NULL, " +
             " PRIMARY KEY (tenancyName)," +
             " KEY (tenancyId)" +
             ")";
@@ -33,10 +34,10 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
     private static final String createNamespaceTable = "CREATE TABLE IF NOT EXISTS customerNamespace (" +
             " namespaceId INT AUTO_INCREMENT, " +
             " name VARCHAR(256) NOT NULL," +
-            " namespaceUID VARCHAR(256) NOT NULL," +
-            " tenancy VARCHAR(255) NOT NULL, " +
-            " FOREIGN KEY (tenancy)" +
-            "   REFERENCES customerTenancy(tenancyName)" +
+            " namespaceUID BINARY(16) NOT NULL," +
+            " tenancyId INT NOT NULL, " +
+            " FOREIGN KEY (tenancyId)" +
+            "   REFERENCES customerTenancy(tenancyId)" +
             "   ON DELETE CASCADE," +
             " PRIMARY KEY (namespaceId)" +
             ")";
@@ -44,11 +45,11 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
     private static final String createBucketTable = "CREATE TABLE IF NOT EXISTS bucket (" +
             " bucketId INT AUTO_INCREMENT, " +
             " bucketName VARCHAR(255) NOT NULL, " +
-            " bucketUID VARCHAR(255) NOT NULL," +
             " compartmentId VARCHAR(255) NOT NULL, " +
             " objectEventsEnabled INT NOT NULL," +
-            " namespace INT NOT NULL," +
-            " FOREIGN KEY (namespace)" +
+            " bucketUID BINARY(16) NOT NULL," +
+            " namespaceId INT NOT NULL," +
+            " FOREIGN KEY (namespaceId)" +
             "   REFERENCES customerNamespace(namespaceId)" +
             "   ON DELETE CASCADE," +
             " PRIMARY KEY (bucketId)" +
@@ -66,11 +67,12 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             ")";
 
     private static final String createObjectTable = "CREATE TABLE IF NOT EXISTS object (" +
-            " objectName VARCHAR(255) NOT NULL," +
             " objectId INT AUTO_INCREMENT," +
+            " objectName VARCHAR(255) NOT NULL," +
             " opcClientRequestId VARCHAR(256)," +
             " contentLength INT NOT NULL," +
             " chunkRedundancy INT NOT NULL," +
+            " objectUID BINARY(16) NOT NULL," +
             " bucketId INT NOT NULL," +
             " namespaceId INT NOT NULL," +
             " FOREIGN KEY (bucketId)" +

@@ -4,9 +4,7 @@ import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
+import java.sql.*;
 
 /*
 ** This is responsible for managing the database used to hold information about the Objects.
@@ -109,6 +107,75 @@ public class ObjectStorageDb {
                 LOG.error("closeObjectStorageDbConn() - SQL conn close(2) SQLException: " + sqlEx.getMessage() + "  SQLState: " + sqlEx.getSQLState());
             }
         }
+    }
+
+    /*
+     ** This obtains the Namespace UID. It will return NULL if the namespace does not exist.
+     */
+    public String getUID(final String uidQueryStr) {
+        String uid = null;
+
+        Connection conn = getObjectStorageDbConn();
+
+        if (conn != null) {
+            Statement stmt = null;
+            ResultSet rs = null;
+
+            try {
+                stmt = conn.createStatement();
+                if (stmt.execute(uidQueryStr)) {
+                    rs = stmt.getResultSet();
+                }
+            } catch (SQLException sqlEx) {
+                LOG.error("getUID() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("Bad SQL command: " + uidQueryStr);
+                System.out.println("SQLException: " + sqlEx.getMessage());
+            } finally {
+                if (rs != null) {
+                    try {
+                        int count = 0;
+                        while (rs.next()) {
+                            /*
+                             ** The rs.getString(1) is the String format of the UID.
+                             */
+                            uid = rs.getString(1);
+                            LOG.info("Requested UID: " + uid);
+
+                            count++;
+                        }
+
+                        if (count != 1) {
+                            uid = null;
+                            LOG.warn("getUID() too many responses count: " + count);
+                        }
+                    } catch (SQLException sqlEx) {
+                        System.out.println("getUID() SQL conn rs.next() SQLException: " + sqlEx.getMessage());
+                    }
+
+                    try {
+                        rs.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("getUID() SQL conn rs.close() SQLException: " + sqlEx.getMessage());
+                    }
+                }
+
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("getUID() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQLException: " + sqlEx.getMessage());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database tables.
+             */
+            closeObjectStorageDbConn(conn);
+        }
+
+        return uid;
     }
 
 }
