@@ -32,7 +32,8 @@ public class ClientTestContextPool extends RequestContextPool {
             LinkedBlockingQueue<RequestContext> contextList = runningContexts.get(threadId);
 
             if (contextList != null) {
-                requestContext = new ClientTestRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup, threadId);
+                requestContext = new ClientTestRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup,
+                        threadId, flavor);
 
                 if (contextList.offer(requestContext)) {
                     LOG.info("allocateContext(ClientTest) [" + threadId + "]");

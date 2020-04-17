@@ -35,7 +35,8 @@ public class StorageServerContextPool extends RequestContextPool {
             LinkedBlockingQueue<RequestContext> contextList = runningContexts.get(threadId);
 
             if (contextList != null) {
-                requestContext = new StorageServerRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup, threadId);
+                requestContext = new StorageServerRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup,
+                        threadId, flavor);
 
                 if (contextList.offer(requestContext)) {
                     LOG.info("allocateContext(StorageServer) [" + threadId + "] webServerFlavor: " + flavor.toString());

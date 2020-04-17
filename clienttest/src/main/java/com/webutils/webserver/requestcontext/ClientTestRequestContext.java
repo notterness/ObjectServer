@@ -23,12 +23,12 @@ public class ClientTestRequestContext extends RequestContext {
      **   the HTTP Request has been sent by the client to the Web Server.
      ** The map is based upon the IP address and the TCP Port of the target plus the chunk number.
      */
-    private Map<ServerIdentifier, AtomicBoolean> httpRequestSent;
+    private final Map<ServerIdentifier, AtomicBoolean> httpRequestSent;
 
 
     ClientTestRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn, final DbSetup dbSetup,
-                             final int threadId) {
-        super(memoryManager, threadThisRunsOn, dbSetup, threadId);
+                             final int threadId, final WebServerFlavor flavor) {
+        super(memoryManager, threadThisRunsOn, dbSetup, threadId, flavor);
 
         /*
          ** Setup the map for the HTTP Request Sent

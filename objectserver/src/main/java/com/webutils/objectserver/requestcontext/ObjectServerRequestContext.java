@@ -12,6 +12,7 @@ import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.*;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
+import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,9 +55,9 @@ public class ObjectServerRequestContext extends RequestContext {
 
 
     public ObjectServerRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn,
-                                      final DbSetup dbSetup, final int threadId) {
+                                      final DbSetup dbSetup, final int threadId, final WebServerFlavor flavor) {
 
-        super(memoryManager, threadThisRunsOn, dbSetup, threadId);
+        super(memoryManager, threadThisRunsOn, dbSetup, threadId, flavor);
 
         /*
          ** The BufferManager(s) that are allocated here are populated in the following Operations:

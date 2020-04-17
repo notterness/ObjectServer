@@ -45,10 +45,10 @@ public abstract class RequestContext {
 
     private static final int MAX_EXEC_WORK_LOOP_COUNT = 10;
 
-    private final WebServerFlavor webServerFlavor = WebServerFlavor.INTEGRATION_TESTS;
+    private final WebServerFlavor webServerFlavor;
 
     /*
-    ** This is the Chunk Size used
+    ** This is the Chunk Size used when saving Object data to the Storage Servers
      */
     private final int chunkSize;
 
@@ -184,12 +184,13 @@ public abstract class RequestContext {
 
 
     public RequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn, final DbSetup dbSetup,
-                          final int threadId) {
+                          final int threadId, final WebServerFlavor flavor) {
 
         this.memoryManager = memoryManager;
         this.threadThisContextRunsOn = threadThisRunsOn;
         this.dbSetup = dbSetup;
         this.threadId = threadId;
+        this.webServerFlavor = flavor;
 
         /*
          ** Setup the chunk size to use. It is dependent upon if this is running in production or simulation

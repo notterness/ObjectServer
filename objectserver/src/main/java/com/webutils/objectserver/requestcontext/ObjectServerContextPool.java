@@ -35,7 +35,8 @@ public class ObjectServerContextPool extends RequestContextPool {
             LinkedBlockingQueue<RequestContext> contextList = runningContexts.get(threadId);
 
             if (contextList != null) {
-                requestContext = new ObjectServerRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup, threadId);
+                requestContext = new ObjectServerRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup,
+                        threadId, flavor);
 
                 if (contextList.offer(requestContext)) {
                     LOG.info("allocateContext(ObjectServer) [" + threadId + "] webServerFlavor: " + flavor.toString());
@@ -67,7 +68,7 @@ public class ObjectServerContextPool extends RequestContextPool {
 
         ObjectServerRequestContext requestContext;
 
-        requestContext = new ObjectServerRequestContext(memoryManager, null, dbSetup, threadId);
+        requestContext = new ObjectServerRequestContext(memoryManager, null, dbSetup, threadId, flavor);
 
         LinkedBlockingQueue<RequestContext> contextList = runningContexts.get(threadId);
         if (contextList != null) {

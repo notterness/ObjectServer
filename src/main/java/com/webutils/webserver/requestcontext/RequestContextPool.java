@@ -1,7 +1,6 @@
 package com.webutils.webserver.requestcontext;
 
 import com.webutils.webserver.memory.MemoryManager;
-import com.webutils.webserver.mysql.DbSetup;
 import com.webutils.webserver.niosockets.EventPollThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

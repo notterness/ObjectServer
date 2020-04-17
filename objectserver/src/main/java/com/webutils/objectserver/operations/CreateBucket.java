@@ -76,7 +76,7 @@ public class CreateBucket implements Operation {
      */
     public void execute() {
         if (!bucketCreated) {
-            WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
+            WebServerFlavor flavor = requestContext.getWebServerFlavor();
 
             TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
             String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");

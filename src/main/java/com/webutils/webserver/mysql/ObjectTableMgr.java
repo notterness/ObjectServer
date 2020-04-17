@@ -1,7 +1,6 @@
 package com.webutils.webserver.mysql;
 
 import com.webutils.webserver.http.HttpRequestInfo;
-import com.webutils.webserver.http.PostContentData;
 import com.webutils.webserver.http.StorageTierEnum;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.eclipse.jetty.http.HttpStatus;

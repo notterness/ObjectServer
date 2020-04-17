@@ -15,8 +15,6 @@ import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-
 public class StorageServerRequestContext extends RequestContext {
 
     private static final Logger LOG = LoggerFactory.getLogger(StorageServerRequestContext.class);
@@ -32,9 +30,9 @@ public class StorageServerRequestContext extends RequestContext {
 
 
     StorageServerRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn,
-                                final DbSetup dbSetup, final int threadId) {
+                                final DbSetup dbSetup, final int threadId, final WebServerFlavor flavor) {
 
-        super(memoryManager, threadThisRunsOn, dbSetup, threadId);
+        super(memoryManager, threadThisRunsOn, dbSetup, threadId, flavor);
 
     }
 
