@@ -2,9 +2,8 @@ package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.http.CasperHttpInfo;
+import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.http.parser.ByteBufferHttpParser;
-import com.webutils.webserver.http.parser.PostContentParser;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,7 +36,7 @@ public class ParseHttpRequest implements Operation {
      */
     private ByteBufferHttpParser httpParser;
 
-    private final CasperHttpInfo casperHttpInfo;
+    private final HttpRequestInfo httpRequestInfo;
 
     private boolean initialHttpBuffer;
 
@@ -71,7 +70,7 @@ public class ParseHttpRequest implements Operation {
          ** The CasperHttpInfo keeps track of the details of a particular
          **   HTTP transfer and the parsed information.
          */
-        this.casperHttpInfo = requestContext.getHttpInfo();
+        this.httpRequestInfo = requestContext.getHttpInfo();
 
         /*
          ** This starts out not being on any queue
@@ -94,7 +93,7 @@ public class ParseHttpRequest implements Operation {
         httpBufferPointer = clientReadBufferMgr.register(this, readBufferPointer);
 
         initialHttpBuffer = true;
-        httpParser = new ByteBufferHttpParser(casperHttpInfo);
+        httpParser = new ByteBufferHttpParser(httpRequestInfo);
 
         return httpBufferPointer;
     }
@@ -143,7 +142,7 @@ public class ParseHttpRequest implements Operation {
             /*
              ** Need to break out of the loop if the parsing is complete.
              */
-            if (casperHttpInfo.getHeaderComplete()) {
+            if (httpRequestInfo.getHeaderComplete()) {
                 break;
             }
         }
@@ -186,7 +185,7 @@ public class ParseHttpRequest implements Operation {
             ** Create a book mark for the next set of readers to register against.
              */
             clientReadBufferMgr.bookmark(httpBufferPointer);
-            casperHttpInfo.parseHeaders();
+            httpRequestInfo.parseHeaders();
 
             /*
              ** First terminate anything going on with the HTTP Request parser. This will remove any dependencies

@@ -54,6 +54,7 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             " bucketId INT AUTO_INCREMENT, " +
             " bucketName VARCHAR(255) NOT NULL, " +
             " compartmentId VARCHAR(255) NOT NULL, " +
+            " storageTier VARCHAR(64) NOT NULL," +
             " objectEventsEnabled INT NOT NULL," +
             " bucketUID BINARY(16) NOT NULL," +
             " namespaceId INT NOT NULL," +
@@ -79,7 +80,11 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             " objectName VARCHAR(255) NOT NULL," +
             " opcClientRequestId VARCHAR(256)," +
             " contentLength INT NOT NULL," +
-            " chunkRedundancy INT NOT NULL," +
+            " storageType INT NOT NULL," +
+            " createTime TIMESTAMP NOT NULL," +
+            " lastReadAccessTime TIMESTAMP," +
+            " readAccessCount INT," +
+            " lastUpdateTime TIMESTAMP NOT NULL," +
             " objectUID BINARY(16) NOT NULL," +
             " bucketId INT NOT NULL," +
             " namespaceId INT NOT NULL," +

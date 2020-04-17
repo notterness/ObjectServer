@@ -1,6 +1,6 @@
 package com.webutils.webserver.http.parser;
 
-import com.webutils.webserver.http.CasperHttpInfo;
+import com.webutils.webserver.http.HttpRequestInfo;
 import org.eclipse.jetty.http.*;
 import org.eclipse.jetty.util.BufferUtil;
 
@@ -35,10 +35,10 @@ public class HttpParserListener implements HttpParser.RequestHandler {
     private boolean _messageCompleted;
     private final List<HttpComplianceSection> _complianceViolation = new ArrayList<>();
 
-    private CasperHttpInfo casperHttpInfo;
+    private HttpRequestInfo httpRequestInfo;
 
-    public HttpParserListener(final CasperHttpInfo httpHeaderInfo) {
-        casperHttpInfo = httpHeaderInfo;
+    public HttpParserListener(final HttpRequestInfo httpHeaderInfo) {
+        httpRequestInfo = httpHeaderInfo;
     }
 
     @Override
@@ -65,13 +65,13 @@ public class HttpParserListener implements HttpParser.RequestHandler {
         /*
         ** Parse the URI first to obtain any version information
          */
-        casperHttpInfo.setHttpUri(uri);
+        httpRequestInfo.setHttpUri(uri);
 
         if (_versionOrReason != null) {
             LOG.info("StartRequest() method: " + method + " uri: " + uri +
                     " version: " + _versionOrReason);
 
-            casperHttpInfo.setHttpMethodAndVersion(method, _versionOrReason);
+            httpRequestInfo.setHttpMethodAndVersion(method, _versionOrReason);
         } else {
             LOG.info("StartRequest() method: " + method + " uri: " + uri +
                     " version: null");
@@ -82,7 +82,7 @@ public class HttpParserListener implements HttpParser.RequestHandler {
 
     @Override
     public void parsedHeader(HttpField field) {
-        casperHttpInfo.addHeaderValue(field);
+        httpRequestInfo.addHeaderValue(field);
     }
 
     @Override
@@ -91,7 +91,7 @@ public class HttpParserListener implements HttpParser.RequestHandler {
         _content = null;
         _headerCompleted = true;
 
-        casperHttpInfo.setHeaderComplete();
+        httpRequestInfo.setHeaderComplete();
         return false;
     }
 
@@ -106,7 +106,7 @@ public class HttpParserListener implements HttpParser.RequestHandler {
     public boolean contentComplete() {
         LOG.info("contentComplete()");
 
-        casperHttpInfo.setContentComplete();
+        httpRequestInfo.setContentComplete();
         return false;
     }
 
@@ -116,13 +116,13 @@ public class HttpParserListener implements HttpParser.RequestHandler {
 
         _messageCompleted = true;
 
-        casperHttpInfo.setMessageComplete();
+        httpRequestInfo.setMessageComplete();
         return true;
     }
 
     @Override
     public void badMessage(final BadMessageException failure) {
-        casperHttpInfo.httpHeaderError(failure);
+        httpRequestInfo.httpHeaderError(failure);
     }
 
     @Override

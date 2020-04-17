@@ -40,7 +40,7 @@ public class K8LocalDbInfo extends DbSetup {
 
         String queryStr = getK8LocalStorageServer + serverName + getServerQueryEnd;
 
-        return getServer(queryStr, serverList);
+        return super.getServer(queryStr, serverList);
     }
 
     public boolean getStorageServers(final List<ServerIdentifier> servers, final int chunkNumber) {

@@ -3,7 +3,7 @@ package com.webutils.webserver.operations;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.common.Sha256Digest;
-import com.webutils.webserver.http.CasperHttpInfo;
+import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,7 +44,7 @@ public class ComputeSha256Digest implements Operation {
 
     private final Sha256Digest sha256Digest;
 
-    private final CasperHttpInfo casperHttpInfo;
+    private final HttpRequestInfo httpRequestInfo;
 
 
     /*
@@ -77,7 +77,7 @@ public class ComputeSha256Digest implements Operation {
 
         sha256Digest = new Sha256Digest();
 
-        casperHttpInfo = requestContext.getHttpInfo();
+        httpRequestInfo = requestContext.getHttpInfo();
     }
 
     public OperationTypeEnum getOperationType() {
@@ -124,7 +124,7 @@ public class ComputeSha256Digest implements Operation {
                 String dataDigestString = sha256Digest.getFinalDigest();
                 requestContext.setSha256DigestComplete();
 
-                boolean contentHasValidSha256Digest = casperHttpInfo.checkContentSha256(dataDigestString);
+                boolean contentHasValidSha256Digest = httpRequestInfo.checkContentSha256(dataDigestString);
                 LOG.info("WebServerConnState[" + requestContext.getRequestId() + "] Computed sha256Digest " +
                         dataDigestString + " is valid: " + contentHasValidSha256Digest);
                 requestContext.setSha256DigestCompareResult(contentHasValidSha256Digest);

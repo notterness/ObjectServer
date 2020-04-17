@@ -19,9 +19,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 // Server class
 public class TestMain {
+    static WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
+
     public static void main(String[] args) {
 
-        WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
         final String CLOSE_CONNECTION_AFTER_HEADER = "DisconnectAfterHeader";
 
         DbSetup dbSetup;
@@ -68,7 +69,6 @@ public class TestMain {
         CreateObjectStorageTables objectStorageDbSetup = new CreateObjectStorageTables(flavor);
         objectStorageDbSetup.checkAndSetupObjectStorageDb();
 
-        /*
         TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
         tenancyMgr.createTenancyEntry("testCustomer", "Tenancy-12345-abcde");
         String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
@@ -76,7 +76,6 @@ public class TestMain {
         NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
         namespaceMgr.createNamespaceEntry("Namespace-xyz-987", tenancyUID, "Noel-MAC");
         String namespaceUID = namespaceMgr.getNamespaceUID("Namespace-xyz-987", tenancyUID);
-*/
 
         /*
         ** Debug stuff to look at Kubernetes Pod information
@@ -245,9 +244,6 @@ public class TestMain {
         ClientTest client_CreateBucket_Simple = new ClientTest_CreateBucket_Simple("CreateBucket_Simple", testClient,
                 serverIpAddr, serverTcpPort, threadCount);
         client_CreateBucket_Simple.execute();
-
-        threadCount.getAndIncrement();
-        waitForTestsToComplete(threadCount);
 
         //ClientTest client_1 = new ClientTest_2("ClientTest_2", testClient, serverTcpPort, threadCount);
         //client_1.execute();
@@ -424,7 +420,6 @@ public class TestMain {
             System.out.println("Wait after test run was interrupted");
         }
     }
-
 }
 
 

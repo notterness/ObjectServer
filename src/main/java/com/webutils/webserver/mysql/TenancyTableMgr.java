@@ -30,6 +30,12 @@ public class TenancyTableMgr extends ObjectStorageDb {
         /*
         ** First check if there is already a record for this Tenancy and Customer
          */
+        String tenancyUID = getTenancyUID(customerName, tenancyName);
+        if (tenancyUID != null) {
+            LOG.warn("This Tenancy already exists. customer: " + customerName + " tenancyName: " + tenancyName);
+            return true;
+        }
+
 
         String createTenancyStr = CREATE_TENANCY_1 + tenancyName + CREATE_TENANCY_2 + customerName + CREATE_TENANCY_3;
 

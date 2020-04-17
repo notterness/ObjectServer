@@ -1,6 +1,6 @@
 package com.webutils.webserver.manual;
 
-import com.webutils.webserver.http.CasperHttpInfo;
+import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.common.Md5Digest;
 import com.webutils.webserver.http.parser.ByteBufferHttpParser;
 import com.webutils.webserver.memory.MemoryManager;
@@ -57,8 +57,8 @@ public abstract class WebServerTest {
         IoInterface connection = testEventThread.allocateConnection(null);
         requestContext.initializeServer(connection, requestId);
 
-        CasperHttpInfo casperHttpInfo = new CasperHttpInfo(requestContext);
-        parser = new ByteBufferHttpParser(casperHttpInfo);
+        HttpRequestInfo httpRequestInfo = new HttpRequestInfo(requestContext);
+        parser = new ByteBufferHttpParser(httpRequestInfo);
     }
 
     /*

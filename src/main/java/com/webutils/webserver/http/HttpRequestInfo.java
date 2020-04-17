@@ -1,6 +1,5 @@
 package com.webutils.webserver.http;
 
-import com.google.common.hash.Hashing;
 import com.google.common.io.BaseEncoding;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.eclipse.jetty.http.BadMessageException;
@@ -16,9 +15,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-public class CasperHttpInfo {
+public class HttpRequestInfo {
 
-    private static final Logger LOG = LoggerFactory.getLogger(CasperHttpInfo.class);
+    private static final Logger LOG = LoggerFactory.getLogger(HttpRequestInfo.class);
 
     /**
      * The following 3 headers are secret headers that should only be used internally by cross-region replication
@@ -38,7 +37,7 @@ public class CasperHttpInfo {
     private static final String VCN_ID_CASPER_DEBUG_HEADER = "x-vcn-id-casper";
 
     private static final String OBJECT_NAME = "/o/";
-    private static final String TENANCY_NAME = "/n/";
+    private static final String NAMESPACE_NAME = "/n/";
     private static final String BUCKET_NAME = "/b/";
     private static final String COMMAND_TYPE = "/v/";
     private static final String TEST_TYPE = "/t/";
@@ -243,7 +242,7 @@ public class CasperHttpInfo {
      */
     private final Map<String, List<String>> headers;
 
-    private String[] uriFields = {OBJECT_NAME, BUCKET_NAME, TENANCY_NAME, COMMAND_TYPE, TEST_TYPE};
+    private final String[] uriFields = {OBJECT_NAME, BUCKET_NAME, NAMESPACE_NAME, COMMAND_TYPE, TEST_TYPE};
 
 
     /*
@@ -259,7 +258,7 @@ public class CasperHttpInfo {
     private Map<String, String> putObjectInfoMap;
 
 
-    public CasperHttpInfo(final RequestContext requestContext) {
+    public HttpRequestInfo(final RequestContext requestContext) {
         headerComplete = false;
         contentComplete = false;
         messageComplete = false;
@@ -527,7 +526,7 @@ public class CasperHttpInfo {
         ** Verify that there was an Object Name, Bucket Name and Tenant Name passed in
          */
         if (httpMethod == HttpMethodEnum.PUT_METHOD) {
-            if ((getObject() == null) || (getBucket() == null) || (getTenancy() == null)) {
+            if ((getObject() == null) || (getBucket() == null) || (getNamespace() == null)) {
                 parseFailureCode = HttpStatus.BAD_REQUEST_400;
                 parseFailureReason = HttpStatus.getMessage(parseFailureCode);
 
@@ -537,10 +536,10 @@ public class CasperHttpInfo {
                 requestContext.setHttpParsingError();
             }
         } else if (httpMethod == HttpMethodEnum.POST_METHOD) {
-            if ((getBucket().compareTo("") != 0) || (getTenancy() == null)) {
+            if ((getBucket().compareTo("") != 0) || (getNamespace() == null)) {
 
                 LOG.error("bucket: " + getBucket() + " compare: " + getBucket().compareTo(""));
-                LOG.error("tenancy: " + getTenancy());
+                LOG.error("namespace: " + getNamespace());
 
                 parseFailureCode = HttpStatus.BAD_REQUEST_400;
                 parseFailureReason = HttpStatus.getMessage(parseFailureCode);
@@ -588,6 +587,13 @@ public class CasperHttpInfo {
         parseFailureReason = HttpStatus.getMessage(parseFailureCode);
         requestContext.setHttpParsingError();
     }
+
+    public void setParseFailureCode(final int errorCode, final String failureMessage) {
+        parseFailureCode = errorCode;
+        parseFailureReason = failureMessage;
+        requestContext.setHttpParsingError();
+    }
+
 
     public int getParseFailureCode() {
         return parseFailureCode;
@@ -688,17 +694,17 @@ public class CasperHttpInfo {
     }
 
     /*
-     ** Return "namespace" from the PathParam
+     ** Return "tenancy" from the PathParam
      */
-    public String getNamespace() {
+    public String getTenancy() {
         return null;
     }
 
     /*
-     ** Return the "tenancy" (TENANCY_NAME) that was parsed from the HTTP uri
+     ** Return the "tenancy" (NAMESPACE_NAME) that was parsed from the HTTP uri
      */
-    public String getTenancy() {
-        return putObjectInfoMap.get(TENANCY_NAME);
+    public String getNamespace() {
+        return putObjectInfoMap.get(NAMESPACE_NAME);
     }
 
     /*
@@ -715,6 +721,21 @@ public class CasperHttpInfo {
         return putObjectInfoMap.get(OBJECT_NAME);
     }
 
+    /*
+    ** Return the "opc-client-request-id". This is an optional field in the PUT Object request.
+     */
+    public String getOpcClientRequestId() { return null; }
+
+    /*
+    **
+     */
+    public int getContentLength() {
+        if (contentLengthReceived) {
+            return contentLength;
+        }
+
+        return -1;
+    }
     /*
     ** Return the "Test Type" (TEST_TYPE) that was parsed from the HTTP uri (This is prefixed with the "/t/").
     **

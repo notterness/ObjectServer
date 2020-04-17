@@ -1,7 +1,7 @@
 package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.http.CasperHttpInfo;
+import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.http.HttpMethodEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.eclipse.jetty.http.HttpStatus;
@@ -35,7 +35,7 @@ public class DetermineRequestType implements Operation {
      */
     private final Map<HttpMethodEnum, Operation> supportedHttpRequests;
 
-    private final CasperHttpInfo casperHttpInfo;
+    private final HttpRequestInfo httpRequestInfo;
 
     private boolean methodDeterminationDone;
 
@@ -45,7 +45,7 @@ public class DetermineRequestType implements Operation {
         this.requestContext = requestContext;
         this.supportedHttpRequests = supportedHttpRequests;
 
-        this.casperHttpInfo = this.requestContext.getHttpInfo();
+        this.httpRequestInfo = this.requestContext.getHttpInfo();
 
         /*
          ** This starts out not being on any queue
@@ -102,7 +102,7 @@ public class DetermineRequestType implements Operation {
                  ** Now, based on the HTTP method, figure out the Operation to event that will setup the sequences for the
                  **   handling of the request.
                  */
-                HttpMethodEnum method = casperHttpInfo.getMethod();
+                HttpMethodEnum method = httpRequestInfo.getMethod();
                 Operation httpRequestSetup = supportedHttpRequests.get(method);
                 if (httpRequestSetup != null) {
                     /*
@@ -116,7 +116,7 @@ public class DetermineRequestType implements Operation {
                     httpRequestSetup.event();
                 } else {
                     LOG.info("DetermineRequestType[" + requestContext.getRequestId() + "] execute() unsupported request " + method.toString());
-                    casperHttpInfo.setParseFailureCode(HttpStatus.METHOD_NOT_ALLOWED_405);
+                    httpRequestInfo.setParseFailureCode(HttpStatus.METHOD_NOT_ALLOWED_405);
 
                     Operation sendFinalStatus = requestContext.getOperation(OperationTypeEnum.SEND_FINAL_STATUS);
                     sendFinalStatus.event();

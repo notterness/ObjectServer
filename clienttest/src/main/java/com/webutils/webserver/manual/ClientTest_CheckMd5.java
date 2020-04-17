@@ -54,8 +54,8 @@ class ClientTest_CheckMd5 extends ClientTest {
 
     @Override
     public String buildRequestString(final String Md5_Digest) {
-        return new String("PUT /n/faketenantname" + "" +
-                "/b/bucket-5e1910d0-ea13-11e9-851d-234132e0fb02" +
+        return new String("PUT /n/Namespace-xyz-987" + "" +
+                "/b/CreateBucket_Simple" +
                 "/o/5e223890-ea13-11e9-851d-234132e0fb02 HTTP/1.1\n" +
                 "Host: ClientTest-" + super.clientTestName + "\n" +
                 "Content-Type: application/json\n" +

@@ -1,11 +1,15 @@
 package com.webutils.webserver.mysql;
 
+import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.http.PostContentData;
+import com.webutils.webserver.http.StorageTierEnum;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
+import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -13,11 +17,12 @@ public class BucketTableMgr extends ObjectStorageDb {
 
     private static final Logger LOG = LoggerFactory.getLogger(BucketTableMgr.class);
 
-    private final static String CREATE_BUCKET_1 = "INSERT INTO bucket VALUES ( NULL, '";
-    private final static String CREATE_BUCKET_2 = "', '";
-    private final static String CREATE_BUCKET_3 = "', ";
-    private final static String CREATE_BUCKET_4 = ", UUID_TO_BIN(UUID()), (SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN('";
-    private final static String CREATE_BUCKET_5 = "') ) )";
+    private final static String CREATE_BUCKET_1 = "INSERT INTO bucket VALUES ( NULL, '";   // bucketName
+    private final static String CREATE_BUCKET_2 = "', '";                                  // compartmentId
+    private final static String CREATE_BUCKET_3 = "', '";                                  // storageTier
+    private final static String CREATE_BUCKET_4 = "', ";                                   // objectEventsEnabled
+    private final static String CREATE_BUCKET_5 = ", UUID_TO_BIN(UUID()), (SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN('";
+    private final static String CREATE_BUCKET_6 = "') ) )";
 
     private final static String GET_BUCKET_UID_1 = "SELECT BIN_TO_UUID(bucketUID) bucketUID FROM bucket WHERE bucketName = '";
     private final static String GET_BUCKET_UID_2 = "' AND namespaceId = ( SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN('";
@@ -27,27 +32,57 @@ public class BucketTableMgr extends ObjectStorageDb {
     private final static String GET_BUCKET_ID_2 = "' AND namespaceId = ( SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN('";
     private final static String GET_BUCKET_ID_3 = "' ) )";
 
-    public BucketTableMgr(final WebServerFlavor flavor) {
+    private final static String GET_BUCKET_STORAGE_TIER_1 = "SELECT storageTier FROM bucket WHERE bucketUID = UUID_TO_BIN('";
+    private final static String GET_BUCKET_STORAGE_TIER_2 = "')";
+
+    /*
+    ** The HttpRequestInfo is needed to allow errors to be logged and passed back to the client
+     */
+    private final HttpRequestInfo httpRequestInfo;
+
+    public BucketTableMgr(final WebServerFlavor flavor, final HttpRequestInfo requestInfo) {
         super(flavor);
+
+        this.httpRequestInfo = requestInfo;
     }
 
-    public boolean createBucketEntry(final PostContentData bucketConfigData, final String namespaceUID) {
-        boolean success = true;
+    public int createBucketEntry(final PostContentData bucketConfigData, final String namespaceUID) {
+        int status = HttpStatus.OK_200;
 
         /*
          ** Obtain the fields required to build the Bucket table entry
          */
         String bucketName = bucketConfigData.getBucketName();
+
+        /*
+        ** Verify tht this bucket has not already been created
+         */
+        String bucketUID = getBucketUID(bucketName, namespaceUID);
+        if (bucketUID != null) {
+            /*
+            ** Need to return a 409 return code (Conflict)
+             */
+            LOG.warn("Bucket already exists name: " + bucketName);
+
+            String errorMessage = "CreateBucket bucket already exists name: " + bucketName + " UID: " + bucketUID;
+            httpRequestInfo.setParseFailureCode(HttpStatus.CONFLICT_409, errorMessage);
+
+            return HttpStatus.CONFLICT_409;
+        }
+
         String compartmentId = bucketConfigData.getCompartmentId();
+        String storageTier = bucketConfigData.getStorageTier();
         int eventsEnabled = bucketConfigData.getObjectEventsEnabled();
 
         if ((bucketName == null) || (compartmentId == null)) {
             LOG.error("createBucketEntry() null required attributes");
-            return false;
+
+            httpRequestInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, "CreateBucket missing attributes name: " + bucketName);
+            return HttpStatus.BAD_REQUEST_400;
         }
 
         String createBucketStr = CREATE_BUCKET_1 + bucketName + CREATE_BUCKET_2 + compartmentId + CREATE_BUCKET_3 +
-                eventsEnabled + CREATE_BUCKET_4 + namespaceUID + CREATE_BUCKET_5;
+                storageTier + CREATE_BUCKET_4 + eventsEnabled + CREATE_BUCKET_5 + namespaceUID + CREATE_BUCKET_6;
 
         Connection conn = getObjectStorageDbConn();
 
@@ -62,7 +97,8 @@ public class BucketTableMgr extends ObjectStorageDb {
                 LOG.error("Bad SQL command: " + createBucketStr);
                 System.out.println("SQLException: " + sqlEx.getMessage());
 
-                success = false;
+                httpRequestInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, "SQL error");
+                status = HttpStatus.INTERNAL_SERVER_ERROR_500;
             } finally {
                 if (stmt != null) {
                     try {
@@ -83,27 +119,28 @@ public class BucketTableMgr extends ObjectStorageDb {
         /*
         ** Now fill in the Tag key value pair tables associated with this bucket.
          */
-        if (success) {
-            String bucketUID = getBucketUID(bucketName, namespaceUID);
+        if (status == HttpStatus.OK_200) {
+            bucketUID = getBucketUID(bucketName, namespaceUID);
             if (bucketUID != null) {
                 LOG.info("bucketUID: " + bucketUID);
-            }
 
-            int id = getBucketId(bucketName, namespaceUID);
-            if (id != -1) {
-                BucketTagTableMgr tagMgr = new BucketTagTableMgr(flavor);
+                int id = getBucketId(bucketName, namespaceUID);
+                if (id != -1) {
+                    BucketTagTableMgr tagMgr = new BucketTagTableMgr(flavor);
 
-                tagMgr.createBucketTags(bucketConfigData, id);
+                    tagMgr.createBucketTags(bucketConfigData, id);
+                }
             }
         }
-        return success;
+
+        return status;
     }
 
     /*
-     ** This obtains the Tenancy UID. It will return NULL if the Tenancy does not exist.
+     ** This obtains the Bucket UID. It will return NULL if the Bucket does not exist.
      **
-     ** NOTE: A Tenancy is unique when the tenancyName and CustomerName are combined. It is legal for multiple customers
-     **   to use the same tenancyName.
+     ** NOTE: A Bucket is unique to a region and a namespace (there is one Object Storage namespace per region per
+     **   tenancy).
      */
     public String getBucketUID(final String bucketName, final String namespaceUID) {
         String getBucketUIDStr = GET_BUCKET_UID_1 + bucketName + GET_BUCKET_UID_2 + namespaceUID + GET_BUCKET_UID_3;
@@ -115,5 +152,81 @@ public class BucketTableMgr extends ObjectStorageDb {
         String getBucketIdStr = GET_BUCKET_ID_1 + bucketName + GET_BUCKET_ID_2 + namespaceUID + GET_BUCKET_ID_3;
 
         return getId(getBucketIdStr);
+    }
+
+    public StorageTierEnum getBucketStorageTier(final String bucketUID) {
+        String storageTierStr = null;
+
+        String bucketStorageTierQuery = GET_BUCKET_STORAGE_TIER_1 + bucketUID + GET_BUCKET_STORAGE_TIER_2;
+
+        Connection conn = getObjectStorageDbConn();
+
+        if (conn != null) {
+            Statement stmt = null;
+            ResultSet rs = null;
+
+            try {
+                stmt = conn.createStatement();
+                if (stmt.execute(bucketStorageTierQuery)) {
+                    rs = stmt.getResultSet();
+                }
+            } catch (SQLException sqlEx) {
+                LOG.error("getBucketStorageTier() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("Bad SQL command: " + bucketStorageTierQuery);
+                System.out.println("SQLException: " + sqlEx.getMessage());
+            } finally {
+                if (rs != null) {
+                    try {
+                        int count = 0;
+                        while (rs.next()) {
+                            /*
+                             ** The rs.getString(1) is the String format of the UID.
+                             */
+                            storageTierStr = rs.getString(1);
+                            LOG.info("Requested storageTier: " + storageTierStr);
+
+                            count++;
+                        }
+
+                        if (count != 1) {
+                            storageTierStr = null;
+                            LOG.warn("getBucketStorageTier() too many responses count: " + count);
+                        }
+                    } catch (SQLException sqlEx) {
+                        System.out.println("getBucketStorageTier() SQL conn rs.next() SQLException: " + sqlEx.getMessage());
+                    }
+
+                    try {
+                        rs.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("getBucketStorageTier() SQL conn rs.close() SQLException: " + sqlEx.getMessage());
+                    }
+                }
+
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("getBucketStorageTier() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQLException: " + sqlEx.getMessage());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database tables.
+             */
+            closeObjectStorageDbConn(conn);
+        }
+
+        StorageTierEnum tier;
+
+        if (storageTierStr != null) {
+            tier = StorageTierEnum.fromString(storageTierStr);
+        } else {
+            tier = StorageTierEnum.INVALID_TIER;
+        }
+
+        return tier;
     }
 }

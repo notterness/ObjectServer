@@ -1,14 +1,10 @@
 package com.webutils.webserver.mysql;
 
-import com.webutils.webserver.requestcontext.ServerIdentifier;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.sql.Connection;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -46,6 +42,15 @@ public class NamespaceTableMgr extends ObjectStorageDb {
      */
     public boolean createNamespaceEntry(final String namespace, final String tenancyUID, final String region) {
         boolean success = true;
+
+        /*
+        ** First check if there is already a namespace entry. If it exists, simply return true indicating it is present.
+         */
+        String namespaceUID = getNamespaceUID(namespace, tenancyUID);
+        if (namespaceUID != null) {
+            LOG.warn("This namespace already exists. namespace: " + namespace + " tenancyUID: " + tenancyUID);
+            return true;
+        }
 
         String createNamespaceStr = CREATE_NAMESPACE_1 + namespace + CREATE_NAMESPACE_2 + region + CREATE_NAMESPACE_3 +
                 tenancyUID + CREATE_NAMESPACE_4;
@@ -85,10 +90,17 @@ public class NamespaceTableMgr extends ObjectStorageDb {
     }
 
     /*
-    ** This obtains the Namespace UID. It will return NULL if the namespace does not exist.
+    ** This obtains the Namespace UID. It will return NULL if the namespace does not exist. A namespace is unique to a
+    **   Tenancy and to a region.
+    **
+    ** NOTE: This check is not using the region table field at this point. For completeness, the search for the
+    **   namespace should use the following:
+    **     tenancyUID - This is how resources are owned by a customer and provides the top level of organization.
+    **     region - The namespace is per region within a tenancy.
+    **     namespaceName - The name of the namespace the Object Storage items are contained within.
      */
-    public String getNamespaceUID(final String namespace, final String tenancyUID) {
-        String getNamespaceUIDStr = GET_NAMESPACE_UID_1 + namespace + GET_NAMESPACE_UID_2 + tenancyUID + GET_NAMESPACE_UID_3;
+    public String getNamespaceUID(final String namespaceName, final String tenancyUID) {
+        String getNamespaceUIDStr = GET_NAMESPACE_UID_1 + namespaceName + GET_NAMESPACE_UID_2 + tenancyUID + GET_NAMESPACE_UID_3;
 
         return getUID(getNamespaceUIDStr);
     }

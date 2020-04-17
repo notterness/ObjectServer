@@ -3,7 +3,7 @@ package com.webutils.webserver.operations;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.common.Md5Digest;
-import com.webutils.webserver.http.CasperHttpInfo;
+import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,7 +44,7 @@ public class ComputeMd5Digest implements Operation {
 
     private final Md5Digest md5Digest;
 
-    private final CasperHttpInfo casperHttpInfo;
+    private final HttpRequestInfo httpRequestInfo;
 
 
     /*
@@ -77,7 +77,7 @@ public class ComputeMd5Digest implements Operation {
 
         md5Digest = new Md5Digest();
 
-        casperHttpInfo = requestContext.getHttpInfo();
+        httpRequestInfo = requestContext.getHttpInfo();
     }
 
     public OperationTypeEnum getOperationType() {
@@ -124,7 +124,7 @@ public class ComputeMd5Digest implements Operation {
                 String dataDigestString = md5Digest.getFinalDigest();
                 requestContext.setDigestComplete();
 
-                boolean contentHasValidMd5Digest = casperHttpInfo.checkContentMD5(dataDigestString);
+                boolean contentHasValidMd5Digest = httpRequestInfo.checkContentMD5(dataDigestString);
                 LOG.info("WebServerConnState[" + requestContext.getRequestId() + "] Computed md5Digest " +
                         dataDigestString + " is valid: " + contentHasValidMd5Digest);
                 requestContext.setMd5DigestCompareResult(contentHasValidMd5Digest);

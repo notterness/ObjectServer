@@ -7,7 +7,6 @@ import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.operations.ComputeMd5Digest;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
-import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,8 +30,6 @@ public class SetupV2Put implements Operation {
 
     private final Operation completeCallback;
 
-
-
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
@@ -46,7 +43,7 @@ public class SetupV2Put implements Operation {
     **
     ** The following is a map of all of the created Operations to handle this request.
      */
-    private Map<OperationTypeEnum, Operation> v2PutHandlerOperations;
+    private final Map<OperationTypeEnum, Operation> v2PutHandlerOperations;
 
     private boolean setupMethodDone;
 
@@ -102,6 +99,15 @@ public class SetupV2Put implements Operation {
 
     public void execute() {
         if (!setupMethodDone) {
+            /*
+            ** Setup the operation to write the Object information to the database. This needs to complete prior to
+            **   the data being written to the Storage Servers
+             */
+            CreateObject createObject = new CreateObject(requestContext, null);
+            v2PutHandlerOperations.put(createObject.getOperationType(), createObject);
+            createObject.initialize();
+            createObject.event();
+
             /*
              ** Add compute MD5 and encrypt to the dependency on the ClientReadBufferManager read pointer.
              */
@@ -182,20 +188,17 @@ public class SetupV2Put implements Operation {
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
         //LOG.info("SetupV2Put[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("SetupV2Put[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("SetupV2Put[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("SetupV2Put[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not on a queue");
+            LOG.warn("SetupV2Put[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("SetupV2Put[" + requestContext.getRequestId() + "] markAddToQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("SetupV2Put[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }

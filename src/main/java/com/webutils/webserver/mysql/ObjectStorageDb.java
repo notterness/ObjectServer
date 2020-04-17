@@ -146,7 +146,8 @@ public class ObjectStorageDb {
 
                         if (count != 1) {
                             uid = null;
-                            LOG.warn("getUID() too many responses count: " + count);
+                            LOG.warn("getUID() incorrect response count: " + count);
+                            LOG.warn(uidQueryStr);
                         }
                     } catch (SQLException sqlEx) {
                         System.out.println("getUID() SQL conn rs.next() SQLException: " + sqlEx.getMessage());

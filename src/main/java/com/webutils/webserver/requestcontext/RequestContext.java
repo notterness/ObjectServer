@@ -2,7 +2,7 @@ package com.webutils.webserver.requestcontext;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.http.CasperHttpInfo;
+import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.http.HttpMethodEnum;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.DbSetup;
@@ -17,7 +17,6 @@ import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -46,6 +45,8 @@ public abstract class RequestContext {
 
     private static final int MAX_EXEC_WORK_LOOP_COUNT = 10;
 
+    private final WebServerFlavor webServerFlavor = WebServerFlavor.INTEGRATION_TESTS;
+
     /*
     ** This is the Chunk Size used
      */
@@ -55,7 +56,7 @@ public abstract class RequestContext {
      ** The HttpXferInfo is a holding object for all of the data parsed out of the HTTP Request and some
      **   other information that is generated from the HTTP parsed headers and URI.
      */
-    private final CasperHttpInfo httpInfo;
+    private final HttpRequestInfo httpInfo;
 
     /*
      ** This is the BufferManager to read data in from the client.
@@ -178,8 +179,8 @@ public abstract class RequestContext {
     private final Condition queueSignal;
     private boolean workQueued;
 
-    private BlockingQueue<Operation> workQueue;
-    private BlockingQueue<Operation> timedWaitQueue;
+    private final BlockingQueue<Operation> workQueue;
+    private final BlockingQueue<Operation> timedWaitQueue;
 
 
     public RequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn, final DbSetup dbSetup,
@@ -205,7 +206,7 @@ public abstract class RequestContext {
         this.clientReadBufferManager = new BufferManager(bufferMgrRingSize, "ClientRead", 100);
         this.clientWriteBufferManager = new BufferManager(bufferMgrRingSize, "ClientWrite", 200);
 
-        httpInfo = new CasperHttpInfo(this);
+        httpInfo = new HttpRequestInfo(this);
 
         /*
         ** Build the list of all supported HTTP Request and the handler
@@ -522,7 +523,7 @@ public abstract class RequestContext {
     ** The getHttpInfo() getter is used to access the CasperHttpInfo where the details about the HTTP Request are
     **   kept.
      */
-    public CasperHttpInfo getHttpInfo() {
+    public HttpRequestInfo getHttpInfo() {
         return httpInfo;
     }
 
@@ -667,6 +668,10 @@ public abstract class RequestContext {
 
     public String getIoInterfaceIdentifier() {
         return clientConnection.getIdentifierInfo();
+    }
+
+    public WebServerFlavor getWebServerFlavor() {
+        return webServerFlavor;
     }
 
     public void dumpOperations() {

@@ -40,7 +40,7 @@ public class K8PodDbInfo extends DbSetup {
 
         String queryStr = getK8Server + serverName + getServerQueryEnd;
 
-        return getServer(queryStr, serverList);
+        return super.getServer(queryStr, serverList);
     }
 
     /*

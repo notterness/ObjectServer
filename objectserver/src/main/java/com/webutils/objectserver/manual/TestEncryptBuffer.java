@@ -2,8 +2,6 @@ package com.webutils.objectserver.manual;
 
 import com.webutils.objectserver.operations.EncryptBuffer;
 import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
-import com.webutils.webserver.http.CasperHttpInfo;
-import com.webutils.webserver.http.parser.ByteBufferHttpParser;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.WebServerFlavor;

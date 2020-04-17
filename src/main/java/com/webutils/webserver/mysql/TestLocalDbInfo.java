@@ -39,7 +39,7 @@ public class TestLocalDbInfo extends DbSetup {
 
         String queryStr = getLocalStorageServer + serverName + getServerQueryEnd;
 
-        return getServer(queryStr, serverList);
+        return super.getServer(queryStr, serverList);
     }
 
     /*

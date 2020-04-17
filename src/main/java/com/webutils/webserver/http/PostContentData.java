@@ -17,6 +17,7 @@ public class PostContentData {
     private static final String NAME_ATTRIBUTE = "name";
     private static final String COMPARTMENT_ID_ATTRIBUTE = "compartmentId";
     private static final String EVENTS_ENABLED_ATTRIBUTE = "objectEventsEnabled";
+    private static final String STORAGE_TIER_ATTRIBUTE = "storageTier";
 
     private final Map<String, String> bucketParams;
 
@@ -278,6 +279,28 @@ public class PostContentData {
         }
 
         return enabled;
+    }
+
+    /*
+    ** The possible Storage Tiers are:
+    **
+    **   Standard - 3 copies of the data within the same data center
+    **   Intelligent-Tiering - Moves data between fast and slow disk depending on access patterns. Always uses 3
+    **     copies of the data.
+    **   Standard-IA (Infrequent Access) - 3 copies on slow disk
+    **   OneZone (Another form of Infrequent Access with less redundacy) - 2 copies of the data on slow disk.
+    **   Archive (slower access than Standard-IA) -
+    **   DeepArchive (slowest access of all, data may be kept on offline storage) -
+    **
+    ** NOTE: If the "storageTier" attribute is not set, then the default is "Standard"
+     */
+    public String getStorageTier() {
+        String storageTier = bucketParams.get(STORAGE_TIER_ATTRIBUTE);
+        if (storageTier == null) {
+            storageTier = "Standard";
+        }
+
+        return storageTier;
     }
 
     public Set<Map.Entry<String, String>> getFreeFormTags() {

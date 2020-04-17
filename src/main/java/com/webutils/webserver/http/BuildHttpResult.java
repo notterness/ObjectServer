@@ -67,7 +67,7 @@ public class BuildHttpResult {
                         .append(" Method Not Allowed\r\n")
                         .append("Content-Type: text/html")
                         .append("\r\n")
-                        .append("Allow: PUT")
+                        .append("Allow: PUT POST")
                         .append("\r\n")
                         .append("Connection: close\r\n")
                         .append("\r\n");

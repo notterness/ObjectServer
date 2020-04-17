@@ -1,37 +1,28 @@
 package com.webutils.objectserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.http.PostContentData;
-import com.webutils.webserver.mysql.BucketTableMgr;
-import com.webutils.webserver.mysql.NamespaceTableMgr;
+import com.webutils.webserver.http.HttpRequestInfo;
+import com.webutils.webserver.mysql.ObjectTableMgr;
 import com.webutils.webserver.mysql.TenancyTableMgr;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
-import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CreateBucket implements Operation {
+public class CreateObject implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(CreateBucket.class);
+    private static final Logger LOG = LoggerFactory.getLogger(CreateObject.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CREATE_BUCKET;
+    public final OperationTypeEnum operationType = OperationTypeEnum.CREATE_OBJECT;
 
     private final RequestContext requestContext;
 
-    private final PostContentData postContentData;
-
     private final Operation completeCallback;
-
-    /*
-    ** Used to insure that the database operations to create the bucket do not get run multiple times.
-     */
-    private boolean bucketCreated;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -40,24 +31,18 @@ public class CreateBucket implements Operation {
      */
     private boolean onExecutionQueue;
 
-    public CreateBucket(final RequestContext requestContext, final PostContentData postContentData, final Operation completeCb) {
+    public CreateObject(final RequestContext requestContext, final Operation completeCb) {
         this.requestContext = requestContext;
-        this.postContentData = postContentData;
         this.completeCallback = completeCb;
-
-        bucketCreated = false;
-
-        /*
-         ** This starts out not being on any queue
-         */
-        onExecutionQueue = false;
     }
 
     public OperationTypeEnum getOperationType() {
         return operationType;
     }
 
-    public int getRequestId() { return requestContext.getRequestId(); }
+    public int getRequestId() {
+        return requestContext.getRequestId();
+    }
 
     public BufferManagerPointer initialize() {
 
@@ -75,32 +60,22 @@ public class CreateBucket implements Operation {
     /*
      */
     public void execute() {
-        if (!bucketCreated) {
-            WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
+        /*
+        ** Create the Object in the database
+         */
+        HttpRequestInfo objectPutInfo = requestContext.getHttpInfo();
 
-            TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
-            String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
+        WebServerFlavor flavor = requestContext.getWebServerFlavor();
 
-            NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
-            String namespaceUID = namespaceMgr.getNamespaceUID("Namespace-xyz-987", tenancyUID);
+        TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
+        String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
 
-            BucketTableMgr bucketMgr = new BucketTableMgr(flavor, requestContext.getHttpInfo());
-            int status = bucketMgr.createBucketEntry(postContentData, namespaceUID);
-            if (status != HttpStatus.OK_200) {
-                /*
-                **
-                 */
-                LOG.warn("CreateBucket failed status: " + status);
-            }
-
-            completeCallback.complete();
-
-            bucketCreated = true;
-        }
+        ObjectTableMgr objectMgr = new ObjectTableMgr(flavor);
+        objectMgr.createObjectEntry(objectPutInfo, tenancyUID);
     }
 
     public void complete() {
-        LOG.info("CreateBucket complete");
+        LOG.info("CreateObject complete");
     }
 
     /*
@@ -119,19 +94,19 @@ public class CreateBucket implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("CreateBucket[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("CreateObject[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("CreateBucket[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("CreateObject[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("CreateBucket[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("CreateObject[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("CreateBucket[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("CreateObject[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -146,7 +121,7 @@ public class CreateBucket implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("CreateBucket[" + requestContext.getRequestId() +
+        LOG.warn("CreateObject[" + requestContext.getRequestId() +
                 "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
