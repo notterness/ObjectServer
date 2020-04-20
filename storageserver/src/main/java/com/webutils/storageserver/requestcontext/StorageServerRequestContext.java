@@ -1,6 +1,8 @@
 package com.webutils.storageserver.requestcontext;
 
 import com.webutils.storageserver.operations.SetupStorageServerPut;
+import com.webutils.storageserver.operations.StorageServerDetermineRequestType;
+import com.webutils.storageserver.operations.StorageServerSendFinalStatus;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpMethodEnum;
@@ -24,9 +26,7 @@ public class StorageServerRequestContext extends RequestContext {
      */
     private CloseOutRequest closeRequest;
 
-    private DetermineRequestType determineRequestType;
-
-    private SendFinalStatus sendFinalStatus;
+    private StorageServerDetermineRequestType determineRequestType;
 
 
     StorageServerRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn,
@@ -78,7 +78,7 @@ public class StorageServerRequestContext extends RequestContext {
         readPointer = readBuffer.initialize();
 
         /*
-         ** The SendFinalStatus, WriteToClient and CloseOutRequest are tied together. The SendFinalStatus is
+         ** The StorageServerSendFinalStatus, WriteToClient and CloseOutRequest are tied together. The StorageServerSendFinalStatus is
          **   responsible for building the final HTTP status response to the client. The WriteToClient is
          **   responsible for kicking the IoInterface to write the data out and waiting for the data
          **   pointer to be updated to know that the data has been written. Once the data has been all written, then
@@ -88,7 +88,7 @@ public class StorageServerRequestContext extends RequestContext {
          **   Once the cleanup is performed, then the RequestContext is added back to the free list so
          **   it can be used to handle a new request.
          */
-        sendFinalStatus = new SendFinalStatus(this, memoryManager, clientConnection);
+        StorageServerSendFinalStatus sendFinalStatus = new StorageServerSendFinalStatus(this, memoryManager);
         requestHandlerOperations.put(sendFinalStatus.getOperationType(), sendFinalStatus);
         BufferManagerPointer clientWritePtr = sendFinalStatus.initialize();
 
@@ -105,7 +105,7 @@ public class StorageServerRequestContext extends RequestContext {
          ** The DetermineRequestType operation is run after the HTTP Request has been parsed and the method
          **   handler determined via the setHttpMethodAndVersion() method in the CasperHttpInfo object.
          */
-        determineRequestType = new DetermineRequestType(this, supportedHttpRequests);
+        determineRequestType = new StorageServerDetermineRequestType(this, supportedHttpRequests);
         requestHandlerOperations.put(determineRequestType.getOperationType(), determineRequestType);
         determineRequestType.initialize();
 
@@ -114,7 +114,7 @@ public class StorageServerRequestContext extends RequestContext {
          **   by the DetermineRequestType operation to setup and run the appropriate handlers.
          */
         SetupStorageServerPut storageServerPutHandler = new SetupStorageServerPut(this, metering, determineRequestType);
-        this.supportedHttpRequests.put(HttpMethodEnum.PUT_STORAGE_SERVER, storageServerPutHandler);
+        this.supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, storageServerPutHandler);
 
         /*
          ** Setup the specific part for parsing the buffers as an HTTP Request.
@@ -171,7 +171,7 @@ public class StorageServerRequestContext extends RequestContext {
         operation = requestHandlerOperations.remove(OperationTypeEnum.WRITE_TO_CLIENT);
         operation.complete();
 
-        operation = requestHandlerOperations.remove(OperationTypeEnum.SEND_FINAL_STATUS);
+        operation = requestHandlerOperations.remove(OperationTypeEnum.STORAGE_SERVER_SEND_FINAL_STATUS);
         operation.complete();
 
         operation = requestHandlerOperations.remove(OperationTypeEnum.REQUEST_FINISHED);
@@ -183,7 +183,7 @@ public class StorageServerRequestContext extends RequestContext {
         operation = requestHandlerOperations.remove(OperationTypeEnum.METER_READ_BUFFERS);
         operation.complete();
 
-        operation = requestHandlerOperations.remove(OperationTypeEnum.DETERMINE_REQUEST_TYPE);
+        operation = requestHandlerOperations.remove(OperationTypeEnum.STORAGE_SERVER_DETERMINE_REQUEST_TYPE);
         operation.complete();
 
         /*
@@ -196,7 +196,6 @@ public class StorageServerRequestContext extends RequestContext {
          */
         metering = null;
         readBuffer = null;
-        sendFinalStatus = null;
         closeRequest = null;
         determineRequestType = null;
 
@@ -221,6 +220,7 @@ public class StorageServerRequestContext extends RequestContext {
         LOG.error("Invalid function");
         return false;
     }
+
     public void setHttpRequestSent(final ServerIdentifier storageServerId) {
         LOG.error("Invalid function");
     }

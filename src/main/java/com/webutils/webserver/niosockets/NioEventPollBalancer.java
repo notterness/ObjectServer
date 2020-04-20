@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.channels.SocketChannel;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /*
 ** This is used to determine which of the event poll threads should be used for this client socket
@@ -29,6 +30,13 @@ public class NioEventPollBalancer {
     private final int numberPollThreads;
     private final int eventPollThreadBaseId;
 
+    /*
+     ** uniqueRequestId is used to guarantee that for any client HTTP Request that comes into the Web Server, there is
+     **   a unique key that can be used to track it through all of the trace statements.
+     */
+    private final AtomicInteger uniqueRequestId;
+
+
     private NioEventPollThread[] eventPollThreadPool;
 
     private final RequestContextPool requestContextPool;
@@ -48,7 +56,12 @@ public class NioEventPollBalancer {
         this.eventPollThreadBaseId = threadBaseId;
         this.requestContextPool = requestContextPool;
 
-        eventPollThreadPool = new NioEventPollThread[this.numberPollThreads];
+        /*
+         ** This is the request ID to track an HTTP Request through the logging.
+         */
+        this.uniqueRequestId = new AtomicInteger(1);
+
+        this.eventPollThreadPool = new NioEventPollThread[this.numberPollThreads];
     }
 
     /*
@@ -59,7 +72,8 @@ public class NioEventPollBalancer {
         currNioEventThread = 0;
 
         for (int i = 0; i < numberPollThreads; i++) {
-            NioEventPollThread pollThread = new NioEventPollThread(this,eventPollThreadBaseId + i, requestContextPool);
+            NioEventPollThread pollThread = new NioEventPollThread(this,eventPollThreadBaseId + i,
+                    requestContextPool, uniqueRequestId);
 
             pollThread.start();
             eventPollThreadPool[i] = pollThread;

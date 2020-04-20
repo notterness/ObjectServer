@@ -70,7 +70,7 @@ public class CreateObject implements Operation {
         TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
         String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
 
-        ObjectTableMgr objectMgr = new ObjectTableMgr(flavor);
+        ObjectTableMgr objectMgr = new ObjectTableMgr(flavor, requestContext.getRequestId());
         objectMgr.createObjectEntry(objectPutInfo, tenancyUID);
     }
 

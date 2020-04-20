@@ -56,6 +56,8 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             " compartmentId VARCHAR(255) NOT NULL, " +
             " storageTier VARCHAR(64) NOT NULL," +
             " objectEventsEnabled INT NOT NULL," +
+            " opcClientRequestId VARCHAR(255)," +
+            " createTime TIMESTAMP NOT NULL," +
             " bucketUID BINARY(16) NOT NULL," +
             " namespaceId INT NOT NULL," +
             " FOREIGN KEY (namespaceId)" +

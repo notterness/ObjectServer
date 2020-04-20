@@ -1,9 +1,11 @@
-package com.webutils.webserver.operations;
+package com.webutils.storageserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.BuildHttpResult;
 import com.webutils.webserver.memory.MemoryManager;
+import com.webutils.webserver.operations.Operation;
+import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -11,32 +13,29 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
-/*
-** This is used to send the final status to the client.
- */
-public class SendFinalStatus implements Operation {
+public class StorageServerSendFinalStatus implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(SendFinalStatus.class);
+    private static final Logger LOG = LoggerFactory.getLogger(StorageServerSendFinalStatus.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.SEND_FINAL_STATUS;
+    public final OperationTypeEnum operationType = OperationTypeEnum.STORAGE_SERVER_SEND_FINAL_STATUS;
 
     /*
-    ** The RequestContext is used to keep the overall state and various data used to track this Request.
+     ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
     private final RequestContext requestContext;
 
     /*
-    ** The MemoryManager is used to allocate a very small number of buffers used to send out the
-    **   final status
+     ** The MemoryManager is used to allocate a very small number of buffers used to send out the
+     **   final status
      */
     private final MemoryManager memoryManager;
 
     /*
-    ** The clientWriteBufferMgr is used to queue up writes back to the client. In this case, the
-    **   writes are to send the final request status.
+     ** The clientWriteBufferMgr is used to queue up writes back to the client. In this case, the
+     **   writes are to send the final request status.
      */
     private BufferManager clientWriteBufferMgr;
     private BufferManagerPointer writeStatusBufferPtr;
@@ -49,14 +48,14 @@ public class SendFinalStatus implements Operation {
     private boolean onExecutionQueue;
 
     /*
-    ** This is used to construct the final response to send to the client.
+     ** This is used to construct the final response to send to the client.
      */
     private final BuildHttpResult resultBuilder;
 
     private boolean httpResponseSent;
 
 
-    public SendFinalStatus(final RequestContext requestContext, final MemoryManager memoryManager) {
+    public StorageServerSendFinalStatus(final RequestContext requestContext, final MemoryManager memoryManager) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
@@ -87,8 +86,8 @@ public class SendFinalStatus implements Operation {
         writeStatusBufferPtr = this.clientWriteBufferMgr.register(this);
 
         /*
-        ** Add a bookmark to insure that the pointer dependent upon this starts at
-        **   position 0.
+         ** Add a bookmark to insure that the pointer dependent upon this starts at
+         **   position 0.
          */
         clientWriteBufferMgr.bookmark(writeStatusBufferPtr);
 
@@ -104,7 +103,7 @@ public class SendFinalStatus implements Operation {
     }
 
     /*
-    ** This will allocate a ByteBuffer from the free pool and then fill it in with the HTTP Response data.
+     ** This will allocate a ByteBuffer from the free pool and then fill it in with the HTTP Response data.
      */
     public void execute() {
 
@@ -114,32 +113,15 @@ public class SendFinalStatus implements Operation {
             ByteBuffer respBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientWriteBufferMgr,
                     operationType);
             if (respBuffer != null) {
-                if (resultCode == HttpStatus.OK_200) {
-                    switch (requestContext.getHttpInfo().getMethod())   {
-                        case PUT_METHOD:
-                            resultBuilder.buildPutOkResponse(respBuffer);
-                            break;
-
-                        case POST_METHOD:
-                            resultBuilder.buildPostOkResponse(respBuffer);
-                            break;
-
-                        default:
-                            break;
-                    }
-                } else {
-                    resultBuilder.buildResponse(respBuffer, resultCode, true, true);
-                }
-
-                //resultBuilder.buildResponse(respBuffer, resultCode, true, true);
+                resultBuilder.buildResponse(respBuffer, resultCode, true, true);
 
                 respBuffer.flip();
 
                 HttpStatus.Code result = HttpStatus.getCode(resultCode);
                 if (result != null) {
-                    LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] resultCode: " + result.getCode() + " " + result.getMessage());
+                    LOG.info("StorageServerSendFinalStatus[" + requestContext.getRequestId() + "] resultCode: " + result.getCode() + " " + result.getMessage());
                 } else {
-                    LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] resultCode: INVALID (" + resultCode +")");
+                    LOG.info("StorageServerSendFinalStatus[" + requestContext.getRequestId() + "] resultCode: INVALID (" + resultCode +")");
                 }
 
                 /*
@@ -151,7 +133,7 @@ public class SendFinalStatus implements Operation {
                 /*
                  ** If we are out of memory to allocate a response, might as well close out the connection and give up.
                  */
-                LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] unable to allocate response buffer");
+                LOG.info("StorageServerSendFinalStatus[" + requestContext.getRequestId() + "] unable to allocate response buffer");
 
                 /*
                  ** Go right to the CloseOutRequest operation. That will close out the connection.
@@ -161,21 +143,21 @@ public class SendFinalStatus implements Operation {
 
             httpResponseSent = true;
         } else {
-            LOG.warn("SendFinalStatus[" + requestContext.getRequestId() + "] execute() after status sent");
+            LOG.warn("StorageServerSendFinalStatus[" + requestContext.getRequestId() + "] execute() after status sent");
         }
     }
 
     /*
-    ** This removes any dependencies that are put upon the BufferManager
+     ** This removes any dependencies that are put upon the BufferManager
      */
     public void complete() {
 
         /*
-        ** Release any buffers in the clientWriteBufferMgr
+         ** Release any buffers in the clientWriteBufferMgr
          */
         int bufferCount = writeStatusBufferPtr.getCurrIndex();
 
-        LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] complete() bufferCount: " + bufferCount);
+        LOG.info("StorageServerSendFinalStatus[" + requestContext.getRequestId() + "] complete() bufferCount: " + bufferCount);
 
         clientWriteBufferMgr.reset(writeStatusBufferPtr);
         for (int i = 0; i < bufferCount; i++) {
@@ -183,7 +165,7 @@ public class SendFinalStatus implements Operation {
             if (buffer != null) {
                 memoryManager.poolMemFree(buffer, clientWriteBufferMgr);
             } else {
-                LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] missing buffer i: " + i);
+                LOG.info("StorageServerSendFinalStatus[" + requestContext.getRequestId() + "] missing buffer i: " + i);
             }
         }
 
@@ -209,19 +191,19 @@ public class SendFinalStatus implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("SendFinalStatus[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("StorageServerSendFinalStatus[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("SendFinalStatus[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("StorageServerSendFinalStatus[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("SendFinalStatus[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("StorageServerSendFinalStatus[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("SendFinalStatus[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("StorageServerSendFinalStatus[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -236,7 +218,7 @@ public class SendFinalStatus implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("SendFinalStatus[" + requestContext.getRequestId() +
+        LOG.warn("StorageServerSendFinalStatus[" + requestContext.getRequestId() +
                 "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }

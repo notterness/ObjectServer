@@ -44,7 +44,6 @@ public class ObjectStorageDb {
     protected final WebServerFlavor flavor;
 
     ObjectStorageDb(final WebServerFlavor flavor) {
-        LOG.info("ObjectStorageDb() WebServerFlavor: " + flavor.toString());
         this.flavor = flavor;
     }
 
@@ -216,6 +215,9 @@ public class ObjectStorageDb {
 
                         if (count != 1) {
                             LOG.warn("getUID() too many responses count: " + count);
+                            LOG.warn(idQueryStr);
+
+                            id = -1;
                         }
                     } catch (SQLException sqlEx) {
                         System.out.println("getUID() SQL conn rs.next() SQLException: " + sqlEx.getMessage());
@@ -245,6 +247,84 @@ public class ObjectStorageDb {
         }
 
         return id;
+    }
+
+    /*
+     ** This obtains the a single String from a particular table entry. It will return null if the entry does not exist.
+     */
+    public String getSingleStr(final String createTimeQueryStr) {
+        String requestedStr = null;
+
+        Connection conn = getObjectStorageDbConn();
+
+        if (conn != null) {
+            Statement stmt = null;
+            ResultSet rs = null;
+
+            try {
+                stmt = conn.createStatement();
+                if (stmt.execute(createTimeQueryStr)) {
+                    rs = stmt.getResultSet();
+                }
+            } catch (SQLException sqlEx) {
+                LOG.error("getSingleStr() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("Bad SQL command: " + createTimeQueryStr);
+                System.out.println("SQLException: " + sqlEx.getMessage());
+            } finally {
+                if (rs != null) {
+                    try {
+                        int count = 0;
+                        while (rs.next()) {
+                            /*
+                             ** The rs.getString(1) is the String format of the UID.
+                             */
+                            requestedStr = rs.getString(1);
+                            LOG.info("Return string: " + requestedStr);
+
+                            /*
+                            ** If it is "NULL", that means the field was not field in. Return null for
+                            **   the string to indicate it is empty.
+                             */
+                            if (requestedStr.equals("NULL")) {
+                                requestedStr = null;
+                            }
+
+                            count++;
+                        }
+
+                        if (count != 1) {
+                            LOG.warn("getSingleStr() too many responses count: " + count);
+                            LOG.warn(createTimeQueryStr);
+                            requestedStr = null;
+                        }
+                    } catch (SQLException sqlEx) {
+                        System.out.println("getSingleStr() SQL conn rs.next() SQLException: " + sqlEx.getMessage());
+                    }
+
+                    try {
+                        rs.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("getSingleStr() SQL conn rs.close() SQLException: " + sqlEx.getMessage());
+                    }
+                }
+
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("getSingleStr() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQLException: " + sqlEx.getMessage());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database tables.
+             */
+            closeObjectStorageDbConn(conn);
+        }
+
+        return requestedStr;
     }
 
 

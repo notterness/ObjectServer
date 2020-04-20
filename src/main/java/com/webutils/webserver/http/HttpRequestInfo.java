@@ -39,7 +39,6 @@ public class HttpRequestInfo {
     private static final String OBJECT_NAME = "/o/";
     private static final String NAMESPACE_NAME = "/n/";
     private static final String BUCKET_NAME = "/b/";
-    private static final String COMMAND_TYPE = "/v/";
     private static final String TEST_TYPE = "/t/";
 
 
@@ -65,7 +64,6 @@ public class HttpRequestInfo {
     /*
      ** Method is one of POST, PUT, DELETE, GET, HEAD, TRACE
      */
-    private String httpMethodString;
     private HttpMethodEnum httpMethod;
 
 
@@ -82,6 +80,9 @@ public class HttpRequestInfo {
      */
     private int parseFailureCode;
     private String parseFailureReason;
+
+    private String successResponseHeaders;
+    private String successResponseContent;
 
     private boolean contentLengthReceived;
 
@@ -180,13 +181,6 @@ public class HttpRequestInfo {
     private String createdBy;
 
     /*
-     ** Format: "2019-10-22T15:44:28.239Z"
-     */
-    private String timeCreated;
-
-    private String lastModified;
-
-    /*
     ** md5override comes from the "md5-override" header (MD5_OVERRIDE_HEADER)
      */
     private String md5Override;
@@ -216,6 +210,7 @@ public class HttpRequestInfo {
      */
     private String expectedMD5;
     private boolean md5parsed;
+    private String contentMD5;
 
     /*
      ** This comes from the "x-content-sha256" header (CONTENT_SHA256). If the validation of
@@ -242,7 +237,7 @@ public class HttpRequestInfo {
      */
     private final Map<String, List<String>> headers;
 
-    private final String[] uriFields = {OBJECT_NAME, BUCKET_NAME, NAMESPACE_NAME, COMMAND_TYPE, TEST_TYPE};
+    private final String[] uriFields = {OBJECT_NAME, BUCKET_NAME, NAMESPACE_NAME, TEST_TYPE};
 
 
     /*
@@ -291,7 +286,14 @@ public class HttpRequestInfo {
 
         httpMethod = HttpMethodEnum.INVALID_METHOD;
         expectedMD5 = null;
+        contentMD5 = null;
         md5parsed = false;
+
+        /*
+        ** These are used to return specific information when requests are successful.
+         */
+        successResponseContent = null;
+        successResponseHeaders = null;
 
         /*
         ** Create a map of the HTTP methods to make the parsing easier
@@ -329,7 +331,6 @@ public class HttpRequestInfo {
          */
         httpVersion = null;
 
-        httpMethodString = null;
         httpMethod = HttpMethodEnum.INVALID_METHOD;
 
         responseCode = HttpStatus.OK_200;
@@ -349,6 +350,7 @@ public class HttpRequestInfo {
 
         opcRequestId = null;
         expectedMD5 = null;
+        contentMD5 = null;
         md5parsed = false;
 
         storageTier = "Standard";
@@ -370,8 +372,9 @@ public class HttpRequestInfo {
         replicationSources = null;
 
         createdBy = null;
-        timeCreated = null;
-        lastModified = null;
+
+        successResponseContent = null;
+        successResponseHeaders = null;
 
         /*
         ** Clear out the object information map
@@ -385,7 +388,6 @@ public class HttpRequestInfo {
     ** Determine the HTTP response handler based upon the URI and some header fields.
      */
     public void setHttpMethodAndVersion(String methodString, String httpParsedVersion) {
-        httpMethodString = methodString;
         httpVersion = httpParsedVersion;
 
         /*
@@ -396,13 +398,6 @@ public class HttpRequestInfo {
             if (result != -1) {
                 httpMethod = entry.getKey();
                 break;
-            }
-        }
-
-        if (httpMethod == HttpMethodEnum.PUT_METHOD) {
-            String version = putObjectInfoMap.get(COMMAND_TYPE);
-            if ((version != null) && (version.equals("StorageServer"))) {
-                httpMethod = HttpMethodEnum.PUT_STORAGE_SERVER;
             }
         }
     }
@@ -594,11 +589,36 @@ public class HttpRequestInfo {
         requestContext.setHttpParsingError();
     }
 
-
     public int getParseFailureCode() {
         return parseFailureCode;
     }
 
+    /*
+    ** These are the setters and getters for response headers and response content
+     */
+    public void setResponseHeaders(final String responseHeaders) {
+        successResponseHeaders = responseHeaders;
+    }
+
+    public void setResponseContent(final String responseContent) {
+        successResponseContent = responseContent;
+    }
+
+    public String getResponseHeaders() {
+        if (successResponseHeaders == null) {
+            return "";
+        }
+
+        return successResponseHeaders;
+    }
+
+    public String getResponseContent() {
+        if (successResponseContent == null) {
+            return "";
+        }
+
+        return successResponseContent;
+    }
 
     /*
      ** Something terminated the HTTP transfer early.
@@ -653,7 +673,7 @@ public class HttpRequestInfo {
             } else {
                 //LOG.info("expectedMD5: " + md5value);
             }
-        } catch (IllegalArgumentException iaex) {
+        } catch (IllegalArgumentException ia_ex) {
             LOG.warn("The value of the Content-MD5 header '" + md5value +
                     "' was not the correct length after base-64 decoding");
             return null;
@@ -736,6 +756,15 @@ public class HttpRequestInfo {
 
         return -1;
     }
+
+    /*
+    **
+     */
+    public String getContentMd5() {
+        return contentMD5;
+    }
+
+
     /*
     ** Return the "Test Type" (TEST_TYPE) that was parsed from the HTTP uri (This is prefixed with the "/t/").
     **
@@ -762,6 +791,12 @@ public class HttpRequestInfo {
      * @param computedMd5 - The MD5 value computed from the content data read in.
      */
     public boolean checkContentMD5(String computedMd5) {
+        /*
+        ** Save away the computed MD5 for the content as it is passed back in the OK_200 response headers for the
+        **   PUT Object request.
+         */
+        contentMD5 = computedMd5;
+
         if ((md5parsed == false) || (md5Override != null))
         {
             LOG.warn("checkContentMd5() [" + requestContext.getRequestId() + "] md5parsed: " + md5parsed +

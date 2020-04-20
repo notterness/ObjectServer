@@ -216,7 +216,6 @@ public class BuildHeaderToStorageServer implements Operation {
         } else {
             return new String("PUT /n/faketenantname" + "" +
                     "/b/bucket-5e1910d0-ea13-11e9-851d-234132e0fb02" +
-                    "/v/StorageServer" +
                     "/t/" + errorInjectString +
                     "/o/5e223890-ea13-11e9-851d-234132e0fb02  HTTP/1.1\n" +
                     "Host: StorageServerWrite\n" +

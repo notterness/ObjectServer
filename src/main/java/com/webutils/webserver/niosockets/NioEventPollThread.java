@@ -25,19 +25,20 @@ public class NioEventPollThread implements Runnable, EventPollThread {
     private final LinkedList<IoInterface> freeConnections;
     private final LinkedList<Operation> waitingForConnections;
 
+    /*
+     ** uniqueRequestId is used to guarantee that for any client HTTP Request that comes into the Web Server, there is
+     **   a unique key that can be used to track it through all of the trace statements. The master AtomicInteger is
+     **   kept by the NioEventPollBalancer.
+     ** The uniqueRequestId is assigned to the RequestContext when a new connection is created in the NioEventPollThread().
+     */
+    private final AtomicInteger uniqueRequestId;
+
     private volatile boolean threadRunning;
 
     private NioSelectHandler nioSelectHandler;
 
-    /*
-    ** uniqueRequestId is used to guarantee that for any client HTTP Request that comes into the Web Server, there is
-    **   a unique key that can be used to track it through all of the trace statements.
-     */
-    private final AtomicInteger uniqueRequestId;
-
-
     public NioEventPollThread(final NioEventPollBalancer poolOwner, final int threadBaseId,
-                              final RequestContextPool requestContextPool) {
+                              final RequestContextPool requestContextPool, final AtomicInteger requestIdAtomic) {
         this.threadPoolOwner = poolOwner;
         this.eventPollThreadBaseId = threadBaseId;
         this.requestContextPool = requestContextPool;
@@ -47,10 +48,7 @@ public class NioEventPollThread implements Runnable, EventPollThread {
 
         this.threadRunning = true;
 
-        /*
-        ** This is the request ID to track an HTTP Request through the logging.
-         */
-        uniqueRequestId = new AtomicInteger(1);
+        this.uniqueRequestId = requestIdAtomic;
     }
 
     /*

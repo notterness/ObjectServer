@@ -47,7 +47,7 @@ public class ParseHttpRequest implements Operation {
     private BufferManagerPointer httpBufferPointer;
 
     private final BufferReadMetering meteringOperation;
-    private final DetermineRequestType determineRequestType;
+    private final Operation determineRequestType;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -57,7 +57,7 @@ public class ParseHttpRequest implements Operation {
     private boolean onExecutionQueue;
 
     public ParseHttpRequest(final RequestContext requestContext, final BufferManagerPointer readBufferPtr,
-                            final BufferReadMetering metering, final DetermineRequestType determineRequestType) {
+                            final BufferReadMetering metering, final Operation determineRequestType) {
 
         this.requestContext = requestContext;
         this.readBufferPointer = readBufferPtr;

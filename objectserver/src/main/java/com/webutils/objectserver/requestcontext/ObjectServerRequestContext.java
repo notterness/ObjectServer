@@ -155,7 +155,7 @@ public class ObjectServerRequestContext extends RequestContext {
          **   Once the cleanup is performed, then the RequestContext is added back to the free list so
          **   it can be used to handle a new request.
          */
-        sendFinalStatus = new SendFinalStatus(this, memoryManager, clientConnection);
+        sendFinalStatus = new SendFinalStatus(this, memoryManager);
         requestHandlerOperations.put(sendFinalStatus.getOperationType(), sendFinalStatus);
         BufferManagerPointer clientWritePtr = sendFinalStatus.initialize();
 
