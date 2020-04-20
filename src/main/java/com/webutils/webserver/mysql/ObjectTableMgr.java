@@ -72,8 +72,10 @@ public class ObjectTableMgr extends ObjectStorageDb {
         int contentLength = objectCreateInfo.getContentLength();
 
         if ((objectName == null) || (bucketName == null) || (namespace == null)) {
-            LOG.error("createObjectEntry() null required attributes objectName: " + objectName + "bucketName: " +
-                    bucketName + " namespace: " + namespace);
+            String failureMessage = "\"PUT Object missing required attributes\",\n  \"objectName\": \"" + objectName +
+                    "\",\n  \"bucketName\": \"" + bucketName + "\",\n \"namespaceName\": \"" + namespace + "\"";
+            LOG.warn(failureMessage);
+            objectCreateInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
             return HttpStatus.BAD_REQUEST_400;
         }
 
@@ -87,7 +89,8 @@ public class ObjectTableMgr extends ObjectStorageDb {
         if (namespaceUID == null) {
             LOG.warn("Unable to create Object: " + objectName + " - invalid namespace: " + namespace);
 
-            objectCreateInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, "Namespace not found :" + namespace);
+            String failureMessage = "\"Namespace not found\"\n  \"namespaceName\": \"" + namespace + "\"";
+            objectCreateInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
             return HttpStatus.PRECONDITION_FAILED_412;
         }
 
@@ -99,7 +102,8 @@ public class ObjectTableMgr extends ObjectStorageDb {
         if (bucketUID == null) {
             LOG.warn("Unable to create Object: " + objectName + " - invalid bucket: " + bucketName);
 
-            objectCreateInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, "Bucket not found :" + bucketName);
+            String failureMessage = "\"Bucket not found\",\n  \"bucketName\": \"" + bucketName + "\"";
+            objectCreateInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
             return HttpStatus.PRECONDITION_FAILED_412;
         }
 
@@ -129,7 +133,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
                 LOG.error("Bad SQL command: " + createObjectStr);
                 System.out.println("SQLException: " + sqlEx.getMessage());
 
-                objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "SQL Exception");
+                objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "\"SQL Exception\"");
                 status = HttpStatus.INTERNAL_SERVER_ERROR_500;
             } finally {
                 if (stmt != null) {

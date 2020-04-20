@@ -18,8 +18,8 @@ public enum StorageTierEnum {
     DEEP_ARCHIVE_TIER(6, "DeepArchive");
 
 
-    private int value;
-    private String tierName;
+    private final int value;
+    private final String tierName;
 
     StorageTierEnum(final int value, final String tierName) {
 
@@ -37,17 +37,17 @@ public enum StorageTierEnum {
     ** The next two static functions setup the Maps that can be used to translate between an integer and the Enum and
     **   a String and its Enum.
      */
-    private static Map<Integer, StorageTierEnum> reverseLookup =
+    private final static Map<Integer, StorageTierEnum> reverseLookup =
             Arrays.stream(StorageTierEnum.values()).collect(Collectors.toMap(StorageTierEnum::toInt, Function.identity()));
 
-    private static Map<String, StorageTierEnum> tierEnumLookup =
+    private final static Map<String, StorageTierEnum> tierEnumLookup =
             Arrays.stream(StorageTierEnum.values()).collect(Collectors.toMap(StorageTierEnum::toString, Function.identity()));
 
-    public static StorageTierEnum fromInt(final int id) {
+    public final static StorageTierEnum fromInt(final int id) {
         return reverseLookup.getOrDefault(id, INVALID_TIER);
     }
 
-    public static StorageTierEnum fromString(final String tierName) {
+    public final static StorageTierEnum fromString(final String tierName) {
         return tierEnumLookup.getOrDefault(tierName, INVALID_TIER);
     }
 }

@@ -12,7 +12,7 @@ public enum HttpMethodEnum {
     PUT_STORAGE_SERVER(2),
     POST_METHOD(3);
 
-    private int value;
+    private final int value;
 
     HttpMethodEnum(final int value) {
         this.value = value;
@@ -22,10 +22,10 @@ public enum HttpMethodEnum {
         return this.value;
     }
 
-    private static Map<Integer, HttpMethodEnum> reverseLookup =
+    private final static Map<Integer, HttpMethodEnum> reverseLookup =
             Arrays.stream(HttpMethodEnum.values()).collect(Collectors.toMap(HttpMethodEnum::toInt, Function.identity()));
 
-    public static HttpMethodEnum fromInt(final int id) {
+    public final static HttpMethodEnum fromInt(final int id) {
         return reverseLookup.getOrDefault(id, INVALID_METHOD);
     }
 }

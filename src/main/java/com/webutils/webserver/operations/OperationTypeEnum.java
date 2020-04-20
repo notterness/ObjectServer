@@ -19,12 +19,12 @@ public enum OperationTypeEnum {
     DETERMINE_REQUEST_TYPE(11),
 
     CREATE_OBJECT(20),
-    SETUP_V2_PUT(21),
+    SETUP_OBJECT_PUT(21),
     SETUP_OBJECT_SERVER_POST(22),
 
     HANDLE_CLIENT_ERROR(50),
 
-    RUN_AUTHENTICATION_PIPELINE(120),   // Used by HttpParsePipelineMgr and HttpsParsePipelineMgr
+    OBJECT_PUT_P2(120),                 // This runs after the Object information is saved into the database
     CHECK_EMBARGO(122),                 // This is used by the AuthenticatePipelineMgr
     AUTHENTICATE_REQUEST(123),
     AUTHENTICATE_FINISHED(124),
@@ -79,7 +79,7 @@ public enum OperationTypeEnum {
     CLIENT_TEST_CREATE_BUCKET_SIMPLE(750),
     CLIENT_TEST_END(800);
 
-    private int value;
+    private final int value;
 
     OperationTypeEnum(final int value) {
         this.value = value;
@@ -89,7 +89,7 @@ public enum OperationTypeEnum {
         return this.value;
     }
 
-    private static Map<Integer, OperationTypeEnum> reverseLookup =
+    private final static Map<Integer, OperationTypeEnum> reverseLookup =
             Arrays.stream(OperationTypeEnum.values()).collect(Collectors.toMap(OperationTypeEnum::toInt, Function.identity()));
 
     public static OperationTypeEnum fromInt(final int id) {

@@ -593,6 +593,9 @@ public class HttpRequestInfo {
         return parseFailureCode;
     }
 
+    public String getParseFailureReason() { return parseFailureReason; }
+
+
     /*
     ** These are the setters and getters for response headers and response content
      */

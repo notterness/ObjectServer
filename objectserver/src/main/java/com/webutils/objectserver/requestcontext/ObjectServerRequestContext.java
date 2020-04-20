@@ -1,7 +1,7 @@
 package com.webutils.objectserver.requestcontext;
 
 import com.webutils.objectserver.operations.SetupObjectServerPost;
-import com.webutils.objectserver.operations.SetupV2Put;
+import com.webutils.objectserver.operations.SetupObjectPut;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpMethodEnum;
@@ -180,7 +180,7 @@ public class ObjectServerRequestContext extends RequestContext {
          ** The HTTP Request methods that are supported are added to the supportedHttpRequests Map<> and are used
          **   by the DetermineRequestType operation to setup and run the appropriate handlers.
          */
-        SetupV2Put v2PutHandler = new SetupV2Put(this, memoryManager, metering, determineRequestType);
+        SetupObjectPut v2PutHandler = new SetupObjectPut(this, memoryManager, metering, determineRequestType);
         this.supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, v2PutHandler);
 
         SetupObjectServerPost postHandler = new SetupObjectServerPost(this, metering, determineRequestType);

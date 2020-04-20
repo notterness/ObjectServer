@@ -89,7 +89,7 @@ public class BucketTableMgr extends ObjectStorageDb {
              */
             LOG.warn("Bucket already exists name: " + bucketName);
 
-            String errorMessage = "CreateBucket bucket already exists name: " + bucketName + " UID: " + bucketUID;
+            String errorMessage = "\"CreateBucket bucket already exists - " + bucketName + "\",\n   \"ETag\": \"" + bucketUID + "\"";
             httpRequestInfo.setParseFailureCode(HttpStatus.CONFLICT_409, errorMessage);
 
             return HttpStatus.CONFLICT_409;
@@ -102,7 +102,7 @@ public class BucketTableMgr extends ObjectStorageDb {
         if ((bucketName == null) || (compartmentId == null)) {
             LOG.error("createBucketEntry() null required attributes");
 
-            httpRequestInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, "CreateBucket missing attributes name: " + bucketName);
+            httpRequestInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, "\"CreateBucket missing attributes - " + bucketName + "\"");
             return HttpStatus.BAD_REQUEST_400;
         }
 
@@ -124,7 +124,7 @@ public class BucketTableMgr extends ObjectStorageDb {
                 LOG.error("Bad SQL command: " + createBucketStr);
                 System.out.println("SQLException: " + sqlEx.getMessage());
 
-                httpRequestInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "SQL error");
+                httpRequestInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "\"SQL error\"");
                 status = HttpStatus.INTERNAL_SERVER_ERROR_500;
             } finally {
                 if (stmt != null) {
@@ -158,7 +158,7 @@ public class BucketTableMgr extends ObjectStorageDb {
                     tagMgr.createBucketTags(bucketConfigData, id);
                 }
             } else {
-                httpRequestInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "SQL error - unable to obtain bucket ETag");
+                httpRequestInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "\"SQL error - unable to obtain bucket ETag\"");
                 status = HttpStatus.INTERNAL_SERVER_ERROR_500;
             }
         }

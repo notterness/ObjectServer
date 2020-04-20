@@ -30,11 +30,21 @@ public class BuildHttpResult {
             **   methods
              */
             if (addContext && (resultCode != HttpStatus.METHOD_NOT_ALLOWED_405)) {
-                content = "\r\n" +
-                        "{\r\n" +
-                        "  \"Description\":\"" +
-                        result.getMessage() +
-                        "\"\r\n}";
+                String failureDescription = httpRequestInfo.getParseFailureReason();
+
+                if (failureDescription != null) {
+                    content = "\r\n" +
+                            "{\r\n" +
+                            "  \"Description\": " +
+                            failureDescription +
+                            "\r\n}";
+                } else {
+                    content = "\r\n" +
+                            "{\r\n" +
+                            "  \"Description\":\"" +
+                            result.getMessage() +
+                            "\"\r\n}";
+                }
 
                 // Assuming that the last two pairs of CR/LF do not count towards the content length
                 contentLength = content.length();

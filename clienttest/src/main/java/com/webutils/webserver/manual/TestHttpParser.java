@@ -97,9 +97,9 @@ public class TestHttpParser extends WebServerTest {
         }
 
         /*
-        ** Following the DetermineRequestType, the SetupV2Put operation should be on the queue.
+        ** Following the DetermineRequestType, the SetupObjectPut operation should be on the queue.
          */
-        if (requestContext.validateOperationOnQueue(OperationTypeEnum.SETUP_V2_PUT)) {
+        if (requestContext.validateOperationOnQueue(OperationTypeEnum.SETUP_OBJECT_PUT)) {
             requestContext.performOperationWork();
 
             testSucceeded = true;

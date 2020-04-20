@@ -1,26 +1,23 @@
 package com.webutils.objectserver.operations;
 
 import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
-import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.memory.MemoryManager;
-import com.webutils.webserver.operations.ComputeMd5Digest;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.ByteBuffer;
 import java.util.*;
 
-public class SetupV2Put implements Operation {
+public class SetupObjectPut implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(SetupV2Put.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SetupObjectPut.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_V2_PUT;
+    public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_OBJECT_PUT;
 
     private final ObjectServerRequestContext requestContext;
 
@@ -43,19 +40,22 @@ public class SetupV2Put implements Operation {
     **
     ** The following is a map of all of the created Operations to handle this request.
      */
-    private final Map<OperationTypeEnum, Operation> v2PutHandlerOperations;
+    private final Map<OperationTypeEnum, Operation> putHandlerOperations;
 
     private boolean setupMethodDone;
 
     /*
-    ** This is used to setup the initial Operation dependencies required to handle the V2 PUT
-    **   request.
-    ** The completeCb will call the DetermineRequestType operation's event() method when the V2 PUT completes.
-    **   Currently, the V2 PUT is marked complete when all the V2 PUT object data is written to the Storage Servers
+    ** This is used to setup the initial Operation dependencies required to handle the Object PUT
+    **   request. This will setup the write of the Object information to the database and once that completes, it will
+    **   signal the ObjectPut_P2 operation to execute. This insures that no real work starts until the Object information
+    **   is safely stored.
+    **
+    ** The completeCb will call the DetermineRequestType operation's event() method when the Object PUT completes.
+    **   Currently, the Object PUT is marked complete when all the PUT object data is written to the Storage Servers
     **   and the Md5 Digest is computed and the comparison against the expected result done.
      */
-    public SetupV2Put(final ObjectServerRequestContext requestContext, final MemoryManager memoryManager, final Operation metering,
-                      final Operation completeCb) {
+    public SetupObjectPut(final ObjectServerRequestContext requestContext, final MemoryManager memoryManager, final Operation metering,
+                          final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
@@ -65,7 +65,7 @@ public class SetupV2Put implements Operation {
         /*
          ** Setup the list of Operations currently used to handle the V2 PUT
          */
-        v2PutHandlerOperations = new HashMap<>();
+        putHandlerOperations = new HashMap<>();
 
         /*
          ** This starts out not being on any queue
@@ -99,57 +99,22 @@ public class SetupV2Put implements Operation {
 
     public void execute() {
         if (!setupMethodDone) {
+
+            ObjectPut_P2 objectPutHandler = new ObjectPut_P2(requestContext, memoryManager, metering, this);
+            objectPutHandler.initialize();
+
             /*
             ** Setup the operation to write the Object information to the database. This needs to complete prior to
             **   the data being written to the Storage Servers
              */
-            CreateObject createObject = new CreateObject(requestContext, null);
-            v2PutHandlerOperations.put(createObject.getOperationType(), createObject);
+            CreateObject createObject = new CreateObject(requestContext, objectPutHandler, this);
+            putHandlerOperations.put(createObject.getOperationType(), createObject);
             createObject.initialize();
             createObject.event();
 
-            /*
-             ** Add compute MD5 and encrypt to the dependency on the ClientReadBufferManager read pointer.
-             */
-            BufferManagerPointer readBufferPointer = requestContext.getReadBufferPointer();
-
-            EncryptBuffer encryptBuffer = new EncryptBuffer(requestContext, memoryManager, readBufferPointer,
-                    this);
-            v2PutHandlerOperations.put(encryptBuffer.getOperationType(), encryptBuffer);
-            encryptBuffer.initialize();
-
-            /*
-            ** The ComputeMd5Digest needs to be completed before the SendFinalStatus operation can be woken up
-            **   to perform its work.
-            **   The SendFinalStatus is dependent upon all the data being written and the Md5 Digest
-            **   having completed.
-             */
-            List<Operation> callbackList = new LinkedList<>();
-            callbackList.add(this);
-
-            ComputeMd5Digest computeMd5Digest = new ComputeMd5Digest(requestContext, callbackList, readBufferPointer);
-            v2PutHandlerOperations.put(computeMd5Digest.getOperationType(), computeMd5Digest);
-            computeMd5Digest.initialize();
-
-            /*
-             ** Dole out another buffer to read in the content data if there is not data remaining in
-             **   the buffer from the HTTP Parsing.
-             */
-            BufferManager clientReadBufferManager = requestContext.getClientReadBufferManager();
-            ByteBuffer remainingBuffer = clientReadBufferManager.peek(readBufferPointer);
-            if (remainingBuffer != null) {
-                if (remainingBuffer.remaining() > 0) {
-                    encryptBuffer.event();
-                } else {
-                    metering.event();
-                }
-            }
-
             setupMethodDone = true;
         } else {
-            /*
-            ** Do nothing. The problem is this has a dependency upon the clientReadPtr
-             */
+            complete();
         }
     }
 
@@ -158,16 +123,10 @@ public class SetupV2Put implements Operation {
     **   work.
      */
     public void complete() {
-        if (requestContext.getDigestComplete() && requestContext.getAllV2PutDataWritten()) {
-            completeCallback.event();
+        completeCallback.event();
 
-            v2PutHandlerOperations.clear();
-
-            LOG.info("SetupV2Put[" + requestContext.getRequestId() + "] completed");
-        } else {
-            LOG.info("SetupV2Put[" + requestContext.getRequestId() + "] not completed digestComplete: " +
-                    requestContext.getDigestComplete() + " all data written: " + requestContext.getAllV2PutDataWritten());
-        }
+        putHandlerOperations.clear();
+        LOG.info("SetupObjectPut[" + requestContext.getRequestId() + "] completed");
     }
 
     /*
@@ -186,19 +145,19 @@ public class SetupV2Put implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("SetupV2Put[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("SetupObjectPut[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("SetupV2Put[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SetupObjectPut[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("SetupV2Put[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("SetupObjectPut[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("SetupV2Put[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SetupObjectPut[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -213,7 +172,7 @@ public class SetupV2Put implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("SetupV2Put[" + requestContext.getRequestId() +
+        LOG.warn("SetupObjectPut[" + requestContext.getRequestId() +
                 "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
@@ -226,7 +185,7 @@ public class SetupV2Put implements Operation {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
         LOG.info("   -> Operations Created By " + operationType);
 
-        Collection<Operation> createdOperations = v2PutHandlerOperations.values();
+        Collection<Operation> createdOperations = putHandlerOperations.values();
         for (Operation createdOperation : createdOperations) {
             createdOperation.dumpCreatedOperations(level + 1);
         }

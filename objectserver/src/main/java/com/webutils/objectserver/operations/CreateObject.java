@@ -8,6 +8,7 @@ import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
+import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,6 +25,8 @@ public class CreateObject implements Operation {
 
     private final Operation completeCallback;
 
+    private final Operation errorCallback;
+
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
@@ -31,9 +34,10 @@ public class CreateObject implements Operation {
      */
     private boolean onExecutionQueue;
 
-    public CreateObject(final RequestContext requestContext, final Operation completeCb) {
+    public CreateObject(final RequestContext requestContext, final Operation completeCb, final Operation errorCb) {
         this.requestContext = requestContext;
         this.completeCallback = completeCb;
+        this.errorCallback = errorCb;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -71,7 +75,11 @@ public class CreateObject implements Operation {
         String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
 
         ObjectTableMgr objectMgr = new ObjectTableMgr(flavor, requestContext.getRequestId());
-        objectMgr.createObjectEntry(objectPutInfo, tenancyUID);
+        if (objectMgr.createObjectEntry(objectPutInfo, tenancyUID) == HttpStatus.OK_200) {
+            completeCallback.event();
+        } else {
+            errorCallback.event();
+        }
     }
 
     public void complete() {
