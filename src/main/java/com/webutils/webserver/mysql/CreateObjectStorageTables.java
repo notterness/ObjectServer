@@ -100,17 +100,20 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             ")";
 
     private static final String createChunkTable = "CREATE TABLE IF NOT EXISTS storageChunk (" +
+            " chunkId INT AUTO_INCREMENT," +
             " offset INT NOT NULL," +
             " length INT NOT NULL," +
             " chunkIndex INT NOT NULL," +
             " storageServerName VARCHAR(64) NOT NULL," +
             " serverIp VARCHAR(64) NOT NULL," +
+            " serverPort INT NOT NULL," +
             " storageLocation VARCHAR(128) NOT NULL," +
             " dataWritten INT NOT NULL," +
             " ownerObject INT NOT NULL," +
             " FOREIGN KEY (ownerObject)" +
             "   REFERENCES object(objectId)" +
-            "   ON DELETE CASCADE" +
+            "   ON DELETE CASCADE," +
+            " PRIMARY KEY (chunkId)" +
             ")";
 
     private static final String createObjectStorageDatabase = "CREATE DATABASE " + objectStorageDbName;

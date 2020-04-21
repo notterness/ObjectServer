@@ -241,7 +241,6 @@ public abstract class RequestContext {
 
     public abstract void cleanupHttpParser();
 
-
     public abstract boolean hasHttpRequestBeenSent(final ServerIdentifier storageServerId);
     public abstract void setHttpRequestSent(final ServerIdentifier storageServerId);
     public abstract void removeHttpRequestSent(final ServerIdentifier storageServerId);

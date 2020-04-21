@@ -327,5 +327,42 @@ public class ObjectStorageDb {
         return requestedStr;
     }
 
+    public boolean executeSqlStatement(final String sqlQuery) {
+        boolean success = true;
+        Connection conn = getObjectStorageDbConn();
+
+        if (conn != null) {
+            Statement stmt = null;
+            ResultSet rs = null;
+
+            try {
+                stmt = conn.createStatement();
+                if (!stmt.execute(sqlQuery)) {
+                    success = false;
+                }
+            } catch (SQLException sqlEx) {
+                success = false;
+                LOG.error("executeSqlStatement() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("Bad SQL command: " + sqlQuery);
+                System.out.println("SQLException: " + sqlEx.getMessage());
+            } finally {
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("executeSqlStatement() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQLException: " + sqlEx.getMessage());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database tables.
+             */
+            closeObjectStorageDbConn(conn);
+        }
+
+        return success;
+    }
 
 }

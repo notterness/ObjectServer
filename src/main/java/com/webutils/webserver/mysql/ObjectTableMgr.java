@@ -156,7 +156,18 @@ public class ObjectTableMgr extends ObjectStorageDb {
         ** When the request is successful, there are a number of headers to return.
          */
         if (status == HttpStatus.OK_200) {
-            objectCreateInfo.setResponseHeaders(buildSuccessHeader(objectCreateInfo, objectName, bucketUID));
+            /*
+            ** Set the objectId in the HttpRequestInfo object so it can easily be accessed when writing out the
+            **   chunk information.
+             */
+            int id = getObjectId(objectName, bucketUID);
+            if (id != -1) {
+                objectCreateInfo.setObjectId(id);
+                objectCreateInfo.setResponseHeaders(buildSuccessHeader(objectCreateInfo, objectName, bucketUID));
+            } else {
+                objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "\"Unable to obtain objectId\"");
+                status = HttpStatus.INTERNAL_SERVER_ERROR_500;
+            }
         }
 
         return status;

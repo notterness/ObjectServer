@@ -23,18 +23,12 @@ public class HttpRequestInfo {
      * The following 3 headers are secret headers that should only be used internally by cross-region replication
      * workers.
      */
-    private static final String ETAG_OVERRIDE_HEADER = "etag-override";
     private static final String MD5_OVERRIDE_HEADER = "md5-override";
-    private static final String PART_COUNT_OVERRIDE_HEADER = "partcount-override";
-    private static final String POLICY_ROUND_HEADER = "policy-round";
 
     private static final String CONTENT_LENGTH = "Content-Length";
     private static final String CONTENT_MD5 = "Content-MD5";
 
     private static final String CONTENT_SHA256 = "x-content-sha256";
-
-    private static final String X_VCN_ID = "x-vcn-id";
-    private static final String VCN_ID_CASPER_DEBUG_HEADER = "x-vcn-id-casper";
 
     private static final String OBJECT_NAME = "/o/";
     private static final String NAMESPACE_NAME = "/n/";
@@ -45,7 +39,7 @@ public class HttpRequestInfo {
     /*
      ** The connection this HTTP information is associated with
      */
-    private RequestContext requestContext;
+    private final RequestContext requestContext;
 
     private boolean headerComplete;
     private boolean contentComplete;
@@ -93,114 +87,24 @@ public class HttpRequestInfo {
     private String httpHost;
     private int httpPort;
 
-    private String contentType;
-
-    private String UserAgent;
-
     private int contentLength;
 
-    /*
-     **
+     /*
+     ** This defines the redundancy and placement for the Objects within a bucket
      */
-    private String namespace;
-
-    /*
-     ** Name of the object being created within Casper
-     */
-    private String name;
+    private StorageTierEnum storageTier;
 
     /*
-     ** Compartment where the object is being created within Casper.
-     **
-     *** i.e. : "ocid1.tenancy.oc1..aaaaaaaaaodntvb6nij46dccx2dqn6a3xs563vhqm7ay5bkn4wbqvb2a3bya"
+    ** This is the unique identifier to access the Object record within the ObjectStorageDd after it has been created.
+    **
+    ** NOTE: This is only filled in for operations that operate on Objects
      */
-    private String compartmentId;
-
-    /*
-     ** Id of the object being created within Casper
-     **
-     ** i.e. : "ocid1.bucket.dev.dev.aaaaaaaajitbjrzo4sy56einy6wlwv46etjg62hn5t7we4yqfwfbf77q7syq"
-     */
-    private String id;
-
-    /*
-     **
-     ** i.e. : dev-1:ujuBuIUfkVu8M6pTiIc6hEy_-9OS2iG9aTK9xg0NbeX2jzleUkmCAEPGPhgVQGAC
-     */
-    private String opcRequestId;
-
-    /*
-     ** Where the object will be placed within Casper:
-     *
-     ** "Standard" or "Archive"
-     */
-    private String storageTier;
-
-    /*
-     ** "NoPublicAccess"
-     */
-    private String publicAccessType;
-
-    /*
-     ** This is a unique identifier for the object within Casper
-     **
-     ** i.e. : "32eae9f1-abd1-4cdd-9685-428a3fe28f65"
-     */
-    private String etag;
-
-    /*
-     ** "Disabled"
-     */
-    private String objectLevelAuditMode;
-
-    /*
-     ** Setting is in the format:
-     ** {
-     **    "empty": true
-     ** }
-     */
-    private String meterFlagSet;
-
-    private String kmsKeyId;
-
-    private String freeFormTags;
-
-    private String definedTags;
-
-    private int approximateCount;
-
-    private int approximateSize;
-
-    private boolean objectEventsEnabled;
-
-    private boolean replicationEnabled;
-    private boolean isReadOnly;
-
-    private String replicationSources;
-
-    private String createdBy;
+    private int objectId;
 
     /*
     ** md5override comes from the "md5-override" header (MD5_OVERRIDE_HEADER)
      */
     private String md5Override;
-
-    /*
-    ** etagOverride comes from the "etag-override" header (ETAG_OVERRIDE_HEADER)
-     */
-    private String etagOverride;
-
-    /*
-    ** partCountOverrideHeader comes from the "partcount-override" header (PART_COUNT_OVERRIDE_HEADER)
-    ** partCountOverride is the parsed out Integer value fro the partCountOverrideHeader String.
-     */
-    private String partCountOverrideHeader;
-    private Integer partCountOverride;
-
-    /*
-    ** etagRound comes from the "" header (POLICY_ROUND_HEADER)
-     */
-    private String etagRound;
 
     /*
      ** This comes from the "Content-MD5" header (CONTENT_MD5). If the validation of
@@ -223,16 +127,6 @@ public class HttpRequestInfo {
 
 
     /*
-    ** This comes from the "x-vcn-id" header (X_VCN_ID)
-     */
-    private String vcnId;
-
-    /*
-    ** This comes from the "x-vcn-id-casper" header (VCN_ID_CASPER_DEBUG_HEADER)
-     */
-    private String vcnDebugId;
-
-    /*
      ** Used to keep track of the Header fields in a generic manner
      */
     private final Map<String, List<String>> headers;
@@ -243,14 +137,14 @@ public class HttpRequestInfo {
     /*
     ** This is used to determine the method as an enum from the method string
      */
-    private Map<HttpMethodEnum, String> httpMethodMap;
+    private final Map<HttpMethodEnum, String> httpMethodMap;
 
     /*
     ** This map is used to hold the Object Name, Bucket Name and Tenancy Name for the created objected.
     ** For Storage Servers, there is also a Test Type that is used to force certain behaviors in the
     **   Storage Server's responses (i.e. disconnect the connection).
      */
-    private Map<String, String> putObjectInfoMap;
+    private final Map<String, String> putObjectInfoMap;
 
 
     public HttpRequestInfo(final RequestContext requestContext) {
@@ -263,7 +157,7 @@ public class HttpRequestInfo {
         contentLengthReceived = false;
 
         // provide case-insensitive key management for the headers map using get(), containsKey(), and put()
-        headers = new HashMap<String, List<String>>() {
+        headers = new HashMap<>() {
             @Override
             public List<String> get(Object key) {
                 return super.get(key.toString().toLowerCase());
@@ -303,6 +197,14 @@ public class HttpRequestInfo {
         httpMethodMap.put(HttpMethodEnum.POST_METHOD, "POST");
 
         putObjectInfoMap = new HashMap<>(3);
+
+        /*
+        ** Set the objectId to -1 to indicate that it is not valid.
+        ** Set the storageTier to the default value of STANDARD_TIER. The value for the storageTier comes from the
+        **   Bucket that the Object is being stored in.
+         */
+        objectId = -1;
+        storageTier = StorageTierEnum.STANDARD_TIER;
     }
 
 
@@ -338,40 +240,14 @@ public class HttpRequestInfo {
         httpHost = null;
         httpPort = 0;
 
-        contentType = null;
-        UserAgent = null;
-
         contentLength = 0;
 
-        namespace = null;
-        name = null;
-        compartmentId = null;
-        id = null;
-
-        opcRequestId = null;
         expectedMD5 = null;
         contentMD5 = null;
         md5parsed = false;
 
-        storageTier = "Standard";
-
-        etag = null;
-        objectLevelAuditMode = "Disabled";
-
-        meterFlagSet = null;
-        kmsKeyId = null;
-        freeFormTags = null;
-        definedTags = null;
-
-        approximateCount = 0;
-        approximateSize = 0;
-
-        objectEventsEnabled = false;
-        replicationEnabled = false;
-        isReadOnly = false;
-        replicationSources = null;
-
-        createdBy = null;
+        storageTier = StorageTierEnum.STANDARD_TIER;
+        objectId = -1;
 
         successResponseContent = null;
         successResponseHeaders = null;
@@ -379,8 +255,8 @@ public class HttpRequestInfo {
         /*
         ** Clear out the object information map
          */
-        for (int i = 0; i < uriFields.length; i++) {
-            putObjectInfoMap.remove(uriFields[i]);
+        for (String uriField : uriFields) {
+            putObjectInfoMap.remove(uriField);
         }
     }
 
@@ -406,9 +282,12 @@ public class HttpRequestInfo {
         return httpMethod;
     }
 
-    public void setHostAndPort(final String host, final int port) {
-        httpHost = host;
+    public void setObjectId(final int id) {
+        objectId = id;
     }
+
+    public int getObjectId() { return objectId; }
+
 
     /*
      ** The uri for the request. This is where the object name, tenancy and bucket name come from
@@ -418,11 +297,11 @@ public class HttpRequestInfo {
         /*
          ** Find the information about this object from the HTTP URI
          */
-        for (int i = 0; i < uriFields.length; i++) {
+        for (String uriField : uriFields) {
             String tmp = null;
-            int startingIndex = uri.indexOf(uriFields[i]);
+            int startingIndex = uri.indexOf(uriField);
             if (startingIndex != -1) {
-                startingIndex += uriFields[i].length();
+                startingIndex += uriField.length();
                 int endingIndex = uri.indexOf(' ', startingIndex);
                 if (endingIndex == -1) {
                     if ((endingIndex = uri.indexOf('/', startingIndex)) == -1) {
@@ -433,16 +312,16 @@ public class HttpRequestInfo {
                 if (endingIndex != -1) {
                     try {
                         tmp = uri.substring(startingIndex, endingIndex);
-                        LOG.info("setHttpUri() [" + requestContext.getRequestId() +  "] name: " + uriFields[i] + " name: " + tmp);
+                        LOG.info("setHttpUri() [" + requestContext.getRequestId() + "] name: " + uriField + " name: " + tmp);
                     } catch (IndexOutOfBoundsException ex) {
-                        LOG.warn("setHttpUri() [" + requestContext.getRequestId() +  "] name:" + uriFields[i] + " startingIndex: " + startingIndex + " endingIndex: " + endingIndex);
+                        LOG.warn("setHttpUri() [" + requestContext.getRequestId() + "] name:" + uriField + " startingIndex: " + startingIndex + " endingIndex: " + endingIndex);
                     }
                 }
             } else {
-                LOG.warn("setHttpUri() [" + requestContext.getRequestId() +  "] name: " + uriFields[i] + " is null");
+                LOG.warn("setHttpUri() [" + requestContext.getRequestId() + "] name: " + uriField + " is null");
             }
 
-            putObjectInfoMap.put(uriFields[i], tmp);
+            putObjectInfoMap.put(uriField, tmp);
         }
     }
 
@@ -641,17 +520,6 @@ public class HttpRequestInfo {
         expectedMD5 = getContentMD5Header();
         expectedSha256 = getContentSha256Header();
         md5Override = getHeaderString(MD5_OVERRIDE_HEADER);
-        etagOverride = getHeaderString(ETAG_OVERRIDE_HEADER);
-        partCountOverrideHeader = getHeaderString(PART_COUNT_OVERRIDE_HEADER);
-        try {
-            partCountOverride = partCountOverrideHeader == null ? null : Integer.parseInt(partCountOverrideHeader);
-        } catch (NumberFormatException e) {
-           LOG.error("Cannot parse partCountOverrideHeader" + partCountOverrideHeader, e);
-        }
-        etagRound = getHeaderString(POLICY_ROUND_HEADER);
-
-        vcnId = vcnIDFromRequest();
-        vcnDebugId = getHeaderString(VCN_ID_CASPER_DEBUG_HEADER);
     }
 
     /*
@@ -779,13 +647,6 @@ public class HttpRequestInfo {
     public String getTestType() { return putObjectInfoMap.get(TEST_TYPE); }
 
     /**
-     * Return the VCN ID, if any, in the request.
-     */
-    private String vcnIDFromRequest() {
-        return getHeaderString(X_VCN_ID);
-    }
-
-    /**
      * Performs an integrity check on the body of an HTTP request if the Content-MD5 header is available.
      *
      * If Content-MD5 is not present, this function does nothing, otherwise it computes the MD5 value for the body and
@@ -800,7 +661,7 @@ public class HttpRequestInfo {
          */
         contentMD5 = computedMd5;
 
-        if ((md5parsed == false) || (md5Override != null))
+        if (!md5parsed || (md5Override != null))
         {
             LOG.warn("checkContentMd5() [" + requestContext.getRequestId() + "] md5parsed: " + md5parsed +
                     " md5Override: " + md5Override);
@@ -839,7 +700,7 @@ public class HttpRequestInfo {
      * @param computedSha256 - The MD5 value computed from the content data read in.
      */
     public boolean checkContentSha256(final String computedSha256) {
-        if (sha256Parsed == false)
+        if (!sha256Parsed)
         {
             LOG.warn("checkContentSha256() [" + requestContext.getRequestId() + "] sha256Parsed: " + sha256Parsed);
             return true;

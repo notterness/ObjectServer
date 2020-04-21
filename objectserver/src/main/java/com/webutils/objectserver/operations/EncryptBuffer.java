@@ -445,16 +445,16 @@ public class EncryptBuffer implements Operation {
             storageServerWriteBufferMgr.bookmarkThis(storageServerWritePointer);
 
             /*
-             ** Now create the VonPicker and start it running. Once it obtains the addresses for the Storage Servers,
+             ** Now create the StorageChunkAllocRequestor and start it running. Once it obtains the addresses for the Storage Servers,
              **   it will start of a SetupChunkWrite for each Storage Server.
              */
             List<Operation> callbackList = new LinkedList<>();
             callbackList.add(this);
 
-            VonPicker vonPicker = new VonPicker(requestContext, callbackList, chunkNumber,
+            StorageChunkAllocRequestor storageChunkAllocRequestor = new StorageChunkAllocRequestor(requestContext, callbackList, chunkNumber,
                     memoryManager, storageServerWritePointer, chunkBytesToEncrypt);
-            vonPicker.initialize();
-            vonPicker.event();
+            storageChunkAllocRequestor.initialize();
+            storageChunkAllocRequestor.event();
 
             chunkNumber++;
         }
