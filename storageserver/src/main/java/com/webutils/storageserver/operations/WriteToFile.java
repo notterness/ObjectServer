@@ -1,8 +1,9 @@
-package com.webutils.webserver.operations;
+package com.webutils.storageserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.memory.MemoryManager;
+import com.webutils.webserver.operations.Operation;
+import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -118,14 +119,30 @@ public class WriteToFile implements Operation {
          ** Register this with the Buffer Manager to allow it to be event(ed) when
          **   buffers are added by the read producer.
          **
-         ** This operation (EncryptBuffer) is a consumer of ByteBuffer(s) produced by the ReadBuffer operation.
+         ** This operation (WriteToFile) is a consumer of ByteBuffer(s) produced by the ReadBuffer operation.
          */
         clientFileWritePtr = clientReadBufferMgr.register(this, clientFullBufferPtr);
 
         /*
+        ** Build the filename. It is comprised of the chunk number, chunk lba and located at
+        **   ./logs/StorageServer"IoInterfaceIdentifier"/"chunk location"
+         */
+        String chunkNumber = requestContext.getHttpInfo().getObjectChunkNumber();
+        String chunkLba = requestContext.getHttpInfo().getObjectChunkLba();
+        String chunkLocation = requestContext.getHttpInfo().getObjectChunkLocation();
+
+        if ((chunkNumber == null) || (chunkLba == null) || (chunkLocation == null)) {
+            LOG.error("WriteToFile chunkNumber: " + chunkNumber + " chunkLba: " + chunkLba + " chunkLocation: " + chunkLocation);
+            return null;
+        }
+
+        String filePathNameStr = "./logs/StorageServer" + requestContext.getIoInterfaceIdentifier() +
+                "/chunk_" + chunkNumber + "_" + chunkLba + ".dat";
+
+        /*
         ** Open up the File for writing
          */
-        outFile = new File("./logs/StorageServer" + requestContext.getIoInterfaceIdentifier() + ".dat");
+        outFile = new File(filePathNameStr);
         try {
             writeFileChannel = new FileOutputStream(outFile, false).getChannel();
         } catch (FileNotFoundException ex) {
@@ -139,7 +156,7 @@ public class WriteToFile implements Operation {
     }
 
     /*
-     ** The EncryptBuffer operation will have its "event()" method invoked whenever there is data read into
+     ** The WriteToBuffer operation will have its "event()" method invoked whenever there is data read into
      **   the ClientReadBufferManager.
      */
     public void event() {

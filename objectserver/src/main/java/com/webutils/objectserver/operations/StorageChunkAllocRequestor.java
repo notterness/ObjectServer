@@ -1,12 +1,15 @@
 package com.webutils.objectserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.DbSetup;
+import com.webutils.webserver.mysql.StorageChunkTableMgr;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
+import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +48,7 @@ public class StorageChunkAllocRequestor implements Operation {
         REQUEST_STORAGE_CHUNK,
         STORAGE_CHUNK_INFO_SAVED,
         WRITE_STORAGE_CHUNK_COMPLETE
-    };
+    }
 
     private ExecutionState currState;
 
@@ -154,7 +157,7 @@ public class StorageChunkAllocRequestor implements Operation {
                     if (!serverList.isEmpty()) {
                         /*
                         ** Kick off the StorageChunkAllocated operation to save the information about the chunks that
-                        **   are going to be written to the Storge Servers.
+                        **   are going to be written to the Storage Servers.
                          */
                         storageChunkAllocated.event();
                         currState = ExecutionState.STORAGE_CHUNK_INFO_SAVED;
@@ -183,8 +186,12 @@ public class StorageChunkAllocRequestor implements Operation {
                 ** NOTE: The complete() function for SetupChunkWrite is called within that Operation.
                  */
                 int i = 0;
-                for (ServerIdentifier serverIdentifier : serverList) {
-                    SetupChunkWrite setupChunkWrite = new SetupChunkWrite(requestContext, serverIdentifier,
+                for (ServerIdentifier server : serverList) {
+                    /*
+                    ** FIXME: The setLength should be a passed in parameter to the allocation call
+                     */
+                    server.setLength(chunkBytesToWrite);
+                    SetupChunkWrite setupChunkWrite = new SetupChunkWrite(requestContext, server,
                             memoryManager, storageServerWritePointer, chunkBytesToWrite, this, i,
                             null);
                     setupChunkWrite.initialize();
@@ -217,19 +224,50 @@ public class StorageChunkAllocRequestor implements Operation {
                     /*
                      ** For debug purposes, dump out the response results from the Storage Servers
                      */
-                    for (ServerIdentifier serverIdentifier : serverList) {
-                        int result = requestContext.getStorageResponseResult(serverIdentifier);
-                        LOG.info("ChunkWriteComplete addr: " + serverIdentifier.getServerIpAddress().toString() +
-                                " port: " + serverIdentifier.getServerTcpPort() + " chunkNumber: " + chunkNumber +
+                    HttpRequestInfo objectCreateInfo = requestContext.getHttpInfo();
+                    StorageChunkTableMgr chunkMgr = new StorageChunkTableMgr(requestContext.getWebServerFlavor(), objectCreateInfo);
+
+                    /*
+                    ** There needs to be at least 1 chunk written to a Storage Server to continue
+                     */
+                    int chunkRedundancy = 0;
+                    for (ServerIdentifier server : serverList) {
+                        int result = requestContext.getStorageResponseResult(server);
+                        LOG.info("ChunkWriteComplete addr: " + server.getServerIpAddress().toString() +
+                                " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
                                 " result: " + result);
+
+                        if (result == HttpStatus.OK_200) {
+                            if (chunkMgr.setChunkWritten(server.getChunkId())) {
+                                chunkRedundancy++;
+                            } else {
+                                chunkMgr.deleteChunk(server.getChunkId());
+                            }
+                        } else {
+                            /*
+                            ** Delete this chunk, hopefully this is not the lst
+                             */
+                            chunkMgr.deleteChunk(server.getChunkId());
+                        }
 
                         /*
                          ** Remove this serverIdentifier from the list
                          */
-                        requestContext.removeStorageServerResponse(serverIdentifier);
+                        requestContext.removeStorageServerResponse(server);
                     }
 
-                     /*
+                    /*
+                    ** Make sure that there was at least 1 valid chunk written
+                     */
+                    if (chunkRedundancy == 0) {
+                        StringBuilder failureMessage = new StringBuilder("\"Unable to obtain write chunk data - failed Storage Servers\"");
+                        for (ServerIdentifier server : serverList) {
+                            failureMessage.append("\n  \"StorageServer\": \"").append(server.getServerName()).append("\"");
+                        }
+                        objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage.toString());
+                    }
+
+                    /*
                      ** Done so cleanup the active list of Storage Servers
                      */
                     serverList.clear();

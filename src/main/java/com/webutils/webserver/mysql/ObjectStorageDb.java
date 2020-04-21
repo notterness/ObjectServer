@@ -333,13 +333,10 @@ public class ObjectStorageDb {
 
         if (conn != null) {
             Statement stmt = null;
-            ResultSet rs = null;
 
             try {
                 stmt = conn.createStatement();
-                if (!stmt.execute(sqlQuery)) {
-                    success = false;
-                }
+                stmt.execute(sqlQuery);
             } catch (SQLException sqlEx) {
                 success = false;
                 LOG.error("executeSqlStatement() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());

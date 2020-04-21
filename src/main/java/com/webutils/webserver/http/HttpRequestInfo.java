@@ -35,6 +35,13 @@ public class HttpRequestInfo {
     private static final String BUCKET_NAME = "/b/";
     private static final String TEST_TYPE = "/t/";
 
+    /*
+    ** The following are used by the Storage Server to determine where to write the chunk data
+     */
+    private static final String CHUNK_LBA = "chunk-lba";
+    private static final String CHUNK_NUMBER = "object-chunk-number";
+    private static final String CHUNK_LOCATION = "chunk-location";
+
 
     /*
      ** The connection this HTTP information is associated with
@@ -312,7 +319,7 @@ public class HttpRequestInfo {
                 if (endingIndex != -1) {
                     try {
                         tmp = uri.substring(startingIndex, endingIndex);
-                        LOG.info("setHttpUri() [" + requestContext.getRequestId() + "] name: " + uriField + " name: " + tmp);
+                        //LOG.info("setHttpUri() [" + requestContext.getRequestId() + "] name: " + uriField + " name: " + tmp);
                     } catch (IndexOutOfBoundsException ex) {
                         LOG.warn("setHttpUri() [" + requestContext.getRequestId() + "] name:" + uriField + " startingIndex: " + startingIndex + " endingIndex: " + endingIndex);
                     }
@@ -338,7 +345,7 @@ public class HttpRequestInfo {
         }
         headers.get(fieldName).add(field.getValue());
 
-        LOG.info("addHeaderValue() header.name" +  fieldName + " value: " + field.getValue());
+        //LOG.info("addHeaderValue() header.name " +  fieldName + " value: " + field.getValue());
 
         if (field instanceof HostPortHttpField) {
             HostPortHttpField hpfield = (HostPortHttpField) field;
@@ -400,6 +407,7 @@ public class HttpRequestInfo {
         ** Verify that there was an Object Name, Bucket Name and Tenant Name passed in
          */
         if (httpMethod == HttpMethodEnum.PUT_METHOD) {
+            /* FIXME: Need to handle the differences between Object Server and Storage Server PUT required fields
             if ((getObject() == null) || (getBucket() == null) || (getNamespace() == null)) {
                 parseFailureCode = HttpStatus.BAD_REQUEST_400;
                 parseFailureReason = HttpStatus.getMessage(parseFailureCode);
@@ -409,6 +417,8 @@ public class HttpRequestInfo {
 
                 requestContext.setHttpParsingError();
             }
+
+             */
         } else if (httpMethod == HttpMethodEnum.POST_METHOD) {
             if ((getBucket().compareTo("") != 0) || (getNamespace() == null)) {
 
@@ -627,6 +637,38 @@ public class HttpRequestInfo {
 
         return -1;
     }
+
+
+    public String getObjectChunkNumber() {
+        List<String> chunkNumbers = headers.get(CHUNK_NUMBER);
+
+        if (chunkNumbers.isEmpty() || (chunkNumbers.size() != 1)) {
+            return null;
+        }
+
+        return chunkNumbers.get(0);
+    }
+
+    public String getObjectChunkLba() {
+        List<String> chunkLba = headers.get(CHUNK_LBA);
+
+        if (chunkLba.isEmpty() || (chunkLba.size() != 1)) {
+            return null;
+        }
+
+        return chunkLba.get(0);
+    }
+
+    public String getObjectChunkLocation() {
+        List<String> chunkLocation = headers.get(CHUNK_LOCATION);
+
+        if (chunkLocation.isEmpty() || (chunkLocation.size() != 1)) {
+            return null;
+        }
+
+        return chunkLocation.get(0);
+    }
+
 
     /*
     **

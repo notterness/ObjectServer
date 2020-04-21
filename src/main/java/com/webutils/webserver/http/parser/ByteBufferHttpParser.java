@@ -46,6 +46,9 @@ public class ByteBufferHttpParser {
         while ((bufferToParse = chunk.getBuffer()) != null) {
             int remaining = bufferToParse.remaining();
 
+            //String tmpStr = chunk.bb_to_str(bufferToParse);
+            //LOG.info("parseHttpData() " + tmpStr);
+
             while (!httpParser.isState(HttpParser.State.END) && (remaining > 0)) {
                 int was_remaining = remaining;
 

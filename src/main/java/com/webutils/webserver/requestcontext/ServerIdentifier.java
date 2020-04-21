@@ -61,4 +61,6 @@ public class ServerIdentifier {
     }
 
     public int getChunkId() { return chunkUniqueId; }
+
+    public String getChunkLocation() { return "test"; }
 }

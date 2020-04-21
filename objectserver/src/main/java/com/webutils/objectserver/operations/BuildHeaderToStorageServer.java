@@ -5,6 +5,7 @@ import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
+import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,6 +28,8 @@ public class BuildHeaderToStorageServer implements Operation {
      */
     private final RequestContext requestContext;
 
+    private final ServerIdentifier storageServer;
+
     private final int chunkBytesToEncrypt;
 
     private final String errorInjectString;
@@ -46,14 +49,15 @@ public class BuildHeaderToStorageServer implements Operation {
     private boolean headerNotBuilt;
 
     public BuildHeaderToStorageServer(final RequestContext requestContext, final BufferManager storageServerBufferManager,
-                                      final BufferManagerPointer addBufferPtr, final int chunkBytesToEncrypt, final String errorInjectString) {
+                                      final BufferManagerPointer addBufferPtr, final ServerIdentifier server, final String errorInjectString) {
 
         this.requestContext = requestContext;
 
         this.storageServerBufferManager = storageServerBufferManager;
         this.addBufferPointer = addBufferPtr;
+        this.storageServer = server;
 
-        this.chunkBytesToEncrypt = chunkBytesToEncrypt;
+        this.chunkBytesToEncrypt = server.getLength();
 
         this.errorInjectString = errorInjectString;
 
@@ -110,7 +114,7 @@ public class BuildHeaderToStorageServer implements Operation {
             if (msgHdr != null) {
 
                 String tmp;
-                tmp = buildRequestString(chunkBytesToEncrypt);
+                tmp = buildRequestString();
 
                 str_to_bb(msgHdr, tmp);
 
@@ -198,34 +202,35 @@ public class BuildHeaderToStorageServer implements Operation {
         LOG.info("");
     }
 
-    private String buildRequestString(final int bytesInContent) {
+    private String buildRequestString() {
         if (errorInjectString == null) {
-            return new String("PUT /n/faketenantname" + "" +
-                    "/b/bucket-5e1910d0-ea13-11e9-851d-234132e0fb02" +
-                    "/v/StorageServer" +
-                    "/o/5e223890-ea13-11e9-851d-234132e0fb02  HTTP/1.1\n" +
-                    "Host: StorageServerWrite\n" +
+            return new String("PUT /o/test HTTP/1.1\n" +
+                    "Host: ObjectServerWrite\n" +
                     "Content-Type: application/json\n" +
                     "Connection: keep-alive\n" +
                     "Accept: */*\n" +
                     "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
                     "Accept-Language: en-us\n" +
                     "Accept-Encoding: gzip, deflate\n" +
-                    "Content-Length: " + bytesInContent + "\n\n");
+                    "object-chunk-number: " + storageServer.getChunkNumber() + "\n" +
+                    "chunk-lba: " + storageServer.getOffset() + "\n" +
+                    "chunk-location: " + storageServer.getChunkLocation() + "\n" +
+                    "Content-Length: " + chunkBytesToEncrypt + "\n\n");
 
         } else {
-            return new String("PUT /n/faketenantname" + "" +
-                    "/b/bucket-5e1910d0-ea13-11e9-851d-234132e0fb02" +
-                    "/t/" + errorInjectString +
-                    "/o/5e223890-ea13-11e9-851d-234132e0fb02  HTTP/1.1\n" +
-                    "Host: StorageServerWrite\n" +
+            return new String("PUT /t/" + errorInjectString +
+                    " HTTP/1.1\n" +
+                    "Host: ObjectServerWrite\n" +
                     "Content-Type: application/json\n" +
                     "Connection: keep-alive\n" +
                     "Accept: */*\n" +
                     "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
                     "Accept-Language: en-us\n" +
                     "Accept-Encoding: gzip, deflate\n" +
-                    "Content-Length: " + bytesInContent + "\n\n");
+                    "object-chunk-number: " + storageServer.getChunkNumber() +
+                    "chunk-lba: " + storageServer.getOffset() +
+                    "chunk-location: " + storageServer.getChunkLocation() +
+                    "Content-Length: " + chunkBytesToEncrypt + "\n\n");
         }
     }
 

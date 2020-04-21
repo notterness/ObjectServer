@@ -34,7 +34,7 @@ public class SetupChunkWrite implements Operation {
     **   checker. It identifies the chunk and the Storage Server through the  IP address, Port number and
     **   the chunk number.
      */
-    private final ServerIdentifier serverIdentifier;
+    private final ServerIdentifier storageServer;
 
     private final MemoryManager memoryManager;
 
@@ -87,14 +87,14 @@ public class SetupChunkWrite implements Operation {
     ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
     **   up the calls to obtain the VON information and the meta-data write to the database.
      */
-    public SetupChunkWrite(final RequestContext requestContext, final ServerIdentifier serverIdentifier,
+    public SetupChunkWrite(final RequestContext requestContext, final ServerIdentifier server,
                            final MemoryManager memoryManager, final BufferManagerPointer encryptedBufferPtr,
                            final int chunkBytesToEncrypt, final Operation completeCb, final int writer,
                            final String errorInjectString) {
 
         this.operationType = OperationTypeEnum.fromInt(OperationTypeEnum.SETUP_CHUNK_WRITE_0.toInt() + writer);
         this.requestContext = requestContext;
-        this.serverIdentifier = serverIdentifier;
+        this.storageServer = server;
         this.memoryManager = memoryManager;
         this.encryptedBufferPtr = encryptedBufferPtr;
         this.chunkBytesToEncrypt = chunkBytesToEncrypt;
@@ -120,9 +120,9 @@ public class SetupChunkWrite implements Operation {
         serverConnectionClosedDueToError = false;
 
         LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] addr: " +
-                serverIdentifier.getServerIpAddress().toString() + " port: " +
-                serverIdentifier.getServerTcpPort() + " chunkNumber: " + serverIdentifier.getChunkNumber() +
-                " writer: " + this.writerNumber);
+                storageServer.getServerIpAddress().toString() + " port: " +
+                storageServer.getServerTcpPort() + " chunkNumber: " + storageServer.getChunkNumber() + " offset: " +
+                storageServer.getOffset() + " writer: " + this.writerNumber);
     }
 
     public OperationTypeEnum getOperationType() {
@@ -196,7 +196,7 @@ public class SetupChunkWrite implements Operation {
              ** For each Storage Server, setup a HandleStorageServerError operation that is used when there
              **   is an error communicating with the StorageServer.
              */
-            HandleStorageServerError errorHandler = new HandleStorageServerError(requestContext, this, serverIdentifier);
+            HandleStorageServerError errorHandler = new HandleStorageServerError(requestContext, this, storageServer);
             requestHandlerOperations.put(errorHandler.getOperationType(), errorHandler);
 
             /*
@@ -210,7 +210,7 @@ public class SetupChunkWrite implements Operation {
              **   EncryptBuffer operation to know where to start writing the data.
              */
             WriteToStorageServer storageServerWriter = new WriteToStorageServer(requestContext, storageServerConnection,
-                    encryptedBufferPtr, chunkBytesToEncrypt, serverIdentifier);
+                    encryptedBufferPtr, chunkBytesToEncrypt, storageServer);
             requestHandlerOperations.put(storageServerWriter.getOperationType(), storageServerWriter);
             storageServerWriter.initialize();
 
@@ -218,14 +218,14 @@ public class SetupChunkWrite implements Operation {
              ** The PUT Header must be written to the Storage Server prior to sending the data
              */
             BuildHeaderToStorageServer headerBuilder = new BuildHeaderToStorageServer(requestContext, storageServerBufferManager,
-                    addBufferPointer, chunkBytesToEncrypt, errorInjectString);
+                    addBufferPointer, storageServer, errorInjectString);
             requestHandlerOperations.put(headerBuilder.getOperationType(), headerBuilder);
             BufferManagerPointer writePointer = headerBuilder.initialize();
 
             List<Operation> ops = new LinkedList<>();
             ops.add(storageServerWriter);
             WriteHeaderToStorageServer headerWriter = new WriteHeaderToStorageServer(requestContext, storageServerConnection, ops,
-                    storageServerBufferManager, writePointer, serverIdentifier);
+                    storageServerBufferManager, writePointer, storageServer);
             requestHandlerOperations.put(headerWriter.getOperationType(), headerWriter);
             headerWriter.initialize();
 
@@ -250,15 +250,15 @@ public class SetupChunkWrite implements Operation {
 
             StorageServerResponseHandler httpRespHandler = new StorageServerResponseHandler(requestContext,
                     storageServerResponseBufferManager, httpBufferPointer, this,
-                    serverIdentifier);
+                    storageServer);
             requestHandlerOperations.put(httpRespHandler.getOperationType(), httpRespHandler);
             httpRespHandler.initialize();
 
             /*
              ** Now open a initiator connection to write encrypted buffers out of.
              */
-            if (!storageServerConnection.startInitiator(serverIdentifier.getServerIpAddress(),
-                    serverIdentifier.getServerTcpPort(), connectComplete, errorHandler)) {
+            if (!storageServerConnection.startInitiator(storageServer.getServerIpAddress(),
+                    storageServer.getServerTcpPort(), connectComplete, errorHandler)) {
                 /*
                 ** This means the SocketChannel could not be opened. Need to indicate a problem
                 **   with the Storage Server and clean up this SetupChunkWrite.
@@ -282,8 +282,8 @@ public class SetupChunkWrite implements Operation {
     public void complete() {
 
         LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] complete addr: " +
-                serverIdentifier.getServerIpAddress().toString() + " port: " +
-                serverIdentifier.getServerTcpPort() + " chunkNumber: " + serverIdentifier.getChunkNumber() +
+                storageServer.getServerIpAddress().toString() + " port: " +
+                storageServer.getServerTcpPort() + " chunkNumber: " + storageServer.getChunkNumber() +
                 " writer: " + writerNumber);
 
         /*
@@ -368,7 +368,7 @@ public class SetupChunkWrite implements Operation {
         /*
         ** Clear the HTTP Request sent for this Storage Server
          */
-        requestContext.removeHttpRequestSent(serverIdentifier);
+        requestContext.removeHttpRequestSent(storageServer);
 
         /*
         ** Now call back the Operation that will handle the completion

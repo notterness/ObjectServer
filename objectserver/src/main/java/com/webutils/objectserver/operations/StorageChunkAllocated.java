@@ -110,8 +110,6 @@ public class StorageChunkAllocated implements Operation {
                 if (status != HttpStatus.OK_200) {
                     break;
                 }
-
-                chunkMgr.setChunkWritten(server.getChunkId());
             }
 
             if (status != HttpStatus.OK_200) {

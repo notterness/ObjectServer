@@ -243,8 +243,6 @@ public class EncryptBuffer implements Operation {
     }
 
     /*
-     ** This will never be called for the CloseOutRequest. When the execute() method completes, the
-     **   RequestContext is no longer "running".
      */
     public void complete() {
 

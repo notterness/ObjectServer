@@ -34,6 +34,9 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
 
     private final static String SET_CHUNK_WRITTEN = "UPDATE storageChunk SET dataWritten = 1 WHERE chunkId = ";
 
+    private final static String DELETE_CHUNK = "DELETE FROM storageChunk WHERE chunkId = ";
+
+
     private final HttpRequestInfo objectCreateInfo;
 
     public StorageChunkTableMgr(final WebServerFlavor flavor, final HttpRequestInfo objectCreateInfo) {
@@ -141,8 +144,10 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
     **   by the Storage Server.
      */
     public boolean setChunkWritten(final int chunkId) {
-        String updateDataWritten = SET_CHUNK_WRITTEN + chunkId;
+        return executeSqlStatement(SET_CHUNK_WRITTEN + chunkId);
+    }
 
-        return executeSqlStatement(updateDataWritten);
+    public void deleteChunk(final int chunkId) {
+        executeSqlStatement(DELETE_CHUNK + chunkId);
     }
 }
