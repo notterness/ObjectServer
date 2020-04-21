@@ -121,8 +121,8 @@ public class ParsePostContent implements Operation {
             srcBuffer.position(savedSrcPosition);
             savedSrcPosition = 0;
 
-            LOG.info("ParsePostContent[" + requestContext.getRequestId() + "] remaining position: " +
-                    srcBuffer.position() + " limit: " + srcBuffer.limit());
+            //LOG.info("ParsePostContent[" + requestContext.getRequestId() + "] remaining position: " +
+            //        srcBuffer.position() + " limit: " + srcBuffer.limit());
 
             /*
              ** Now run the Buffer State through the POST Content Parser
@@ -146,7 +146,7 @@ public class ParsePostContent implements Operation {
             }
         }
 
-        LOG.info("ParsePostContent[" + requestContext.getRequestId() + "] exit from loop");
+        //LOG.info("ParsePostContent[" + requestContext.getRequestId() + "] exit from loop");
 
         /*
          ** Check if there needs to be another read to bring in more of the HTTP request
@@ -162,7 +162,7 @@ public class ParsePostContent implements Operation {
                  */
                 meteringOperation.event();
             } else {
-                LOG.info("ParsePostContent[" + requestContext.getRequestId() + "] parsing error, no allocation");
+                LOG.warn("ParsePostContent[" + requestContext.getRequestId() + "] parsing error, no allocation");
 
                 /*
                  ** Event the DetermineRequestType. This will check if there is an error and then perform the
@@ -171,11 +171,6 @@ public class ParsePostContent implements Operation {
                 completeCallback.event();
             }
         } else {
-            boolean parseError = parser.getParseError();
-
-            LOG.info("ParsePostContent[" + requestContext.getRequestId() + "] content was parsed error: " +
-                    parseError);
-
             /*
             ** Even if there is an error, the content data has all been parsed (or at least as far as it will be).
              */
@@ -185,7 +180,7 @@ public class ParsePostContent implements Operation {
             ** Make sure that there was not a parsing error up until this point. Assuming it was all good, then validate
             **   that the required attributes are all present.
              */
-            if (!parseError) {
+            if (!parser.getParseError()) {
                 if (postContentData.validatePostContentData()) {
                     postContentData.dumpMaps();
                 } else {
@@ -196,6 +191,8 @@ public class ParsePostContent implements Operation {
                     requestContext.getHttpInfo().setParseFailureCode(HttpStatus.BAD_REQUEST_400);
                     requestContext.setHttpParsingError();
                 }
+            } else {
+                LOG.warn("ParsePostContent[" + requestContext.getRequestId() + "] content parser error");
             }
 
             /*

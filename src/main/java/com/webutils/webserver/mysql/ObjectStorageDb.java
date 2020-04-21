@@ -138,7 +138,7 @@ public class ObjectStorageDb {
                              ** The rs.getString(1) is the String format of the UID.
                              */
                             uid = rs.getString(1);
-                            LOG.info("Requested UID: " + uid);
+                            //LOG.info("Requested UID: " + uid);
 
                             count++;
                         }
@@ -208,7 +208,7 @@ public class ObjectStorageDb {
                              ** The rs.getString(1) is the String format of the UID.
                              */
                             id = rs.getInt(1);
-                            LOG.info("Requested Id: " + id);
+                            //LOG.info("Requested Id: " + id);
 
                             count++;
                         }
@@ -279,7 +279,7 @@ public class ObjectStorageDb {
                              ** The rs.getString(1) is the String format of the UID.
                              */
                             requestedStr = rs.getString(1);
-                            LOG.info("Return string: " + requestedStr);
+                            //LOG.info("Return string: " + requestedStr);
 
                             /*
                             ** If it is "NULL", that means the field was not field in. Return null for

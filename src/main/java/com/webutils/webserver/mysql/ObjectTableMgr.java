@@ -55,7 +55,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
     public ObjectTableMgr(final WebServerFlavor flavor, final int requestId) {
         super(flavor);
 
-        LOG.info("ObjectTableMgr() flavor: " + flavor + " requestId: " + requestId);
+        //LOG.info("ObjectTableMgr() flavor: " + flavor + " requestId: " + requestId);
         this.opcRequestId = requestId;
     }
 
@@ -237,7 +237,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
                         SUCCESS_HEADER_4 + objectUID + "\n" + SUCCESS_HEADER_5 + createTime + "\n";
             }
 
-            LOG.info(successHeader);
+            //LOG.info(successHeader);
         } else {
             successHeader = null;
         }

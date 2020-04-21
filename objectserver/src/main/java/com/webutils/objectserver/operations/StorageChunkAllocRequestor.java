@@ -233,20 +233,32 @@ public class StorageChunkAllocRequestor implements Operation {
                     int chunkRedundancy = 0;
                     for (ServerIdentifier server : serverList) {
                         int result = requestContext.getStorageResponseResult(server);
-                        LOG.info("ChunkWriteComplete addr: " + server.getServerIpAddress().toString() +
-                                " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
-                                " result: " + result);
 
+                        /*
+                        ** If the status is OK_200, then update the chunk to mark that the data was written.
+                         */
                         if (result == HttpStatus.OK_200) {
                             if (chunkMgr.setChunkWritten(server.getChunkId())) {
+                                LOG.info("ChunkWriteComplete addr: " + server.getServerIpAddress().toString() +
+                                        " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
+                                        " result: OK_200 " + chunkRedundancy);
+
                                 chunkRedundancy++;
                             } else {
+                                LOG.error("ChunkWriteComplete unable to update dataWritten addr: " + server.getServerIpAddress().toString() +
+                                        " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
+                                        " result: OK_200");
+
                                 chunkMgr.deleteChunk(server.getChunkId());
                             }
                         } else {
                             /*
                             ** Delete this chunk, hopefully this is not the lst
                              */
+                            LOG.error("ChunkWriteComplete unable to update dataWritten addr: " + server.getServerIpAddress().toString() +
+                                    " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
+                                    " result: " + result);
+
                             chunkMgr.deleteChunk(server.getChunkId());
                         }
 

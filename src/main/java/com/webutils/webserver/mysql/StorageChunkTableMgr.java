@@ -42,7 +42,7 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
     public StorageChunkTableMgr(final WebServerFlavor flavor, final HttpRequestInfo objectCreateInfo) {
         super(flavor);
 
-        LOG.info("ObjectTableMgr() flavor: " + flavor);
+        //LOG.info("ObjectTableMgr() flavor: " + flavor);
 
         this.objectCreateInfo = objectCreateInfo;
     }

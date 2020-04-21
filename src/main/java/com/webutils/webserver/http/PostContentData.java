@@ -72,7 +72,7 @@ public class PostContentData {
                  ** The first time this is called (bracketDepth == 1 at this point), keyStrObtained will be false.
                  */
                 if (keyStrObtained) {
-                    LOG.info("Open bracket " + bracketDepth + " - " + keyStr);
+                    //LOG.info("Open bracket " + bracketDepth + " - " + keyStr);
 
                     /*
                      ** Special case checking for "definedTags". This must take place prior to pushing the
@@ -91,7 +91,7 @@ public class PostContentData {
                         parsingError = true;
                     }
                 } else {
-                    LOG.info("Open bracket " + bracketDepth);
+                    //LOG.info("Open bracket " + bracketDepth);
                 }
                 break;
             case "}":
@@ -107,7 +107,7 @@ public class PostContentData {
                 if (bracketDepth > 0) {
                     try {
                         String removedStr = keyStringStack.pop();
-                        LOG.info("Closing bracket " + bracketDepth + " - " + removedStr);
+                        //LOG.info("Closing bracket " + bracketDepth + " - " + removedStr);
                     } catch (EmptyStackException ex) {
                         LOG.error("Closing bracket, should be something on stack: " + ex.getMessage());
                         parsingError = true;
@@ -134,7 +134,7 @@ public class PostContentData {
                 if (!keyStrObtained) {
                     keyStr = str1;
                     keyStrObtained = true;
-                    LOG.info("keyStr: " + keyStr);
+                    //LOG.info("keyStr: " + keyStr);
                 } else {
                     /*
                      ** Check if there is anything in the stack, the top element is the type of Map to add to
@@ -143,13 +143,13 @@ public class PostContentData {
                         /*
                          ** Simple case, just add to the normal bucketParams Map
                          */
-                        LOG.info("empty stack - " + keyStr + " : " + str1);
+                        //LOG.info("empty stack - " + keyStr + " : " + str1);
                         bucketParams.put(keyStr, str1);
                     } else {
                         try {
                             String mapSelector = keyStringStack.peek();
 
-                            LOG.info("mapSelector (" + mapSelector + ") - " + keyStr + " : " + str1);
+                            //LOG.info("mapSelector (" + mapSelector + ") - " + keyStr + " : " + str1);
 
                             /*
                              ** The first check is to see if there is a map that covers this selector
@@ -350,7 +350,7 @@ public class PostContentData {
                     **   that are under a new sub-category within the "definedTags" grouping).
                      */
                     if (!definedTags.containsKey(keyStr)) {
-                        LOG.info("Creating new map under definedTags: " + keyStr);
+                        //LOG.info("Creating new map under definedTags: " + keyStr);
 
                         Map<String, String> subCategoryMap = new HashMap<> (5);
 

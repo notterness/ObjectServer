@@ -66,7 +66,7 @@ public class BucketTableMgr extends ObjectStorageDb {
     public BucketTableMgr(final WebServerFlavor flavor, final int requestId, final HttpRequestInfo requestInfo) {
         super(flavor);
 
-        LOG.info("BucketTableMgr() flavor: " + flavor + " requestId: " + requestId);
+        //LOG.info("BucketTableMgr() flavor: " + flavor + " requestId: " + requestId);
         this.opcRequestId = requestId;
         this.httpRequestInfo = requestInfo;
     }
@@ -313,7 +313,8 @@ public class BucketTableMgr extends ObjectStorageDb {
                 successHeader = SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + bucketUID + "\n" +
                         SUCCESS_HEADER_4 + "test" + "\n";
             }
-            LOG.info(successHeader);
+
+            //LOG.info(successHeader);
         } else {
             successHeader = null;
         }
