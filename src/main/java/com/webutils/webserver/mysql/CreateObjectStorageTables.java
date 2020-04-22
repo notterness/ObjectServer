@@ -241,70 +241,68 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
         }
 
         /*
-         ** Check if the Database needs to be created
+         ** If the code reaches here, the database needs to be created
          */
-        if (vendorError == MysqlErrorNumbers.ER_BAD_DB_ERROR) {
-            LOG.info("createObjectStorageDb() create database");
+        LOG.info("createObjectStorageDb() create database");
 
-            if (isDockerImage() || isKubernetesImage()) {
-                jdbcConnect = kubeJDBCConnect;
-            } else {
-                jdbcConnect = execJDBCConnect;
-            }
+        if (isDockerImage() || isKubernetesImage()) {
+            jdbcConnect = kubeJDBCConnect;
+        } else {
+            jdbcConnect = execJDBCConnect;
+        }
 
+        try {
+            conn = DriverManager.getConnection(jdbcConnect, userName, password);
+        } catch (SQLException ex) {
+            vendorError = ex.getErrorCode();
+            System.out.println("createObjectStorageDb(2) - JDBC connect: " + jdbcConnect);
+            System.out.println("createObjectStorageDb(2) - creating database - SQLException: " + ex.getMessage() +
+                    " SQLState: " + ex.getSQLState() + " " + vendorError);
+            LOG.error("createObjectStorageDb(2) - creating database - SQLException: " + ex.getMessage() +
+                    " SQLState: " + ex.getSQLState() + " " + vendorError);
+            return false;
+        }
+
+        if (conn != null) {
+            Statement stmt = null;
+
+            /*
+            ** For clarity and better handling of errors, may want to separate out the different execute statements. For
+            **   example, if the Object Storage user has laready been created, it will cause an exception and return
+            **   a vendor error of 1396.
+             */
             try {
-                conn = DriverManager.getConnection(jdbcConnect, userName, password);
-            } catch (SQLException ex) {
-                vendorError = ex.getErrorCode();
-                System.out.println("createObjectStorageDb(2) - JDBC connect: " + jdbcConnect);
-                System.out.println("createObjectStorageDb(2) - creating database - SQLException: " + ex.getMessage() +
-                        " SQLState: " + ex.getSQLState() + " " + vendorError);
-                LOG.error("createObjectStorageDb(2) - creating database - SQLException: " + ex.getMessage() +
-                        " SQLState: " + ex.getSQLState() + " " + vendorError);
+                stmt = conn.createStatement();
+                stmt.execute(createObjectStorageDatabase);
+
+                stmt.execute(createObjectStorageUser);
+
+                stmt.execute(privilegeObjectStorageUser);
+            } catch (SQLException sqlEx) {
+                System.out.println("createObjectStorageDb() - create database - SQLException: " + sqlEx.getMessage() + " vendorError: " + sqlEx.getErrorCode());
+                LOG.error("createObjectStorageDb() - create database - SQLException: " + sqlEx.getMessage() + " vendorError: " + sqlEx.getErrorCode());
                 return false;
             }
-
-            if (conn != null) {
-                Statement stmt = null;
-
-                /*
-                ** For clarity and better handling of errors, may want to separate out the different execute statements. For
-                **   example, if the Object Storage user has laready been created, it will cause an exception and return
-                **   a vendor error of 1396.
-                 */
-                try {
-                    stmt = conn.createStatement();
-                    stmt.execute(createObjectStorageDatabase);
-
-                    stmt.execute(createObjectStorageUser);
-
-                    stmt.execute(privilegeObjectStorageUser);
-                } catch (SQLException sqlEx) {
-                    System.out.println("createObjectStorageDb() - create database - SQLException: " + sqlEx.getMessage() + " vendorError: " + sqlEx.getErrorCode());
-                    LOG.error("createObjectStorageDb() - create database - SQLException: " + sqlEx.getMessage() + " vendorError: " + sqlEx.getErrorCode());
-                    return false;
-                }
-                finally {
-                    if (stmt != null) {
-                        try {
-                            stmt.close();
-                        } catch (SQLException sqlEx) {
-                            System.out.println("createObjectStorageDb() - close - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
-                            LOG.error("createObjectStorageDb() - close - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
-                        }
+            finally {
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("createObjectStorageDb() - close - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        LOG.error("createObjectStorageDb() - close - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                     }
                 }
+            }
 
-                /*
-                 ** Close out this connection as it was only used to create the database.
-                 */
-                try {
-                    conn.close();
-                } catch (SQLException sqlEx) {
-                    // handle any errors
-                    System.out.println("SQL conn close(2) SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
-                    LOG.error("SQL conn close(2) SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
-                }
+            /*
+            ** Close out this connection as it was only used to create the database.
+             */
+            try {
+                conn.close();
+            } catch (SQLException sqlEx) {
+                // handle any errors
+                System.out.println("SQL conn close(2) SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("SQL conn close(2) SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
             }
         }
 

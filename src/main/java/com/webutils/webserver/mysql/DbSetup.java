@@ -337,65 +337,61 @@ public abstract class DbSetup {
         }
 
         /*
-         ** Check if the Database needs to be created
+         ** If the code reaches here, the database needs to be created
          */
-        if (vendorError == MysqlErrorNumbers.ER_BAD_DB_ERROR) {
-            System.out.println("createStorageServerDb() create database");
+        System.out.println("createStorageServerDb() create database");
 
-            if (isDockerImage() || isKubernetesImage()) {
-                jdbcConnect = kubeJDBCConnect;
-            } else {
-                jdbcConnect = execJDBCConnect;
-            }
+        if (isDockerImage() || isKubernetesImage()) {
+            jdbcConnect = kubeJDBCConnect;
+        } else {
+            jdbcConnect = execJDBCConnect;
+        }
+
+        try {
+            conn = DriverManager.getConnection(jdbcConnect, userName, password);
+        } catch (SQLException ex) {
+            vendorError = ex.getErrorCode();
+            System.out.println("createStorageServerDb(2) - JDBC connect: " + jdbcConnect);
+            System.out.println("createStorageServerDb(2) - creating database - SQLException: " + ex.getMessage() +
+                    " SQLState: " + ex.getSQLState() + " " + vendorError);
+            LOG.error("createStorageServerDb(2) - creating database - SQLException: " + ex.getMessage() +
+                    " SQLState: " + ex.getSQLState() + " " + vendorError);
+            return false;
+        }
+
+        if (conn != null) {
+            Statement stmt = null;
 
             try {
-                conn = DriverManager.getConnection(jdbcConnect, userName, password);
-            } catch (SQLException ex) {
-                vendorError = ex.getErrorCode();
-                System.out.println("createStorageServerDb(2) - JDBC connect: " + jdbcConnect);
-                System.out.println("createStorageServerDb(2) - creating database - SQLException: " + ex.getMessage() +
-                        " SQLState: " + ex.getSQLState() + " " + vendorError);
-                LOG.error("createStorageServerDb(2) - creating database - SQLException: " + ex.getMessage() +
-                        " SQLState: " + ex.getSQLState() + " " + vendorError);
-                return false;
+                stmt = conn.createStatement();
+                stmt.execute("CREATE DATABASE StorageServers");
+
+                stmt.execute(createStorageServerUser);
+                stmt.execute(privilegeStorageServerUser);
+            } catch (SQLException sqlEx) {
+                System.out.println("createStorageServerDb() - create database - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("createStorageServerDb() - create database - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
             }
-
-            if (conn != null) {
-                Statement stmt = null;
-
-                try {
-                    stmt = conn.createStatement();
-                    stmt.execute("CREATE DATABASE StorageServers");
-
-                    stmt.execute(createStorageServerUser);
-
-                    stmt.execute(privilegeStorageServerUser);
-                } catch (SQLException sqlEx) {
-                    System.out.println("createStorageServerDb() - create database - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
-                    LOG.error("createStorageServerDb() - create database - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
-                    return false;
-                }
-                finally {
-                    if (stmt != null) {
-                        try {
-                            stmt.close();
-                        } catch (SQLException sqlEx) {
-                            System.out.println("createStorageServerDb() - close - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
-                            LOG.error("createStorageServerDb() - close - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
-                        }
+            finally {
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("createStorageServerDb() - close - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        LOG.error("createStorageServerDb() - close - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                     }
                 }
+            }
 
-                /*
-                ** Close out this connection as it was only used to create the database.
-                 */
-                try {
-                    conn.close();
-                } catch (SQLException sqlEx) {
-                    // handle any errors
-                    System.out.println("SQL conn close(2) SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
-                    LOG.error("SQL conn close(2) SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
-                }
+            /*
+            ** Close out this connection as it was only used to create the database.
+             */
+            try {
+                conn.close();
+            } catch (SQLException sqlEx) {
+                // handle any errors
+                System.out.println("SQL conn close(2) SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("SQL conn close(2) SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
             }
         }
 
