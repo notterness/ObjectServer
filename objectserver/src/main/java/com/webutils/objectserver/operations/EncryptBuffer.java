@@ -236,7 +236,7 @@ public class EncryptBuffer implements Operation {
             /*
             ** Need to cleanup here from the Encrypt operation
              */
-            requestContext.setAllV2PutDataWritten();
+            requestContext.setAllPutDataWritten();
 
             complete();
         }

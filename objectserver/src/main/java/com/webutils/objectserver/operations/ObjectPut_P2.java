@@ -149,7 +149,7 @@ public class ObjectPut_P2 implements Operation {
      **   work.
      */
     public void complete() {
-        if (requestContext.getDigestComplete() && requestContext.getAllV2PutDataWritten()) {
+        if (requestContext.getDigestComplete() && requestContext.getAllPutDataWritten()) {
             completeCallback.event();
 
             v2PutHandlerOperations.clear();
@@ -157,7 +157,7 @@ public class ObjectPut_P2 implements Operation {
             LOG.info("ObjectPut_P2[" + requestContext.getRequestId() + "] completed");
         } else {
             LOG.info("ObjectPut_P2[" + requestContext.getRequestId() + "] not completed digestComplete: " +
-                    requestContext.getDigestComplete() + " all data written: " + requestContext.getAllV2PutDataWritten());
+                    requestContext.getDigestComplete() + " all data written: " + requestContext.getAllPutDataWritten());
         }
     }
 

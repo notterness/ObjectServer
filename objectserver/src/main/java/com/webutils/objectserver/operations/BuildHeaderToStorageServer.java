@@ -203,34 +203,44 @@ public class BuildHeaderToStorageServer implements Operation {
     }
 
     private String buildRequestString() {
-        if (errorInjectString == null) {
-            return new String("PUT /o/test HTTP/1.1\n" +
-                    "Host: ObjectServerWrite\n" +
+        String opcClientRequestId = requestContext.getHttpInfo().getOpcClientRequestId();
+
+        String commonPieces;
+        if (opcClientRequestId != null) {
+            commonPieces = "Host: ObjectServerWrite\n" +
                     "Content-Type: application/json\n" +
                     "Connection: keep-alive\n" +
                     "Accept: */*\n" +
                     "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
                     "Accept-Language: en-us\n" +
                     "Accept-Encoding: gzip, deflate\n" +
+                    "opc-client-request-id: " + opcClientRequestId + "\n" +
+                    "opc-request-id: " + requestContext.getRequestId() + "\n" +
+                    "ETag: " + requestContext.getHttpInfo().getObjectUID() + "\n" +
                     "object-chunk-number: " + storageServer.getChunkNumber() + "\n" +
                     "chunk-lba: " + storageServer.getOffset() + "\n" +
                     "chunk-location: " + storageServer.getChunkLocation() + "\n" +
-                    "Content-Length: " + chunkBytesToEncrypt + "\n\n");
-
+                    "Content-Length: " + chunkBytesToEncrypt + "\n\n";
         } else {
-            return new String("PUT /t/" + errorInjectString +
-                    " HTTP/1.1\n" +
-                    "Host: ObjectServerWrite\n" +
+            commonPieces = "Host: ObjectServerWrite\n" +
                     "Content-Type: application/json\n" +
                     "Connection: keep-alive\n" +
                     "Accept: */*\n" +
                     "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
                     "Accept-Language: en-us\n" +
                     "Accept-Encoding: gzip, deflate\n" +
-                    "object-chunk-number: " + storageServer.getChunkNumber() +
-                    "chunk-lba: " + storageServer.getOffset() +
-                    "chunk-location: " + storageServer.getChunkLocation() +
-                    "Content-Length: " + chunkBytesToEncrypt + "\n\n");
+                    "opc-request-id: " + requestContext.getRequestId() + "\n" +
+                    "ETag: " + requestContext.getHttpInfo().getObjectUID() + "\n" +
+                    "object-chunk-number: " + storageServer.getChunkNumber() + "\n" +
+                    "chunk-lba: " + storageServer.getOffset() + "\n" +
+                    "chunk-location: " + storageServer.getChunkLocation() + "\n" +
+                    "Content-Length: " + chunkBytesToEncrypt + "\n\n";
+        }
+
+        if (errorInjectString == null) {
+            return "PUT /o/test HTTP/1.1\n" + commonPieces;
+        } else {
+            return "PUT /t/" + errorInjectString + " HTTP/1.1\n" + commonPieces;
         }
     }
 

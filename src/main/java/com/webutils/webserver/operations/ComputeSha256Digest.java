@@ -46,6 +46,7 @@ public class ComputeSha256Digest implements Operation {
 
     private final HttpRequestInfo httpRequestInfo;
 
+    private int savedSrcPosition;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -74,6 +75,7 @@ public class ComputeSha256Digest implements Operation {
          */
         clientObjectBytes = requestContext.getRequestContentLength();
         sha256DigestedBytes = 0;
+        savedSrcPosition = 0;
 
         sha256Digest = new Sha256Digest();
 
@@ -93,6 +95,20 @@ public class ComputeSha256Digest implements Operation {
     public BufferManagerPointer initialize() {
 
         sha256DigestPointer = clientReadBufferMgr.register(this, readBufferPointer);
+
+        /*
+         ** savedSrcPosition is used to handle the case where there are multiple readers from the readBufferPointer and
+         **   there has already been data read from the buffer. In that case, the position() will not be zero, but there
+         **   is a race condition as to how the cursors within the "base" buffer are adjusted. The best solution is to
+         **   use a "copy" of the buffer and to set its cursors appropriately.
+         */
+        ByteBuffer readBuffer;
+        if ((readBuffer = clientReadBufferMgr.peek(sha256DigestPointer)) != null) {
+            savedSrcPosition = readBuffer.position();
+        } else {
+            savedSrcPosition = 0;
+        }
+        LOG.info("ComputeSha256Digest() savedSrcPosition: " + savedSrcPosition);
 
         return sha256DigestPointer;
     }
@@ -114,19 +130,27 @@ public class ComputeSha256Digest implements Operation {
 
         while ((buffer = clientReadBufferMgr.poll(sha256DigestPointer)) != null) {
 
-            LOG.info("sha-256 digest position: " + buffer.position() + " limit: " + buffer.limit());
+            /*
+             ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
+             **  affecting the position() and limit() indexes for other users of the base buffer
+             */
+            ByteBuffer sha256Buffer = buffer.duplicate();
+            sha256Buffer.position(savedSrcPosition);
+            savedSrcPosition = 0;
 
-            sha256DigestedBytes += (buffer.limit() - buffer.position());
-            sha256Digest.digestByteBuffer(buffer);
+            LOG.info("sha-256 digest position: " + sha256Buffer.position() + " limit: " + sha256Buffer.limit());
+
+            sha256DigestedBytes += (sha256Buffer.limit() - sha256Buffer.position());
+            sha256Digest.digestByteBuffer(sha256Buffer);
 
             if (sha256DigestedBytes == clientObjectBytes) {
 
-                String dataDigestString = sha256Digest.getFinalDigest();
-                requestContext.setSha256DigestComplete();
+                String sha256DigestString = sha256Digest.getFinalDigest();
+                requestContext.setSha256DigestComplete(sha256DigestString);
 
-                boolean contentHasValidSha256Digest = httpRequestInfo.checkContentSha256(dataDigestString);
+                boolean contentHasValidSha256Digest = httpRequestInfo.checkContentSha256(sha256DigestString);
                 LOG.info("WebServerConnState[" + requestContext.getRequestId() + "] Computed sha256Digest " +
-                        dataDigestString + " is valid: " + contentHasValidSha256Digest);
+                        sha256DigestString + " is valid: " + contentHasValidSha256Digest);
                 requestContext.setSha256DigestCompareResult(contentHasValidSha256Digest);
 
                 /*

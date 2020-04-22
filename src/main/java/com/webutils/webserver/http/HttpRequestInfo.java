@@ -14,14 +14,13 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class HttpRequestInfo {
 
     private static final Logger LOG = LoggerFactory.getLogger(HttpRequestInfo.class);
 
     /**
-     * The following 3 headers are secret headers that should only be used internally by cross-region replication
-     * workers.
      */
     private static final String MD5_OVERRIDE_HEADER = "md5-override";
 
@@ -29,6 +28,9 @@ public class HttpRequestInfo {
     private static final String CONTENT_MD5 = "Content-MD5";
 
     private static final String CONTENT_SHA256 = "x-content-sha256";
+
+    private static final String CLIENT_OPC_REQUEST_ID = "opc-client-request-id";
+    private static final String OPC_REQUEST_ID = "opc-request-id";
 
     private static final String OBJECT_NAME = "/o/";
     private static final String NAMESPACE_NAME = "/n/";
@@ -102,11 +104,15 @@ public class HttpRequestInfo {
     private StorageTierEnum storageTier;
 
     /*
-    ** This is the unique identifier to access the Object record within the ObjectStorageDd after it has been created.
+    ** The objectId is the identifier to access the Object record within the ObjectStorageDd after it has been created. It is
+    **   generated during the INSERT operation on the table and uses an AUTO_INCREMENT field.
+    ** The objectUID is String that represents the Object and is also generated during the INSERT operation using the
+    **   UUID() MySQL function.
     **
-    ** NOTE: This is only filled in for operations that operate on Objects
+    ** NOTE: These variables are only filled in for operations that operate on Objects
      */
     private int objectId;
+    private String objectUID;
 
     /*
     ** md5override comes from the "md5-override" header (MD5_OVERRIDE_HEADER)
@@ -120,8 +126,7 @@ public class HttpRequestInfo {
      **   be set to false;
      */
     private String expectedMD5;
-    private boolean md5parsed;
-    private String contentMD5;
+    private AtomicBoolean md5parsed;
 
     /*
      ** This comes from the "x-content-sha256" header (CONTENT_SHA256). If the validation of
@@ -130,7 +135,7 @@ public class HttpRequestInfo {
      **   be set to false;
      */
     private String expectedSha256;
-    private boolean sha256Parsed;
+    private AtomicBoolean sha256Parsed;
 
 
     /*
@@ -187,8 +192,10 @@ public class HttpRequestInfo {
 
         httpMethod = HttpMethodEnum.INVALID_METHOD;
         expectedMD5 = null;
-        contentMD5 = null;
-        md5parsed = false;
+        md5parsed = new AtomicBoolean(false);
+
+        expectedSha256 = null;
+        sha256Parsed = new AtomicBoolean(false);
 
         /*
         ** These are used to return specific information when requests are successful.
@@ -250,11 +257,14 @@ public class HttpRequestInfo {
         contentLength = 0;
 
         expectedMD5 = null;
-        contentMD5 = null;
-        md5parsed = false;
+        md5parsed.set(false);
+
+        expectedSha256 = null;
+        sha256Parsed.set(false);
 
         storageTier = StorageTierEnum.STANDARD_TIER;
         objectId = -1;
+        objectUID = null;
 
         successResponseContent = null;
         successResponseHeaders = null;
@@ -289,11 +299,14 @@ public class HttpRequestInfo {
         return httpMethod;
     }
 
-    public void setObjectId(final int id) {
+    public void setObjectId(final int id, final String uid) {
         objectId = id;
+        objectUID = uid;
     }
 
     public int getObjectId() { return objectId; }
+
+    public String getObjectUID() { return objectUID; }
 
 
     /*
@@ -325,7 +338,7 @@ public class HttpRequestInfo {
                     }
                 }
             } else {
-                LOG.warn("setHttpUri() [" + requestContext.getRequestId() + "] name: " + uriField + " is null");
+                //LOG.warn("setHttpUri() [" + requestContext.getRequestId() + "] name: " + uriField + " is null");
             }
 
             putObjectInfoMap.put(uriField, tmp);
@@ -345,7 +358,7 @@ public class HttpRequestInfo {
         }
         headers.get(fieldName).add(field.getValue());
 
-        //LOG.info("addHeaderValue() header.name " +  fieldName + " value: " + field.getValue());
+        LOG.info("addHeaderValue() header.name " +  fieldName + " value: " + field.getValue());
 
         if (field instanceof HostPortHttpField) {
             HostPortHttpField hpfield = (HostPortHttpField) field;
@@ -537,22 +550,20 @@ public class HttpRequestInfo {
     **   it is the correct length.
     ** Assuming it is found and the correct length it is then returned.
      */
-    private String getContentMD5Header() {
+    public String getContentMD5Header() {
         String md5value = getHeaderString(CONTENT_MD5);
         if (md5value == null || md5value.isEmpty()) {
-            md5parsed = false;
+            md5parsed.set(false);
             return null;
         }
 
-        md5parsed = true;
+        md5parsed.set(true);
         try {
             byte[] bytes = BaseEncoding.base64().decode(md5value);
             if (bytes.length != 16) {
                 LOG.warn("The value of the Content-MD5 header '" + md5value +
                         "' was not the correct length after base-64 decoding");
                 return null;
-            } else {
-                //LOG.info("expectedMD5: " + md5value);
             }
         } catch (IllegalArgumentException ia_ex) {
             LOG.warn("The value of the Content-MD5 header '" + md5value +
@@ -568,22 +579,20 @@ public class HttpRequestInfo {
      **   it is the correct length.
      ** Assuming it is found and the correct length it is then returned.
      */
-    private String getContentSha256Header() {
+    public String getContentSha256Header() {
         String sha256Value = getHeaderString(CONTENT_SHA256);
         if (sha256Value == null || sha256Value.isEmpty()) {
-            sha256Parsed = false;
+            sha256Parsed.set(false);
             return null;
         }
 
-        sha256Parsed = true;
+        sha256Parsed.set(true);
         try {
             byte[] bytes = BaseEncoding.base64().decode(sha256Value);
             if (bytes.length != 32) {
                 LOG.warn("The value of the x-content-sha256 header '" + sha256Value +
                         "' was not the correct length after base-64 decoding");
                 return null;
-            } else {
-                //LOG.info("expectedSha256: " + sha256Value);
             }
         } catch (IllegalArgumentException ia_ex) {
             LOG.warn("The value of the Content-MD5 header '" + sha256Value +
@@ -623,9 +632,27 @@ public class HttpRequestInfo {
     }
 
     /*
-    ** Return the "opc-client-request-id". This is an optional field in the PUT Object request.
+     ** Return the "opc-client-request-id". This is an optional field in the PUT Object request.
+     ** This field is provided by the client to allow them to track requests.
      */
-    public String getOpcClientRequestId() { return null; }
+    public String getOpcClientRequestId() {
+        return putObjectInfoMap.get(CLIENT_OPC_REQUEST_ID);
+    }
+
+    /*
+     ** Return the "opc-request-id". This is an required field in the Storage Server PUT Object request.
+     ** This field is generated by the Object Server when a request is received. It is guaranteed to be unique per
+     **   request. A single request in the Object Server may fan out into multiple requests to Storage Servers.
+     */
+    public String getOpcRequestId() {
+        List<String> opcRequestId = headers.get(OPC_REQUEST_ID);
+
+        if (opcRequestId.size() != 1) {
+            return null;
+        }
+
+        return opcRequestId.get(0);
+    }
 
     /*
     **
@@ -642,7 +669,7 @@ public class HttpRequestInfo {
     public String getObjectChunkNumber() {
         List<String> chunkNumbers = headers.get(CHUNK_NUMBER);
 
-        if (chunkNumbers.isEmpty() || (chunkNumbers.size() != 1)) {
+        if (chunkNumbers.size() != 1) {
             return null;
         }
 
@@ -652,7 +679,7 @@ public class HttpRequestInfo {
     public String getObjectChunkLba() {
         List<String> chunkLba = headers.get(CHUNK_LBA);
 
-        if (chunkLba.isEmpty() || (chunkLba.size() != 1)) {
+        if (chunkLba.size() != 1) {
             return null;
         }
 
@@ -662,19 +689,11 @@ public class HttpRequestInfo {
     public String getObjectChunkLocation() {
         List<String> chunkLocation = headers.get(CHUNK_LOCATION);
 
-        if (chunkLocation.isEmpty() || (chunkLocation.size() != 1)) {
+        if (chunkLocation.size() != 1) {
             return null;
         }
 
         return chunkLocation.get(0);
-    }
-
-
-    /*
-    **
-     */
-    public String getContentMd5() {
-        return contentMD5;
     }
 
 
@@ -694,16 +713,10 @@ public class HttpRequestInfo {
      * If Content-MD5 is not present, this function does nothing, otherwise it computes the MD5 value for the body and
      * compares it to the value from the header.
      *
-     * @param computedMd5 - The MD5 value computed from the content data read in.
+     * @param computedMd5 - The MD5 value computed from the content data read in ("Computed-MD5").
      */
-    public boolean checkContentMD5(String computedMd5) {
-        /*
-        ** Save away the computed MD5 for the content as it is passed back in the OK_200 response headers for the
-        **   PUT Object request.
-         */
-        contentMD5 = computedMd5;
-
-        if (!md5parsed || (md5Override != null))
+    public boolean checkContentMD5(final String computedMd5) {
+        if (!md5parsed.get() || (md5Override != null))
         {
             LOG.warn("checkContentMd5() [" + requestContext.getRequestId() + "] md5parsed: " + md5parsed +
                     " md5Override: " + md5Override);
@@ -739,10 +752,10 @@ public class HttpRequestInfo {
      * If Content-MD5 is not present, this function does nothing, otherwise it computes the MD5 value for the body and
      * compares it to the value from the header.
      *
-     * @param computedSha256 - The MD5 value computed from the content data read in.
+     * @param computedSha256 - The Sha256 value computed from the content data read in ("x-content-sha256").
      */
     public boolean checkContentSha256(final String computedSha256) {
-        if (!sha256Parsed)
+        if (!sha256Parsed.get())
         {
             LOG.warn("checkContentSha256() [" + requestContext.getRequestId() + "] sha256Parsed: " + sha256Parsed);
             return true;

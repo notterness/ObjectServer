@@ -89,8 +89,8 @@ public class BucketTableMgr extends ObjectStorageDb {
              */
             LOG.warn("Bucket already exists name: " + bucketName);
 
-            String errorMessage = "\"CreateBucket bucket already exists - " + bucketName + "\",\n   \"ETag\": \"" + bucketUID + "\"";
-            httpRequestInfo.setParseFailureCode(HttpStatus.CONFLICT_409, errorMessage);
+            String failureMessage = "\"CreateBucket bucket already exists - " + bucketName + "\",\n   \"ETag\": \"" + bucketUID + "\"";
+            httpRequestInfo.setParseFailureCode(HttpStatus.CONFLICT_409, failureMessage);
 
             return HttpStatus.CONFLICT_409;
         }

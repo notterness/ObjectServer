@@ -17,6 +17,7 @@ import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -159,17 +160,19 @@ public abstract class RequestContext {
      ** The next two variables are used to keep track of the Md5 Digest calculation. First if it has been
      **   completed and second if the calculated Md5 digest matches the expected one.
      */
-    private boolean digestComplete;
+    private final AtomicBoolean md5DigestComplete;
     private boolean contentHasValidMd5Digest;
+    private String computedMd5Digest;
 
     /*
      ** The next two variables are used to keep track of the Sha-256 Digest calculation. First if it has been
      **   completed and second if the calculated Sha-256 digest matches the expected one.
      */
-    private boolean sha256DigestComplete;
+    private final AtomicBoolean sha256DigestComplete;
     private boolean contentHasValidSha256Digest;
+    private String computedSha256Digest;
 
-    private boolean v2PutAllDataWritten;
+    private boolean putAllDataWritten;
     private boolean postMethodContentDataParsed;
 
     /*
@@ -226,10 +229,12 @@ public abstract class RequestContext {
         workQueue = new LinkedBlockingQueue<>(20);
         timedWaitQueue = new LinkedBlockingQueue<>(20);
 
-        digestComplete = false;
+        md5DigestComplete = new AtomicBoolean(false);
         contentHasValidMd5Digest = false;
+        sha256DigestComplete = new AtomicBoolean(false);
+        contentHasValidSha256Digest = false;
 
-        v2PutAllDataWritten = false;
+        putAllDataWritten = false;
         postMethodContentDataParsed = false;
     }
 
@@ -287,11 +292,15 @@ public abstract class RequestContext {
         dumpOperations();
         requestHandlerOperations.clear();
 
-        digestComplete = false;
+        md5DigestComplete.set(false);
         contentHasValidMd5Digest = false;
-        sha256DigestComplete = false;
+        computedMd5Digest = null;
+
+        sha256DigestComplete.set(false);
         contentHasValidSha256Digest = false;
-        v2PutAllDataWritten = false;
+        computedSha256Digest = null;
+
+        putAllDataWritten = false;
         postMethodContentDataParsed = false;
     }
 
@@ -580,50 +589,69 @@ public abstract class RequestContext {
 
     /*
      ** Accessor methods for the Md5 Digest information
+     **
+     ** NOTE: The setDigestComplete() method is called from a compute thread that is not the same as the worker
+     **   threads.
+     **       The getDigestComplete() is called from a worker thread. It must be true before the worker thread
+     **   accesses the getMd5DigestResult() and the getComputedMd5Digest() methods so it acts as a barrier to insure
+     **   that the contentHasValidMd5Digest and computedMd5Digest values are valid.
      */
-    public void setDigestComplete() {
-        digestComplete = true;
+    public void setDigestComplete(final String digest) {
+        computedMd5Digest = digest;
+        md5DigestComplete.set(true);
     }
 
     public void setMd5DigestCompareResult(final boolean valid) {
         if (!valid) {
             /*
-            ** Set the error response (This should probably be more descriptive to indicate that the Md5 digest failed)
+             ** Set the error response and provide details about what was expected and why it failed.
              */
-            httpInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400);
+            String failureMessage = "\"Bad Md5 Compare\",\n  \"Content-MD5\": \"" + httpInfo.getContentMD5Header() +
+                    "\",\n  \"Computed-MD5\": \"" + computedMd5Digest + "\"";
+            httpInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
         }
 
         contentHasValidMd5Digest = valid;
     }
 
     public boolean getDigestComplete() {
-        return digestComplete;
+        return md5DigestComplete.get();
     }
 
     public boolean getMd5DigestResult() {
         return contentHasValidMd5Digest;
     }
 
+    public String getComputedMd5Digest() { return computedMd5Digest; }
+
     /*
-     ** Accessor methods for the Sha-256 Digest information
+     ** Accessor methods for the Sha-256 Digest information.
+     **
+     ** NOTE: The setSha256DigestComplete() method is called from a compute thread that is not the same as the worker
+     **   threads.
+     **       The getSha256DigestComplete() is called from a worker thread. It must be true before the worker thread
+     **   accesses the getSha256DigestResult() method so it acts as a barrier.
      */
-    public void setSha256DigestComplete() {
-        sha256DigestComplete = true;
+    public void setSha256DigestComplete(final String digest) {
+        computedSha256Digest = digest;
+        sha256DigestComplete.set(true);
     }
 
     public void setSha256DigestCompareResult(final boolean valid) {
         if (!valid) {
             /*
-             ** Set the error response (This should probably be more descriptive to indicate that the Sha-256 digest failed)
+             ** Set the error response and provide details about what was expected and why it failed.
              */
-            httpInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400);
+            String failureMessage = "\"Bad Sha256 Compare\",\n  \"x-content-sha256\": \"" + httpInfo.getContentSha256Header() +
+                    "\",\n  \"Computed-Sha256\": \"" + computedSha256Digest + "\"";
+            httpInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
         }
 
         contentHasValidSha256Digest = valid;
     }
 
     public boolean getSha256DigestComplete() {
-        return sha256DigestComplete;
+        return sha256DigestComplete.get();
     }
 
     public boolean getSha256DigestResult() {
@@ -631,16 +659,20 @@ public abstract class RequestContext {
     }
 
     /*
-    ** Acccessor methods to keep track of when all the data has been written to the Storage Server(s)
+    ** Accessor methods to keep track of when all the data has been written to the Storage Server(s) for the Object
+    **   Server or when a Chunk has been written to disk by a Storage Server
      */
-    public void setAllV2PutDataWritten() {
-        v2PutAllDataWritten = true;
+    public void setAllPutDataWritten() {
+        putAllDataWritten = true;
     }
 
-    public boolean getAllV2PutDataWritten() {
-        return v2PutAllDataWritten;
+    public boolean getAllPutDataWritten() {
+        return putAllDataWritten;
     }
 
+    /*
+    ** Accessor methods to indicate when
+     */
     /*
     **
      */

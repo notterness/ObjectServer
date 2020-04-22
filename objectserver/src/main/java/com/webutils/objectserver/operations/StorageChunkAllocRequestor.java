@@ -47,7 +47,8 @@ public class StorageChunkAllocRequestor implements Operation {
     enum ExecutionState {
         REQUEST_STORAGE_CHUNK,
         STORAGE_CHUNK_INFO_SAVED,
-        WRITE_STORAGE_CHUNK_COMPLETE
+        WRITE_STORAGE_CHUNK_COMPLETE,
+        WRITE_STORAGE_CHUNK_DONE
     }
 
     private ExecutionState currState;
@@ -204,8 +205,6 @@ public class StorageChunkAllocRequestor implements Operation {
                 break;
 
             case WRITE_STORAGE_CHUNK_COMPLETE:
-                LOG.info("StorageChunkAllocRequestor() WRITE_STORAGE_CHUNK_COMPLETE");
-
                 /*
                  ** Check if all of the Storage Servers have responded or have had an error (either a bad
                  **   Shaw-256 validation, timed out, or disconnected).
@@ -274,7 +273,7 @@ public class StorageChunkAllocRequestor implements Operation {
                     if (chunkRedundancy == 0) {
                         StringBuilder failureMessage = new StringBuilder("\"Unable to obtain write chunk data - failed Storage Servers\"");
                         for (ServerIdentifier server : serverList) {
-                            failureMessage.append("\n  \"StorageServer\": \"").append(server.getServerName()).append("\"");
+                            failureMessage.append(",\n  \"StorageServer\": \"").append(server.getServerName()).append("\"");
                         }
                         objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage.toString());
                     }
@@ -292,7 +291,12 @@ public class StorageChunkAllocRequestor implements Operation {
                         operation.event();
                     }
                     callbackOperationsToRun.clear();
+
+                    currState = ExecutionState.WRITE_STORAGE_CHUNK_DONE;
                 }
+                break;
+
+            case WRITE_STORAGE_CHUNK_DONE:
                 break;
         }
     }

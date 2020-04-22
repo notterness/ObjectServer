@@ -2,16 +2,17 @@ package com.webutils.storageserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.http.HttpRequestInfo;
+import com.webutils.webserver.operations.ComputeMd5Digest;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
+import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public class SetupStorageServerPut implements Operation {
 
@@ -23,6 +24,13 @@ public class SetupStorageServerPut implements Operation {
     **
      */
     private static final String CLOSE_CONNECTION_AFTER_HEADER = "DisconnectAfterHeader";
+
+    /*
+    ** Strings used to build the success response for the chunk write
+     */
+    private final static String SUCCESS_HEADER_1 = "opc-client-request-id: ";
+    private final static String SUCCESS_HEADER_2 = "opc-request-id: ";
+    private final static String SUCCESS_HEADER_3 = "opc-content-md5: ";
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
@@ -62,6 +70,11 @@ public class SetupStorageServerPut implements Operation {
     private boolean skipSendingStatus;
 
     /*
+    ** This is used to prevent the Operation setup code from being called multiple times in the execute() method
+     */
+    private boolean putOperationSetupDone;
+
+    /*
      ** This is used to setup the initial Operation dependencies required to handle the V2 PUT
      **   request.
      */
@@ -85,6 +98,8 @@ public class SetupStorageServerPut implements Operation {
         **
          */
         skipSendingStatus = false;
+
+        putOperationSetupDone = false;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -112,47 +127,81 @@ public class SetupStorageServerPut implements Operation {
     }
 
     public void execute() {
-        /*
-        ** Check if there is some error to be injected into the test
-         */
-        String errorType = requestContext.getHttpInfo().getTestType();
-        if (errorType == null) {
+        if (!putOperationSetupDone) {
             /*
-             ** For the current test Storage Server implementation, simply write the bytes to a file and when
-             **   that completes, call this Operation's complete() method.
+             ** Check if there is some error to be injected into the test
              */
-            WriteToFile writeToFile = new WriteToFile(requestContext, clientReadPtr, this);
-            storageServerPutHandlerOperations.put(writeToFile.getOperationType(), writeToFile);
-            writeToFile.initialize();
+            String errorType = requestContext.getHttpInfo().getTestType();
+            if (errorType == null) {
+                /*
+                 ** Compute the Md5 digest for the chunk.
+                 */
+                List<Operation> callbackList = new LinkedList<>();
+                callbackList.add(this);
 
-            /*
-             ** Dole out another buffer to read in the content data if there is not data remaining in
-             **   the buffer from the HTTP Parsing. This is only done once and all further doling out
-             **   of buffers is done within the WriteToFile operation.
-             */
-            BufferManager clientReadBufferManager = requestContext.getClientReadBufferManager();
-            ByteBuffer remainingBuffer = clientReadBufferManager.peek(clientReadPtr);
-            if (remainingBuffer != null) {
-                if (remainingBuffer.remaining() > 0) {
-                    writeToFile.event();
+                ComputeMd5Digest computeMd5Digest = new ComputeMd5Digest(requestContext, callbackList, clientReadPtr);
+                storageServerPutHandlerOperations.put(computeMd5Digest.getOperationType(), computeMd5Digest);
+                computeMd5Digest.initialize();
+
+                /*
+                 ** For the current test Storage Server implementation, simply write the bytes to a file and when
+                 **   that completes, call this Operation's complete() method.
+                 */
+                WriteToFile writeToFile = new WriteToFile(requestContext, clientReadPtr, this);
+                storageServerPutHandlerOperations.put(writeToFile.getOperationType(), writeToFile);
+                BufferManagerPointer writeToFilePtr = writeToFile.initialize();
+
+                /*
+                 ** Dole out another buffer to read in the content data if there is not data remaining in
+                 **   the buffer from the HTTP Parsing. This is only done once and all further doling out
+                 **   of buffers is done within the WriteToFile operation.
+                 **
+                 ** NOTE: The check for calling either the writeToFile or metering operations needs to use the
+                 **   BufferManagerPointer returned from the writeToFile.initialize() method as that is the one used
+                 **   to obtain buffers to write to the file.
+                 */
+                BufferManager clientReadBufferManager = requestContext.getClientReadBufferManager();
+                ByteBuffer remainingBuffer = clientReadBufferManager.peek(writeToFilePtr);
+                if (remainingBuffer != null) {
+                    if (remainingBuffer.remaining() > 0) {
+                        writeToFile.event();
+                    } else {
+                        metering.event();
+                    }
                 } else {
+                    /*
+                     ** There are no buffers waiting with data, so need to dole out another buffer to start a read
+                     **   operation.
+                     */
                     metering.event();
                 }
+
+                LOG.info("SetupStorageServerPut[" + requestContext.getRequestId() + "] initialized");
             } else {
                 /*
-                 ** There are no buffers waiting with data, so need to dole out another buffer to start a read
-                 **   operation.
+                 ** Need to perform whatever is requested by the errorType
                  */
-                metering.event();
+                if (errorType.compareTo(CLOSE_CONNECTION_AFTER_HEADER) == 0) {
+                    skipSendingStatus = true;
+                    complete();
+                }
             }
 
-            LOG.info("SetupStorageServerPut[" + requestContext.getRequestId() + "] initialized");
+            putOperationSetupDone = true;
         } else {
             /*
-            ** Need to perform whatever is requested by the errorType
+            ** Check if the Md5 computation was completed and the data has all been written to the file
              */
-            if (errorType.compareTo(CLOSE_CONNECTION_AFTER_HEADER) == 0) {
-                skipSendingStatus = true;
+            if (requestContext.getDigestComplete() && requestContext.getAllPutDataWritten()) {
+
+                /*
+                ** Build the response content for the case where the status is OK_200. This is required to allow the
+                **   sender to validate that the computed Md5 checksum matches what was sent.
+                 */
+                if (requestContext.getHttpParseStatus() == HttpStatus.OK_200) {
+                    requestContext.getHttpInfo().setResponseHeaders(buildSuccessHeader());
+                }
+
                 complete();
             }
         }
@@ -165,6 +214,12 @@ public class SetupStorageServerPut implements Operation {
     public void complete() {
 
         LOG.info("SetupStorageServerPut[" + requestContext.getRequestId() + "] complete()");
+
+        /*
+        ** Remove the COMPUTE_MD5_DIGEST operation from the list since it will have already called it's
+        **   complete() operation.
+         */
+        storageServerPutHandlerOperations.remove(OperationTypeEnum.COMPUTE_MD5_DIGEST);
 
         /*
         ** Call the complete() method for any operations that this one created.
@@ -251,6 +306,32 @@ public class SetupStorageServerPut implements Operation {
             createdOperation.dumpCreatedOperations(level + 1);
         }
         LOG.info("");
+    }
+
+    /*
+     ** This builds the OK_200 response headers for the PUT Object command. This returns the following headers:
+     **
+     **   opc-client-request-id - If the client passed one in, otherwise it it will not be returned
+     **   opc-request-id
+     **   opc-content-md5
+     **   ETag - This is the generated objectUID that is unique to this object
+     **   last-modified - The Date/Time this object was created.
+     */
+    private String buildSuccessHeader() {
+        String successHeader;
+
+        String contentMD5 = requestContext.getComputedMd5Digest();
+        String opcClientRequestId = requestContext.getHttpInfo().getOpcClientRequestId();
+        String opcRequestId = requestContext.getHttpInfo().getOpcRequestId();
+
+        if (opcClientRequestId != null) {
+            successHeader = SUCCESS_HEADER_1 + opcClientRequestId + "\n" + SUCCESS_HEADER_2 + opcRequestId + "\n" +
+                    SUCCESS_HEADER_3 + contentMD5 + "\n";
+        } else {
+            successHeader = SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + contentMD5 + "\n";
+        }
+
+        return successHeader;
     }
 
 }

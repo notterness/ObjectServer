@@ -44,7 +44,7 @@ public class WriteToFile implements Operation {
      ** The clientFullBufferPtr is used to track ByteBuffer(s) that are filled with client object data and are
      **   ready to be written out to the file on disk for later comparison.
      */
-    private final BufferManagerPointer clientFullBufferPtr;
+    private final BufferManagerPointer readBufferPointer;
 
     private final Operation readBufferMetering;
 
@@ -61,7 +61,7 @@ public class WriteToFile implements Operation {
      ** The following are used to keep track of how much has been written to this Storage Server and
      **   how much is supposed to be written.
      */
-    private int bytesToWriteToFile;
+    private final int bytesToWriteToFile;
     private int fileBytesWritten;
 
     private int savedSrcPosition;
@@ -69,21 +69,21 @@ public class WriteToFile implements Operation {
     /*
     ** The following are used for the file management
      */
-    private File outFile;
     private FileChannel writeFileChannel;
 
     /*
      */
-    public WriteToFile(final RequestContext requestContext, final BufferManagerPointer clientReadPointer,
+    public WriteToFile(final RequestContext requestContext, final BufferManagerPointer readBufferPtr,
                        final Operation completeCb) {
 
         this.requestContext = requestContext;
-        this.clientReadBufferMgr = this.requestContext.getClientReadBufferManager();
+        this.clientReadBufferMgr = requestContext.getClientReadBufferManager();
         this.completeCallback = completeCb;
 
-        this.clientFullBufferPtr = clientReadPointer;
+        this.readBufferPointer = readBufferPtr;
 
         this.readBufferMetering = requestContext.getOperation(OperationTypeEnum.METER_READ_BUFFERS);
+        this.bytesToWriteToFile = requestContext.getRequestContentLength();
 
         /*
          ** This starts out not being on any queue
@@ -107,13 +107,6 @@ public class WriteToFile implements Operation {
          **   need to be written.
          */
         fileBytesWritten = 0;
-        bytesToWriteToFile = requestContext.getRequestContentLength();
-
-        /*
-         ** savedSrcPosition is used to handle the case where not all of the data could be written
-         **   to the file, so another attempt will need to be made
-         */
-        savedSrcPosition = 0;
 
         /*
          ** Register this with the Buffer Manager to allow it to be event(ed) when
@@ -121,7 +114,20 @@ public class WriteToFile implements Operation {
          **
          ** This operation (WriteToFile) is a consumer of ByteBuffer(s) produced by the ReadBuffer operation.
          */
-        clientFileWritePtr = clientReadBufferMgr.register(this, clientFullBufferPtr);
+        clientFileWritePtr = clientReadBufferMgr.register(this, readBufferPointer);
+
+        /*
+         ** savedSrcPosition is used to handle the case where there are multiple readers from the readBufferPointer and
+         **   there has already been data read from the buffer. In that case, the position() will not be zero, but there
+         **   is a race condition as to how the cursors within the "base" buffer are adjusted. The best solution is to
+         **   use a "copy" of the buffer and to set its cursors appropriately.
+         */
+        ByteBuffer readBuffer;
+        if ((readBuffer = clientReadBufferMgr.peek(clientFileWritePtr)) != null) {
+            savedSrcPosition = readBuffer.position();
+        } else {
+            savedSrcPosition = 0;
+        }
 
         /*
         ** Build the filename. It is comprised of the chunk number, chunk lba and located at
@@ -142,7 +148,7 @@ public class WriteToFile implements Operation {
         /*
         ** Open up the File for writing
          */
-        outFile = new File(filePathNameStr);
+        File outFile = new File(filePathNameStr);
         try {
             writeFileChannel = new FileOutputStream(outFile, false).getChannel();
         } catch (FileNotFoundException ex) {
@@ -150,7 +156,7 @@ public class WriteToFile implements Operation {
             writeFileChannel = null;
         }
 
-        LOG.info("WriteToFile[" + requestContext.getRequestId() + "] initialize done");
+        LOG.info("WriteToFile[" + requestContext.getRequestId() + "] initialize done savedSrcPosition: " + savedSrcPosition);
 
         return clientFileWritePtr;
     }
@@ -186,6 +192,10 @@ public class WriteToFile implements Operation {
                 /*
                  ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
                  **  affecting the position() and limit() indexes
+                 **
+                 ** NOTE: savedSrcPosition is modifed within the writeFileChannel.write() handling as the write may
+                 **   only consume a portion of the buffer and it will take multiple passes through using the same
+                 **   buffer to actually write all the data tot the file.
                  */
                 ByteBuffer srcBuffer = readBuffer.duplicate();
                 srcBuffer.position(savedSrcPosition);
@@ -236,13 +246,13 @@ public class WriteToFile implements Operation {
                     readBufferMetering.event();
                 } else if (fileBytesWritten == bytesToWriteToFile) {
                     /*
-                    ** Done with this operation
+                    ** Done with this operation, so set the flag within the RequestContext. The SetupStorageServerPut
+                    **   operation is dependent upon this write of the data to disk completing as well as the Md5 digest
+                    **   being completed before it can send status back to the Object Server.
                     ** Tell the SetupStorageServerPut operation that produced this that it is done.
-                    **
-                    ** TODO: This should probalby call the event() method and have a different higher
-                    **   level operation or the RequestContext call the complete() method.
                      */
-                    completeCallback.complete();
+                    requestContext.setAllPutDataWritten();
+                    completeCallback.event();
                 }
 
                 outOfBuffers = true;

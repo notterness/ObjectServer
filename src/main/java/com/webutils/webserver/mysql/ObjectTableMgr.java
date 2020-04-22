@@ -2,6 +2,7 @@ package com.webutils.webserver.mysql;
 
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.http.StorageTierEnum;
+import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -45,18 +46,21 @@ public class ObjectTableMgr extends ObjectStorageDb {
     private final static String SUCCESS_HEADER_4 = "ETag: ";
     private final static String SUCCESS_HEADER_5 = "last-modified: ";
 
+
     /*
      ** The opcRequestId is used to track the request through the system. It is uniquely generated for each
      **   request connection.
      */
+    private final RequestContext requestContext;
     private final int opcRequestId;
 
 
-    public ObjectTableMgr(final WebServerFlavor flavor, final int requestId) {
+    public ObjectTableMgr(final WebServerFlavor flavor, final RequestContext requestContext) {
         super(flavor);
 
         //LOG.info("ObjectTableMgr() flavor: " + flavor + " requestId: " + requestId);
-        this.opcRequestId = requestId;
+        this.requestContext = requestContext;
+        this.opcRequestId = requestContext.getRequestId();
     }
 
     public int createObjectEntry(final HttpRequestInfo objectCreateInfo, final String tenancyUID) {
@@ -89,7 +93,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
         if (namespaceUID == null) {
             LOG.warn("Unable to create Object: " + objectName + " - invalid namespace: " + namespace);
 
-            String failureMessage = "\"Namespace not found\"\n  \"namespaceName\": \"" + namespace + "\"";
+            String failureMessage = "\"Namespace not found\",\n  \"namespaceName\": \"" + namespace + "\"";
             objectCreateInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
             return HttpStatus.PRECONDITION_FAILED_412;
         }
@@ -162,7 +166,8 @@ public class ObjectTableMgr extends ObjectStorageDb {
              */
             int id = getObjectId(objectName, bucketUID);
             if (id != -1) {
-                objectCreateInfo.setObjectId(id);
+                String objectUID = getObjectUID(id);
+                objectCreateInfo.setObjectId(id, objectUID);
                 objectCreateInfo.setResponseHeaders(buildSuccessHeader(objectCreateInfo, objectName, bucketUID));
             } else {
                 objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "\"Unable to obtain objectId\"");
@@ -210,13 +215,11 @@ public class ObjectTableMgr extends ObjectStorageDb {
     }
 
     /*
-     ** This builds the OK_200 response headers for the PUT Object command. This returns the following headers:
+     ** This builds the OK_200 response headers for the Storage Server PUT Object command. This returns the following headers:
      **
      **   opc-client-request-id - If the client passed one in, otherwise it it will not be returned
      **   opc-request-id
      **   opc-content-md5
-     **   ETag - This is the generated objectUID that is unique to this object
-     **   last-modified - The Date/Time this object was created.
      */
     private String buildSuccessHeader(final HttpRequestInfo objectCreateInfo, final String objectName, final String bucketUID) {
         String successHeader;
@@ -226,7 +229,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
             String createTime = getObjectCreationTime(objectId);
             String objectUID = getObjectUID(objectId);
             String opcClientId = objectCreateInfo.getOpcClientRequestId();
-            String contentMD5 = objectCreateInfo.getContentMd5();
+            String contentMD5 = requestContext.getComputedMd5Digest();
 
             if (opcClientId != null) {
                 successHeader = SUCCESS_HEADER_1 + opcClientId + "\n" + SUCCESS_HEADER_2 + opcRequestId + "\n" +

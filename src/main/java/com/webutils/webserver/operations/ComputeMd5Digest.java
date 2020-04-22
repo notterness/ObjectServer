@@ -46,6 +46,7 @@ public class ComputeMd5Digest implements Operation {
 
     private final HttpRequestInfo httpRequestInfo;
 
+    private int savedSrcPosition;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -62,7 +63,7 @@ public class ComputeMd5Digest implements Operation {
         this.operationsToRun = operationsToRun;
         this.readBufferPointer = readBufferPtr;
 
-        this.clientReadBufferMgr = this.requestContext.getClientReadBufferManager();
+        this.clientReadBufferMgr = requestContext.getClientReadBufferManager();
 
         /*
          ** This starts out not being on any queue
@@ -74,6 +75,7 @@ public class ComputeMd5Digest implements Operation {
          */
         clientObjectBytes = requestContext.getRequestContentLength();
         md5DigestedBytes = 0;
+        savedSrcPosition = 0;
 
         md5Digest = new Md5Digest();
 
@@ -93,6 +95,20 @@ public class ComputeMd5Digest implements Operation {
     public BufferManagerPointer initialize() {
 
         md5DigestPointer = clientReadBufferMgr.register(this, readBufferPointer);
+
+        /*
+         ** savedSrcPosition is used to handle the case where there are multiple readers from the readBufferPointer and
+         **   there has already been data read from the buffer. In that case, the position() will not be zero, but there
+         **   is a race condition as to how the cursors within the "base" buffer are adjusted. The best solution is to
+         **   use a "copy" of the buffer and to set its cursors appropriately.
+         */
+        ByteBuffer readBuffer;
+        if ((readBuffer = clientReadBufferMgr.peek(md5DigestPointer)) != null) {
+            savedSrcPosition = readBuffer.position();
+        } else {
+            savedSrcPosition = 0;
+        }
+        LOG.info("ComputeMd5Digest() savedSrcPosition: " + savedSrcPosition);
 
         return md5DigestPointer;
     }
@@ -114,19 +130,27 @@ public class ComputeMd5Digest implements Operation {
 
         while ((buffer = clientReadBufferMgr.poll(md5DigestPointer)) != null) {
 
-            LOG.info("md5 digest position: " + buffer.position() + " limit: " + buffer.limit());
+            /*
+             ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
+             **  affecting the position() and limit() indexes for other users of the base buffer
+             */
+            ByteBuffer md5Buffer = buffer.duplicate();
+            md5Buffer.position(savedSrcPosition);
+            savedSrcPosition = 0;
 
-            md5DigestedBytes += (buffer.limit() - buffer.position());
-            md5Digest.digestByteBuffer(buffer);
+            LOG.info("md5 digest position: " + md5Buffer.position() + " limit: " + md5Buffer.limit());
+
+            md5DigestedBytes += (md5Buffer.limit() - md5Buffer.position());
+            md5Digest.digestByteBuffer(md5Buffer);
 
             if (md5DigestedBytes == clientObjectBytes) {
 
-                String dataDigestString = md5Digest.getFinalDigest();
-                requestContext.setDigestComplete();
+                String md5DigestString = md5Digest.getFinalDigest();
+                requestContext.setDigestComplete(md5DigestString);
 
-                boolean contentHasValidMd5Digest = httpRequestInfo.checkContentMD5(dataDigestString);
-                LOG.info("WebServerConnState[" + requestContext.getRequestId() + "] Computed md5Digest " +
-                        dataDigestString + " is valid: " + contentHasValidMd5Digest);
+                boolean contentHasValidMd5Digest = httpRequestInfo.checkContentMD5(md5DigestString);
+                LOG.info("WebServerConnState[" + requestContext.getRequestId() + "] Computed Md5 " +
+                        md5DigestString + " is valid: " + contentHasValidMd5Digest);
                 requestContext.setMd5DigestCompareResult(contentHasValidMd5Digest);
 
                 /*

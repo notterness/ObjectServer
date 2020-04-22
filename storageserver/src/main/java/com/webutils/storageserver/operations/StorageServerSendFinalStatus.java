@@ -113,7 +113,22 @@ public class StorageServerSendFinalStatus implements Operation {
             ByteBuffer respBuffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientWriteBufferMgr,
                     operationType);
             if (respBuffer != null) {
-                resultBuilder.buildResponse(respBuffer, resultCode, true, true);
+                if (resultCode == HttpStatus.OK_200) {
+                    switch (requestContext.getHttpInfo().getMethod()) {
+                        case PUT_METHOD:
+                            resultBuilder.buildPutOkResponse(respBuffer);
+                            break;
+
+                        case POST_METHOD:
+                            resultBuilder.buildPostOkResponse(respBuffer);
+                            break;
+
+                        default:
+                            break;
+                    }
+                } else {
+                    resultBuilder.buildResponse(respBuffer, resultCode, true, true);
+                }
 
                 respBuffer.flip();
 
