@@ -716,7 +716,6 @@ public class WebServerSSLConnState extends WebServerConnState {
         // TODO: Why does resetHttpParser() not do what is expected (meaning leaving it in a state to start parsing a new stream)?
         //httpParser.resetHttpParser();
         httpParser = null;
-        httpParser = new ByteBufferHttpParser(casperHttpInfo);
 
         resetHttpReadValues();
         resetContentAllRead();
