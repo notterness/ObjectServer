@@ -1,6 +1,6 @@
 package com.webutils.webserver.http.parser;
 
-import com.webutils.webserver.http.HttpRequestInfo;
+import com.webutils.webserver.http.HttpInfo;
 import org.eclipse.jetty.http.HttpParser;
 
 import java.nio.ByteBuffer;
@@ -13,9 +13,9 @@ public class ByteBufferHttpParser {
     private static final Logger LOG = LoggerFactory.getLogger(ByteBufferHttpParser.class);
 
     private final HttpParser httpParser;
-    private final HttpRequestInfo casperHeaderInfo;
+    private final HttpInfo casperHeaderInfo;
 
-    public ByteBufferHttpParser(final HttpRequestInfo httpHeaderInfo) {
+    public ByteBufferHttpParser(final HttpInfo httpHeaderInfo) {
         casperHeaderInfo = httpHeaderInfo;
 
         HttpParserListener listener = new HttpParserListener(httpHeaderInfo);

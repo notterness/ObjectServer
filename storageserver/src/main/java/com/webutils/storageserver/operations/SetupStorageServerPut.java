@@ -2,7 +2,7 @@ package com.webutils.storageserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.http.HttpRequestInfo;
+import com.webutils.webserver.common.Md5ResultHandler;
 import com.webutils.webserver.operations.ComputeMd5Digest;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
@@ -62,7 +62,9 @@ public class SetupStorageServerPut implements Operation {
      **
      ** The following is a map of all of the created Operations to handle this request.
      */
-    private Map<OperationTypeEnum, Operation> storageServerPutHandlerOperations;
+    private final Map<OperationTypeEnum, Operation> storageServerPutHandlerOperations;
+
+    private final Md5ResultHandler updator;
 
     /*
     **
@@ -87,7 +89,9 @@ public class SetupStorageServerPut implements Operation {
         /*
          ** Setup the list of Operations currently used to handle the V2 PUT
          */
-        storageServerPutHandlerOperations = new HashMap<>();
+        this.storageServerPutHandlerOperations = new HashMap<>();
+
+        this.updator = requestContext.getMd5ResultHandler();
 
         /*
          ** This starts out not being on any queue
@@ -139,7 +143,7 @@ public class SetupStorageServerPut implements Operation {
                 List<Operation> callbackList = new LinkedList<>();
                 callbackList.add(this);
 
-                ComputeMd5Digest computeMd5Digest = new ComputeMd5Digest(requestContext, callbackList, clientReadPtr);
+                ComputeMd5Digest computeMd5Digest = new ComputeMd5Digest(requestContext, callbackList, clientReadPtr, updator);
                 storageServerPutHandlerOperations.put(computeMd5Digest.getOperationType(), computeMd5Digest);
                 computeMd5Digest.initialize();
 
@@ -192,7 +196,13 @@ public class SetupStorageServerPut implements Operation {
             /*
             ** Check if the Md5 computation was completed and the data has all been written to the file
              */
-            if (requestContext.getDigestComplete() && requestContext.getAllPutDataWritten()) {
+            if (updator.getMd5DigestComplete() && requestContext.getAllPutDataWritten()) {
+                /*
+                ** Validate the Md5 digest.
+                **
+                ** NOTE: The error status is updated within the method so nothing to do if it fails
+                 */
+                updator.checkContentMD5();
 
                 /*
                 ** Build the response content for the case where the status is OK_200. This is required to allow the
@@ -310,14 +320,12 @@ public class SetupStorageServerPut implements Operation {
      **
      **   opc-client-request-id - If the client passed one in, otherwise it it will not be returned
      **   opc-request-id
-     **   opc-content-md5
-     **   ETag - This is the generated objectUID that is unique to this object
-     **   last-modified - The Date/Time this object was created.
+     **   Content-Md5
      */
     private String buildSuccessHeader() {
         String successHeader;
 
-        String contentMD5 = requestContext.getComputedMd5Digest();
+        String contentMD5 = updator.getComputedMd5Digest();
         String opcClientRequestId = requestContext.getHttpInfo().getOpcClientRequestId();
         String opcRequestId = requestContext.getHttpInfo().getOpcRequestId();
 

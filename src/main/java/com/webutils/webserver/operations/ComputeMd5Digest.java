@@ -3,7 +3,7 @@ package com.webutils.webserver.operations;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.common.Md5Digest;
-import com.webutils.webserver.http.HttpRequestInfo;
+import com.webutils.webserver.common.Md5ResultHandler;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,7 +44,7 @@ public class ComputeMd5Digest implements Operation {
 
     private final Md5Digest md5Digest;
 
-    private final HttpRequestInfo httpRequestInfo;
+    private final Md5ResultHandler resultUpdator;
 
     private int savedSrcPosition;
 
@@ -57,11 +57,12 @@ public class ComputeMd5Digest implements Operation {
 
 
     public ComputeMd5Digest(final RequestContext requestContext, final List<Operation> operationsToRun,
-                           final BufferManagerPointer readBufferPtr) {
+                            final BufferManagerPointer readBufferPtr, final Md5ResultHandler updator) {
 
         this.requestContext = requestContext;
         this.operationsToRun = operationsToRun;
         this.readBufferPointer = readBufferPtr;
+        this.resultUpdator = updator;
 
         this.clientReadBufferMgr = requestContext.getClientReadBufferManager();
 
@@ -78,8 +79,6 @@ public class ComputeMd5Digest implements Operation {
         savedSrcPosition = 0;
 
         md5Digest = new Md5Digest();
-
-        httpRequestInfo = requestContext.getHttpInfo();
     }
 
     public OperationTypeEnum getOperationType() {
@@ -93,6 +92,11 @@ public class ComputeMd5Digest implements Operation {
     **   are filled, the Md5 Digest can be updated with the new buffers.
      */
     public BufferManagerPointer initialize() {
+
+        /*
+        ** Pull the Content-Md5 from the appropriate place
+         */
+        resultUpdator.validateMD5Header();
 
         md5DigestPointer = clientReadBufferMgr.register(this, readBufferPointer);
 
@@ -108,7 +112,7 @@ public class ComputeMd5Digest implements Operation {
         } else {
             savedSrcPosition = 0;
         }
-        LOG.info("ComputeMd5Digest() savedSrcPosition: " + savedSrcPosition);
+        LOG.info("ComputeMd5Digest() savedSrcPosition: " + savedSrcPosition + " clientObjectBytes: " + clientObjectBytes);
 
         return md5DigestPointer;
     }
@@ -144,14 +148,13 @@ public class ComputeMd5Digest implements Operation {
             md5Digest.digestByteBuffer(md5Buffer);
 
             if (md5DigestedBytes == clientObjectBytes) {
-
-                String md5DigestString = md5Digest.getFinalDigest();
-                requestContext.setDigestComplete(md5DigestString);
-
-                boolean contentHasValidMd5Digest = httpRequestInfo.checkContentMD5(md5DigestString);
-                LOG.info("WebServerConnState[" + requestContext.getRequestId() + "] Computed Md5 " +
-                        md5DigestString + " is valid: " + contentHasValidMd5Digest);
-                requestContext.setMd5DigestCompareResult(contentHasValidMd5Digest);
+                /*
+                ** Set the computed value at this point. The actual comparison is dependent upon if this is being
+                **   computed for a request (in which case the "Content-Md5" value is passed in prior to any processing
+                **   taking place) or if this is for handling a chunk (where the "Content-Md5" value is returned in
+                **   the response header and the check takes place after the response has been processed).
+                 */
+                resultUpdator.setMd5DigestComplete(md5Digest.getFinalDigest());
 
                 /*
                 ** Everything is done for the Md5 Digest calculation and comparison.

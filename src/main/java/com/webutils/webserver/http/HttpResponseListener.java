@@ -37,9 +37,8 @@ public class HttpResponseListener implements HttpParser.ResponseHandler {
     private boolean _early;
     private boolean _headerCompleted;
     private boolean _messageCompleted;
-    private final List<HttpComplianceSection> _complianceViolation = new ArrayList<>();
 
-    private HttpResponseCallback httpResponseCb;
+    private final HttpResponseCallback httpResponseCb;
 
     public HttpResponseListener(final HttpResponseCallback callback) {
         httpResponseCb = callback;

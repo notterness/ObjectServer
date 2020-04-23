@@ -3,6 +3,7 @@ package com.webutils.objectserver.operations;
 import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.common.Md5ResultHandler;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.operations.ComputeMd5Digest;
 import com.webutils.webserver.operations.Operation;
@@ -29,6 +30,8 @@ public class ObjectPut_P2 implements Operation {
     private final Operation metering;
 
     private final Operation completeCallback;
+
+    private final Md5ResultHandler updator;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -61,6 +64,8 @@ public class ObjectPut_P2 implements Operation {
         this.memoryManager = memoryManager;
         this.metering = metering;
         this.completeCallback = completeCb;
+
+        this.updator = requestContext.getMd5ResultHandler();
 
         /*
          ** Setup the list of Operations currently used to handle the V2 PUT
@@ -118,7 +123,7 @@ public class ObjectPut_P2 implements Operation {
             List<Operation> callbackList = new LinkedList<>();
             callbackList.add(this);
 
-            ComputeMd5Digest computeMd5Digest = new ComputeMd5Digest(requestContext, callbackList, readBufferPointer);
+            ComputeMd5Digest computeMd5Digest = new ComputeMd5Digest(requestContext, callbackList, readBufferPointer, updator);
             v2PutHandlerOperations.put(computeMd5Digest.getOperationType(), computeMd5Digest);
             computeMd5Digest.initialize();
 
@@ -149,7 +154,14 @@ public class ObjectPut_P2 implements Operation {
      **   work.
      */
     public void complete() {
-        if (requestContext.getDigestComplete() && requestContext.getAllPutDataWritten()) {
+        if (updator.getMd5DigestComplete() && requestContext.getAllPutDataWritten()) {
+            /*
+             ** Validate the Md5 digest.
+             **
+             ** NOTE: The error status is updated within the method so nothing to do if it fails
+             */
+            updator.checkContentMD5();
+
             completeCallback.event();
 
             v2PutHandlerOperations.clear();
@@ -157,7 +169,7 @@ public class ObjectPut_P2 implements Operation {
             LOG.info("ObjectPut_P2[" + requestContext.getRequestId() + "] completed");
         } else {
             LOG.info("ObjectPut_P2[" + requestContext.getRequestId() + "] not completed digestComplete: " +
-                    requestContext.getDigestComplete() + " all data written: " + requestContext.getAllPutDataWritten());
+                    updator.getMd5DigestComplete() + " all data written: " + requestContext.getAllPutDataWritten());
         }
     }
 

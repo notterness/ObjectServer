@@ -79,7 +79,7 @@ public class ComputeThreadPool {
                         isOnWorkQueue);
 
                 if (!workQueue.offer(computeOperation)) {
-                    LOG.error("requestId[] addComputeWorkToThreadn() unable to add");
+                    LOG.error("requestId[] addComputeWorkToThread() unable to add");
                 } else {
                     computeOperation.markAddedToQueue(false);
 

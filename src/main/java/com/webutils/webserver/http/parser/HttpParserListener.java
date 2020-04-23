@@ -1,5 +1,6 @@
 package com.webutils.webserver.http.parser;
 
+import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpRequestInfo;
 import org.eclipse.jetty.http.*;
 import org.eclipse.jetty.util.BufferUtil;
@@ -23,22 +24,16 @@ public class HttpParserListener implements HttpParser.RequestHandler {
      **   through.
      */
 
-    private String _host;
-    private int _port;
-    private String _bad;
-    private String _content;
-    private String _methodOrVersion;
     private String _versionOrReason;
+
+    private String _content;
     private List<HttpField> _trailers = new ArrayList<>();
-    private boolean _early;
-    private boolean _headerCompleted;
-    private boolean _messageCompleted;
-    private final List<HttpComplianceSection> _complianceViolation = new ArrayList<>();
+    //private final List<HttpComplianceSection> _complianceViolation = new ArrayList<>();
 
-    private HttpRequestInfo httpRequestInfo;
+    private final HttpInfo httpRequestInfo;
 
-    public HttpParserListener(final HttpRequestInfo httpHeaderInfo) {
-        httpRequestInfo = httpHeaderInfo;
+    public HttpParserListener(final HttpInfo httpHeaderInfo) {
+        this.httpRequestInfo = httpHeaderInfo;
     }
 
     @Override
@@ -56,12 +51,6 @@ public class HttpParserListener implements HttpParser.RequestHandler {
 
     @Override
     public boolean startRequest(String method, String uri, HttpVersion version) {
-        _methodOrVersion = method;
-        _versionOrReason = version == null ? null : version.asString();
-        _messageCompleted = false;
-        _headerCompleted = false;
-        _early = false;
-
         /*
         ** Parse the URI first to obtain any version information
          */
@@ -70,13 +59,12 @@ public class HttpParserListener implements HttpParser.RequestHandler {
         if (_versionOrReason != null) {
             LOG.info("StartRequest() method: " + method + " uri: " + uri +
                     " version: " + _versionOrReason);
-
-            httpRequestInfo.setHttpMethodAndVersion(method, _versionOrReason);
         } else {
             LOG.info("StartRequest() method: " + method + " uri: " + uri +
                     " version: null");
         }
 
+        httpRequestInfo.setHttpMethodAndVersion(method, _versionOrReason);
         return false;
     }
 
@@ -88,9 +76,6 @@ public class HttpParserListener implements HttpParser.RequestHandler {
     @Override
     public boolean headerComplete() {
         LOG.info("headerComplete()");
-        _content = null;
-        _headerCompleted = true;
-
         httpRequestInfo.setHeaderComplete();
         return false;
     }
@@ -114,8 +99,6 @@ public class HttpParserListener implements HttpParser.RequestHandler {
     public boolean messageComplete() {
         LOG.info("messageComplete()");
 
-        _messageCompleted = true;
-
         httpRequestInfo.setMessageComplete();
         return true;
     }
@@ -127,8 +110,7 @@ public class HttpParserListener implements HttpParser.RequestHandler {
 
     @Override
     public void earlyEOF() {
-
-        _early = true;
+        httpRequestInfo.earlyEndOfFile();
     }
 
     @Override

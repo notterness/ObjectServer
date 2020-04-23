@@ -185,7 +185,6 @@ public class ParseHttpRequest implements Operation {
             ** Create a book mark for the next set of readers to register against.
              */
             clientReadBufferMgr.bookmark(httpBufferPointer);
-            httpRequestInfo.parseHeaders();
 
             /*
              ** First terminate anything going on with the HTTP Request parser. This will remove any dependencies

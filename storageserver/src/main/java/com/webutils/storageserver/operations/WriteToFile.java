@@ -133,11 +133,11 @@ public class WriteToFile implements Operation {
         ** Build the filename. It is comprised of the chunk number, chunk lba and located at
         **   ./logs/StorageServer"IoInterfaceIdentifier"/"chunk location"
          */
-        String chunkNumber = requestContext.getHttpInfo().getObjectChunkNumber();
-        String chunkLba = requestContext.getHttpInfo().getObjectChunkLba();
+        int chunkNumber = requestContext.getHttpInfo().getObjectChunkNumber();
+        int chunkLba = requestContext.getHttpInfo().getObjectChunkLba();
         String chunkLocation = requestContext.getHttpInfo().getObjectChunkLocation();
 
-        if ((chunkNumber == null) || (chunkLba == null) || (chunkLocation == null)) {
+        if ((chunkNumber == -1) || (chunkLba == -1) || (chunkLocation == null)) {
             LOG.error("WriteToFile chunkNumber: " + chunkNumber + " chunkLba: " + chunkLba + " chunkLocation: " + chunkLocation);
             return null;
         }
@@ -235,7 +235,7 @@ public class WriteToFile implements Operation {
 
             } else {
                 LOG.info("WriteToFile[" + requestContext.getRequestId() + "] out of read buffers bytesWritten: " +
-                        fileBytesWritten);
+                        fileBytesWritten + " bytesToWriteToFile: " + bytesToWriteToFile);
 
                 /*
                 ** Check if all the bytes (meaning the amount passed in the content-length in the HTTP header)

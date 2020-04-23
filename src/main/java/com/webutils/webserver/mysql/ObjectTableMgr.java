@@ -1,5 +1,6 @@
 package com.webutils.webserver.mysql;
 
+import com.webutils.webserver.common.Md5ResultHandler;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.http.StorageTierEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
@@ -229,7 +230,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
             String createTime = getObjectCreationTime(objectId);
             String objectUID = getObjectUID(objectId);
             String opcClientId = objectCreateInfo.getOpcClientRequestId();
-            String contentMD5 = requestContext.getComputedMd5Digest();
+            String contentMD5 = requestContext.getMd5ResultHandler().getComputedMd5Digest();
 
             if (opcClientId != null) {
                 successHeader = SUCCESS_HEADER_1 + opcClientId + "\n" + SUCCESS_HEADER_2 + opcRequestId + "\n" +

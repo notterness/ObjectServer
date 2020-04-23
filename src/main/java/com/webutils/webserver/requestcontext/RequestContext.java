@@ -2,8 +2,10 @@ package com.webutils.webserver.requestcontext;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.http.HttpRequestInfo;
+import com.webutils.webserver.common.Md5ResultHandler;
+import com.webutils.webserver.common.Sha256ResultHandler;
 import com.webutils.webserver.http.HttpMethodEnum;
+import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.DbSetup;
 import com.webutils.webserver.niosockets.EventPollThread;
@@ -54,10 +56,16 @@ public abstract class RequestContext {
     private final int chunkSize;
 
     /*
-     ** The HttpXferInfo is a holding object for all of the data parsed out of the HTTP Request and some
+     ** The HttpRequestInfo is a holding object for all of the data parsed out of the HTTP Request and some
      **   other information that is generated from the HTTP parsed headers and URI.
      */
     private final HttpRequestInfo httpInfo;
+
+    /*
+    ** Object used to manage the Md5 and Sha256 results
+     */
+    private final Md5ResultHandler md5ResultHandler;
+    private final Sha256ResultHandler sha256ResultHandler;
 
     /*
      ** This is the BufferManager to read data in from the client.
@@ -156,22 +164,6 @@ public abstract class RequestContext {
      */
     private boolean httpRequestParsed;
 
-    /*
-     ** The next two variables are used to keep track of the Md5 Digest calculation. First if it has been
-     **   completed and second if the calculated Md5 digest matches the expected one.
-     */
-    private final AtomicBoolean md5DigestComplete;
-    private boolean contentHasValidMd5Digest;
-    private String computedMd5Digest;
-
-    /*
-     ** The next two variables are used to keep track of the Sha-256 Digest calculation. First if it has been
-     **   completed and second if the calculated Sha-256 digest matches the expected one.
-     */
-    private final AtomicBoolean sha256DigestComplete;
-    private boolean contentHasValidSha256Digest;
-    private String computedSha256Digest;
-
     private boolean putAllDataWritten;
     private boolean postMethodContentDataParsed;
 
@@ -211,6 +203,8 @@ public abstract class RequestContext {
         this.clientWriteBufferManager = new BufferManager(bufferMgrRingSize, "ClientWrite", 200);
 
         httpInfo = new HttpRequestInfo(this);
+        md5ResultHandler = new Md5ResultHandler(this, httpInfo);
+        sha256ResultHandler = new Sha256ResultHandler(this, httpInfo);
 
         /*
         ** Build the list of all supported HTTP Request and the handler
@@ -228,11 +222,6 @@ public abstract class RequestContext {
 
         workQueue = new LinkedBlockingQueue<>(20);
         timedWaitQueue = new LinkedBlockingQueue<>(20);
-
-        md5DigestComplete = new AtomicBoolean(false);
-        contentHasValidMd5Digest = false;
-        sha256DigestComplete = new AtomicBoolean(false);
-        contentHasValidSha256Digest = false;
 
         putAllDataWritten = false;
         postMethodContentDataParsed = false;
@@ -291,14 +280,6 @@ public abstract class RequestContext {
          */
         dumpOperations();
         requestHandlerOperations.clear();
-
-        md5DigestComplete.set(false);
-        contentHasValidMd5Digest = false;
-        computedMd5Digest = null;
-
-        sha256DigestComplete.set(false);
-        contentHasValidSha256Digest = false;
-        computedSha256Digest = null;
 
         putAllDataWritten = false;
         postMethodContentDataParsed = false;
@@ -588,77 +569,6 @@ public abstract class RequestContext {
     }
 
     /*
-     ** Accessor methods for the Md5 Digest information
-     **
-     ** NOTE: The setDigestComplete() method is called from a compute thread that is not the same as the worker
-     **   threads.
-     **       The getDigestComplete() is called from a worker thread. It must be true before the worker thread
-     **   accesses the getMd5DigestResult() and the getComputedMd5Digest() methods so it acts as a barrier to insure
-     **   that the contentHasValidMd5Digest and computedMd5Digest values are valid.
-     */
-    public void setDigestComplete(final String digest) {
-        computedMd5Digest = digest;
-        md5DigestComplete.set(true);
-    }
-
-    public void setMd5DigestCompareResult(final boolean valid) {
-        if (!valid) {
-            /*
-             ** Set the error response and provide details about what was expected and why it failed.
-             */
-            String failureMessage = "\"Bad Md5 Compare\",\n  \"Content-MD5\": \"" + httpInfo.getContentMD5Header() +
-                    "\",\n  \"Computed-MD5\": \"" + computedMd5Digest + "\"";
-            httpInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
-        }
-
-        contentHasValidMd5Digest = valid;
-    }
-
-    public boolean getDigestComplete() {
-        return md5DigestComplete.get();
-    }
-
-    public boolean getMd5DigestResult() {
-        return contentHasValidMd5Digest;
-    }
-
-    public String getComputedMd5Digest() { return computedMd5Digest; }
-
-    /*
-     ** Accessor methods for the Sha-256 Digest information.
-     **
-     ** NOTE: The setSha256DigestComplete() method is called from a compute thread that is not the same as the worker
-     **   threads.
-     **       The getSha256DigestComplete() is called from a worker thread. It must be true before the worker thread
-     **   accesses the getSha256DigestResult() method so it acts as a barrier.
-     */
-    public void setSha256DigestComplete(final String digest) {
-        computedSha256Digest = digest;
-        sha256DigestComplete.set(true);
-    }
-
-    public void setSha256DigestCompareResult(final boolean valid) {
-        if (!valid) {
-            /*
-             ** Set the error response and provide details about what was expected and why it failed.
-             */
-            String failureMessage = "\"Bad Sha256 Compare\",\n  \"x-content-sha256\": \"" + httpInfo.getContentSha256Header() +
-                    "\",\n  \"Computed-Sha256\": \"" + computedSha256Digest + "\"";
-            httpInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
-        }
-
-        contentHasValidSha256Digest = valid;
-    }
-
-    public boolean getSha256DigestComplete() {
-        return sha256DigestComplete.get();
-    }
-
-    public boolean getSha256DigestResult() {
-        return contentHasValidSha256Digest;
-    }
-
-    /*
     ** Accessor methods to keep track of when all the data has been written to the Storage Server(s) for the Object
     **   Server or when a Chunk has been written to disk by a Storage Server
      */
@@ -705,6 +615,10 @@ public abstract class RequestContext {
     public WebServerFlavor getWebServerFlavor() {
         return webServerFlavor;
     }
+
+    public Md5ResultHandler getMd5ResultHandler() { return md5ResultHandler; }
+    public Sha256ResultHandler getSha256ResultHandler() { return sha256ResultHandler; }
+
 
     public void dumpOperations() {
         LOG.info(" RequestContext[" + connectionRequestId + "] Operation dependency");

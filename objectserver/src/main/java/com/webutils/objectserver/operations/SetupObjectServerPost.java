@@ -3,6 +3,7 @@ package com.webutils.objectserver.operations;
 import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.common.Sha256ResultHandler;
 import com.webutils.webserver.http.PostContentData;
 import com.webutils.webserver.operations.ComputeSha256Digest;
 import com.webutils.webserver.operations.Operation;
@@ -31,6 +32,7 @@ public class SetupObjectServerPost implements Operation {
 
     private CreateBucket createBucket;
 
+    private final Sha256ResultHandler updator;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -65,6 +67,8 @@ public class SetupObjectServerPost implements Operation {
         this.completeCallback = completeCb;
 
         this.postContentData = new PostContentData();
+
+        this.updator = requestContext.getSha256ResultHandler();
 
         /*
          ** Setup the list of Operations currently used to handle the V2 PUT
@@ -137,7 +141,7 @@ public class SetupObjectServerPost implements Operation {
             List<Operation> callbackList = new LinkedList<>();
             callbackList.add(this);
 
-            ComputeSha256Digest computeSha256Digest = new ComputeSha256Digest(requestContext, callbackList, readBufferPointer);
+            ComputeSha256Digest computeSha256Digest = new ComputeSha256Digest(requestContext, callbackList, readBufferPointer, updator);
             PostHandlerOperations.put(computeSha256Digest.getOperationType(), computeSha256Digest);
             computeSha256Digest.initialize();
 
@@ -161,7 +165,7 @@ public class SetupObjectServerPost implements Operation {
              ** This will be placed on the execute queue twice, once by the ParsePostContent operation when the
              **   parsing is complete and a second time when the ComputeSha256Digest has completed.
              */
-            if (requestContext.getSha256DigestComplete() && requestContext.postMethodContentParsed()) {
+            if (updator.getSha256DigestComplete() && requestContext.postMethodContentParsed()) {
                 LOG.info("SetupObjectServerPost[" + requestContext.getRequestId() + "] Sha-256 and Parsing done");
 
                 /*
@@ -177,7 +181,7 @@ public class SetupObjectServerPost implements Operation {
                  */
                 PostHandlerOperations.remove(OperationTypeEnum.COMPUTE_SHA256_DIGEST);
 
-                if (requestContext.getSha256DigestResult()) {
+                if (updator.checkContentSha256()) {
                     createBucket.event();
                 } else {
                     /*
@@ -190,7 +194,7 @@ public class SetupObjectServerPost implements Operation {
                 waitingOnOperations = false;
             } else {
                 LOG.info("SetupObjectServerPost[" + requestContext.getRequestId() + "] not completed Sha-256 digestComplete: " +
-                        requestContext.getSha256DigestComplete() + " POST content parsed: " + requestContext.postMethodContentParsed());
+                        updator.getSha256DigestComplete() + " POST content parsed: " + requestContext.postMethodContentParsed());
             }
         } else {
             /*

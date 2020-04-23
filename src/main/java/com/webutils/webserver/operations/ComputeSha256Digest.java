@@ -3,7 +3,7 @@ package com.webutils.webserver.operations;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.common.Sha256Digest;
-import com.webutils.webserver.http.HttpRequestInfo;
+import com.webutils.webserver.common.Sha256ResultHandler;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,9 +42,9 @@ public class ComputeSha256Digest implements Operation {
     private final int clientObjectBytes;
     private int sha256DigestedBytes;
 
-    private final Sha256Digest sha256Digest;
+    private final Sha256ResultHandler updator;
 
-    private final HttpRequestInfo httpRequestInfo;
+    private final Sha256Digest sha256Digest;
 
     private int savedSrcPosition;
 
@@ -57,11 +57,13 @@ public class ComputeSha256Digest implements Operation {
 
 
     public ComputeSha256Digest (final RequestContext requestContext, final List<Operation> operationsToRun,
-                            final BufferManagerPointer readBufferPtr) {
+                            final BufferManagerPointer readBufferPtr, final Sha256ResultHandler updator) {
 
         this.requestContext = requestContext;
         this.operationsToRun = operationsToRun;
         this.readBufferPointer = readBufferPtr;
+
+        this.updator = updator;
 
         this.clientReadBufferMgr = this.requestContext.getClientReadBufferManager();
 
@@ -78,8 +80,6 @@ public class ComputeSha256Digest implements Operation {
         savedSrcPosition = 0;
 
         sha256Digest = new Sha256Digest();
-
-        httpRequestInfo = requestContext.getHttpInfo();
     }
 
     public OperationTypeEnum getOperationType() {
@@ -146,12 +146,9 @@ public class ComputeSha256Digest implements Operation {
             if (sha256DigestedBytes == clientObjectBytes) {
 
                 String sha256DigestString = sha256Digest.getFinalDigest();
-                requestContext.setSha256DigestComplete(sha256DigestString);
+                updator.setSha256DigestComplete(sha256DigestString);
 
-                boolean contentHasValidSha256Digest = httpRequestInfo.checkContentSha256(sha256DigestString);
-                LOG.info("WebServerConnState[" + requestContext.getRequestId() + "] Computed sha256Digest " +
-                        sha256DigestString + " is valid: " + contentHasValidSha256Digest);
-                requestContext.setSha256DigestCompareResult(contentHasValidSha256Digest);
+                updator.checkContentSha256();
 
                 /*
                  ** Everything is done for the Sha-256 Digest calculation and comparison.

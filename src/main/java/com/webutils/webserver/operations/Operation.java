@@ -8,7 +8,7 @@ public interface Operation {
      ** This is how long the Operation should wait until if goes back through the
      **   CHECK_SLOW_CHANNEL state if no other activity is taking place.
      */
-    static final long TIME_TILL_NEXT_TIMEOUT_CHECK = 500;
+    long TIME_TILL_NEXT_TIMEOUT_CHECK = 500;
 
     /*
     ** A simple way to obtain a identifier for the Operation when it is added to a list of
