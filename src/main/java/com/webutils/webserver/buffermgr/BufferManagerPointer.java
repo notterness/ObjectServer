@@ -347,11 +347,14 @@ public class BufferManagerPointer {
     **   depending upon this producer.
      */
     int updateWriteIndex() {
-
-        generateDependsOnEvents();
-
+        /*
+        ** The index must be incremented prior to the dependent Operations are evented otherwise there is the
+        **   potential of an Operation that is running on a compute thread missing the index update and then
+        **   simply exiting without doing any work.
+         */
         int newIndex = bufferIndex.accumulateAndGet(bufferArraySize, computeNextIndex);
 
+        generateDependsOnEvents();
 
         //LOG.info("Producer("  + identifier + ":" + getOperationType() + ") writeIndex: " + newIndex);
 

@@ -109,6 +109,7 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             " serverPort INT NOT NULL," +
             " storageLocation VARCHAR(128) NOT NULL," +
             " dataWritten INT NOT NULL," +
+            " chunkMd5 BINARY(16)," +
             " ownerObject INT NOT NULL," +
             " FOREIGN KEY (ownerObject)" +
             "   REFERENCES object(objectId)" +

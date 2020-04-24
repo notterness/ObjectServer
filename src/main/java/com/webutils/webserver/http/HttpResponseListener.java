@@ -38,10 +38,13 @@ public class HttpResponseListener implements HttpParser.ResponseHandler {
     private boolean _headerCompleted;
     private boolean _messageCompleted;
 
+    private final HttpResponseInfo httpInfo;
     private final HttpResponseCallback httpResponseCb;
 
-    public HttpResponseListener(final HttpResponseCallback callback) {
-        httpResponseCb = callback;
+    public HttpResponseListener(final HttpResponseInfo httpInfo, final HttpResponseCallback callback) {
+
+        this.httpInfo = httpInfo;
+        this.httpResponseCb = callback;
     }
 
     @Override

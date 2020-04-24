@@ -1,6 +1,5 @@
 package com.webutils.webserver.common;
 
-import com.google.common.io.BaseEncoding;
 import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.eclipse.jetty.http.HttpStatus;

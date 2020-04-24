@@ -31,7 +31,7 @@ public class ObjectPut_P2 implements Operation {
 
     private final Operation completeCallback;
 
-    private final Md5ResultHandler updator;
+    private final Md5ResultHandler updater;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -65,7 +65,7 @@ public class ObjectPut_P2 implements Operation {
         this.metering = metering;
         this.completeCallback = completeCb;
 
-        this.updator = requestContext.getMd5ResultHandler();
+        this.updater = requestContext.getMd5ResultHandler();
 
         /*
          ** Setup the list of Operations currently used to handle the V2 PUT
@@ -123,7 +123,8 @@ public class ObjectPut_P2 implements Operation {
             List<Operation> callbackList = new LinkedList<>();
             callbackList.add(this);
 
-            ComputeMd5Digest computeMd5Digest = new ComputeMd5Digest(requestContext, callbackList, readBufferPointer, updator);
+            ComputeMd5Digest computeMd5Digest = new ComputeMd5Digest(requestContext, callbackList, readBufferPointer,
+                    updater, requestContext.getRequestContentLength());
             v2PutHandlerOperations.put(computeMd5Digest.getOperationType(), computeMd5Digest);
             computeMd5Digest.initialize();
 
@@ -154,13 +155,15 @@ public class ObjectPut_P2 implements Operation {
      **   work.
      */
     public void complete() {
-        if (updator.getMd5DigestComplete() && requestContext.getAllPutDataWritten()) {
+        if (updater.getMd5DigestComplete() && requestContext.getAllPutDataWritten()) {
             /*
-             ** Validate the Md5 digest.
+             ** Validate the Md5 digest. First read in the value from the Request Header and then compare it to the
+             **   computed digest.
              **
              ** NOTE: The error status is updated within the method so nothing to do if it fails
              */
-            updator.checkContentMD5();
+            updater.validateMD5Header();
+            updater.checkContentMD5();
 
             completeCallback.event();
 
@@ -169,7 +172,7 @@ public class ObjectPut_P2 implements Operation {
             LOG.info("ObjectPut_P2[" + requestContext.getRequestId() + "] completed");
         } else {
             LOG.info("ObjectPut_P2[" + requestContext.getRequestId() + "] not completed digestComplete: " +
-                    updator.getMd5DigestComplete() + " all data written: " + requestContext.getAllPutDataWritten());
+                    updater.getMd5DigestComplete() + " all data written: " + requestContext.getAllPutDataWritten());
         }
     }
 

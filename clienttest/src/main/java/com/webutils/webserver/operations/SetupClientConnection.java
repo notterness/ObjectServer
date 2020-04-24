@@ -7,7 +7,6 @@ import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
-import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,11 +23,6 @@ public class SetupClientConnection implements Operation {
     public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_CLIENT_CONNECTION;
 
     private final int WRITE_BUFFERS_TO_ALLOCATE = 10;
-
-    /*
-    **
-     */
-    private final WebServerFlavor webServerFlavor;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -67,7 +61,7 @@ public class SetupClientConnection implements Operation {
     /*
      ** The following is a map of all of the created Operations to handle this client request.
      */
-    private Map<OperationTypeEnum, Operation> clientOperations;
+    private final Map<OperationTypeEnum, Operation> clientOperations;
 
 
     /*
@@ -99,11 +93,10 @@ public class SetupClientConnection implements Operation {
     private boolean doneSignalSent;
 
 
-    public SetupClientConnection(final WebServerFlavor flavor, final RequestContext requestContext,
+    public SetupClientConnection(final RequestContext requestContext,
                                  final MemoryManager memoryManager, final ClientTest clientTest,
                                  final IoInterface connection, final ServerIdentifier serverIdentifier) {
 
-        this.webServerFlavor = flavor;
         this.requestContext = requestContext;
         this.clientTest = clientTest;
         this.memoryManager = memoryManager;
@@ -246,7 +239,8 @@ public class SetupClientConnection implements Operation {
         clientOperations.put(readBuffer.getOperationType(), readBuffer);
         BufferManagerPointer readPointer = readBuffer.initialize();
 
-        ClientResponseHandler clientResponseHandler = new ClientResponseHandler(requestContext, clientTest, readPointer);
+        ClientResponseHandler clientResponseHandler = new ClientResponseHandler(requestContext, clientTest, readPointer,
+                serverIdentifier.getHttpInfo());
         clientOperations.put(clientResponseHandler.getOperationType(), clientResponseHandler);
         clientResponseHandler.initialize();
 
@@ -389,7 +383,7 @@ public class SetupClientConnection implements Operation {
     }
 
 
-    private boolean waitForCleanup() {
+    private void waitForCleanup() {
         boolean status = true;
 
         synchronized (cleanupCompleted) {
@@ -406,9 +400,7 @@ public class SetupClientConnection implements Operation {
             }
         }
 
-        LOG.info("SetupClientConnection waitForCleanup() done: ");
-
-        return status;
+        LOG.info("SetupClientConnection waitForCleanup() done status: " + status);
     }
 
     /*
@@ -429,20 +421,17 @@ public class SetupClientConnection implements Operation {
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
         //LOG.info("SetupClientConnection[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("SetupClientConnection[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("SetupClientConnection[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("SetupClientConnection[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not on a queue");
+            LOG.warn("SetupClientConnection[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("SetupClientConnection[" + requestContext.getRequestId() + "] markAddToQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("SetupClientConnection[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }

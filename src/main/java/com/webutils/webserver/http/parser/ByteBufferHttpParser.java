@@ -13,10 +13,10 @@ public class ByteBufferHttpParser {
     private static final Logger LOG = LoggerFactory.getLogger(ByteBufferHttpParser.class);
 
     private final HttpParser httpParser;
-    private final HttpInfo casperHeaderInfo;
+    private final HttpInfo httpInfo;
 
     public ByteBufferHttpParser(final HttpInfo httpHeaderInfo) {
-        casperHeaderInfo = httpHeaderInfo;
+        this.httpInfo = httpHeaderInfo;
 
         HttpParserListener listener = new HttpParserListener(httpHeaderInfo);
         httpParser = new HttpParser(listener);
@@ -62,7 +62,7 @@ public class ByteBufferHttpParser {
             ** Check if the header has been parsed. If so, grab the remaining bytes from
             **   the passed in buffer and return it.
              */
-            if (casperHeaderInfo.getHeaderComplete()) {
+            if (httpInfo.getHeaderComplete()) {
                 LOG.info("parseHttpData() headerComplete");
                 remainingBuffer = chunk.isThereRemainingData();
                 break;

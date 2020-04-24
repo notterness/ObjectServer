@@ -1,5 +1,6 @@
 package com.webutils.webserver.mysql;
 
+import com.google.common.io.BaseEncoding;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
@@ -7,9 +8,7 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 
 public class StorageChunkTableMgr extends ObjectStorageDb {
 
@@ -22,7 +21,7 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
     private final static String CREATE_CHUNK_5 = "', '";                                       // serverIp
     private final static String CREATE_CHUNK_6 = "', ";                                        // serverPort
     private final static String CREATE_CHUNK_7 = ", '";                                        // storageLocation
-    private final static String CREATE_CHUCK_8 = "', 0, ";                                     // dataWritten, ownerObject
+    private final static String CREATE_CHUCK_8 = "', 0, NULL, ";                               // dataWritten, chunkMd5, ownerObject
     private final static String CREATE_CHUNK_9 = " )";
 
     private final static String CHECK_FOR_DUPLICATE_1 = "SELECT chunkId FROM storageChunk WHERE offset = ";
@@ -32,7 +31,9 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
 
     private final static String GET_CHUNK_ID = " AND ownerObject = ";
 
-    private final static String SET_CHUNK_WRITTEN = "UPDATE storageChunk SET dataWritten = 1 WHERE chunkId = ";
+    private final static String SET_CHUNK_WRITTEN = "UPDATE storageChunk SET dataWritten = 1, chunkMd5 = ? WHERE chunkId = ?";
+
+    private final static String GET_CHUNK_MD5_DIGEST = "SELECT chunkMd5 FROM storageChunk WHERE chunkId = ";
 
     private final static String DELETE_CHUNK = "DELETE FROM storageChunk WHERE chunkId = ";
 
@@ -143,8 +144,135 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
     ** This updates the dataWritten field for the chunk. This is called after all the data for the chunk has been written
     **   by the Storage Server.
      */
-    public boolean setChunkWritten(final int chunkId) {
-        return executeSqlStatement(SET_CHUNK_WRITTEN + chunkId);
+    public boolean setChunkWritten(final int chunkId, final String md5Digest) {
+        if (md5Digest == null) {
+            LOG.warn("setChunkWritten() md5Digest is null");
+            return false;
+        }
+
+        byte[] md5DigestBytes = BaseEncoding.base64().decode(md5Digest);
+        if (md5DigestBytes.length != 16) {
+            LOG.warn("The value of the digest '" + md5Digest + "' incorrect length after base-64 decoding");
+            return false;
+        }
+
+        boolean success = true;
+
+        Connection conn = getObjectStorageDbConn();
+        if (conn != null) {
+            PreparedStatement stmt = null;
+
+            try {
+                stmt = conn.prepareStatement(SET_CHUNK_WRITTEN);
+                stmt.setBytes(1, md5DigestBytes);
+                stmt.setInt(2,chunkId);
+                stmt.execute();
+            } catch (SQLException sqlEx) {
+                success = false;
+                LOG.error("executeSqlStatement() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("Bad SQL command: " + SET_CHUNK_WRITTEN);
+                System.out.println("SQLException: " + sqlEx.getMessage());
+            } finally {
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("executeSqlStatement() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQLException: " + sqlEx.getMessage());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database tables.
+             */
+            closeObjectStorageDbConn(conn);
+        }
+
+        return success;
+    }
+
+    /*
+    ** The chunkMd5 is stored in the storageChunk table after the chunk is successfully written to the Storage Server.
+    **   The chunkMd5 is then used when reading data back from the Storage Server to insure that it matches what was
+    **   sent to the Storage Server earlier.
+     */
+    public String getChunkMd5Digest(final int chunkId) {
+        String chunkMd5Query = GET_CHUNK_MD5_DIGEST + chunkId;
+        String md5DigestStr = null;
+
+        Connection conn = getObjectStorageDbConn();
+
+        if (conn != null) {
+            Statement stmt = null;
+            ResultSet rs = null;
+
+            try {
+                stmt = conn.createStatement();
+                if (stmt.execute(chunkMd5Query)) {
+                    rs = stmt.getResultSet();
+                }
+            } catch (SQLException sqlEx) {
+                LOG.error("getSingleStr() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("Bad SQL command: " + chunkMd5Query);
+                System.out.println("SQLException: " + sqlEx.getMessage());
+            } finally {
+                if (rs != null) {
+                    byte[] md5Bytes;
+
+                    try {
+                        int count = 0;
+                        while (rs.next()) {
+                            /*
+                             ** The rs.getString(1) is the BINARY() representation of the Md5 Digest.
+                             */
+                            md5Bytes = rs.getBytes(1);
+
+                            count++;
+
+                            /*
+                            ** There should only be one storageChunk table entry based upon the chunkId, but add a
+                            **   safety check to insure that is true.
+                             */
+                            if (count == 1) {
+                                md5DigestStr = BaseEncoding.base64().encode(md5Bytes);
+
+                                System.out.println("getChunkMd5Digest() encode: " + md5DigestStr);
+                            }
+                        }
+
+                        if (count != 1) {
+                            LOG.warn("getChunkMd5Digest() invalid response count: " + count);
+                            LOG.warn(chunkMd5Query);
+                        }
+                    } catch (SQLException sqlEx) {
+                        System.out.println("getSingleStr() SQL conn rs.next() SQLException: " + sqlEx.getMessage());
+                    }
+
+                    try {
+                        rs.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("getSingleStr() SQL conn rs.close() SQLException: " + sqlEx.getMessage());
+                    }
+                }
+
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("getSingleStr() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQLException: " + sqlEx.getMessage());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database tables.
+             */
+            closeObjectStorageDbConn(conn);
+        }
+
+        return md5DigestStr;
     }
 
     public void deleteChunk(final int chunkId) {

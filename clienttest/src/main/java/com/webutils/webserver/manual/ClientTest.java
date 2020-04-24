@@ -1,5 +1,6 @@
 package com.webutils.webserver.manual;
 
+import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.niosockets.NioTestClient;
 import com.webutils.webserver.operations.SetupClientConnection;
 import com.webutils.webserver.memory.MemoryManager;
@@ -106,7 +107,10 @@ public abstract class ClientTest {
         memoryManager = new MemoryManager(webServerFlavor);
 
         ServerIdentifier serverId = new ServerIdentifier("ClientTest", serverIpAddr, serverTcpPort, 0);
-        SetupClientConnection setupClientConnection = new SetupClientConnection(webServerFlavor, clientContext, memoryManager,
+
+        HttpResponseInfo httpResponseInfo = new HttpResponseInfo(clientContext);
+        serverId.setHttpInfo(httpResponseInfo);
+        SetupClientConnection setupClientConnection = new SetupClientConnection(clientContext, memoryManager,
                 this, connection, serverId);
         setupClientConnection.initialize();
 

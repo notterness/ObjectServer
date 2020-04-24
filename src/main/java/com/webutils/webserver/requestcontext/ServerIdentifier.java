@@ -1,5 +1,7 @@
 package com.webutils.webserver.requestcontext;
 
+import com.webutils.webserver.http.HttpResponseInfo;
+
 import java.net.InetAddress;
 
 /*
@@ -14,6 +16,12 @@ public class ServerIdentifier {
 
     private int chunkOffset;
     private int chunkLength;
+
+    /*
+    ** This is used to handle the HTTP Information that is parsed out of the response from the request to this
+    **   server.
+     */
+    private HttpResponseInfo httpInfo;
 
     /*
     ** The following is the unique ID that can be used to access a chunk's information that is written into the
@@ -63,4 +71,11 @@ public class ServerIdentifier {
     public int getChunkId() { return chunkUniqueId; }
 
     public String getChunkLocation() { return "test"; }
+
+    /*
+    **
+     */
+    public void setHttpInfo(final HttpResponseInfo httpResponseInfo) { httpInfo = httpResponseInfo; }
+
+    public HttpResponseInfo getHttpInfo() { return httpInfo; }
 }

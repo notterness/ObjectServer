@@ -2,6 +2,7 @@ package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.http.HttpResponseListener;
 import com.webutils.webserver.manual.ClientTest;
 import com.webutils.webserver.manual.HttpResponseCompleted;
@@ -30,6 +31,8 @@ public class ClientResponseHandler implements Operation {
      */
     private final ClientTest clientTest;
 
+    private final HttpResponseInfo httpInfo;
+
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
@@ -44,11 +47,13 @@ public class ClientResponseHandler implements Operation {
     private HttpParser httpParser;
 
     public ClientResponseHandler(final RequestContext requestContext, final ClientTest clientTest,
-                                 final BufferManagerPointer readBufferPtr) {
+                                 final BufferManagerPointer readBufferPtr, final HttpResponseInfo httpInfo) {
 
         this.requestContext = requestContext;
         this.clientTest = clientTest;
         this.readBufferPointer = readBufferPtr;
+
+        this.httpInfo = httpInfo;
 
         this.clientReadBufferManager = requestContext.getClientReadBufferManager();
 
@@ -74,7 +79,7 @@ public class ClientResponseHandler implements Operation {
         httpResponseBufferPointer = clientReadBufferManager.register(this, readBufferPointer);
 
         HttpResponseCompleted httpResponseCompleted = new HttpResponseCompleted(clientTest);
-        HttpResponseListener listener = new HttpResponseListener(httpResponseCompleted);
+        HttpResponseListener listener = new HttpResponseListener(httpInfo, httpResponseCompleted);
         httpParser = new HttpParser(listener);
 
         if (httpParser.isState(HttpParser.State.END))

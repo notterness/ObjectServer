@@ -13,24 +13,24 @@ public class Md5ResultHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger(Md5ResultHandler.class);
 
-    private final RequestContext requestContext;
+    protected final RequestContext requestContext;
     private final HttpInfo httpInfo;
 
     private final AtomicBoolean md5Parsed;
     private boolean md5Override;
 
-    private final AtomicBoolean md5DigestComplete;
+    protected final AtomicBoolean md5DigestComplete;
     private boolean contentHasValidMd5Digest;
 
     /*
     ** This is the value parsed out of the HTTP Request "Content-Md5" header
      */
-    private String md5FromHeader;
+    protected String md5FromHeader;
 
     /*
     ** This is the value that was computed from the Http Request content
      */
-    private String computedMd5Digest;
+    protected String computedMd5Digest;
 
 
     public Md5ResultHandler(final RequestContext requestContext, final HttpInfo httpInfo) {
@@ -50,13 +50,13 @@ public class Md5ResultHandler {
      **   it is the correct length.
      ** Assuming it is found and the correct length it is then returned.
      */
-    public String validateMD5Header() {
+    public void validateMD5Header() {
         md5FromHeader = httpInfo.getContentMd5();
         if (md5FromHeader == null) {
             LOG.warn("Content-MD5 header not provided");
 
             md5Parsed.set(false);
-            return null;
+            return;
         }
 
         md5Override = httpInfo.getMd5Override();
@@ -68,18 +68,17 @@ public class Md5ResultHandler {
                         "' was not the correct length after base-64 decoding");
                 md5FromHeader = null;
                 md5Parsed.set(false);
-                return null;
+                return;
             }
         } catch (IllegalArgumentException ia_ex) {
             LOG.warn("The value of the Content-MD5 header '" + md5FromHeader +
                     "' was not the correct length after base-64 decoding");
             md5FromHeader = null;
             md5Parsed.set(false);
-            return null;
+            return;
         }
 
         md5Parsed.set(true);
-        return md5FromHeader;
     }
 
 
@@ -99,7 +98,7 @@ public class Md5ResultHandler {
         }
 
         if (!md5DigestComplete.get()) {
-            LOG.warn("Content-MD5 [" + requestContext.getRequestId() +  "] no computed Md5 digest: " + md5FromHeader);
+            LOG.warn("Content-MD5 [" + requestContext.getRequestId() + "] no computed Md5 digest: " + md5FromHeader);
 
             String failureMessage = "\"No computed Md5 digest\",\n  \"Content-MD5\": \"" + md5FromHeader +
                     "\"";
@@ -110,7 +109,7 @@ public class Md5ResultHandler {
 
         if (md5FromHeader != null) {
             if (!md5FromHeader.equals(computedMd5Digest)) {
-                LOG.warn("Content-MD5 [" + requestContext.getRequestId() +  "] did not match computed. expected: " +
+                LOG.warn("Content-MD5 [" + requestContext.getRequestId() + "] did not match computed. expected: " +
                         md5FromHeader + " computed: " + computedMd5Digest);
 
                 String failureMessage = "\"Bad Md5 Compare\",\n  \"Content-MD5\": \"" + md5FromHeader +
@@ -120,7 +119,7 @@ public class Md5ResultHandler {
                 return;
             }
         } else {
-            LOG.warn("Content-MD5 [" + requestContext.getRequestId() +  "] passed in was invalid. computed: " +
+            LOG.warn("Content-MD5 [" + requestContext.getRequestId() + "] passed in was invalid. computed: " +
                     computedMd5Digest);
             String failureMessage = "\"Invalid or missing Content-Md5\",\n  \"Computed-MD5\": \"" + computedMd5Digest + "\"";
 
@@ -128,9 +127,8 @@ public class Md5ResultHandler {
             return;
         }
 
-        LOG.warn("checkContentMd5() [" + requestContext.getRequestId() +  "] passed");
+        LOG.warn("checkContentMd5() [" + requestContext.getRequestId() + "] passed");
         contentHasValidMd5Digest = true;
-        return;
     }
 
     /*

@@ -1,5 +1,6 @@
 package com.webutils.webserver.manual;
 
+import com.google.common.io.BaseEncoding;
 import com.webutils.objectserver.manual.TestChunkWrite;
 import com.webutils.objectserver.manual.TestEncryptBuffer;
 import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
@@ -25,7 +26,19 @@ public class TestMain {
 
         final String CLOSE_CONNECTION_AFTER_HEADER = "DisconnectAfterHeader";
 
-        DbSetup dbSetup;
+        String md5FromHeader = "RUyS5v1cKdbFcsRdO7NgfQ==";
+        byte[] bytes = BaseEncoding.base64().decode(md5FromHeader);
+        if (bytes.length != 16) {
+            System.out.println("The value of the Content-MD5 header '" + md5FromHeader +
+                    "' was not the correct length after base-64 decoding");
+        } else {
+            String encodeStr = BaseEncoding.base64().encode(bytes);
+
+            boolean match = encodeStr.equals(md5FromHeader);
+            System.out.println("initial " + md5FromHeader + " encode: " + encodeStr + " match: " + match);
+        }
+
+            DbSetup dbSetup;
 
         final int serverTcpPort = 5001;
 

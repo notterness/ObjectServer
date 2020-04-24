@@ -1,10 +1,13 @@
 package com.webutils.objectserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.common.ResponseMd5ResultHandler;
 import com.webutils.webserver.http.HttpRequestInfo;
+import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.DbSetup;
 import com.webutils.webserver.mysql.StorageChunkTableMgr;
+import com.webutils.webserver.operations.ComputeMd5Digest;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
@@ -73,6 +76,14 @@ public class StorageChunkAllocRequestor implements Operation {
     private StorageChunkAllocated storageChunkAllocated;
 
     /*
+    ** The following are used to Parse the Http responses coming back from the Storage Servers
+     */
+    /*
+     ** This is used to handle the compute of the Md5 for the chunk of data being sent to the Storage Server
+     */
+    private final ResponseMd5ResultHandler chunkMd5Updater;
+
+    /*
     ** This Operation does two things, first it makes the call to allocate the chunks of storage on the various
     **   Storage Servers (this is based upon the storage class for the Object being written). Once the Storage chunk
     **   information has been obtained, then the StorageChunkAllocated operation will be run. The
@@ -95,6 +106,8 @@ public class StorageChunkAllocRequestor implements Operation {
         this.memoryManager = memoryManager;
         this.storageServerWritePointer = writePointer;
         this.chunkBytesToWrite = bytesToWrite;
+
+        this.chunkMd5Updater = new ResponseMd5ResultHandler(requestContext);
 
         /*
          ** This starts out not being on any queue
@@ -182,6 +195,16 @@ public class StorageChunkAllocRequestor implements Operation {
                 LOG.info("StorageChunkAllocRequestor() STORAGE_CHUNK_INFO_SAVED");
 
                 /*
+                ** Start an Md5 digest for the chunk
+                 */
+                List<Operation> callbackList = new LinkedList<>();
+                callbackList.add(this);
+
+                ComputeMd5Digest chunkMd5Digest = new ComputeMd5Digest(requestContext, callbackList, storageServerWritePointer,
+                        requestContext.getStorageServerWriteBufferManager(), chunkMd5Updater, chunkBytesToWrite);
+                chunkMd5Digest.initialize();
+
+                /*
                 ** For all of the Storage Servers start a Chunk write sequence.
                 **
                 ** NOTE: The complete() function for SetupChunkWrite is called within that Operation.
@@ -189,8 +212,12 @@ public class StorageChunkAllocRequestor implements Operation {
                 int i = 0;
                 for (ServerIdentifier server : serverList) {
                     /*
-                    ** FIXME: The setLength should be a passed in parameter to the allocation call
+                    ** FIXME: The setLength should be a passed in parameter to the allocation call for the obtaining
+                    **   the ServerIdentifier
                      */
+                    HttpResponseInfo httpInfo = new HttpResponseInfo(requestContext);
+                    server.setHttpInfo(httpInfo);
+
                     server.setLength(chunkBytesToWrite);
                     SetupChunkWrite setupChunkWrite = new SetupChunkWrite(requestContext, server,
                             memoryManager, storageServerWritePointer, chunkBytesToWrite, this, i,
@@ -206,10 +233,11 @@ public class StorageChunkAllocRequestor implements Operation {
 
             case WRITE_STORAGE_CHUNK_COMPLETE:
                 /*
-                 ** Check if all of the Storage Servers have responded or have had an error (either a bad
-                 **   Shaw-256 validation, timed out, or disconnected).
+                ** Verify that the Md5 computation has been completed.
+                ** Check if all of the Storage Servers have responded or have had an error (either a bad
+                **   Shaw-256 validation, timed out, or disconnected).
                  */
-                boolean allResponded = true;
+                boolean allResponded = chunkMd5Updater.getMd5DigestComplete();
                 for (ServerIdentifier serverIdentifier : serverList) {
                     if (!requestContext.hasStorageServerResponseArrived(serverIdentifier)) {
                         allResponded = false;
@@ -234,14 +262,23 @@ public class StorageChunkAllocRequestor implements Operation {
                         int result = requestContext.getStorageResponseResult(server);
 
                         /*
-                        ** If the status is OK_200, then update the chunk to mark that the data was written.
+                        ** Verify the Md5 that was computed by the Storage Server
+                         */
+                        HttpResponseInfo httpInfo = server.getHttpInfo();
+
+
+                        /*
+                        ** If the status is OK_200, then update the chunk to mark that the data was written and save
+                        **   the Md5 Digest for the chunk. The Md5 for the chunk is used to validate that data read
+                        **   back from the Storage Server is valid.
                          */
                         if (result == HttpStatus.OK_200) {
-                            if (chunkMgr.setChunkWritten(server.getChunkId())) {
+                            if (chunkMgr.setChunkWritten(server.getChunkId(), chunkMd5Updater.getComputedMd5Digest())) {
                                 LOG.info("ChunkWriteComplete addr: " + server.getServerIpAddress().toString() +
                                         " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
                                         " result: OK_200 " + chunkRedundancy);
 
+                                chunkMgr.getChunkMd5Digest(server.getChunkId());
                                 chunkRedundancy++;
                             } else {
                                 LOG.error("ChunkWriteComplete unable to update dataWritten addr: " + server.getServerIpAddress().toString() +
@@ -263,7 +300,11 @@ public class StorageChunkAllocRequestor implements Operation {
 
                         /*
                          ** Remove this serverIdentifier from the list
+                         **
+                         ** Need to remove the reference to the HttpResponseInfo from the server to insure it gets released
                          */
+                        server.setHttpInfo(null);
+
                         requestContext.removeStorageServerResponse(server);
                     }
 

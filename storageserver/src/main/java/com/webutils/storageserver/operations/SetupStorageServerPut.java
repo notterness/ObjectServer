@@ -64,7 +64,7 @@ public class SetupStorageServerPut implements Operation {
      */
     private final Map<OperationTypeEnum, Operation> storageServerPutHandlerOperations;
 
-    private final Md5ResultHandler updator;
+    private final Md5ResultHandler updater;
 
     /*
     **
@@ -91,7 +91,7 @@ public class SetupStorageServerPut implements Operation {
          */
         this.storageServerPutHandlerOperations = new HashMap<>();
 
-        this.updator = requestContext.getMd5ResultHandler();
+        this.updater = requestContext.getMd5ResultHandler();
 
         /*
          ** This starts out not being on any queue
@@ -143,7 +143,8 @@ public class SetupStorageServerPut implements Operation {
                 List<Operation> callbackList = new LinkedList<>();
                 callbackList.add(this);
 
-                ComputeMd5Digest computeMd5Digest = new ComputeMd5Digest(requestContext, callbackList, clientReadPtr, updator);
+                ComputeMd5Digest computeMd5Digest = new ComputeMd5Digest(requestContext, callbackList, clientReadPtr,
+                        updater, requestContext.getRequestContentLength());
                 storageServerPutHandlerOperations.put(computeMd5Digest.getOperationType(), computeMd5Digest);
                 computeMd5Digest.initialize();
 
@@ -196,13 +197,13 @@ public class SetupStorageServerPut implements Operation {
             /*
             ** Check if the Md5 computation was completed and the data has all been written to the file
              */
-            if (updator.getMd5DigestComplete() && requestContext.getAllPutDataWritten()) {
+            if (updater.getMd5DigestComplete() && requestContext.getAllPutDataWritten()) {
                 /*
                 ** Validate the Md5 digest.
                 **
                 ** NOTE: The error status is updated within the method so nothing to do if it fails
                  */
-                updator.checkContentMD5();
+                updater.checkContentMD5();
 
                 /*
                 ** Build the response content for the case where the status is OK_200. This is required to allow the
@@ -325,7 +326,7 @@ public class SetupStorageServerPut implements Operation {
     private String buildSuccessHeader() {
         String successHeader;
 
-        String contentMD5 = updator.getComputedMd5Digest();
+        String contentMD5 = updater.getComputedMd5Digest();
         String opcClientRequestId = requestContext.getHttpInfo().getOpcClientRequestId();
         String opcRequestId = requestContext.getHttpInfo().getOpcRequestId();
 

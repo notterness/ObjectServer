@@ -628,7 +628,7 @@ public class HttpInfo {
      ** This finds all the occurrences of a passed in String in the headers key fields and adds those to the return
      **   string.
      */
-    private String getHeaderString(String name) {
+    protected String getHeaderString(String name) {
         List<String> values = headers.get(name);
         if (values == null) {
             return null;

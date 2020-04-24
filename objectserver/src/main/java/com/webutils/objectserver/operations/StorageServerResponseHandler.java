@@ -3,6 +3,7 @@ package com.webutils.objectserver.operations;
 import com.webutils.objectserver.http.StorageServerResponseCallback;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.http.HttpResponseListener;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
@@ -55,6 +56,7 @@ public class StorageServerResponseHandler implements Operation {
      */
     private final Operation completionCallback;
 
+    private final HttpResponseInfo httpInfo;
 
     public StorageServerResponseHandler(final RequestContext requestContext, final BufferManager storageServerResponseBufferMgr,
                                         final BufferManagerPointer readBufferPtr, final Operation completionCb,
@@ -68,6 +70,8 @@ public class StorageServerResponseHandler implements Operation {
         this.completionCallback = completionCb;
 
         this.serverIdentifier = serverIdentifier;
+
+        this.httpInfo = serverIdentifier.getHttpInfo();
 
         /*
          ** This starts out not being on any queue
@@ -92,7 +96,8 @@ public class StorageServerResponseHandler implements Operation {
 
         StorageServerResponseCallback httpResponseCompleted = new StorageServerResponseCallback(requestContext,
                 completionCallback, serverIdentifier);
-        HttpResponseListener listener = new HttpResponseListener(httpResponseCompleted);
+
+        HttpResponseListener listener = new HttpResponseListener(httpInfo, httpResponseCompleted);
         httpParser = new HttpParser(listener);
 
         if (httpParser.isState(HttpParser.State.END))

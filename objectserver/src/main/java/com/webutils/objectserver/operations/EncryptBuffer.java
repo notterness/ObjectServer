@@ -95,7 +95,7 @@ public class EncryptBuffer implements Operation {
         this.clientReadBufferMgr = this.requestContext.getClientReadBufferManager();
         this.completeCallback = completeCb;
 
-        this.storageServerWriteBufferMgr = this.requestContext.getStorageServerWriteBufferManager();
+        this.storageServerWriteBufferMgr = requestContext.getStorageServerWriteBufferManager();
 
         this.readBufferPointer = readBufferPtr;
 

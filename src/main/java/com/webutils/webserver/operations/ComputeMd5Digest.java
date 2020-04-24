@@ -35,7 +35,7 @@ public class ComputeMd5Digest implements Operation {
      ** The md5DigestPointer tracks the clientReadBufferManager where data is placed following reads from
      **   the client connection's SocketChannel.
      */
-    private final BufferManager clientReadBufferMgr;
+    private final BufferManager readBufferManager;
     private final BufferManagerPointer readBufferPointer;
     private BufferManagerPointer md5DigestPointer;
 
@@ -44,7 +44,7 @@ public class ComputeMd5Digest implements Operation {
 
     private final Md5Digest md5Digest;
 
-    private final Md5ResultHandler resultUpdator;
+    private final Md5ResultHandler resultUpdater;
 
     private int savedSrcPosition;
 
@@ -57,14 +57,22 @@ public class ComputeMd5Digest implements Operation {
 
 
     public ComputeMd5Digest(final RequestContext requestContext, final List<Operation> operationsToRun,
-                            final BufferManagerPointer readBufferPtr, final Md5ResultHandler updator) {
+                            final BufferManagerPointer readBufferPtr, final Md5ResultHandler updater,
+                            final int bytesToDigest) {
+
+        this(requestContext, operationsToRun, readBufferPtr, requestContext.getClientReadBufferManager(), updater, bytesToDigest);
+    }
+
+    public ComputeMd5Digest(final RequestContext requestContext, final List<Operation> operationsToRun,
+                            final BufferManagerPointer readBufferPtr, final BufferManager readBufferMgr,
+                            final Md5ResultHandler updater, final int bytesToDigest) {
 
         this.requestContext = requestContext;
         this.operationsToRun = operationsToRun;
         this.readBufferPointer = readBufferPtr;
-        this.resultUpdator = updator;
+        this.resultUpdater = updater;
 
-        this.clientReadBufferMgr = requestContext.getClientReadBufferManager();
+        this.readBufferManager = readBufferMgr;
 
         /*
          ** This starts out not being on any queue
@@ -72,9 +80,9 @@ public class ComputeMd5Digest implements Operation {
         onExecutionQueue = false;
 
         /*
-        ** Setup the total number of bytes being transferred in this client object
+         ** Setup the total number of bytes being transferred in this client object
          */
-        clientObjectBytes = requestContext.getRequestContentLength();
+        clientObjectBytes = bytesToDigest;
         md5DigestedBytes = 0;
         savedSrcPosition = 0;
 
@@ -93,12 +101,7 @@ public class ComputeMd5Digest implements Operation {
      */
     public BufferManagerPointer initialize() {
 
-        /*
-        ** Pull the Content-Md5 from the appropriate place
-         */
-        resultUpdator.validateMD5Header();
-
-        md5DigestPointer = clientReadBufferMgr.register(this, readBufferPointer);
+        md5DigestPointer = readBufferManager.register(this, readBufferPointer);
 
         /*
          ** savedSrcPosition is used to handle the case where there are multiple readers from the readBufferPointer and
@@ -107,7 +110,7 @@ public class ComputeMd5Digest implements Operation {
          **   use a "copy" of the buffer and to set its cursors appropriately.
          */
         ByteBuffer readBuffer;
-        if ((readBuffer = clientReadBufferMgr.peek(md5DigestPointer)) != null) {
+        if ((readBuffer = readBufferManager.peek(md5DigestPointer)) != null) {
             savedSrcPosition = readBuffer.position();
         } else {
             savedSrcPosition = 0;
@@ -132,7 +135,7 @@ public class ComputeMd5Digest implements Operation {
     public void execute() {
         ByteBuffer buffer;
 
-        while ((buffer = clientReadBufferMgr.poll(md5DigestPointer)) != null) {
+        while ((buffer = readBufferManager.poll(md5DigestPointer)) != null) {
 
             /*
              ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
@@ -154,7 +157,7 @@ public class ComputeMd5Digest implements Operation {
                 **   taking place) or if this is for handling a chunk (where the "Content-Md5" value is returned in
                 **   the response header and the check takes place after the response has been processed).
                  */
-                resultUpdator.setMd5DigestComplete(md5Digest.getFinalDigest());
+                resultUpdater.setMd5DigestComplete(md5Digest.getFinalDigest());
 
                 /*
                 ** Everything is done for the Md5 Digest calculation and comparison.
@@ -177,7 +180,7 @@ public class ComputeMd5Digest implements Operation {
          */
         requestContext.removeComputeWork(this);
 
-        clientReadBufferMgr.unregister(md5DigestPointer);
+        readBufferManager.unregister(md5DigestPointer);
         md5DigestPointer = null;
 
         /*
