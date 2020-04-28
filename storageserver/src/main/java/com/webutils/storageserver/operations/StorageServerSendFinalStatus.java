@@ -144,6 +144,7 @@ public class StorageServerSendFinalStatus implements Operation {
                  */
                 clientWriteBufferMgr.offer(writeStatusBufferPtr, respBuffer);
 
+                requestContext.setAllClientBuffersFilled();
             } else {
                 /*
                  ** If we are out of memory to allocate a response, might as well close out the connection and give up.

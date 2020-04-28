@@ -99,13 +99,23 @@ public class SetupObjectPut implements Operation {
 
     public void execute() {
         if (!setupMethodDone) {
-
+            /*
+            ** The ObjectPut_P2 operation is run after the CreateObject operation has updated the database with all
+            **   the information about the object to be saved. It provides the gate where the wait for the Md5 digest
+            **   calculation and waiting for all the data to be written to the Storage Servers takes place.
+             */
             ObjectPut_P2 objectPutHandler = new ObjectPut_P2(requestContext, memoryManager, metering, this);
             objectPutHandler.initialize();
 
             /*
             ** Setup the operation to write the Object information to the database. This needs to complete prior to
-            **   the data being written to the Storage Servers
+            **   the data being written to the Storage Servers. The CreateObject operation will event() the
+            **   ObjectPut_P2 operation when it completes successfully. If there was an error creating the object
+            **   in the database, it will event() this (SetupObjectPut) to allow the error response to be sent and
+            **   cleanup to take place.
+            **
+            ** NOTE: At this point in the code development, the CreateObject operation does not have any code
+            **   that runs in the complete() method. So , no need to call it during the cleanup below.
              */
             CreateObject createObject = new CreateObject(requestContext, objectPutHandler, this);
             putHandlerOperations.put(createObject.getOperationType(), createObject);
@@ -119,8 +129,7 @@ public class SetupObjectPut implements Operation {
     }
 
     /*
-    ** This is called from both the EncryptBuffer and ComputeMd5Digest operations when they have completed their
-    **   work.
+    ** This is called from the ObjectPut_P2 operation when it has completed its work or an error occurred.
      */
     public void complete() {
         completeCallback.event();

@@ -3,9 +3,7 @@ package com.webutils.storageserver.operations;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.common.Md5ResultHandler;
-import com.webutils.webserver.operations.ComputeMd5Digest;
-import com.webutils.webserver.operations.Operation;
-import com.webutils.webserver.operations.OperationTypeEnum;
+import com.webutils.webserver.operations.*;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -17,6 +15,11 @@ import java.util.*;
 public class SetupStorageServerPut implements Operation {
 
     private static final Logger LOG = LoggerFactory.getLogger(SetupStorageServerPut.class);
+
+    /*
+     ** A unique identifier for this Operation so it can be tracked.
+     */
+    public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_STORAGE_SERVER_PUT;
 
     /*
     ** The following are the Error Types that this Mock Storage Server can inject into the
@@ -31,11 +34,6 @@ public class SetupStorageServerPut implements Operation {
     private final static String SUCCESS_HEADER_1 = "opc-client-request-id: ";
     private final static String SUCCESS_HEADER_2 = "opc-request-id: ";
     private final static String SUCCESS_HEADER_3 = "opc-content-md5: ";
-
-    /*
-     ** A unique identifier for this Operation so it can be tracked.
-     */
-    public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_STORAGE_SERVER_PUT;
 
     private final RequestContext requestContext;
 
@@ -77,8 +75,8 @@ public class SetupStorageServerPut implements Operation {
     private boolean putOperationSetupDone;
 
     /*
-     ** This is used to setup the initial Operation dependencies required to handle the V2 PUT
-     **   request.
+     ** This is used to setup the initial Operation dependencies required to handle the Storage Server PUT
+     **   request. This is how chunks of data for an Object are written to the backing storage.
      */
     public SetupStorageServerPut(final RequestContext requestContext, final Operation metering, final Operation completeCb) {
 

@@ -81,12 +81,6 @@ public abstract class RequestContext {
     protected final BufferManager clientWriteBufferManager;
 
     /*
-     ** The readBuffer Operation is the interface to the code that fills in the buffers with data.
-     **   In normal execution, this is the NIO handler code that reads from SocketChannel.
-     */
-    protected ReadBuffer readBuffer;
-
-    /*
      ** The read pointer is used by the code used to read data into buffers to indicate
      **   where valid data is.
      */
@@ -168,6 +162,12 @@ public abstract class RequestContext {
     private boolean postMethodContentDataParsed;
 
     /*
+     ** This is used to by the WriteToClient operation to know when all of the buffers to be written to the client have
+     **   been queued up to the BufferManager.
+     */
+    private final AtomicBoolean allClientBuffersFilled;
+
+    /*
      ** Mutex to protect the addition and removal from the work and timed queues
      */
     private final ReentrantLock queueMutex;
@@ -216,15 +216,17 @@ public abstract class RequestContext {
          */
         this.requestHandlerOperations = new HashMap<> ();
 
-        queueMutex = new ReentrantLock();
-        queueSignal = queueMutex.newCondition();
-        workQueued = false;
+        this.queueMutex = new ReentrantLock();
+        this.queueSignal = queueMutex.newCondition();
+        this.workQueued = false;
 
-        workQueue = new LinkedBlockingQueue<>(20);
-        timedWaitQueue = new LinkedBlockingQueue<>(20);
+        this.workQueue = new LinkedBlockingQueue<>(20);
+        this.timedWaitQueue = new LinkedBlockingQueue<>(20);
 
-        putAllDataWritten = false;
-        postMethodContentDataParsed = false;
+        this.putAllDataWritten = false;
+        this.postMethodContentDataParsed = false;
+
+        this.allClientBuffersFilled = new AtomicBoolean(false);
     }
 
     /*
@@ -283,6 +285,8 @@ public abstract class RequestContext {
 
         putAllDataWritten = false;
         postMethodContentDataParsed = false;
+
+        allClientBuffersFilled.set(false);
     }
 
     /*
@@ -612,6 +616,8 @@ public abstract class RequestContext {
         return clientConnection.getIdentifierInfo();
     }
 
+    public IoInterface getClientConnection() { return clientConnection; }
+
     public WebServerFlavor getWebServerFlavor() {
         return webServerFlavor;
     }
@@ -619,6 +625,12 @@ public abstract class RequestContext {
     public Md5ResultHandler getMd5ResultHandler() { return md5ResultHandler; }
     public Sha256ResultHandler getSha256ResultHandler() { return sha256ResultHandler; }
 
+    /*
+    ** Accessor functions for the allClientBuffersFilled AtomicBoolean
+     */
+    public boolean getAllClientBuffersFilled() { return allClientBuffersFilled.get(); }
+
+    public void setAllClientBuffersFilled() { allClientBuffersFilled.set(true); }
 
     public void dumpOperations() {
         LOG.info(" RequestContext[" + connectionRequestId + "] Operation dependency");

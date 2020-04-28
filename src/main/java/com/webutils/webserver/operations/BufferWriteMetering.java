@@ -9,20 +9,21 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
-public class BufferReadMetering implements Operation {
+public class BufferWriteMetering implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(BufferReadMetering.class);
+
+    private static final Logger LOG = LoggerFactory.getLogger(BufferWriteMetering.class);
 
     /*
-    ** A unique identifier for this Operation so it can be tracked.
+     ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.METER_READ_BUFFERS;
+    public final OperationTypeEnum operationType = OperationTypeEnum.METER_WRITE_BUFFERS;
 
     private final RequestContext requestContext;
 
     private final MemoryManager memoryManager;
 
-    private final BufferManager clientReadBufferMgr;
+    private final BufferManager clientWriteBufferMgr;
     private BufferManagerPointer bufferMeteringPointer;
 
     /*
@@ -33,16 +34,16 @@ public class BufferReadMetering implements Operation {
     private boolean onExecutionQueue;
 
     /*
-    ** The BufferReadMetering operation will populate the clientReadBufferManager with the
-    **   ByteBuffer(s) and will set the allocation BufferManagerPointer back to the start of
-    **   the BufferManager (meaning that no ByteBuffer(s) are available to read data into).
+     ** The BufferReadMetering operation will populate the clientWriteBufferManager with the
+     **   ByteBuffer(s) and will set the allocation BufferManagerPointer back to the start of
+     **   the BufferManager (meaning that no ByteBuffer(s) are available to write data into).
      */
-    public BufferReadMetering(final RequestContext requestContext, final MemoryManager memoryManager) {
+    public BufferWriteMetering(final RequestContext requestContext, final MemoryManager memoryManager) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
 
-        this.clientReadBufferMgr = requestContext.getClientReadBufferManager();
+        this.clientWriteBufferMgr = requestContext.getClientWriteBufferManager();
 
         /*
          ** This starts out not being on any queue
@@ -52,7 +53,7 @@ public class BufferReadMetering implements Operation {
         /*
          ** Obtain the pointer used to meter out buffers to the read operation
          */
-        bufferMeteringPointer = this.clientReadBufferMgr.register(this);
+        bufferMeteringPointer = this.clientWriteBufferMgr.register(this);
 
         /*
          ** If this is the WebServerFlavor.INTEGRATION_TESTS then allocate a limited
@@ -62,9 +63,9 @@ public class BufferReadMetering implements Operation {
         int buffersToAllocate = memoryManager.getBufferManagerRingSize();
 
         for (int i = 0; i < buffersToAllocate; i++) {
-            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientReadBufferMgr, operationType);
+            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientWriteBufferMgr, operationType);
 
-            clientReadBufferMgr.offer(bufferMeteringPointer, buffer);
+            clientWriteBufferMgr.offer(bufferMeteringPointer, buffer);
         }
     }
 
@@ -80,7 +81,7 @@ public class BufferReadMetering implements Operation {
          ** Set the pointer back to the beginning of the BufferManager. The BufferReadMetering operation will need
          **   to have its execute() method called to dole out ByteBuffer(s) to perform read operations into.
          */
-        clientReadBufferMgr.reset(bufferMeteringPointer);
+        clientWriteBufferMgr.reset(bufferMeteringPointer);
 
         return bufferMeteringPointer;
     }
@@ -94,16 +95,16 @@ public class BufferReadMetering implements Operation {
     }
 
     /*
-    ** For the metering, this is where the pointer for buffers that are available are metered out according to
-    **   customer requirements and limitations. The buffers can be preallocated on the BufferManager and only
-    **   passed out as needed or as requested.
+     ** For the metering, this is where the pointer for buffers that are available are metered out according to
+     **   customer requirements and limitations. The buffers can be preallocated on the BufferManager and only
+     **   passed out as needed or as requested.
      */
     public void execute() {
 
         /*
-        ** Add a free buffer to the ClientReadBufferManager
+         ** Add a free buffer to the ClientReadBufferManager
          */
-        clientReadBufferMgr.updateProducerWritePointer(bufferMeteringPointer);
+        clientWriteBufferMgr.updateProducerWritePointer(bufferMeteringPointer);
     }
 
     public void complete() {
@@ -111,23 +112,23 @@ public class BufferReadMetering implements Operation {
         /*
          ** Set the pointer back to the beginning of the BufferManager to release the allocated memory
          */
-        clientReadBufferMgr.reset(bufferMeteringPointer);
+        clientWriteBufferMgr.reset(bufferMeteringPointer);
 
         int buffersAllocated = memoryManager.getBufferManagerRingSize();
 
         for (int i = 0; i < buffersAllocated; i++) {
-            ByteBuffer buffer = clientReadBufferMgr.getAndRemove(bufferMeteringPointer);
+            ByteBuffer buffer = clientWriteBufferMgr.getAndRemove(bufferMeteringPointer);
             if (buffer != null) {
-                memoryManager.poolMemFree(buffer, clientReadBufferMgr);
+                memoryManager.poolMemFree(buffer, clientWriteBufferMgr);
             } else {
-                LOG.warn("BufferReadMetering[" + requestContext.getRequestId() + "] null buffer i: " + i);
+                LOG.warn("BufferWriteMetering[" + requestContext.getRequestId() + "] null buffer i: " + i);
             }
         }
 
         /*
-        ** Release the metering pointer
+         ** Release the metering pointer
          */
-        clientReadBufferMgr.unregister(bufferMeteringPointer);
+        clientWriteBufferMgr.unregister(bufferMeteringPointer);
         bufferMeteringPointer = null;
     }
 
@@ -147,13 +148,13 @@ public class BufferReadMetering implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("BufferReadMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("BufferWriteMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("BufferReadMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("BufferWriteMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("BufferReadMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("BufferWriteMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
@@ -174,7 +175,7 @@ public class BufferReadMetering implements Operation {
     }
 
     /*
-    ** Display what this has created and any BufferManager(s) and BufferManagerPointer(s)
+     ** Display what this has created and any BufferManager(s) and BufferManagerPointer(s)
      */
     public void dumpCreatedOperations(final int level) {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
@@ -186,4 +187,5 @@ public class BufferReadMetering implements Operation {
         }
         LOG.info("");
     }
+
 }

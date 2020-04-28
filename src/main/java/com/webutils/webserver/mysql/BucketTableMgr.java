@@ -188,7 +188,7 @@ public class BucketTableMgr extends ObjectStorageDb {
         return getUID(getBucketUIDStr);
     }
 
-    private int getBucketId(final String bucketName, final String namespaceUID) {
+    public int getBucketId(final String bucketName, final String namespaceUID) {
         String getBucketIdStr = GET_BUCKET_ID_1 + bucketName + GET_BUCKET_ID_2 + namespaceUID + GET_BUCKET_ID_3;
 
         return getId(getBucketIdStr);

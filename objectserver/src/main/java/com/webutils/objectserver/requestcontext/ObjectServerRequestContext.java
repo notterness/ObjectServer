@@ -1,5 +1,6 @@
 package com.webutils.objectserver.requestcontext;
 
+import com.webutils.objectserver.operations.SetupObjectGet;
 import com.webutils.objectserver.operations.SetupObjectServerPost;
 import com.webutils.objectserver.operations.SetupObjectPut;
 import com.webutils.webserver.buffermgr.BufferManager;
@@ -140,7 +141,7 @@ public class ObjectServerRequestContext extends RequestContext {
         requestHandlerOperations.put(metering.getOperationType(), metering);
         BufferManagerPointer meteringPtr = metering.initialize();
 
-        readBuffer = new ReadBuffer(this, meteringPtr, clientConnection);
+        ReadBuffer readBuffer = new ReadBuffer(this, meteringPtr, clientConnection);
         requestHandlerOperations.put(readBuffer.getOperationType(), readBuffer);
         readPointer = readBuffer.initialize();
 
@@ -181,10 +182,13 @@ public class ObjectServerRequestContext extends RequestContext {
          **   by the DetermineRequestType operation to setup and run the appropriate handlers.
          */
         SetupObjectPut v2PutHandler = new SetupObjectPut(this, memoryManager, metering, determineRequestType);
-        this.supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, v2PutHandler);
+        supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, v2PutHandler);
 
         SetupObjectServerPost postHandler = new SetupObjectServerPost(this, metering, determineRequestType);
-        this.supportedHttpRequests.put(HttpMethodEnum.POST_METHOD, postHandler);
+        supportedHttpRequests.put(HttpMethodEnum.POST_METHOD, postHandler);
+
+        SetupObjectGet getHandler = new SetupObjectGet(this, memoryManager, determineRequestType);
+        supportedHttpRequests.put(HttpMethodEnum.GET_METHOD, getHandler);
 
         /*
          ** Setup the specific part for parsing the buffers as an HTTP Request.
@@ -260,7 +264,6 @@ public class ObjectServerRequestContext extends RequestContext {
          ** Clear out the references to the Operations
          */
         metering = null;
-        readBuffer = null;
         sendFinalStatus = null;
         closeRequest = null;
         determineRequestType = null;

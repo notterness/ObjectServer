@@ -1,28 +1,30 @@
-package com.webutils.webserver.operations;
+package com.webutils.storageserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.memory.MemoryManager;
+import com.webutils.webserver.operations.Operation;
+import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
-public class BufferReadMetering implements Operation {
+public class BufferObjectGetMetering implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(BufferReadMetering.class);
+    private static final Logger LOG = LoggerFactory.getLogger(BufferObjectGetMetering.class);
 
     /*
-    ** A unique identifier for this Operation so it can be tracked.
+     ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.METER_READ_BUFFERS;
+    public final OperationTypeEnum operationType = OperationTypeEnum.BUFFER_OBJECT_GET_METERING;
 
     private final RequestContext requestContext;
 
     private final MemoryManager memoryManager;
 
-    private final BufferManager clientReadBufferMgr;
+    private final BufferManager chunkGetBufferMgr;
     private BufferManagerPointer bufferMeteringPointer;
 
     /*
@@ -33,39 +35,25 @@ public class BufferReadMetering implements Operation {
     private boolean onExecutionQueue;
 
     /*
-    ** The BufferReadMetering operation will populate the clientReadBufferManager with the
-    **   ByteBuffer(s) and will set the allocation BufferManagerPointer back to the start of
-    **   the BufferManager (meaning that no ByteBuffer(s) are available to read data into).
+     ** The BufferReadMetering operation will populate the clientReadBufferManager with the
+     **   ByteBuffer(s) and will set the allocation BufferManagerPointer back to the start of
+     **   the BufferManager (meaning that no ByteBuffer(s) are available to read data into).
      */
-    public BufferReadMetering(final RequestContext requestContext, final MemoryManager memoryManager) {
+    public BufferObjectGetMetering(final RequestContext requestContext, final MemoryManager memoryManager) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
 
-        this.clientReadBufferMgr = requestContext.getClientReadBufferManager();
+        /*
+        ** Since this is data leaving the Storage Server, it uses the write buffer manager
+         */
+        this.chunkGetBufferMgr = requestContext.getClientWriteBufferManager();
 
         /*
          ** This starts out not being on any queue
          */
         onExecutionQueue = false;
 
-        /*
-         ** Obtain the pointer used to meter out buffers to the read operation
-         */
-        bufferMeteringPointer = this.clientReadBufferMgr.register(this);
-
-        /*
-         ** If this is the WebServerFlavor.INTEGRATION_TESTS then allocate a limited
-         **   number of ByteBuffer(s) up front and then reset the metering
-         **   pointer.
-         */
-        int buffersToAllocate = memoryManager.getBufferManagerRingSize();
-
-        for (int i = 0; i < buffersToAllocate; i++) {
-            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientReadBufferMgr, operationType);
-
-            clientReadBufferMgr.offer(bufferMeteringPointer, buffer);
-        }
     }
 
     public OperationTypeEnum getOperationType() {
@@ -77,10 +65,28 @@ public class BufferReadMetering implements Operation {
     public BufferManagerPointer initialize() {
 
         /*
+         ** Obtain the pointer used to meter out buffers for the GET operation
+         */
+        bufferMeteringPointer = chunkGetBufferMgr.register(this);
+
+        /*
+         ** If this is the WebServerFlavor.INTEGRATION_TESTS then allocate a limited
+         **   number of ByteBuffer(s) up front and then reset the metering
+         **   pointer.
+         */
+        int buffersToAllocate = memoryManager.getBufferManagerRingSize();
+
+        for (int i = 0; i < buffersToAllocate; i++) {
+            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, chunkGetBufferMgr, operationType);
+
+            chunkGetBufferMgr.offer(bufferMeteringPointer, buffer);
+        }
+
+        /*
          ** Set the pointer back to the beginning of the BufferManager. The BufferReadMetering operation will need
          **   to have its execute() method called to dole out ByteBuffer(s) to perform read operations into.
          */
-        clientReadBufferMgr.reset(bufferMeteringPointer);
+        chunkGetBufferMgr.reset(bufferMeteringPointer);
 
         return bufferMeteringPointer;
     }
@@ -94,16 +100,16 @@ public class BufferReadMetering implements Operation {
     }
 
     /*
-    ** For the metering, this is where the pointer for buffers that are available are metered out according to
-    **   customer requirements and limitations. The buffers can be preallocated on the BufferManager and only
-    **   passed out as needed or as requested.
+     ** For the metering, this is where the pointer for buffers that are available are metered out according to
+     **   customer requirements and limitations. The buffers can be preallocated on the BufferManager and only
+     **   passed out as needed or as requested.
      */
     public void execute() {
 
         /*
-        ** Add a free buffer to the ClientReadBufferManager
+         ** Add a free buffer to the ClientReadBufferManager
          */
-        clientReadBufferMgr.updateProducerWritePointer(bufferMeteringPointer);
+        chunkGetBufferMgr.updateProducerWritePointer(bufferMeteringPointer);
     }
 
     public void complete() {
@@ -111,23 +117,23 @@ public class BufferReadMetering implements Operation {
         /*
          ** Set the pointer back to the beginning of the BufferManager to release the allocated memory
          */
-        clientReadBufferMgr.reset(bufferMeteringPointer);
+        chunkGetBufferMgr.reset(bufferMeteringPointer);
 
         int buffersAllocated = memoryManager.getBufferManagerRingSize();
 
         for (int i = 0; i < buffersAllocated; i++) {
-            ByteBuffer buffer = clientReadBufferMgr.getAndRemove(bufferMeteringPointer);
+            ByteBuffer buffer = chunkGetBufferMgr.getAndRemove(bufferMeteringPointer);
             if (buffer != null) {
-                memoryManager.poolMemFree(buffer, clientReadBufferMgr);
+                memoryManager.poolMemFree(buffer, chunkGetBufferMgr);
             } else {
-                LOG.warn("BufferReadMetering[" + requestContext.getRequestId() + "] null buffer i: " + i);
+                LOG.warn("BufferObjectGetMetering[" + requestContext.getRequestId() + "] null buffer i: " + i);
             }
         }
 
         /*
-        ** Release the metering pointer
+         ** Release the metering pointer
          */
-        clientReadBufferMgr.unregister(bufferMeteringPointer);
+        chunkGetBufferMgr.unregister(bufferMeteringPointer);
         bufferMeteringPointer = null;
     }
 
@@ -147,13 +153,13 @@ public class BufferReadMetering implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("BufferReadMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("BufferObjectGetMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("BufferReadMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("BufferObjectGetMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("BufferReadMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("BufferObjectGetMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
@@ -174,7 +180,7 @@ public class BufferReadMetering implements Operation {
     }
 
     /*
-    ** Display what this has created and any BufferManager(s) and BufferManagerPointer(s)
+     ** Display what this has created and any BufferManager(s) and BufferManagerPointer(s)
      */
     public void dumpCreatedOperations(final int level) {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
@@ -186,4 +192,5 @@ public class BufferReadMetering implements Operation {
         }
         LOG.info("");
     }
+
 }

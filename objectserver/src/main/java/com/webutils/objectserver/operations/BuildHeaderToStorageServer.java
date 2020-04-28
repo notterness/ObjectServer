@@ -2,6 +2,7 @@ package com.webutils.objectserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.http.HttpMethodEnum;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
@@ -21,7 +22,7 @@ public class BuildHeaderToStorageServer implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.BUILD_HEADER_TO_STORGE_SERVER;
+    public final OperationTypeEnum operationType = OperationTypeEnum.BUILD_HEADER_TO_STORAGE_SERVER;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -114,21 +115,39 @@ public class BuildHeaderToStorageServer implements Operation {
             if (msgHdr != null) {
 
                 String tmp;
-                tmp = buildRequestString();
 
-                str_to_bb(msgHdr, tmp);
+                switch (requestContext.getHttpInfo().getMethod()) {
+                    case PUT_METHOD:
+                        tmp = buildPutRequestString();
+                        break;
 
-                /*
-                 ** Need to flip() the buffer so that the limit() is set to the end of where the HTTP Request is
-                 **   and the position() reset to 0.
-                 */
-                msgHdr.flip();
+                    case GET_METHOD:
+                        tmp = buildGetRequestString();
+                        break;
 
-                /*
-                 ** Data is now present in the ByteBuffer so the writePointer needs to be updated. This will trigger
-                 **   the event() to be sent to the WriteHeaderToStorageServer operation.
-                 */
-                storageServerBufferManager.updateProducerWritePointer(writePointer);
+                    default:
+                        LOG.error("BuildHeaderToStorageServer() unsupported method: " + requestContext.getHttpInfo().getMethod());
+                        tmp = null;
+                        break;
+                }
+
+                if (tmp != null) {
+                    str_to_bb(msgHdr, tmp);
+
+                    /*
+                     ** Need to flip() the buffer so that the limit() is set to the end of where the HTTP Request is
+                     **   and the position() reset to 0.
+                     */
+                    msgHdr.flip();
+
+                    /*
+                     ** Data is now present in the ByteBuffer so the writePointer needs to be updated. This will trigger
+                     **   the event() to be sent to the WriteHeaderToStorageServer operation.
+                     */
+                    storageServerBufferManager.updateProducerWritePointer(writePointer);
+                } else {
+
+                }
             } else {
                 LOG.info("BuildHeaderToStorageServer no buffers");
             }
@@ -202,7 +221,7 @@ public class BuildHeaderToStorageServer implements Operation {
         LOG.info("");
     }
 
-    private String buildRequestString() {
+    private String buildPutRequestString() {
         String opcClientRequestId = requestContext.getHttpInfo().getOpcClientRequestId();
 
         String commonPieces;
@@ -241,6 +260,46 @@ public class BuildHeaderToStorageServer implements Operation {
             return "PUT /o/test HTTP/1.1\n" + commonPieces;
         } else {
             return "PUT /t/" + errorInjectString + " HTTP/1.1\n" + commonPieces;
+        }
+    }
+
+    private String buildGetRequestString() {
+        String opcClientRequestId = requestContext.getHttpInfo().getOpcClientRequestId();
+
+        String commonPieces;
+        if (opcClientRequestId != null) {
+            commonPieces = "Host: ObjectServerRead\n" +
+                    "Content-Type: application/json\n" +
+                    "Connection: keep-alive\n" +
+                    "Accept: */*\n" +
+                    "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
+                    "Accept-Language: en-us\n" +
+                    "Accept-Encoding: gzip, deflate\n" +
+                    "opc-client-request-id: " + opcClientRequestId + "\n" +
+                    "opc-request-id: " + requestContext.getRequestId() + "\n" +
+                    "object-chunk-number: " + storageServer.getChunkNumber() + "\n" +
+                    "chunk-lba: " + storageServer.getOffset() + "\n" +
+                    "chunk-location: " + storageServer.getChunkLocation() + "\n" +
+                    "Content-Length: 0\n\n";
+        } else {
+            commonPieces = "Host: ObjectServerRead\n" +
+                    "Content-Type: application/json\n" +
+                    "Connection: keep-alive\n" +
+                    "Accept: */*\n" +
+                    "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
+                    "Accept-Language: en-us\n" +
+                    "Accept-Encoding: gzip, deflate\n" +
+                    "opc-request-id: " + requestContext.getRequestId() + "\n" +
+                    "object-chunk-number: " + storageServer.getChunkNumber() + "\n" +
+                    "chunk-lba: " + storageServer.getOffset() + "\n" +
+                    "chunk-location: " + storageServer.getChunkLocation() + "\n" +
+                    "Content-Length: 0\n\n";
+        }
+
+        if (errorInjectString == null) {
+            return "GET /o/test HTTP/1.1\n" + commonPieces;
+        } else {
+            return "GET /t/" + errorInjectString + " HTTP/1.1\n" + commonPieces;
         }
     }
 

@@ -1,5 +1,6 @@
 package com.webutils.storageserver.requestcontext;
 
+import com.webutils.storageserver.operations.SetupStorageServerGet;
 import com.webutils.storageserver.operations.SetupStorageServerPut;
 import com.webutils.storageserver.operations.StorageServerDetermineRequestType;
 import com.webutils.storageserver.operations.StorageServerSendFinalStatus;
@@ -24,8 +25,6 @@ public class StorageServerRequestContext extends RequestContext {
     /*
      **
      */
-    private CloseOutRequest closeRequest;
-
     private StorageServerDetermineRequestType determineRequestType;
 
 
@@ -33,7 +32,6 @@ public class StorageServerRequestContext extends RequestContext {
                                 final DbSetup dbSetup, final int threadId, final WebServerFlavor flavor) {
 
         super(memoryManager, threadThisRunsOn, dbSetup, threadId, flavor);
-
     }
 
     /*
@@ -73,18 +71,14 @@ public class StorageServerRequestContext extends RequestContext {
         requestHandlerOperations.put(metering.getOperationType(), metering);
         BufferManagerPointer meteringPtr = metering.initialize();
 
-        readBuffer = new ReadBuffer(this, meteringPtr, clientConnection);
+        ReadBuffer readBuffer = new ReadBuffer(this, meteringPtr, clientConnection);
         requestHandlerOperations.put(readBuffer.getOperationType(), readBuffer);
         readPointer = readBuffer.initialize();
 
         /*
-         ** The StorageServerSendFinalStatus, WriteToClient and CloseOutRequest are tied together. The StorageServerSendFinalStatus is
-         **   responsible for building the final HTTP status response to the client. The WriteToClient is
-         **   responsible for kicking the IoInterface to write the data out and waiting for the data
-         **   pointer to be updated to know that the data has been written. Once the data has been all written, then
-         **   the WriteToClient operation will event() the CloseOutRequest operation.
-         **   The CloseOutRequest is executed after the write to the client completes and it is responsible for
-         **   cleaning up the Request and its associated connection.
+         ** The StorageServerSendFinalStatus, WriteToClient and CloseOutRequest are tied together. The
+         **   StorageServerSendFinalStatus is responsible for building the final HTTP status response to the client in
+         **   the case of errors and for the PUT operation.
          **   Once the cleanup is performed, then the RequestContext is added back to the free list so
          **   it can be used to handle a new request.
          */
@@ -92,7 +86,7 @@ public class StorageServerRequestContext extends RequestContext {
         requestHandlerOperations.put(sendFinalStatus.getOperationType(), sendFinalStatus);
         BufferManagerPointer clientWritePtr = sendFinalStatus.initialize();
 
-        closeRequest = new CloseOutRequest(this);
+        CloseOutRequest closeRequest = new CloseOutRequest(this);
         requestHandlerOperations.put(closeRequest.getOperationType(), closeRequest);
         closeRequest.initialize();
 
@@ -115,6 +109,9 @@ public class StorageServerRequestContext extends RequestContext {
          */
         SetupStorageServerPut storageServerPutHandler = new SetupStorageServerPut(this, metering, determineRequestType);
         this.supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, storageServerPutHandler);
+
+        SetupStorageServerGet storageServerGetHandler = new SetupStorageServerGet(this, memoryManager, determineRequestType);
+        this.supportedHttpRequests.put(HttpMethodEnum.GET_METHOD, storageServerGetHandler);
 
         /*
          ** Setup the specific part for parsing the buffers as an HTTP Request.
@@ -191,12 +188,12 @@ public class StorageServerRequestContext extends RequestContext {
          */
         requestHandlerOperations.remove(OperationTypeEnum.SETUP_STORAGE_SERVER_PUT);
 
+        requestHandlerOperations.clear();
+
         /*
          ** Clear out the references to the Operations
          */
         metering = null;
-        readBuffer = null;
-        closeRequest = null;
         determineRequestType = null;
 
         /*

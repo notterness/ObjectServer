@@ -125,6 +125,7 @@ public class SendFinalStatus implements Operation {
                             break;
 
                         default:
+                            resultBuilder.buildResponse(respBuffer, resultCode, true, true);
                             break;
                     }
                 } else {
@@ -147,6 +148,7 @@ public class SendFinalStatus implements Operation {
                  */
                 clientWriteBufferMgr.offer(writeStatusBufferPtr, respBuffer);
 
+                requestContext.setAllClientBuffersFilled();
             } else {
                 /*
                  ** If we are out of memory to allocate a response, might as well close out the connection and give up.

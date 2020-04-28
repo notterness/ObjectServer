@@ -4,7 +4,10 @@ import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.IoInterface;
-import com.webutils.webserver.operations.*;
+import com.webutils.webserver.operations.ConnectComplete;
+import com.webutils.webserver.operations.Operation;
+import com.webutils.webserver.operations.OperationTypeEnum;
+import com.webutils.webserver.operations.StorageServerResponseBufferMetering;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
@@ -13,11 +16,12 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.*;
 
-public class SetupChunkWrite implements Operation {
+public class SetupChunkRead implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(SetupChunkWrite.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SetupChunkRead.class);
 
     private final int STORAGE_SERVER_HEADER_BUFFER_COUNT = 4;
+    private final int STORAGE_SERVER_GET_BUFFER_COUNT = 10;
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
@@ -30,9 +34,9 @@ public class SetupChunkWrite implements Operation {
     private final RequestContext requestContext;
 
     /*
-    ** The StorageServerIdentifer is this chunk write's unique identifier. It is determined through the VON
-    **   checker. It identifies the chunk and the Storage Server through the  IP address, Port number and
-    **   the chunk number.
+     ** The StorageServerIdentifer is this chunk write's unique identifier. It is determined through the VON
+     **   checker. It identifies the chunk and the Storage Server through the  IP address, Port number and
+     **   the chunk number.
      */
     private final ServerIdentifier storageServer;
 
@@ -47,18 +51,14 @@ public class SetupChunkWrite implements Operation {
      */
     private boolean onExecutionQueue;
 
-    private final BufferManagerPointer encryptedBufferPtr;
-
-    private final int chunkBytesToEncrypt;
-
     /*
-    ** An integer that identifies which of the Storage Server writers this is
+     ** An integer that identifies which of the Storage Server writers this is
      */
     private final int writerNumber;
 
     /*
-    ** The following is set to null in normal cases or it is set to a value when the ChunkWrite want the target Storage
-    **   Server to respond with an error or to close the TCP connection at certain times during the transfer.
+     ** The following is set to null in normal cases or it is set to a value when the ChunkWrite want the target Storage
+     **   Server to respond with an error or to close the TCP connection at certain times during the transfer.
      */
     private final String errorInjectString;
 
@@ -75,7 +75,7 @@ public class SetupChunkWrite implements Operation {
     private final Map<OperationTypeEnum, Operation> requestHandlerOperations;
 
     /*
-    ** The following is the connection used to communicate with the Storage Server
+     ** The following is the connection used to communicate with the Storage Server
      */
     private IoInterface storageServerConnection;
 
@@ -84,20 +84,17 @@ public class SetupChunkWrite implements Operation {
     private boolean serverConnectionClosedDueToError;
 
     /*
-    ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
-    **   up the calls to obtain the VON information and the meta-data write to the database.
+     ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
+     **   up the calls to obtain the VON information and the meta-data write to the database.
      */
-    public SetupChunkWrite(final RequestContext requestContext, final ServerIdentifier server,
-                           final MemoryManager memoryManager, final BufferManagerPointer encryptedBufferPtr,
-                           final int chunkBytesToEncrypt, final Operation completeCb, final int writer,
+    public SetupChunkRead(final RequestContext requestContext, final ServerIdentifier server,
+                           final MemoryManager memoryManager, final Operation completeCb, final int writer,
                            final String errorInjectString) {
 
-        this.operationType = OperationTypeEnum.fromInt(OperationTypeEnum.SETUP_CHUNK_WRITE_0.toInt() + writer);
+        this.operationType = OperationTypeEnum.fromInt(OperationTypeEnum.SETUP_CHUNK_READ_0.toInt() + writer);
         this.requestContext = requestContext;
         this.storageServer = server;
         this.memoryManager = memoryManager;
-        this.encryptedBufferPtr = encryptedBufferPtr;
-        this.chunkBytesToEncrypt = chunkBytesToEncrypt;
 
         this.completeCallback = completeCb;
 
@@ -119,7 +116,7 @@ public class SetupChunkWrite implements Operation {
 
         serverConnectionClosedDueToError = false;
 
-        LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] addr: " +
+        LOG.info("SetupChunkRead[" + requestContext.getRequestId() + "] addr: " +
                 storageServer.getServerIpAddress().toString() + " port: " +
                 storageServer.getServerTcpPort() + " chunkNumber: " + storageServer.getChunkNumber() + " offset: " +
                 storageServer.getOffset() + " writer: " + this.writerNumber);
@@ -189,14 +186,14 @@ public class SetupChunkWrite implements Operation {
              **   Storage Server is successful.
              */
             responseBufferMetering = new StorageServerResponseBufferMetering(requestContext, memoryManager, storageServerResponseBufferManager,
-                    STORAGE_SERVER_HEADER_BUFFER_COUNT);
+                    STORAGE_SERVER_GET_BUFFER_COUNT);
             respBufferPointer = responseBufferMetering.initialize();
 
             /*
              ** For each Storage Server, setup a HandleChunkWriteConnError operation that is used when there
              **   is an error communicating with the StorageServer.
              */
-            HandleChunkWriteConnError errorHandler = new HandleChunkWriteConnError(requestContext, this, storageServer);
+            HandleChunkReadConnError errorHandler = new HandleChunkReadConnError(requestContext, this, storageServer);
             requestHandlerOperations.put(errorHandler.getOperationType(), errorHandler);
 
             /*
@@ -205,17 +202,7 @@ public class SetupChunkWrite implements Operation {
             storageServerConnection = requestContext.allocateConnection(this);
 
             /*
-             ** For each Storage Server, create a WriteToStorageServer operation that will handle writing the data out
-             **   to the Storage Server. The WriteToStorageServer will use the bookmark created in the
-             **   EncryptBuffer operation to know where to start writing the data.
-             */
-            WriteToStorageServer storageServerWriter = new WriteToStorageServer(requestContext, storageServerConnection,
-                    encryptedBufferPtr, chunkBytesToEncrypt, storageServer);
-            requestHandlerOperations.put(storageServerWriter.getOperationType(), storageServerWriter);
-            storageServerWriter.initialize();
-
-            /*
-             ** The PUT Header must be written to the Storage Server prior to sending the data
+             ** The GET Header must be written to the Storage Server so that the data can be read in
              */
             BuildHeaderToStorageServer headerBuilder = new BuildHeaderToStorageServer(requestContext, storageServerBufferManager,
                     addBufferPointer, storageServer, errorInjectString);
@@ -223,7 +210,7 @@ public class SetupChunkWrite implements Operation {
             BufferManagerPointer writePointer = headerBuilder.initialize();
 
             List<Operation> ops = new LinkedList<>();
-            ops.add(storageServerWriter);
+            ops.add(this);
             WriteHeaderToStorageServer headerWriter = new WriteHeaderToStorageServer(requestContext, storageServerConnection, ops,
                     storageServerBufferManager, writePointer, storageServer);
             requestHandlerOperations.put(headerWriter.getOperationType(), headerWriter);
@@ -259,12 +246,12 @@ public class SetupChunkWrite implements Operation {
             if (!storageServerConnection.startInitiator(storageServer.getServerIpAddress(),
                     storageServer.getServerTcpPort(), connectComplete, errorHandler)) {
                 /*
-                ** This means the SocketChannel could not be opened. Need to indicate a problem
-                **   with the Storage Server and clean up this SetupChunkWrite.
-                ** Set the error to indicate that the Storage Server cannot be reached.
-                **
-                ** TODO: Add a test case for the startInitiator failing to make sure the cleanup
-                **   is properly handled.
+                 ** This means the SocketChannel could not be opened. Need to indicate a problem
+                 **   with the Storage Server and clean up this SetupChunkWrite.
+                 ** Set the error to indicate that the Storage Server cannot be reached.
+                 **
+                 ** TODO: Add a test case for the startInitiator failing to make sure the cleanup
+                 **   is properly handled.
                  */
                 complete();
             }
@@ -275,20 +262,20 @@ public class SetupChunkWrite implements Operation {
     }
 
     /*
-    ** This is called to cleanup the SetupChunkWrite and will tear down all the BufferManagerPointers and
-    **   release the ByteBuffer(s) associated with the storageServerBufferManager.
+     ** This is called to cleanup the SetupChunkWrite and will tear down all the BufferManagerPointers and
+     **   release the ByteBuffer(s) associated with the storageServerBufferManager.
      */
     public void complete() {
 
-        LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] complete addr: " +
+        LOG.info("SetupChunkRead[" + requestContext.getRequestId() + "] complete addr: " +
                 storageServer.getServerIpAddress().toString() + " port: " +
                 storageServer.getServerTcpPort() + " chunkNumber: " + storageServer.getChunkNumber() +
                 " writer: " + writerNumber);
 
         /*
-        ** The following must be called in order to make sure that the BufferManagerPointer
-        **   dependencies are torn down in the correct order. The pointers in
-        **   headerWriter are dependent upon the pointers in headerBuilder
+         ** The following must be called in order to make sure that the BufferManagerPointer
+         **   dependencies are torn down in the correct order. The pointers in
+         **   headerWriter are dependent upon the pointers in headerBuilder
          */
         Operation headerWriter = requestHandlerOperations.get(OperationTypeEnum.WRITE_HEADER_TO_STORAGE_SERVER);
         headerWriter.complete();
@@ -312,14 +299,14 @@ public class SetupChunkWrite implements Operation {
         requestHandlerOperations.remove(OperationTypeEnum.READ_STORAGE_SERVER_RESPONSE_BUFFER);
 
         /*
-        ** Remove the HandleChunkWriteConnError operation from the createdOperations list. This never has its
-        **   complete() method called, so it is best just to remove it.
+         ** Remove the HandleChunkReadConnError operation from the createdOperations list. This never has its
+         **   complete() method called, so it is best just to remove it.
          */
-        requestHandlerOperations.remove(OperationTypeEnum.HANDLE_CHUNK_WRITE_CONN_ERROR);
+        requestHandlerOperations.remove(OperationTypeEnum.HANDLE_CHUNK_READ_CONN_ERROR);
 
         /*
-        ** Call the complete() methods for all of the Operations created to handle the chunk write that did not have
-        **   ordering dependencies due to the registrations with the BufferManager(s).
+         ** Call the complete() methods for all of the Operations created to handle the chunk write that did not have
+         **   ordering dependencies due to the registrations with the BufferManager(s).
          */
         Collection<Operation> createdOperations = requestHandlerOperations.values();
         for (Operation createdOperation : createdOperations) {
@@ -338,8 +325,8 @@ public class SetupChunkWrite implements Operation {
         storageServerConnection = null;
 
         /*
-        ** Return the allocated buffers that were used to send the HTTP Request and the
-        **   Shaw-256 value to the Storage Server
+         ** Return the allocated buffers that were used to send the HTTP Request and the
+         **   Shaw-256 value to the Storage Server
          */
         storageServerBufferManager.reset(addBufferPointer);
         for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
@@ -347,7 +334,7 @@ public class SetupChunkWrite implements Operation {
             if (buffer != null) {
                 memoryManager.poolMemFree(buffer, storageServerBufferManager);
             } else {
-                LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] null buffer addBufferPointer index: " + addBufferPointer.getCurrIndex());
+                LOG.info("SetupChunkRead[" + requestContext.getRequestId() + "] null buffer addBufferPointer index: " + addBufferPointer.getCurrIndex());
             }
         }
 
@@ -365,19 +352,16 @@ public class SetupChunkWrite implements Operation {
         storageServerResponseBufferManager = null;
 
         /*
-        ** Clear the HTTP Request sent for this Storage Server
+         ** Clear the HTTP Request sent for this Storage Server
          */
         requestContext.removeHttpRequestSent(storageServer);
 
         /*
-        ** Now call back the Operation that will handle the completion
+         ** Now call back the Operation that will handle the completion
          */
         completeCallback.event();
     }
 
-    /*
-    ** This must be on a per connection basis
-     */
     public void connectionCloseDueToError() {
         serverConnectionClosedDueToError = true;
     }
@@ -398,19 +382,19 @@ public class SetupChunkWrite implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("SetupChunkRead[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("SetupChunkWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SetupChunkRead[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("SetupChunkWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("SetupChunkRead[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("SetupChunkWrite[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SetupChunkRead[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -425,7 +409,7 @@ public class SetupChunkWrite implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("SetupChunkWrite[" + requestContext.getRequestId() +
+        LOG.warn("SetupChunkRead[" + requestContext.getRequestId() +
                 "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }

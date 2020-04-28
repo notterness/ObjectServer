@@ -9,7 +9,8 @@ public enum HttpMethodEnum {
 
     INVALID_METHOD(0, "INVALID METHOD"),
     PUT_METHOD(1, "PUT"),
-    POST_METHOD(2, "POST");
+    POST_METHOD(2, "POST"),
+    GET_METHOD(3, "GET");
 
     private final int value;
     private final String methodName;

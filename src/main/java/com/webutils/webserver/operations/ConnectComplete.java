@@ -24,7 +24,7 @@ public class ConnectComplete implements Operation {
     /*
     ** The following is the operation to run (if any) when the ConnectComplete is executed.
      */
-    private List<Operation> operationsToRun;
+    private final List<Operation> operationsToRun;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that

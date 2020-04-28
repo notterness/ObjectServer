@@ -8,7 +8,11 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.sql.*;
+import java.util.List;
+import java.util.StringTokenizer;
 
 public class StorageChunkTableMgr extends ObjectStorageDb {
 
@@ -36,6 +40,8 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
     private final static String GET_CHUNK_MD5_DIGEST = "SELECT chunkMd5 FROM storageChunk WHERE chunkId = ";
 
     private final static String DELETE_CHUNK = "DELETE FROM storageChunk WHERE chunkId = ";
+
+    private final static String GET_CHUNKS_FOR_OBJECT = "SELECT * FROM storageChunk WHERE ownerObject = ";
 
 
     private final HttpRequestInfo objectCreateInfo;
@@ -224,7 +230,7 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
                         int count = 0;
                         while (rs.next()) {
                             /*
-                             ** The rs.getString(1) is the BINARY() representation of the Md5 Digest.
+                             ** The rs.getBytes(1) is the BINARY() representation of the Md5 Digest.
                              */
                             md5Bytes = rs.getBytes(1);
 
@@ -274,6 +280,109 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
 
         return md5DigestStr;
     }
+
+    /*
+     ** The chunkMd5 is stored in the storageChunk table after the chunk is successfully written to the Storage Server.
+     **   The chunkMd5 is then used when reading data back from the Storage Server to insure that it matches what was
+     **   sent to the Storage Server earlier.
+     */
+    public void getChunks(final int objectId, final List<ServerIdentifier> chunkList) {
+        String chunkQuery = GET_CHUNKS_FOR_OBJECT + objectId;
+        String md5DigestStr = null;
+
+        Connection conn = getObjectStorageDbConn();
+
+        if (conn != null) {
+            Statement stmt = null;
+            ResultSet rs = null;
+
+            try {
+                stmt = conn.createStatement();
+                if (stmt.execute(chunkQuery)) {
+                    rs = stmt.getResultSet();
+                }
+            } catch (SQLException sqlEx) {
+                LOG.error("getSingleStr() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("Bad SQL command: " + chunkQuery);
+                System.out.println("SQLException: " + sqlEx.getMessage());
+            } finally {
+                if (rs != null) {
+                    try {
+                        while (rs.next()) {
+                            int dataWritten = rs.getInt(9);
+                            if (dataWritten == 1) {
+                                int chunkId = rs.getInt(1);
+                                int offset = rs.getInt(2);
+                                int length = rs.getInt(3);
+                                int chunkIndex = rs.getInt(4);
+                                String serverName = rs.getString(5);
+                                String ip = rs.getString(6);
+                                int port = rs.getInt(7);
+                                String location = rs.getString(8);
+
+                                /*
+                                ** Pull out the name of the server
+                                 */
+                                String hostName = null;
+                                StringTokenizer stk = new StringTokenizer(ip, " /");
+                                if (stk.hasMoreTokens()) {
+                                    hostName = stk.nextToken();
+                                    LOG.info("hostName: " + hostName);
+                                }
+
+                                /*
+                                 ** The rs.getBytes(10) is the BINARY() representation of the Md5 Digest.
+                                 */
+                                byte[] md5Bytes = rs.getBytes(10);
+                                md5DigestStr = BaseEncoding.base64().encode(md5Bytes);
+
+                                if (hostName != null) {
+                                    try {
+                                        InetAddress addr = InetAddress.getByName(hostName);
+
+
+                                        ServerIdentifier server = new ServerIdentifier(serverName, addr, port, chunkIndex);
+                                        server.setOffset(offset);
+                                        server.setLength(length);
+                                        server.setChunkLocation(location);
+                                        server.setMd5Digest(md5DigestStr);
+                                        server.setChunkId(chunkId);
+
+                                        chunkList.add(server);
+                                    } catch (UnknownHostException ex) {
+                                        LOG.error("Bad IP: " + ip + " " + ex.getMessage());
+                                    }
+                                }
+                            }
+                        }
+                    } catch (SQLException sqlEx) {
+                        System.out.println("getSingleStr() SQL conn rs.next() SQLException: " + sqlEx.getMessage());
+                    }
+
+                    try {
+                        rs.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("getSingleStr() SQL conn rs.close() SQLException: " + sqlEx.getMessage());
+                    }
+                }
+
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("getSingleStr() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQLException: " + sqlEx.getMessage());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to read the database tables.
+             */
+            closeObjectStorageDbConn(conn);
+        }
+    }
+
 
     public void deleteChunk(final int chunkId) {
         executeSqlStatement(DELETE_CHUNK + chunkId);

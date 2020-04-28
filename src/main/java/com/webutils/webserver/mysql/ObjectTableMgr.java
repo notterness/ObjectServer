@@ -1,6 +1,6 @@
 package com.webutils.webserver.mysql;
 
-import com.webutils.webserver.common.Md5ResultHandler;
+import com.google.common.io.BaseEncoding;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.http.StorageTierEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -18,11 +19,11 @@ public class ObjectTableMgr extends ObjectStorageDb {
     private static final Logger LOG = LoggerFactory.getLogger(BucketTableMgr.class);
 
     private final static String CREATE_OBJECT_1 = "INSERT INTO object VALUES ( NULL, '";       // objectName
-    private final static String CREATE_OBJECT_2 = "', '";                                      // opcClientRequestId not null
-    private final static String CREATE_OBJECT_2_NULL = "', NULL, ";                            // contentLength when opcClientRequestId is null
+    private final static String CREATE_OBJECT_2 = "', '0', '";                                 // versionId, opcClientRequestId not null
+    private final static String CREATE_OBJECT_2_NULL = "', '0', NULL, ";                            // versionId, contentLength when opcClientRequestId is null
     private final static String CREATE_OBJECT_3 = "', ";                                       // contentLength
     private final static String CREATE_OBJECT_4 = " , ";                                       // storageType
-    private final static String CREATE_OBJECT_5 = " , CURRENT_TIMESTAMP(), NULL, 0, CURRENT_TIMESTAMP(), UUID_TO_BIN(UUID()),";
+    private final static String CREATE_OBJECT_5 = " , NULL, CURRENT_TIMESTAMP(), NULL, 0, CURRENT_TIMESTAMP(), UUID_TO_BIN(UUID()), 0, ";
     private final static String CREATE_OBJECT_6 = " (SELECT bucketId FROM bucket WHERE bucketUID = UUID_TO_BIN('";
     private final static String CREATE_OBJECT_7 = "') ), (SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN('";
     private final static String CREATE_OBJECT_8 = "') ) )";
@@ -46,7 +47,10 @@ public class ObjectTableMgr extends ObjectStorageDb {
     private final static String SUCCESS_HEADER_3 = "opc-content-md5: ";
     private final static String SUCCESS_HEADER_4 = "ETag: ";
     private final static String SUCCESS_HEADER_5 = "last-modified: ";
+    private final static String SUCCESS_HEADER_6 = "version-id: ";
 
+    private final static String RETRIEVE_OBJECT_QUERY_1 = "SELECT * FROM object WHERE objectName = '";
+    private final static String RETRIEVE_OBJECT_QUERY_2 = "' AND bucketId = ";
 
     /*
      ** The opcRequestId is used to track the request through the system. It is uniquely generated for each
@@ -64,6 +68,11 @@ public class ObjectTableMgr extends ObjectStorageDb {
         this.opcRequestId = requestContext.getRequestId();
     }
 
+    /*
+    ** This is used to create an object representation in the ObjectStorageDb database.
+    **
+    ** TODO: Handle the "if-match", "if-none-match" headers. Create a function to generate a new object versionId.
+     */
     public int createObjectEntry(final HttpRequestInfo objectCreateInfo, final String tenancyUID) {
         int status = HttpStatus.OK_200;
 
@@ -180,6 +189,146 @@ public class ObjectTableMgr extends ObjectStorageDb {
     }
 
     /*
+    ** This retrieves the information needed to access an object. It is used for the GET operations.
+    **
+    ** TODO: The ObjectInfo should be a list and then this command can support the following
+    **   GetObject
+    **   HeadObject
+    **   ListObjects
+    **   ListObjectVersions
+     */
+    public int retrieveObjectInfo(final HttpRequestInfo objectHttpInfo, final ObjectInfo info, final String tenancyUID) {
+        String objectName = info.getObjectName();
+        String bucketName = info.getBucketName();
+        String namespace = info.getNamespace();
+
+        if ((objectName == null) || (bucketName == null) || (namespace == null)) {
+            String failureMessage = "\"GET Object missing required attributes\",\n  \"objectName\": \"" + objectName +
+                    "\",\n  \"bucketName\": \"" + bucketName + "\",\n \"namespaceName\": \"" + namespace + "\"";
+            LOG.warn(failureMessage);
+            objectHttpInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
+            return HttpStatus.BAD_REQUEST_400;
+        }
+
+        /*
+         ** First need to validate that the namespace exists
+         */
+        NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
+        String namespaceUID = namespaceMgr.getNamespaceUID(namespace, tenancyUID);
+        if (namespaceUID == null) {
+            LOG.warn("Unable to create Object: " + objectName + " - invalid namespace: " + namespace);
+
+            String failureMessage = "\"Namespace not found\",\n  \"namespaceName\": \"" + namespace + "\"";
+            objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+            return HttpStatus.PRECONDITION_FAILED_412;
+        }
+
+        /*
+         ** Now make sure the Bucket that this Object is stored within actually exists.
+         */
+        BucketTableMgr bucketMgr = new BucketTableMgr(flavor, opcRequestId, objectHttpInfo);
+        int bucketId = bucketMgr.getBucketId(bucketName, namespaceUID);
+        if (bucketId == -1) {
+            LOG.warn("Unable to create Object: " + objectName + " - invalid bucket: " + bucketName);
+
+            String failureMessage = "\"Bucket not found\",\n  \"bucketName\": \"" + bucketName + "\"";
+            objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+            return HttpStatus.PRECONDITION_FAILED_412;
+        }
+
+        LOG.info("retrieveObjectInfo() objectName: " + objectName + " bucketName: " + bucketName);
+
+        int objectId = -1;
+
+        Connection conn = getObjectStorageDbConn();
+        if (conn != null) {
+            String queryStr = RETRIEVE_OBJECT_QUERY_1 + objectName + RETRIEVE_OBJECT_QUERY_2 + bucketId;
+            Statement stmt = null;
+            ResultSet rs = null;
+
+            try {
+                stmt = conn.createStatement();
+                if (stmt.execute(queryStr)) {
+                    rs = stmt.getResultSet();
+                }
+            } catch (SQLException sqlEx) {
+                LOG.error("getUID() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("Bad SQL command: " + queryStr);
+                System.out.println("SQLException: " + sqlEx.getMessage());
+            } finally {
+                if (rs != null) {
+                    try {
+                        int count = 0;
+                        while (rs.next()) {
+                            /*
+                             */
+                            if (count == 0) {
+                                /*
+                                ** objectId is the unique identifier for the object
+                                 */
+                                objectId = rs.getInt(1);
+
+                                /*
+                                ** Field 5 (INT) - contentLength
+                                 */
+                                info.setContentLength(rs.getInt(5));
+
+                                /*
+                                ** Field 6 (BINARY(16)) - contentMd5
+                                 */
+                                byte[] md5Bytes = rs.getBytes(6);
+                                if (md5Bytes != null) {
+                                    String md5DigestStr = BaseEncoding.base64().encode(md5Bytes);
+                                    info.setContentMd5(md5DigestStr);
+                                }
+                            }
+
+                            count++;
+                        }
+
+                        if (count != 1) {
+                            LOG.warn("retrieveObjectInfo() too many responses count: " + count);
+                            LOG.warn(queryStr);
+                        }
+                    } catch (SQLException sqlEx) {
+                        System.out.println("retrieveObjectInfo() SQL conn rs.next() SQLException: " + sqlEx.getMessage());
+                    }
+
+                    try {
+                        rs.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("retrieveObjectInfo() SQL conn rs.close() SQLException: " + sqlEx.getMessage());
+                    }
+                }
+
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("retrieveObjectInfo() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQLException: " + sqlEx.getMessage());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database tables.
+             */
+            closeObjectStorageDbConn(conn);
+        }
+
+        /*
+        ** Now use the objectId to get a list of chunks for this object
+         */
+        if (objectId != -1) {
+            StorageChunkTableMgr chunkTableMgr = new StorageChunkTableMgr(flavor, objectHttpInfo);
+            chunkTableMgr.getChunks(objectId, info.getChunkList());
+        }
+
+        return HttpStatus.OK_200;
+    }
+
+    /*
      ** This obtains the Bucket UID. It will return NULL if the Bucket does not exist.
      **
      ** NOTE: A Bucket is unique to a region and a namespace (there is one Object Storage namespace per region per
@@ -221,6 +370,9 @@ public class ObjectTableMgr extends ObjectStorageDb {
      **   opc-client-request-id - If the client passed one in, otherwise it it will not be returned
      **   opc-request-id
      **   opc-content-md5
+     **   ETag - Unique ID for this version of the object
+     **   last-modified -
+     **   version-id - There can be multiple versions of the same object present
      */
     private String buildSuccessHeader(final HttpRequestInfo objectCreateInfo, final String objectName, final String bucketUID) {
         String successHeader;

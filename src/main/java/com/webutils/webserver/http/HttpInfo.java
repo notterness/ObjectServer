@@ -43,6 +43,17 @@ public class HttpInfo {
     private static final String CHUNK_LOCATION = "chunk-location";
 
     /*
+    ** The following headers are used for the GET and PUT commands
+    **   "if-match" - Contains the ETag for the object
+    **    "if-none-match" - May only contain '*'. This requires that the "if-match" header is provided. For GET
+    **       operations, this means that upload any that do not match the ETag. For PUT operations, it means to fail
+    **       the upload if there already exists an object with the ETag.
+     */
+    private static final String IF_MATCH = "if-match";
+    private static final String IF_NONE_MATCH = "if-none-match";
+
+
+    /*
      ** The connection this HTTP information is associated with
      */
     protected final RequestContext requestContext;
@@ -77,7 +88,7 @@ public class HttpInfo {
      ** For Storage Servers, there is also a Test Type that is used to force certain behaviors in the
      **   Storage Server's responses (i.e. disconnect the connection).
      */
-    private final Map<String, String> putObjectInfoMap;
+    private final Map<String, String> objectUriInfoMap;
 
     /*
      ** The following variables are set when httpHeaderError() is called to indicate there was a problem with the
@@ -85,9 +96,6 @@ public class HttpInfo {
      */
     private int parseFailureCode;
     private String parseFailureReason;
-
-    private String successResponseHeaders;
-    private String successResponseContent;
 
     /*
      ** The httpHost and httpPort can be used to validate the connection and to limit traffic
@@ -131,8 +139,9 @@ public class HttpInfo {
         httpMethodMap = new HashMap<>(2);
         httpMethodMap.put(HttpMethodEnum.PUT_METHOD, "PUT");
         httpMethodMap.put(HttpMethodEnum.POST_METHOD, "POST");
+        httpMethodMap.put(HttpMethodEnum.GET_METHOD, "GET");
 
-        putObjectInfoMap = new HashMap<>(3);
+        objectUriInfoMap = new HashMap<>(3);
 
         /*
         ** Information about the header - httpVersion is not used, but useful for debug
@@ -145,12 +154,6 @@ public class HttpInfo {
          */
         parseFailureCode = HttpStatus.OK_200;
         parseFailureReason = null;
-
-        /*
-         ** These are used to return specific information when requests are successful.
-         */
-        successResponseContent = null;
-        successResponseHeaders = null;
 
         /*
          ** The httpHost and httpPort can be used to validate the connection and to limit traffic
@@ -179,7 +182,7 @@ public class HttpInfo {
          ** Clear out the object information map
          */
         for (String uriField : uriFields) {
-            putObjectInfoMap.remove(uriField);
+            objectUriInfoMap.remove(uriField);
         }
 
         /*
@@ -187,12 +190,6 @@ public class HttpInfo {
          */
         parseFailureCode = HttpStatus.OK_200;
         parseFailureReason = null;
-
-        /*
-         ** These are used to return specific information when requests are successful.
-         */
-        successResponseContent = null;
-        successResponseHeaders = null;
 
         /*
         ** The httpHost and httpPort can be used to validate the connection and to limit traffic
@@ -266,7 +263,7 @@ public class HttpInfo {
                 //LOG.warn("setHttpUri() [" + requestContext.getRequestId() + "] name: " + uriField + " is null");
             }
 
-            putObjectInfoMap.put(uriField, tmp);
+            objectUriInfoMap.put(uriField, tmp);
         }
     }
 
@@ -454,21 +451,21 @@ public class HttpInfo {
      ** Return the "namespace" (NAMESPACE_NAME) that was parsed from the HTTP uri
      */
     public String getNamespace() {
-        return putObjectInfoMap.get(NAMESPACE_NAME);
+        return objectUriInfoMap.get(NAMESPACE_NAME);
     }
 
     /*
      ** Return the "bucket" (BUCKET_NAME) that was parsed from the HTTP uri
      */
     public String getBucket() {
-        return putObjectInfoMap.get(BUCKET_NAME);
+        return objectUriInfoMap.get(BUCKET_NAME);
     }
 
     /*
      ** Return the "object" (OBJECT_NAME) that was parsed from the HTTP uri
      */
     public String getObject() {
-        return putObjectInfoMap.get(OBJECT_NAME);
+        return objectUriInfoMap.get(OBJECT_NAME);
     }
 
     /*
@@ -479,7 +476,7 @@ public class HttpInfo {
      ** The current valid TestTypes are:
      **    - DisconnectAfterHeader
      */
-    public String getTestType() { return putObjectInfoMap.get(TEST_TYPE); }
+    public String getTestType() { return objectUriInfoMap.get(TEST_TYPE); }
 
 
     /*
@@ -502,7 +499,17 @@ public class HttpInfo {
      ** This field is provided by the client to allow them to track requests.
      */
     public String getOpcClientRequestId() {
-        return putObjectInfoMap.get(CLIENT_OPC_REQUEST_ID);
+        List<String> opcRequestId = headers.get(CLIENT_OPC_REQUEST_ID);
+
+        if (opcRequestId == null) {
+            return null;
+        }
+
+        if (opcRequestId.size() != 1) {
+            return null;
+        }
+
+        return opcRequestId.get(0);
     }
 
     /*
@@ -622,6 +629,41 @@ public class HttpInfo {
             location = null;
         }
         return location;
+    }
+
+    /*
+    ** Return the "if-match" UID - This must be a valid UID (meaning it is 36 characters)
+     */
+    public String getIfMatchUid() {
+        String uid = getHeaderString(IF_MATCH);
+        if ((uid != null) && (uid.length() != 36)) {
+            uid = null;
+        }
+
+        return uid;
+    }
+
+    /*
+     ** Returns if the "if-none-match" is set - If this is present, the only valid value is '*'.
+     **
+     ** NOTE: This will also return false if the "if-match" is not set with a valid UID
+     */
+    public boolean getIfNoneMatch() {
+        boolean ifNoneMatchSet;
+
+        /*
+        ** Make sure that there is a valid "if-match" header
+         */
+        String uid = getIfMatchUid();
+
+        String ifNoneMatch = getHeaderString(IF_NONE_MATCH);
+        if ((uid != null) && (ifNoneMatch != null) && ifNoneMatch.equals("*")) {
+            ifNoneMatchSet = true;
+        } else {
+            ifNoneMatchSet = false;
+        }
+
+        return ifNoneMatchSet;
     }
 
     /*

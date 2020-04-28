@@ -46,7 +46,7 @@ public class ObjectPut_P2 implements Operation {
      **
      ** The following is a map of all of the created Operations to handle this request.
      */
-    private final Map<OperationTypeEnum, Operation> v2PutHandlerOperations;
+    private final Map<OperationTypeEnum, Operation> putHandlerOps;
 
     private boolean setupMethodDone;
 
@@ -70,7 +70,7 @@ public class ObjectPut_P2 implements Operation {
         /*
          ** Setup the list of Operations currently used to handle the V2 PUT
          */
-        v2PutHandlerOperations = new HashMap<>();
+        putHandlerOps = new HashMap<>();
 
         /*
          ** This starts out not being on any queue
@@ -111,7 +111,7 @@ public class ObjectPut_P2 implements Operation {
 
             EncryptBuffer encryptBuffer = new EncryptBuffer(requestContext, memoryManager, readBufferPointer,
                     this);
-            v2PutHandlerOperations.put(encryptBuffer.getOperationType(), encryptBuffer);
+            putHandlerOps.put(encryptBuffer.getOperationType(), encryptBuffer);
             encryptBuffer.initialize();
 
             /*
@@ -125,7 +125,7 @@ public class ObjectPut_P2 implements Operation {
 
             ComputeMd5Digest computeMd5Digest = new ComputeMd5Digest(requestContext, callbackList, readBufferPointer,
                     updater, requestContext.getRequestContentLength());
-            v2PutHandlerOperations.put(computeMd5Digest.getOperationType(), computeMd5Digest);
+            putHandlerOps.put(computeMd5Digest.getOperationType(), computeMd5Digest);
             computeMd5Digest.initialize();
 
             /*
@@ -167,7 +167,7 @@ public class ObjectPut_P2 implements Operation {
 
             completeCallback.event();
 
-            v2PutHandlerOperations.clear();
+            putHandlerOps.clear();
 
             LOG.info("ObjectPut_P2[" + requestContext.getRequestId() + "] completed");
         } else {
@@ -232,7 +232,7 @@ public class ObjectPut_P2 implements Operation {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
         LOG.info("   -> Operations Created By " + operationType);
 
-        Collection<Operation> createdOperations = v2PutHandlerOperations.values();
+        Collection<Operation> createdOperations = putHandlerOps.values();
         for (Operation createdOperation : createdOperations) {
             createdOperation.dumpCreatedOperations(level + 1);
         }

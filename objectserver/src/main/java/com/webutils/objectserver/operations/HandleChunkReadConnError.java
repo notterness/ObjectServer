@@ -9,18 +9,14 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/*
-** This handles errors when communicating over a SocketChannel to a particular Storage Server.
- */
+public class HandleChunkReadConnError implements Operation {
 
-public class HandleStorageServerError implements Operation {
-
-    private static final Logger LOG = LoggerFactory.getLogger(HandleStorageServerError.class);
+    private static final Logger LOG = LoggerFactory.getLogger(HandleChunkWriteConnError.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.HANDLE_STORAGE_SERVER_ERROR;
+    public final OperationTypeEnum operationType = OperationTypeEnum.HANDLE_CHUNK_WRITE_CONN_ERROR;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -28,14 +24,14 @@ public class HandleStorageServerError implements Operation {
     private final RequestContext requestContext;
 
     /*
-    ** The owner of this operation is the SetupChunkWrite class. It is responsible for cleaning up when the wrtie to
-    **   the Storage Server has either completed successfully or failed.
+     ** The owner of this operation is the SetupChunkWrite class. It is responsible for cleaning up when the wrtie to
+     **   the Storage Server has either completed successfully or failed.
      */
-    private final SetupChunkWrite chunkWrite;
+    private final SetupChunkRead chunkRead;
 
     /*
-    ** The ServerIdentifier is required to set the failure status for the Storage Server that is either inaccessible or
-    **   dropped the connection during the transfer.
+     ** The ServerIdentifier is required to set the failure status for the Storage Server that is either inaccessible or
+     **   dropped the connection during the transfer.
      */
     private final ServerIdentifier serverIdentifier;
 
@@ -48,9 +44,9 @@ public class HandleStorageServerError implements Operation {
     private boolean onExecutionQueue;
     private long nextExecuteTime;
 
-    HandleStorageServerError(final RequestContext requestContext, final SetupChunkWrite chunkWrite, final ServerIdentifier serverIdentifier) {
+    HandleChunkReadConnError(final RequestContext requestContext, final SetupChunkRead chunkRead, final ServerIdentifier serverIdentifier) {
         this.requestContext = requestContext;
-        this.chunkWrite = chunkWrite;
+        this.chunkRead = chunkRead;
         this.serverIdentifier = serverIdentifier;
     }
 
@@ -70,14 +66,14 @@ public class HandleStorageServerError implements Operation {
 
     public void event() {
         /*
-        ** Set the failure status inline, rather than waiting for the execute to come around
+         ** Set the failure status inline, rather than waiting for the execute to come around
          */
         requestContext.setStorageServerResponse(serverIdentifier, HttpStatus.SERVICE_UNAVAILABLE_503);
 
         /*
-        ** Tell the SetupChunkWrite that the NioSocket connection has already been closed.
+         ** Tell the SetupChunkRead that the NioSocket connection has already been closed.
          */
-        chunkWrite.connectionCloseDueToError();
+        chunkRead.connectionCloseDueToError();
 
         /*
          ** Add this to the execute queue if it is not already on it.
@@ -90,17 +86,17 @@ public class HandleStorageServerError implements Operation {
      */
     public void execute() {
         /*
-        ** For now the SetupChunkWrite operation will take care of cleaning everything up.
+         ** For now the SetupChunkRead operation will take care of cleaning everything up.
          */
-        chunkWrite.event();
+        chunkRead.event();
     }
 
     /*
-     ** This will never be called for HandleStorageServerError. This class is really just a placeholder to cleanup
+     ** This will never be called for HandleChunkWriteConnError. This class is really just a placeholder to cleanup
      **   the operations that were setup to perform the Chunk Write to the Storage Server.
      */
     public void complete() {
-        LOG.error("HandleStorageServerError complete() should never be here!");
+        LOG.error("HandleChunkReadConnError complete() should never be here!");
     }
 
     /*
@@ -134,7 +130,7 @@ public class HandleStorageServerError implements Operation {
 
             onExecutionQueue = false;
         } else {
-            LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
+            LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
@@ -174,4 +170,5 @@ public class HandleStorageServerError implements Operation {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
         LOG.info("");
     }
+
 }

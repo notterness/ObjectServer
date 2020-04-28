@@ -17,6 +17,10 @@ public class ServerIdentifier {
     private int chunkOffset;
     private int chunkLength;
 
+    private String chunkLocation;
+
+    private String md5Digest;
+
     /*
     ** This is used to handle the HTTP Information that is parsed out of the response from the request to this
     **   server.
@@ -70,7 +74,16 @@ public class ServerIdentifier {
 
     public int getChunkId() { return chunkUniqueId; }
 
+    public void setChunkLocation(final String location) { chunkLocation = location; }
     public String getChunkLocation() { return "test"; }
+
+    public void setMd5Digest(final String digest) {
+        md5Digest = digest;
+    }
+
+    public String getMd5Digest() {
+        return md5Digest;
+    }
 
     /*
     **

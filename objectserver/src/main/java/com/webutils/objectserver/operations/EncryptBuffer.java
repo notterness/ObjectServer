@@ -293,20 +293,17 @@ public class EncryptBuffer implements Operation {
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
         //LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("EncryptBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("EncryptBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("EncryptBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not on a queue");
+            LOG.warn("EncryptBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("EncryptBuffer[" + requestContext.getRequestId() + "] markAddToQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("EncryptBuffer[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }

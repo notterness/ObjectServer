@@ -263,6 +263,11 @@ public class TestMain {
         ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverIpAddr, serverTcpPort, threadCount);
         checkMd5.execute();
 
+        waitForTestsToComplete(threadCount);
+
+        ClientTest getObjectSimple = new ClientTest_GetObjectSimple("GetObjectSimple", testClient, serverIpAddr, serverTcpPort, threadCount);
+        getObjectSimple.execute();
+
         /*
         ** Uncomment out the following two lines to let TestMain just act as a server. It can then be used to
         **   handle requests from an external tool or command line. It will remain stuck in the
