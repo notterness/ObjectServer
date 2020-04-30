@@ -248,7 +248,7 @@ public class SetupChunkWrite implements Operation {
             BufferManagerPointer httpBufferPointer = readRespBuffer.initialize();
 
             StorageServerResponseHandler httpRespHandler = new StorageServerResponseHandler(requestContext,
-                    storageServerResponseBufferManager, httpBufferPointer, this,
+                    storageServerResponseBufferManager, httpBufferPointer, responseBufferMetering,this,
                     storageServer);
             requestHandlerOperations.put(httpRespHandler.getOperationType(), httpRespHandler);
             httpRespHandler.initialize();

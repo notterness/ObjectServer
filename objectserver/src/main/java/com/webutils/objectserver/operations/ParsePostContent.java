@@ -165,7 +165,7 @@ public class ParsePostContent implements Operation {
                 LOG.warn("ParsePostContent[" + requestContext.getRequestId() + "] parsing error, no allocation");
 
                 /*
-                 ** Event the DetermineRequestType. This will check if there is an error and then perform the
+                 ** Event the DetermineRequest. This will check if there is an error and then perform the
                  **   setup for the send of the final status to the client.
                  */
                 completeCallback.event();

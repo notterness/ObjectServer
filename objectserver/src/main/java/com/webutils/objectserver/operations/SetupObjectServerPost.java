@@ -55,7 +55,7 @@ public class SetupObjectServerPost implements Operation {
     /*
      ** This is used to setup the initial Operation dependencies required to handle the V2 PUT
      **   request.
-     ** The completeCb will call the DetermineRequestType operation's event() method when the V2 PUT completes.
+     ** The completeCb will call the DetermineRequest operation's event() method when the V2 PUT completes.
      **   Currently, the V2 PUT is marked complete when all the V2 PUT object data is written to the Storage Servers
      **   and the Md5 Digest is computed and the comparison against the expected result done.
      */

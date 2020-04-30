@@ -18,7 +18,7 @@ import java.nio.ByteBuffer;
 **   operation.
 **
 ** When the HTTP Parser has completed its parsing of the HTTP Request, it will fire an event to the
-**   the DetermineRequestType operation.
+**   the DetermineRequest operation.
  */
 
 public class ParseHttpRequest implements Operation {
@@ -173,7 +173,7 @@ public class ParseHttpRequest implements Operation {
                 requestContext.cleanupHttpParser();
 
                 /*
-                ** Event the DetermineRequestType. This will check if there is an error and then perform the
+                ** Event the DetermineRequest. This will check if there is an error and then perform the
                 **   setup for the send of the final status to the client.
                  */
                 determineRequestType.event();
@@ -193,7 +193,7 @@ public class ParseHttpRequest implements Operation {
             requestContext.cleanupHttpParser();
 
             /*
-            ** Send the event to the DetermineRequestType operation to allow this request to proceed.
+            ** Send the event to the DetermineRequest operation to allow this request to proceed.
              */
             determineRequestType.event();
         }

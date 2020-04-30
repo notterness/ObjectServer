@@ -497,7 +497,7 @@ public abstract class RequestContext {
     **     public static final int CHUNK_SIZE_IN_BYTES = MemoryManager.XFER_BUFFER_SIZE * CHUNK_BUFFER_COUNT;
      */
     public static int getChunkSize() {
-        return CHUNK_SIZE_IN_BYTES;
+        return TEST_CHUNK_SIZE_IN_BYTES;
     }
 
 

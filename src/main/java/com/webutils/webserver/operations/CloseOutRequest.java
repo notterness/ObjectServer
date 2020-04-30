@@ -13,7 +13,7 @@ public class CloseOutRequest implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.REQUEST_FINISHED;
+    public final OperationTypeEnum operationType = OperationTypeEnum.CLOSE_OUT_REQUEST;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.

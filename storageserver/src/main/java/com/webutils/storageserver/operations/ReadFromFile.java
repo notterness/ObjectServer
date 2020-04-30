@@ -212,7 +212,7 @@ public class ReadFromFile implements Operation {
                 /*
                 ** Done with this buffer, now check if there is data to read from the file
                  */
-                chunkGetBufferMgr.updateConsumerReadPointer(chunkFileReadPtr);
+                chunkGetBufferMgr.updateProducerWritePointer(chunkFileReadPtr);
 
                 if (goodResponseSent) {
                     bufferMetering.event();
@@ -256,7 +256,7 @@ public class ReadFromFile implements Operation {
                             /*
                             ** Done with this buffer, see if there is more data to read from the file
                              */
-                            chunkGetBufferMgr.updateConsumerReadPointer(chunkFileReadPtr);
+                            chunkGetBufferMgr.updateProducerWritePointer(chunkFileReadPtr);
                             savedSrcPosition = 0;
 
                             LOG.info("ReadFromFile[" + requestContext.getRequestId() + "] read buffer full bytesRead: " +
@@ -386,17 +386,17 @@ public class ReadFromFile implements Operation {
 
         if (opcClientRequestId != null) {
             responseHeader = SUCCESS_HEADER_1 + opcClientRequestId + "\n" + SUCCESS_HEADER_2 + opcRequestId + "\n" +
-                    SUCCESS_HEADER_3 + bytesToReadFromFile + "\n";
+                    SUCCESS_HEADER_3 + bytesToReadFromFile + "\n\n";
         } else {
-            responseHeader = SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + bytesToReadFromFile + "\n";
+            responseHeader = SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + bytesToReadFromFile + "\n\n";
         }
 
         String tmpStr;
         if ((readFileChannel != null) && (bytesToReadFromFile != 0)) {
-            tmpStr = "HTTP/1.1 200" +
+            tmpStr = "HTTP/1.1 200 OK" +
                     "\r\n" +
-                    responseHeader +
-                    "Content-Length: 0\n\n";
+                    "Content-Type: text/html\n" +
+                    responseHeader;
         } else {
             goodResponseSent = false;
             String content = "\r\n" +

@@ -19,12 +19,14 @@ public class ObjectServerContextPool extends RequestContextPool {
     private final DbSetup dbSetup;
 
     private final ChunkMemoryPool chunkMemPool;
+    private boolean chunkMemoryReleased;
 
     public ObjectServerContextPool(final WebServerFlavor flavor, final MemoryManager memoryManager, final DbSetup dbSetup) {
         super(flavor, memoryManager, "ObjectServer");
         this.dbSetup = dbSetup;
 
         this.chunkMemPool = new ChunkMemoryPool(memoryManager, RequestContext.getChunkBufferCount());
+        chunkMemoryReleased = false;
     }
 
     /*
@@ -90,4 +92,9 @@ public class ObjectServerContextPool extends RequestContextPool {
         return requestContext;
     }
 
+    public void stop(final int threadId) {
+        chunkMemPool.reset();
+
+        super.stop(threadId);
+    }
 }

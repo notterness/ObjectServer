@@ -13,7 +13,7 @@ import java.util.*;
 /*
 ** This is a base class to contain information that is either parsed from the HTTP Request or the HTTP Response
  */
-public class HttpInfo {
+abstract public class HttpInfo {
 
     private static final Logger LOG = LoggerFactory.getLogger(HttpInfo.class);
 
@@ -22,7 +22,7 @@ public class HttpInfo {
      */
     private static final String MD5_OVERRIDE_HEADER = "md5-override";
 
-    private static final String CONTENT_LENGTH = "Content-Length";
+    protected static final String CONTENT_LENGTH = "Content-Length";
     private static final String CONTENT_MD5 = "Content-MD5";
 
     private static final String CONTENT_SHA256 = "x-content-sha256";
@@ -67,7 +67,7 @@ public class HttpInfo {
     /*
      ** Method is one of POST, PUT, DELETE, GET, HEAD, TRACE
      */
-    private HttpMethodEnum httpMethod;
+    protected HttpMethodEnum httpMethod;
 
     /*
      ** Used to keep track of the Header fields in a generic manner
@@ -76,7 +76,7 @@ public class HttpInfo {
 
     private final String[] uriFields = {OBJECT_NAME, BUCKET_NAME, NAMESPACE_NAME, TEST_TYPE};
 
-    private boolean headerComplete;
+    protected boolean headerComplete;
 
     /*
      ** This is used to determine the method as an enum from the method string
@@ -94,8 +94,8 @@ public class HttpInfo {
      ** The following variables are set when httpHeaderError() is called to indicate there was a problem with the
      **   buffer passed into the HTTP Parser. These are used to build the response to the request.
      */
-    private int parseFailureCode;
-    private String parseFailureReason;
+    protected int parseFailureCode;
+    protected String parseFailureReason;
 
     /*
      ** The httpHost and httpPort can be used to validate the connection and to limit traffic
@@ -106,8 +106,8 @@ public class HttpInfo {
     /*
     ** The following are used to determine how much data follows the headers.
      */
-    private boolean contentLengthReceived;
-    private int contentLength;
+    protected boolean contentLengthReceived;
+    protected int contentLength;
 
     public HttpInfo(final RequestContext requestContext) {
 
@@ -270,8 +270,6 @@ public class HttpInfo {
     /*
      ** This function will pull out the various information in the HTTP header fields and add it to
      ** the associated string within this object.
-     ** TODO: Is it more efficient to add the values to a particular named field or to keep them in the
-     **   _fields + _hdr + _val fields?
      */
     public void addHeaderValue(HttpField field) {
         final String fieldName = field.getName().toLowerCase();
@@ -290,90 +288,13 @@ public class HttpInfo {
             LOG.info("addHeaderValue() httpHost: " + httpHost + " httpPort: " + httpPort);
             return;
         }
-
-        /*
-         ** The CONTENT_LENGTH is parsed out early as it is used in the headers parsed callback to
-         **   setup the next stage of the connection pipeline.
-         */
-        int result = fieldName.indexOf(CONTENT_LENGTH.toLowerCase());
-        if (result != -1) {
-            try {
-                contentLengthReceived = true;
-                contentLength = Integer.parseInt(field.getValue());
-
-                /*
-                 ** TODO: Are there specific limits for the Content-Length that need to be validated
-                 */
-                if (contentLength < 0) {
-                    contentLength = 0;
-                    parseFailureCode = HttpStatus.RANGE_NOT_SATISFIABLE_416;
-                    parseFailureReason = HttpStatus.getMessage(parseFailureCode);
-
-                    LOG.info("Invalid Content-Length [" + requestContext.getRequestId() +  "] code: " +
-                            parseFailureCode + " reason: " + parseFailureReason);
-
-                    requestContext.setHttpParsingError();
-                }
-            } catch (NumberFormatException num_ex) {
-                LOG.info("addHeaderValue() " + field.getName() + " " + num_ex.getMessage());
-            }
-        }
     }
 
     /*
      ** When the headers have been completely read in, that will be the time to insure it is valid
      **   and the field values make sense.
      */
-    public void setHeaderComplete() {
-        /*
-         ** Verify that the "Content-Length" header has been received. It is an error if it has not
-         */
-        if (!contentLengthReceived) {
-            parseFailureCode = HttpStatus.NO_CONTENT_204;
-            parseFailureReason = HttpStatus.getMessage(parseFailureCode);
-
-            LOG.warn("No Content-Length [" + requestContext.getRequestId() +  "] code: " +
-                    parseFailureCode + " reason: " + parseFailureReason);
-
-            requestContext.setHttpParsingError();
-        }
-
-        /*
-         ** Verify that there was an Object Name, Bucket Name and Tenant Name passed in
-         */
-        if (httpMethod == HttpMethodEnum.PUT_METHOD) {
-            /* FIXME: Need to handle the differences between Object Server and Storage Server PUT required fields
-            if ((getObject() == null) || (getBucket() == null) || (getNamespace() == null)) {
-                parseFailureCode = HttpStatus.BAD_REQUEST_400;
-                parseFailureReason = HttpStatus.getMessage(parseFailureCode);
-
-                LOG.warn("PUT Missing Critical Object Info [" + requestContext.getRequestId() + "] code: " +
-                        parseFailureCode + " reason: " + parseFailureReason);
-
-                requestContext.setHttpParsingError();
-            }
-
-             */
-        } else if (httpMethod == HttpMethodEnum.POST_METHOD) {
-            if ((getBucket().compareTo("") != 0) || (getNamespace() == null)) {
-
-                LOG.error("bucket: " + getBucket() + " compare: " + getBucket().compareTo(""));
-                LOG.error("namespace: " + getNamespace());
-
-                parseFailureCode = HttpStatus.BAD_REQUEST_400;
-                parseFailureReason = HttpStatus.getMessage(parseFailureCode);
-
-                LOG.warn("POST Missing Critical Object Info [" + requestContext.getRequestId() + "] code: " +
-                        parseFailureCode + " reason: " + parseFailureReason);
-
-                requestContext.setHttpParsingError();
-            }
-        }
-
-        headerComplete = true;
-
-        requestContext.httpHeaderParseComplete(contentLength);
-    }
+    abstract public void setHeaderComplete();
 
     public void setContentComplete() {
     }
@@ -410,8 +331,6 @@ public class HttpInfo {
         parseFailureReason = (reason == null) ? String.valueOf(failure.getCode()) : reason;
         LOG.info("badMessage() [" + requestContext.getRequestId() + "] code: " +
                 parseFailureCode + " reason: " + parseFailureReason);
-
-        requestContext.setHttpParsingError();
     }
 
     public void setParseFailureCode(final int errorCode) {

@@ -39,8 +39,10 @@ public class TestEncryptBuffer {
         requestContext.reset();
 
         contextPool.releaseContext(requestContext);
-        contextPool.stop(THREAD_BASE_ID);
 
-        memoryManager.verifyMemoryPools("TestEncryptBuffer-" + THREAD_BASE_ID);
+        /*
+        ** NOTE: Memory pools are verified when the stop() call is made to the RequestContextPool object.
+         */
+        contextPool.stop(THREAD_BASE_ID);
     }
 }

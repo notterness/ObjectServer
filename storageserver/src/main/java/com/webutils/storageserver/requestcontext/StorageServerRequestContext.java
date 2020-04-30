@@ -2,8 +2,7 @@ package com.webutils.storageserver.requestcontext;
 
 import com.webutils.storageserver.operations.SetupStorageServerGet;
 import com.webutils.storageserver.operations.SetupStorageServerPut;
-import com.webutils.storageserver.operations.StorageServerDetermineRequestType;
-import com.webutils.storageserver.operations.StorageServerSendFinalStatus;
+import com.webutils.storageserver.operations.StorageServerDetermineRequest;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpMethodEnum;
@@ -25,7 +24,7 @@ public class StorageServerRequestContext extends RequestContext {
     /*
      **
      */
-    private StorageServerDetermineRequestType determineRequestType;
+    private StorageServerDetermineRequest determineRequestType;
 
 
     StorageServerRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn,
@@ -48,13 +47,13 @@ public class StorageServerRequestContext extends RequestContext {
      **          When the data is read into the ByteBuffer by the IoInterface, it will call the ParseHttpRequest event()
      **          method. This will queue up the operation to be handled by the EventPollThread. When the execute()
      **          method for ParseHttpRequest is called, it will parse all available buffers until it receives the all
-     **          headers parsed callback from the HTTP Parser. Once all of the headers are parsed, the DetermineRequestType
+     **          headers parsed callback from the HTTP Parser. Once all of the headers are parsed, the DetermineRequest
      **          operations event() method is called.
      **          The final step for the ParseHttpRequest is to cleanup so that the RequestContext can be used again
      **          to parse another HTTP Request. This will allow a pool of RequestContext to be allocated at start of
      **          day and then reused.
      **
-     ** The DetermineRequestType uses the information that the HTTP Parser generated and stored in the CasperHttpInfo
+     ** The DetermineRequest uses the information that the HTTP Parser generated and stored in the CasperHttpInfo
      **   object to setup the correct method handler. There is a list of supported HTTP Methods kept in the
      **   Map<Operation> supportedHttpRequests. Once the correct request is determined, the Operation to setup the
      **   method handler is run.
@@ -75,37 +74,22 @@ public class StorageServerRequestContext extends RequestContext {
         requestHandlerOperations.put(readBuffer.getOperationType(), readBuffer);
         readPointer = readBuffer.initialize();
 
-        /*
-         ** The StorageServerSendFinalStatus, WriteToClient and CloseOutRequest are tied together. The
-         **   StorageServerSendFinalStatus is responsible for building the final HTTP status response to the client in
-         **   the case of errors and for the PUT operation.
-         **   Once the cleanup is performed, then the RequestContext is added back to the free list so
-         **   it can be used to handle a new request.
-         */
-        StorageServerSendFinalStatus sendFinalStatus = new StorageServerSendFinalStatus(this, memoryManager);
-        requestHandlerOperations.put(sendFinalStatus.getOperationType(), sendFinalStatus);
-        BufferManagerPointer clientWritePtr = sendFinalStatus.initialize();
-
-        CloseOutRequest closeRequest = new CloseOutRequest(this);
-        requestHandlerOperations.put(closeRequest.getOperationType(), closeRequest);
-        closeRequest.initialize();
-
-        WriteToClient writeToClient = new WriteToClient(this, clientConnection,
-                closeRequest, clientWritePtr);
-        requestHandlerOperations.put(writeToClient.getOperationType(), writeToClient);
-        writeToClient.initialize();
 
         /*
-         ** The DetermineRequestType operation is run after the HTTP Request has been parsed and the method
+         ** The DetermineRequest operation is run after the HTTP Request has been parsed and the method
          **   handler determined via the setHttpMethodAndVersion() method in the CasperHttpInfo object.
          */
-        determineRequestType = new StorageServerDetermineRequestType(this, supportedHttpRequests);
+        determineRequestType = new StorageServerDetermineRequest(this, supportedHttpRequests, memoryManager,
+                clientConnection);
         requestHandlerOperations.put(determineRequestType.getOperationType(), determineRequestType);
         determineRequestType.initialize();
 
         /*
          ** The HTTP Request methods that are supported are added to the supportedHttpRequests Map<> and are used
-         **   by the DetermineRequestType operation to setup and run the appropriate handlers.
+         **   by the DetermineRequest operation to setup and run the appropriate handlers.
+         **
+         ** NOTE: Although it seems weird to add the supported HTTP requests after the creating of the
+         **   StorageServerDetermineRequest, the method handler have a dependency upon the determine request.
          */
         SetupStorageServerPut storageServerPutHandler = new SetupStorageServerPut(this, metering, determineRequestType);
         this.supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, storageServerPutHandler);
@@ -130,8 +114,8 @@ public class StorageServerRequestContext extends RequestContext {
 
         /*
          ** The two Operations that run to perform the HTTP Parsing are ParseHttpRequest and
-         **   DetermineRequestType. When the entire HTTP Request has been parsed, the ParseHttpRequest
-         **   will event the DetermineRequestType operation to determine what operation sequence
+         **   DetermineRequest. When the entire HTTP Request has been parsed, the ParseHttpRequest
+         **   will event the DetermineRequest operation to determine what operation sequence
          **   to setup.
          */
         ParseHttpRequest httpParser = new ParseHttpRequest(this, readPointer, metering, determineRequestType);
@@ -161,52 +145,50 @@ public class StorageServerRequestContext extends RequestContext {
      */
     public void cleanupServerRequest() {
 
-        clientConnection.closeConnection();
+        LOG.info("cleanupServerRequest()");
 
-        Operation operation;
+        if (clientConnection != null) {
+            clientConnection.closeConnection();
 
-        operation = requestHandlerOperations.remove(OperationTypeEnum.WRITE_TO_CLIENT);
-        operation.complete();
+            Operation operation;
 
-        operation = requestHandlerOperations.remove(OperationTypeEnum.STORAGE_SERVER_SEND_FINAL_STATUS);
-        operation.complete();
+            operation = requestHandlerOperations.remove(OperationTypeEnum.READ_BUFFER);
+            operation.complete();
 
-        operation = requestHandlerOperations.remove(OperationTypeEnum.REQUEST_FINISHED);
-        operation.complete();
+            operation = requestHandlerOperations.remove(OperationTypeEnum.METER_READ_BUFFERS);
+            operation.complete();
 
-        operation = requestHandlerOperations.remove(OperationTypeEnum.READ_BUFFER);
-        operation.complete();
+            operation = requestHandlerOperations.remove(OperationTypeEnum.STORAGE_SERVER_DETERMINE_REQUEST);
+            operation.complete();
 
-        operation = requestHandlerOperations.remove(OperationTypeEnum.METER_READ_BUFFERS);
-        operation.complete();
+            /*
+             ** Remove the supported HTTP request types
+             */
+            supportedHttpRequests.clear();
 
-        operation = requestHandlerOperations.remove(OperationTypeEnum.STORAGE_SERVER_DETERMINE_REQUEST_TYPE);
-        operation.complete();
+            /*
+            ** Remove any remaining request handler operations
+             */
+            requestHandlerOperations.clear();
 
-        /*
-        ** Remove the supported HTTP request types
-         */
-        requestHandlerOperations.remove(OperationTypeEnum.SETUP_STORAGE_SERVER_PUT);
+            /*
+             ** Clear out the references to the Operations
+             */
+            metering = null;
+            determineRequestType = null;
 
-        requestHandlerOperations.clear();
+            /*
+             ** Call reset() to make sure the BufferManager(s) have released all the references to
+             **   ByteBuffer(s).
+             */
+            reset();
 
-        /*
-         ** Clear out the references to the Operations
-         */
-        metering = null;
-        determineRequestType = null;
-
-        /*
-         ** Call reset() to make sure the BufferManager(s) have released all the references to
-         **   ByteBuffer(s).
-         */
-        reset();
-
-        /*
-         ** Finally release the clientConnection back to the free pool.
-         */
-        releaseConnection(clientConnection);
-        clientConnection = null;
+            /*
+             ** Finally release the clientConnection back to the free pool.
+             */
+            releaseConnection(clientConnection);
+            clientConnection = null;
+        }
     }
 
     /*

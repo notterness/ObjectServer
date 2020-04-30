@@ -89,15 +89,15 @@ public class TestHttpParser extends WebServerTest {
         metering.execute();
 
         /*
-        ** When the HTTP Parsing is complete, the DetermineRequestType operation should be on the execute
+        ** When the HTTP Parsing is complete, the DetermineRequest operation should be on the execute
         **   queue, so run the performOperationWork() again.
          */
-        if (requestContext.validateOperationOnQueue(OperationTypeEnum.DETERMINE_REQUEST_TYPE)) {
+        if (requestContext.validateOperationOnQueue(OperationTypeEnum.DETERMINE_REQUEST)) {
             requestContext.performOperationWork();
         }
 
         /*
-        ** Following the DetermineRequestType, the SetupObjectPut operation should be on the queue.
+        ** Following the DetermineRequest, the SetupObjectPut operation should be on the queue.
          */
         if (requestContext.validateOperationOnQueue(OperationTypeEnum.SETUP_OBJECT_PUT)) {
             requestContext.performOperationWork();

@@ -1,7 +1,6 @@
 package com.webutils.webserver.http.parser;
 
 import com.webutils.webserver.http.HttpInfo;
-import com.webutils.webserver.http.HttpRequestInfo;
 import org.eclipse.jetty.http.*;
 import org.eclipse.jetty.util.BufferUtil;
 
@@ -14,9 +13,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-public class HttpParserListener implements HttpParser.RequestHandler {
+public class HttpRequestListener implements HttpParser.RequestHandler {
 
-    private static final Logger LOG = LoggerFactory.getLogger(HttpParserListener.class);
+    private static final Logger LOG = LoggerFactory.getLogger(HttpRequestListener.class);
 
     /*
      ** TODO: These local variables will be removed from this class once the code is further along.
@@ -32,7 +31,7 @@ public class HttpParserListener implements HttpParser.RequestHandler {
 
     private final HttpInfo httpRequestInfo;
 
-    public HttpParserListener(final HttpInfo httpHeaderInfo) {
+    public HttpRequestListener(final HttpInfo httpHeaderInfo) {
         this.httpRequestInfo = httpHeaderInfo;
     }
 

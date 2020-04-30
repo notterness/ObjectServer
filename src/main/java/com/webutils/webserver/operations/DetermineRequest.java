@@ -1,10 +1,8 @@
-package com.webutils.storageserver.operations;
+package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.http.HttpMethodEnum;
 import com.webutils.webserver.http.HttpRequestInfo;
-import com.webutils.webserver.operations.Operation;
-import com.webutils.webserver.operations.OperationTypeEnum;
+import com.webutils.webserver.http.HttpMethodEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -12,14 +10,14 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
-public class StorageServerDetermineRequestType implements Operation {
+public class DetermineRequest implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(StorageServerDetermineRequestType.class);
+    private static final Logger LOG = LoggerFactory.getLogger(DetermineRequest.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.STORAGE_SERVER_DETERMINE_REQUEST_TYPE;
+    public final OperationTypeEnum operationType = OperationTypeEnum.DETERMINE_REQUEST;
 
     private final RequestContext requestContext;
 
@@ -42,7 +40,7 @@ public class StorageServerDetermineRequestType implements Operation {
     private boolean methodDeterminationDone;
 
 
-    public StorageServerDetermineRequestType(final RequestContext requestContext, final Map<HttpMethodEnum, Operation> supportedHttpRequests) {
+    public DetermineRequest(final RequestContext requestContext, final Map<HttpMethodEnum, Operation> supportedHttpRequests) {
 
         this.requestContext = requestContext;
         this.supportedHttpRequests = supportedHttpRequests;
@@ -80,19 +78,19 @@ public class StorageServerDetermineRequestType implements Operation {
     }
 
     /*
-     ** This execute() method does two distinct things.
-     **    1) First it uses the information in the HttpInfo object to determine the HTTP Request to be handled.
-     **       There is a setup request operation for each type of HTTP Request and that is then initialized() and
-     **       started via the event() method. At that point, the DetermineRequestType operation sits idle until the
-     **       HTTP Request is completed and the DetermineRequestType operation has its event() method called again.
-     **    2) When DetermineRequestType has its event() method called a second time, it then must send the HTTP
-     **       Response (via the SendFinalStatus operation) to the client.
+    ** This execute() method does two distinct things.
+    **    1) First it uses the information in the CasperHttpInfo object to determine the HTTP Request to be handled.
+    **       There is a setup request operation for each type of HTTP Request and that is then initialized() and
+    **       started via the event() method. At that point, the DetermineRequest operation sits idle until the
+    **       HTTP Request is completed and the DetermineRequest operation has its event() method called again.
+    **    2) When DetermineRequest has its event() method called a second time, it then must send the HTTP
+    **       Response (via the SendFinalStatus operation) to the client.
      */
     public void execute() {
-        Operation sendFinalStatus = requestContext.getOperation(OperationTypeEnum.STORAGE_SERVER_SEND_FINAL_STATUS);
+        Operation sendFinalStatus = requestContext.getOperation(OperationTypeEnum.SEND_FINAL_STATUS);
         if (sendFinalStatus == null) {
-            LOG.info("StorageServerDetermineRequestType[" + requestContext.getRequestId() + "] sendFinalStatus null");
-            return;
+             LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] sendFinalStatus null");
+             return;
         }
 
         if (!methodDeterminationDone) {
@@ -100,7 +98,7 @@ public class StorageServerDetermineRequestType implements Operation {
                 /*
                  ** Event the send client response operation here so that the final status is sent
                  */
-                LOG.warn("StorageServerDetermineRequestType[" + requestContext.getRequestId() + "] sending final status HTTP Parse error");
+                LOG.warn("DetermineRequest[" + requestContext.getRequestId() + "] sending final status HTTP Parse error");
 
                 sendFinalStatus.event();
             } else {
@@ -113,16 +111,16 @@ public class StorageServerDetermineRequestType implements Operation {
                 Operation httpRequestSetup = supportedHttpRequests.get(method);
                 if (httpRequestSetup != null) {
                     /*
-                     ** The operation being run is added to the list for the RequestContext so that it can be cleaned up
-                     **   if needed (meaning calling the complete() method).
+                    ** The operation being run is added to the list for the RequestContext so that it can be cleaned up
+                    **   if needed (meaning calling the complete() method).
                      */
                     requestContext.addOperation(httpRequestSetup);
 
-                    LOG.info("StorageServerDetermineRequestType[" + requestContext.getRequestId() + "] execute() " + method.toString());
+                    LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] execute() " + method.toString());
                     httpRequestSetup.initialize();
                     httpRequestSetup.event();
                 } else {
-                    LOG.info("StorageServerDetermineRequestType[" + requestContext.getRequestId() + "] execute() unsupported request " + method.toString());
+                    LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] execute() unsupported request " + method.toString());
                     httpRequestInfo.setParseFailureCode(HttpStatus.METHOD_NOT_ALLOWED_405);
 
                     sendFinalStatus.event();
@@ -131,20 +129,14 @@ public class StorageServerDetermineRequestType implements Operation {
 
             methodDeterminationDone = true;
         } else {
-            /*
-            ** Do not send the final status for GET operations. The GET operation sends a header and then the chunk
-            **   data, so it behaves differently than commands that expect just a response header.
-             */
-            if (httpRequestInfo.getMethod() != HttpMethodEnum.GET_METHOD) {
-                sendFinalStatus.event();
-            }
+            sendFinalStatus.event();
         }
     }
 
     public void complete() {
         /*
-         ** This does not have anything that needs to be released or cleaned up, so this is just an
-         **   empty method for now.
+        ** This does not have anything that needs to be released or cleaned up, so this is just an
+        **   empty method for now.
          */
     }
 
@@ -164,19 +156,19 @@ public class StorageServerDetermineRequestType implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("StorageServerDetermineRequestType[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("StorageServerDetermineRequestType[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("DetermineRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("StorageServerDetermineRequestType[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("DetermineRequest[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("StorageServerDetermineRequestType[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("DetermineRequest[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -191,7 +183,7 @@ public class StorageServerDetermineRequestType implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("StorageServerDetermineRequestType[" + requestContext.getRequestId() +
+        LOG.warn("DetermineRequest[" + requestContext.getRequestId() +
                 "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }

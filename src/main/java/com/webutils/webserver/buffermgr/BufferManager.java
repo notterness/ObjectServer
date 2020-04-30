@@ -216,7 +216,7 @@ public class BufferManager {
     public ByteBuffer peek(final BufferManagerPointer pointer) {
         int readIndex = pointer.getReadIndex(false);
 
-        //LOG.info("peek " + bufferManagerName + " (" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
+        LOG.info("peek " + bufferManagerName + " (" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
 
         if (readIndex != -1) {
             return bufferArray[readIndex];

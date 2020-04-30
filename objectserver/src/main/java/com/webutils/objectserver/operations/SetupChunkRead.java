@@ -4,6 +4,7 @@ import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.buffermgr.ChunkAllocBufferInfo;
 import com.webutils.webserver.buffermgr.ChunkMemoryPool;
+import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.ConnectComplete;
@@ -12,6 +13,7 @@ import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.operations.StorageServerResponseBufferMetering;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
+import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,6 +49,18 @@ public class SetupChunkRead implements Operation {
     private final ChunkMemoryPool chunkMemPool;
 
     private final Operation completeCallback;
+
+    /*
+     ** This is to make the execute() function more manageable
+     */
+    enum ExecutionState {
+        SETUP_CHUNK_READ_OPS,
+        WAITING_FOR_CONN_COMP,
+        WAITING_FOR_RESPONSE_HEADER,
+        EMPTY_STATE
+    }
+
+    private SetupChunkRead.ExecutionState currState;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -90,8 +104,6 @@ public class SetupChunkRead implements Operation {
      */
     private IoInterface storageServerConnection;
 
-    private boolean chunkWriteSetupComplete;
-
     private boolean serverConnectionClosedDueToError;
 
     /*
@@ -124,7 +136,7 @@ public class SetupChunkRead implements Operation {
          */
         requestHandlerOperations = new HashMap<>();
 
-        chunkWriteSetupComplete = false;
+        currState = ExecutionState.SETUP_CHUNK_READ_OPS;
 
         serverConnectionClosedDueToError = false;
 
@@ -173,120 +185,68 @@ public class SetupChunkRead implements Operation {
      **
      */
     public void execute() {
-        if (!chunkWriteSetupComplete) {
-            BufferManagerPointer respBufferPointer;
+        switch (currState) {
+            case SETUP_CHUNK_READ_OPS:
+                if (setupChunkReadOps()) {
+                    currState = ExecutionState.WAITING_FOR_CONN_COMP;
+                } else {
+                    currState = ExecutionState.EMPTY_STATE;
+                }
+                break;
 
-            chunkWriteSetupComplete = true;
+            case WAITING_FOR_CONN_COMP:
+                {
+                    /*
+                     ** First check if all the request has been sent to the StorageServer (meaning the connection
+                     **   was made and the data has been written)
+                     */
+                    int status;
+                    if (requestContext.hasHttpRequestBeenSent(storageServer)) {
+                        currState = ExecutionState.WAITING_FOR_RESPONSE_HEADER;
+                        /*
+                        ** Fall through to handle the case where the connection was setup and the response header was
+                        **   received prior to this being scheduled.
+                         */
+                    } else if ((status = requestContext.getStorageResponseResult(storageServer)) != HttpStatus.OK_200) {
+                        LOG.warn("SetupChunkRead[" + requestContext.getRequestId() + "] failure: " + status + " addr: " +
+                            storageServer.getServerIpAddress().toString() + " port: " +
+                            storageServer.getServerTcpPort() + " chunkNumber: " + storageServer.getChunkNumber() +
+                            " writer: " + writerNumber);
 
-            /*
-             ** Create a BufferManager with two required entries to send the HTTP Request header to the
-             **   Storage Server.
-             */
-            requestBufferManager = new BufferManager(STORAGE_SERVER_HEADER_BUFFER_COUNT,
-                    "StorageServer", 1000 + (writerNumber * 10));
+                        /*
+                        ** TODO: This needs to check if there is another storage server
+                         */
+                        StringBuilder failureMessage = new StringBuilder("\"Unable to obtain read chunk data - failed Storage Server\"");
+                        failureMessage.append(",\n  \"StorageServer\": \"").append(storageServer.getServerName()).append("\"");
 
-            /*
-             ** Allocate ByteBuffer(s) for the GET request header
-             */
-            addBufferPointer = requestBufferManager.register(this);
-            requestBufferManager.bookmark(addBufferPointer);
-            for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
-                ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, requestBufferManager,
-                        operationType);
+                        requestContext.getHttpInfo().setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage.toString());
 
-                requestBufferManager.offer(addBufferPointer, buffer);
-            }
+                        currState = ExecutionState.EMPTY_STATE;
+                        complete();
+                        break;
+                    }
+                }
 
-            requestBufferManager.reset(addBufferPointer);
+            case WAITING_FOR_RESPONSE_HEADER:
+                {
+                    int status = requestContext.getStorageResponseResult(storageServer);
 
+                    if (status == HttpStatus.OK_200) {
+                        currState = ExecutionState.EMPTY_STATE;
+                        complete();
+                    } else if (status != -1) {
+                        /*
+                        ** Some sort of an error response
+                         */
+                        currState = ExecutionState.EMPTY_STATE;
+                        complete();
+                    }
+                }
+                break;
 
-            /*
-             ** Create a BufferManager to accept the response from the Storage Server. This BufferManager is just used
-             **   as a placeholder for buffers while there are decrypted and have their Md5 digest computed. After they
-             **   are decrypted, they are placed in the chunk buffer to be written to the client.
-             **
-             */
-            responseBufferManager = new BufferManager(STORAGE_SERVER_GET_BUFFER_COUNT,
-                    "StorageServerResponse", 1100 + (writerNumber * 10));
+            case EMPTY_STATE:
+                break;
 
-            /*
-             ** Allocate ByteBuffer(s) to read in the response from the Storage Server. By using a metering operation, the
-             **   setup for the reading of the Storage Server response header can be be deferred until the TCP connection to the
-             **   Storage Server is successful.
-             */
-            responseBufferMetering = new StorageServerResponseBufferMetering(requestContext, memoryManager, responseBufferManager,
-                    STORAGE_SERVER_GET_BUFFER_COUNT);
-            respBufferPointer = responseBufferMetering.initialize();
-
-            /*
-             ** For each Storage Server, setup a HandleChunkWriteConnError operation that is used when there
-             **   is an error communicating with the StorageServer.
-             */
-            HandleChunkReadConnError errorHandler = new HandleChunkReadConnError(requestContext, this, storageServer);
-            requestHandlerOperations.put(errorHandler.getOperationType(), errorHandler);
-
-            /*
-             ** For each Storage Server, create the connection used to communicate with it.
-             */
-            storageServerConnection = requestContext.allocateConnection(this);
-
-            /*
-             ** The GET Header must be written to the Storage Server so that the data can be read in
-             */
-            BuildHeaderToStorageServer headerBuilder = new BuildHeaderToStorageServer(requestContext, requestBufferManager,
-                    addBufferPointer, storageServer, errorInjectString);
-            requestHandlerOperations.put(headerBuilder.getOperationType(), headerBuilder);
-            BufferManagerPointer writePointer = headerBuilder.initialize();
-
-            List<Operation> ops = new LinkedList<>();
-            ops.add(this);
-            WriteHeaderToStorageServer headerWriter = new WriteHeaderToStorageServer(requestContext, storageServerConnection, ops,
-                    requestBufferManager, writePointer, storageServer);
-            requestHandlerOperations.put(headerWriter.getOperationType(), headerWriter);
-            headerWriter.initialize();
-
-            /*
-             ** For each Storage Server, setup a ConnectComplete operation that is used when the NIO
-             **   connection is made with the StorageServer.
-             */
-            List<Operation> operationList = new LinkedList<>();
-            operationList.add(headerBuilder);
-            operationList.add(responseBufferMetering);
-            ConnectComplete connectComplete = new ConnectComplete(requestContext, operationList, storageServer.getServerTcpPort());
-            requestHandlerOperations.put(connectComplete.getOperationType(), connectComplete);
-
-            /*
-             ** Setup the operations to read in the HTTP Response header and process it
-             */
-            ReadStorageServerResponseBuffer readRespBuffer = new ReadStorageServerResponseBuffer(requestContext,
-                    storageServerConnection, responseBufferManager, respBufferPointer);
-            requestHandlerOperations.put(readRespBuffer.getOperationType(), readRespBuffer);
-            BufferManagerPointer httpBufferPointer = readRespBuffer.initialize();
-
-            StorageServerResponseHandler httpRespHandler = new StorageServerResponseHandler(requestContext,
-                    responseBufferManager, httpBufferPointer, this,
-                    storageServer);
-            requestHandlerOperations.put(httpRespHandler.getOperationType(), httpRespHandler);
-            httpRespHandler.initialize();
-
-            /*
-             ** Now open a initiator connection to write encrypted buffers out of.
-             */
-            if (!storageServerConnection.startInitiator(storageServer.getServerIpAddress(),
-                    storageServer.getServerTcpPort(), connectComplete, errorHandler)) {
-                /*
-                 ** This means the SocketChannel could not be opened. Need to indicate a problem
-                 **   with the Storage Server and clean up this SetupChunkWrite.
-                 ** Set the error to indicate that the Storage Server cannot be reached.
-                 **
-                 ** TODO: Add a test case for the startInitiator failing to make sure the cleanup
-                 **   is properly handled.
-                 */
-                complete();
-            }
-        } else {
-
-            complete();
         }
     }
 
@@ -385,6 +345,11 @@ public class SetupChunkRead implements Operation {
         requestContext.removeHttpRequestSent(storageServer);
 
         /*
+        ** remove the HttpResponseInfo association from the ServerIdentifier
+         */
+        storageServer.setHttpInfo(null);
+        
+        /*
          ** Now call back the Operation that will handle the completion
          */
         completeCallback.event();
@@ -454,6 +419,128 @@ public class SetupChunkRead implements Operation {
             createdOperation.dumpCreatedOperations(level + 1);
         }
         LOG.info("");
+    }
+
+    /*
+    ** This sets up the operations and all of their dependencies.
+    **
+    ** It will return false if the setup of the connection to the Storage Server fails
+     */
+    private boolean setupChunkReadOps() {
+        /*
+        ** First setup the HttpResponseInfo for this request.
+         */
+        HttpResponseInfo httpInfo = new HttpResponseInfo(requestContext);
+        storageServer.setHttpInfo(httpInfo);
+
+        /*
+         ** Create a BufferManager with two required entries to send the HTTP Request header to the
+         **   Storage Server.
+         */
+        requestBufferManager = new BufferManager(STORAGE_SERVER_HEADER_BUFFER_COUNT,
+                "StorageServer", 1000 + (writerNumber * 10));
+
+        /*
+         ** Allocate ByteBuffer(s) for the GET request header
+         */
+        addBufferPointer = requestBufferManager.register(this);
+        requestBufferManager.bookmark(addBufferPointer);
+        for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
+            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, requestBufferManager,
+                    operationType);
+
+            requestBufferManager.offer(addBufferPointer, buffer);
+        }
+
+        requestBufferManager.reset(addBufferPointer);
+
+        /*
+         ** Create a BufferManager to accept the response from the Storage Server. This BufferManager is just used
+         **   as a placeholder for buffers while there are decrypted and have their Md5 digest computed. After they
+         **   are decrypted, they are placed in the chunk buffer to be written to the client.
+         **
+         */
+        responseBufferManager = new BufferManager(STORAGE_SERVER_GET_BUFFER_COUNT,
+                "StorageServerResponse", 1100 + (writerNumber * 10));
+
+        /*
+         ** Allocate ByteBuffer(s) to read in the response from the Storage Server. By using a metering operation, the
+         **   setup for the reading of the Storage Server response header can be be deferred until the TCP connection to the
+         **   Storage Server is successful.
+         */
+        responseBufferMetering = new StorageServerResponseBufferMetering(requestContext, memoryManager, responseBufferManager,
+                STORAGE_SERVER_GET_BUFFER_COUNT);
+        BufferManagerPointer respBufferPointer = responseBufferMetering.initialize();
+
+        /*
+         ** For each Storage Server, setup a HandleChunkWriteConnError operation that is used when there
+         **   is an error communicating with the StorageServer.
+         */
+        HandleChunkReadConnError errorHandler = new HandleChunkReadConnError(requestContext, this, storageServer);
+        requestHandlerOperations.put(errorHandler.getOperationType(), errorHandler);
+
+        /*
+         ** For each Storage Server, create the connection used to communicate with it.
+         */
+        storageServerConnection = requestContext.allocateConnection(this);
+
+        /*
+         ** The GET Header must be written to the Storage Server so that the data can be read in
+         */
+        BuildHeaderToStorageServer headerBuilder = new BuildHeaderToStorageServer(requestContext, requestBufferManager,
+                addBufferPointer, storageServer, errorInjectString);
+        requestHandlerOperations.put(headerBuilder.getOperationType(), headerBuilder);
+        BufferManagerPointer writePointer = headerBuilder.initialize();
+
+        List<Operation> ops = new LinkedList<>();
+        ops.add(this);
+        WriteHeaderToStorageServer headerWriter = new WriteHeaderToStorageServer(requestContext, storageServerConnection, ops,
+                requestBufferManager, writePointer, storageServer);
+        requestHandlerOperations.put(headerWriter.getOperationType(), headerWriter);
+        headerWriter.initialize();
+
+        /*
+         ** For each Storage Server, setup a ConnectComplete operation that is used when the NIO
+         **   connection is made with the StorageServer.
+         */
+        List<Operation> operationList = new LinkedList<>();
+        operationList.add(headerBuilder);
+        operationList.add(responseBufferMetering);
+        ConnectComplete connectComplete = new ConnectComplete(requestContext, operationList, storageServer.getServerTcpPort());
+        requestHandlerOperations.put(connectComplete.getOperationType(), connectComplete);
+
+        /*
+         ** Setup the operations to read in the HTTP Response header and process it
+         */
+        ReadStorageServerResponseBuffer readRespBuffer = new ReadStorageServerResponseBuffer(requestContext,
+                storageServerConnection, responseBufferManager, respBufferPointer);
+        requestHandlerOperations.put(readRespBuffer.getOperationType(), readRespBuffer);
+        BufferManagerPointer httpBufferPointer = readRespBuffer.initialize();
+
+        StorageServerResponseHandler httpRespHandler = new StorageServerResponseHandler(requestContext,
+                responseBufferManager, httpBufferPointer, responseBufferMetering,this,
+                storageServer);
+        requestHandlerOperations.put(httpRespHandler.getOperationType(), httpRespHandler);
+        httpRespHandler.initialize();
+
+        /*
+         ** Now open a initiator connection to write encrypted buffers out of.
+         */
+        if (!storageServerConnection.startInitiator(storageServer.getServerIpAddress(),
+                storageServer.getServerTcpPort(), connectComplete, errorHandler)) {
+            /*
+             ** This means the SocketChannel could not be opened. Need to indicate a problem
+             **   with the Storage Server and clean up this SetupChunkWrite.
+             ** Set the error to indicate that the Storage Server cannot be reached.
+             **
+             ** TODO: Add a test case for the startInitiator failing to make sure the cleanup
+             **   is properly handled.
+             */
+            complete();
+            return false;
+        }
+
+        return true;
     }
 
 }

@@ -50,7 +50,7 @@ public class SetupObjectPut implements Operation {
     **   signal the ObjectPut_P2 operation to execute. This insures that no real work starts until the Object information
     **   is safely stored.
     **
-    ** The completeCb will call the DetermineRequestType operation's event() method when the Object PUT completes.
+    ** The completeCb will call the DetermineRequest operation's event() method when the Object PUT completes.
     **   Currently, the Object PUT is marked complete when all the PUT object data is written to the Storage Servers
     **   and the Md5 Digest is computed and the comparison against the expected result done.
      */

@@ -4,12 +4,12 @@ import com.webutils.objectserver.http.StorageServerResponseCallback;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpResponseInfo;
-import com.webutils.webserver.http.HttpResponseListener;
+import com.webutils.webserver.http.parser.ResponseHttpParser;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
+import com.webutils.webserver.operations.StorageServerResponseBufferMetering;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
-import org.eclipse.jetty.http.HttpParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,9 +46,15 @@ public class StorageServerResponseHandler implements Operation {
     private BufferManagerPointer httpResponseBufferPointer;
 
     /*
+    ** The metering operation to hand out buffers to read in the response header and the data
+     */
+    private final StorageServerResponseBufferMetering metering;
+
+    /*
     ** The HTTP Parser is used to extract the status from the Storage Server response
      */
-    private HttpParser httpParser;
+    private ResponseHttpParser parser;
+    private boolean initialHttpBuffer;
 
     /*
     ** The completionCallback is what is used to call back into the SetupChunkWrite to indicate that the
@@ -59,13 +65,15 @@ public class StorageServerResponseHandler implements Operation {
     private final HttpResponseInfo httpInfo;
 
     public StorageServerResponseHandler(final RequestContext requestContext, final BufferManager storageServerResponseBufferMgr,
-                                        final BufferManagerPointer readBufferPtr, final Operation completionCb,
-                                        final ServerIdentifier serverIdentifier) {
+                                        final BufferManagerPointer readBufferPtr, final StorageServerResponseBufferMetering metering,
+                                        final Operation completionCb, final ServerIdentifier serverIdentifier) {
 
         this.requestContext = requestContext;
 
         this.storageServerResponseBufferManager = storageServerResponseBufferMgr;
         this.readBufferPointer = readBufferPtr;
+
+        this.metering = metering;
 
         this.completionCallback = completionCb;
 
@@ -94,16 +102,11 @@ public class StorageServerResponseHandler implements Operation {
          */
         httpResponseBufferPointer = storageServerResponseBufferManager.register(this, readBufferPointer);
 
-        StorageServerResponseCallback httpResponseCompleted = new StorageServerResponseCallback(requestContext,
+        StorageServerResponseCallback httpRespCompCb = new StorageServerResponseCallback(requestContext,
                 completionCallback, serverIdentifier);
 
-        HttpResponseListener listener = new HttpResponseListener(httpInfo, httpResponseCompleted);
-        httpParser = new HttpParser(listener);
-
-        if (httpParser.isState(HttpParser.State.END))
-            httpParser.reset();
-        if (!httpParser.isState(HttpParser.State.START))
-            throw new IllegalStateException("!START");
+        parser = new ResponseHttpParser(httpInfo, httpRespCompCb);
+        initialHttpBuffer = true;
 
         return httpResponseBufferPointer;
     }
@@ -125,8 +128,65 @@ public class StorageServerResponseHandler implements Operation {
             /*
              ** Now run the Buffer State through the Http Parser
              */
-            httpParser.parseNext(httpBuffer);
-            storageServerResponseBufferManager.updateConsumerReadPointer(httpResponseBufferPointer);
+            boolean remainingBuffer = parser.parseHttpData(httpBuffer, initialHttpBuffer);
+            if (remainingBuffer) {
+                /*
+                 ** Leave the pointer in the same place since there is data remaining in the buffer
+                 */
+                LOG.info("StorageServerResponseHandler[" + requestContext.getRequestId() + "] remaining position: " +
+                        httpBuffer.position() + " limit: " + httpBuffer.limit());
+
+            } else {
+                /*
+                 ** Only update the pointer if the data in the buffer was all consumed.
+                 */
+                LOG.info("StorageServerResponseHandler[" + requestContext.getRequestId() + "]  position: " +
+                        httpBuffer.position() + " limit: " + httpBuffer.limit());
+
+                storageServerResponseBufferManager.updateConsumerReadPointer(httpResponseBufferPointer);
+            }
+
+            initialHttpBuffer = false;
+
+            /*
+             ** Need to break out of the loop if the parsing is complete.
+             */
+            if (httpInfo.getHeaderComplete()) {
+                break;
+            }
+        }
+
+        /*
+         ** Check if there needs to be another read to bring in more of the HTTP request
+         */
+        boolean headerParsed = httpInfo.getHeaderComplete();
+        if (!headerParsed) {
+            /*
+             ** Allocate another buffer and read in more data. But, do not
+             **   allocate if there was a parsing error.
+             */
+            if (!requestContext.getHttpParseError()) {
+                /*
+                 ** Meter out another buffer here.
+                 */
+                metering.event();
+            } else {
+                LOG.info("StorageServerResponseHandler[" + requestContext.getRequestId() + "] parsing error, no allocation");
+
+                completionCallback.event();
+            }
+        } else {
+            LOG.info("StorageServerResponseHandler[" + requestContext.getRequestId() + "] header was parsed");
+
+            /*
+             ** Create a book mark for the next set of readers to register against.
+             */
+            storageServerResponseBufferManager.bookmark(httpResponseBufferPointer);
+
+            /*
+             ** Send the event to the next operation to allow this request to proceed.
+             */
+            completionCallback.event();
         }
 
     }
@@ -135,10 +195,13 @@ public class StorageServerResponseHandler implements Operation {
      ** This removes any dependencies that are put upon the BufferManager
      */
     public void complete() {
-        httpParser = null;
-
         storageServerResponseBufferManager.unregister(httpResponseBufferPointer);
         httpResponseBufferPointer = null;
+
+        /*
+         ** The ResponseHttpParser is also no longer needed so remove any references to it
+         */
+        parser = null;
     }
 
     /*

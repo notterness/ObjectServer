@@ -58,7 +58,7 @@ public abstract class WebServerTest {
         IoInterface connection = testEventThread.allocateConnection(null);
         requestContext.initializeServer(connection, requestId);
 
-        HttpInfo httpRequestInfo = new HttpInfo(requestContext);
+        HttpInfo httpRequestInfo = new HttpRequestInfo(requestContext);
         parser = new ByteBufferHttpParser(httpRequestInfo);
     }
 

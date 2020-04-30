@@ -44,7 +44,7 @@ public class ObjectServerRequestContext extends RequestContext {
      */
     private CloseOutRequest closeRequest;
 
-    private DetermineRequestType determineRequestType;
+    private DetermineRequest determineRequest;
 
     private SendFinalStatus sendFinalStatus;
 
@@ -128,13 +128,13 @@ public class ObjectServerRequestContext extends RequestContext {
      **          When the data is read into the ByteBuffer by the IoInterface, it will call the ParseHttpRequest event()
      **          method. This will queue up the operation to be handled by the EventPollThread. When the execute()
      **          method for ParseHttpRequest is called, it will parse all available buffers until it receives the all
-     **          headers parsed callback from the HTTP Parser. Once all of the headers are parsed, the DetermineRequestType
+     **          headers parsed callback from the HTTP Parser. Once all of the headers are parsed, the DetermineRequest
      **          operations event() method is called.
      **          The final step for the ParseHttpRequest is to cleanup so that the RequestContext can be used again
      **          to parse another HTTP Request. This will allow a pool of RequestContext to be allocated at start of
      **          day and then reused.
      **
-     ** The DetermineRequestType uses the information that the HTTP Parser generated and stored in the CasperHttpInfo
+     ** The DetermineRequest uses the information that the HTTP Parser generated and stored in the CasperHttpInfo
      **   object to setup the correct method handler. There is a list of supported HTTP Methods kept in the
      **   Map<Operation> supportedHttpRequests. Once the correct request is determined, the Operation to setup the
      **   method handler is run.
@@ -180,24 +180,27 @@ public class ObjectServerRequestContext extends RequestContext {
         writeToClient.initialize();
 
         /*
-         ** The DetermineRequestType operation is run after the HTTP Request has been parsed and the method
+         ** The DetermineRequest operation is run after the HTTP Request has been parsed and the method
          **   handler determined via the setHttpMethodAndVersion() method in the CasperHttpInfo object.
          */
-        determineRequestType = new DetermineRequestType(this, supportedHttpRequests);
-        requestHandlerOperations.put(determineRequestType.getOperationType(), determineRequestType);
-        determineRequestType.initialize();
+        determineRequest = new DetermineRequest(this, supportedHttpRequests);
+        requestHandlerOperations.put(determineRequest.getOperationType(), determineRequest);
+        determineRequest.initialize();
 
         /*
          ** The HTTP Request methods that are supported are added to the supportedHttpRequests Map<> and are used
-         **   by the DetermineRequestType operation to setup and run the appropriate handlers.
+         **   by the DetermineRequest operation to setup and run the appropriate handlers.
+         **
+         ** NOTE: Although it seems weird to add the supported HTTP requests after the creating of the
+         **   DetermineRequest, the method handler have a dependency upon the determine request.
          */
-        SetupObjectPut v2PutHandler = new SetupObjectPut(this, memoryManager, metering, determineRequestType);
+        SetupObjectPut v2PutHandler = new SetupObjectPut(this, memoryManager, metering, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, v2PutHandler);
 
-        SetupObjectServerPost postHandler = new SetupObjectServerPost(this, metering, determineRequestType);
+        SetupObjectServerPost postHandler = new SetupObjectServerPost(this, metering, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.POST_METHOD, postHandler);
 
-        SetupObjectGet getHandler = new SetupObjectGet(this, memoryManager, chunkMemPool, determineRequestType);
+        SetupObjectGet getHandler = new SetupObjectGet(this, memoryManager, chunkMemPool, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.GET_METHOD, getHandler);
 
         /*
@@ -217,11 +220,11 @@ public class ObjectServerRequestContext extends RequestContext {
 
         /*
          ** The two Operations that run to perform the HTTP Parsing are ParseHttpRequest and
-         **   DetermineRequestType. When the entire HTTP Request has been parsed, the ParseHttpRequest
-         **   will event the DetermineRequestType operation to determine what operation sequence
+         **   DetermineRequest. When the entire HTTP Request has been parsed, the ParseHttpRequest
+         **   will event the DetermineRequest operation to determine what operation sequence
          **   to setup.
          */
-        ParseHttpRequest httpParser = new ParseHttpRequest(this, readPointer, metering, determineRequestType);
+        ParseHttpRequest httpParser = new ParseHttpRequest(this, readPointer, metering, determineRequest);
         requestHandlerOperations.put(httpParser.getOperationType(), httpParser);
         httpParser.initialize();
 
@@ -258,7 +261,7 @@ public class ObjectServerRequestContext extends RequestContext {
         operation = requestHandlerOperations.remove(OperationTypeEnum.SEND_FINAL_STATUS);
         operation.complete();
 
-        operation = requestHandlerOperations.remove(OperationTypeEnum.REQUEST_FINISHED);
+        operation = requestHandlerOperations.remove(OperationTypeEnum.CLOSE_OUT_REQUEST);
         operation.complete();
 
         operation = requestHandlerOperations.remove(OperationTypeEnum.READ_BUFFER);
@@ -267,8 +270,13 @@ public class ObjectServerRequestContext extends RequestContext {
         operation = requestHandlerOperations.remove(OperationTypeEnum.METER_READ_BUFFERS);
         operation.complete();
 
-        operation = requestHandlerOperations.remove(OperationTypeEnum.DETERMINE_REQUEST_TYPE);
+        operation = requestHandlerOperations.remove(OperationTypeEnum.DETERMINE_REQUEST);
         operation.complete();
+
+        /*
+        ** Clear out the supported operations Map<>
+         */
+        supportedHttpRequests.clear();
 
         /*
          ** Clear out the references to the Operations
@@ -276,7 +284,7 @@ public class ObjectServerRequestContext extends RequestContext {
         metering = null;
         sendFinalStatus = null;
         closeRequest = null;
-        determineRequestType = null;
+        determineRequest = null;
 
         /*
          ** Call reset() to make sure the BufferManager(s) have released all the references to

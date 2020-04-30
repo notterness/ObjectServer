@@ -130,7 +130,7 @@ public class BuildHttpResult {
 
         String respHeader = httpRequestInfo.getResponseHeaders();
 
-        String tmpStr = "HTTP/1.1 200" +
+        String tmpStr = "HTTP/1.1 200 OK" +
                 "\r\n" +
                 "Content-Type: text/html\n" +
                 respHeader +
@@ -157,7 +157,7 @@ public class BuildHttpResult {
     public void buildPutOkResponse(final ByteBuffer respBuffer) {
         String respHeader = httpRequestInfo.getResponseHeaders();
 
-        String tmpStr = "HTTP/1.1 200" +
+        String tmpStr = "HTTP/1.1 200 OK" +
                 "\r\n" +
                 respHeader +
                 "Content-Length: 0\n\n";
