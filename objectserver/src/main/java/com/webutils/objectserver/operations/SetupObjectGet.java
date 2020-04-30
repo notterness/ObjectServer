@@ -1,6 +1,7 @@
 package com.webutils.objectserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.buffermgr.ChunkMemoryPool;
 import com.webutils.webserver.common.Md5ResultHandler;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
@@ -44,6 +45,8 @@ public class SetupObjectGet implements Operation {
 
     private final MemoryManager memoryManager;
 
+    private final ChunkMemoryPool chunkMemPool;
+
     /*
      ** The completeCallback will cause the final response to be sent out.
      */
@@ -77,10 +80,12 @@ public class SetupObjectGet implements Operation {
      ** This is used to setup the initial Operation dependencies required to handle the Storage Server GET
      **   request. This is how chunks of data for an Object are read to the backing storage.
      */
-    public SetupObjectGet(final RequestContext requestContext, final MemoryManager mempryManager, final Operation completeCb) {
+    public SetupObjectGet(final RequestContext requestContext, final MemoryManager mempryManager,
+                          final ChunkMemoryPool chunkMemPool, final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.memoryManager = mempryManager;
+        this.chunkMemPool = chunkMemPool;
         this.completeCallback = completeCb;
 
         /*
@@ -132,7 +137,8 @@ public class SetupObjectGet implements Operation {
              */
             objectInfo = new ObjectInfo(objectHttpInfo);
 
-            ReadObjectChunks readChunks = new ReadObjectChunks(requestContext, memoryManager, objectInfo, this);
+            ReadObjectChunks readChunks = new ReadObjectChunks(requestContext, memoryManager, chunkMemPool,
+                    objectInfo, this);
             objectGetHandlerOps.put(readChunks.getOperationType(), readChunks);
             readChunks.initialize();
 

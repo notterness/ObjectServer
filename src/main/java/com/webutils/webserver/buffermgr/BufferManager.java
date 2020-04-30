@@ -20,7 +20,7 @@ public class BufferManager {
     **   in. When the producer updates their pointer into the ring, that will cause all of the consumers
     **   to be event(ed) which will allow them to run.
      */
-    private ByteBuffer[] bufferArray;
+    private final ByteBuffer[] bufferArray;
     private final int bufferArraySize;
 
     private final int bufferManagerIdentifier;
@@ -52,7 +52,18 @@ public class BufferManager {
 
         int currIdentifier = identifier.getAndIncrement();
 
-        LOG.info("register " + bufferManagerName + " ("  + currIdentifier + ":" + operation.getOperationType() + ")");
+        /*
+        ** The operation can be null for the case of allocating BufferManagers and their ByteBuffer up front so they
+        **   can be handed out with a minimal performance penalty. In the case the operation is null, it must be
+        **   assigned at a later point prior to the BufferManager being used.
+         */
+        if (operation != null) {
+            LOG.info("register " + bufferManagerName + " (" + currIdentifier + ":" + operation.getOperationType() + ")");
+        } else {
+            LOG.info("register " + bufferManagerName + " (" + currIdentifier + ": null operation)");
+
+        }
+
         BufferManagerPointer pointer = new BufferManagerPointer(operation, bufferArraySize, currIdentifier);
 
         registeredPointers.put(currIdentifier, pointer);
@@ -205,8 +216,7 @@ public class BufferManager {
     public ByteBuffer peek(final BufferManagerPointer pointer) {
         int readIndex = pointer.getReadIndex(false);
 
-        LOG.info("peek " + bufferManagerName + " (" + pointer.getIdentifier() + ":" + pointer.getOperationType() +
-                ") readIndex: " + readIndex);
+        //LOG.info("peek " + bufferManagerName + " (" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
 
         if (readIndex != -1) {
             return bufferArray[readIndex];
@@ -272,9 +282,7 @@ public class BufferManager {
     }
 
     public String getBufferManagerName() {
-        String name = new String(bufferManagerName + " id: " + bufferManagerIdentifier);
-
-        return name;
+        return (bufferManagerName + " id: " + bufferManagerIdentifier);
     }
 
     public void dumpInformation() {

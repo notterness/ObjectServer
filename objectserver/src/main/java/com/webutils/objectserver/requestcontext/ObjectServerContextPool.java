@@ -1,5 +1,6 @@
 package com.webutils.objectserver.requestcontext;
 
+import com.webutils.webserver.buffermgr.ChunkMemoryPool;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.DbSetup;
 import com.webutils.webserver.niosockets.EventPollThread;
@@ -17,9 +18,13 @@ public class ObjectServerContextPool extends RequestContextPool {
 
     private final DbSetup dbSetup;
 
+    private final ChunkMemoryPool chunkMemPool;
+
     public ObjectServerContextPool(final WebServerFlavor flavor, final MemoryManager memoryManager, final DbSetup dbSetup) {
         super(flavor, memoryManager, "ObjectServer");
         this.dbSetup = dbSetup;
+
+        this.chunkMemPool = new ChunkMemoryPool(memoryManager, RequestContext.getChunkBufferCount());
     }
 
     /*
@@ -36,7 +41,7 @@ public class ObjectServerContextPool extends RequestContextPool {
 
             if (contextList != null) {
                 requestContext = new ObjectServerRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup,
-                        threadId, flavor);
+                        chunkMemPool, threadId, flavor);
 
                 if (contextList.offer(requestContext)) {
                     LOG.info("allocateContext(ObjectServer) [" + threadId + "] webServerFlavor: " + flavor.toString());
@@ -68,7 +73,8 @@ public class ObjectServerContextPool extends RequestContextPool {
 
         ObjectServerRequestContext requestContext;
 
-        requestContext = new ObjectServerRequestContext(memoryManager, null, dbSetup, threadId, flavor);
+        requestContext = new ObjectServerRequestContext(memoryManager, null, dbSetup, chunkMemPool,
+                threadId, flavor);
 
         LinkedBlockingQueue<RequestContext> contextList = runningContexts.get(threadId);
         if (contextList != null) {

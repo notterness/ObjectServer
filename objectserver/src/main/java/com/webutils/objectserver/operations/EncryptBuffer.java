@@ -440,16 +440,16 @@ public class EncryptBuffer implements Operation {
             storageServerWriteBufferMgr.bookmarkThis(storageServerWritePointer);
 
             /*
-             ** Now create the StorageChunkAllocRequestor and start it running. Once it obtains the addresses for the Storage Servers,
+             ** Now create the WriteObjectChunk and start it running. Once it obtains the addresses for the Storage Servers,
              **   it will start of a SetupChunkWrite for each Storage Server.
              */
             List<Operation> callbackList = new LinkedList<>();
             callbackList.add(this);
 
-            StorageChunkAllocRequestor storageChunkAllocRequestor = new StorageChunkAllocRequestor(requestContext, callbackList, chunkNumber,
+            WriteObjectChunk writeObjectChunk = new WriteObjectChunk(requestContext, callbackList, chunkNumber,
                     memoryManager, storageServerWritePointer, chunkBytesToEncrypt);
-            storageChunkAllocRequestor.initialize();
-            storageChunkAllocRequestor.event();
+            writeObjectChunk.initialize();
+            writeObjectChunk.event();
 
             chunkNumber++;
         }

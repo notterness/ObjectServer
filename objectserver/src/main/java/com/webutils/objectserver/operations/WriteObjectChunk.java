@@ -19,9 +19,9 @@ import org.slf4j.LoggerFactory;
 import java.util.LinkedList;
 import java.util.List;
 
-public class StorageChunkAllocRequestor implements Operation {
+public class WriteObjectChunk implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(StorageChunkAllocRequestor.class);
+    private static final Logger LOG = LoggerFactory.getLogger(WriteObjectChunk.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
@@ -95,9 +95,9 @@ public class StorageChunkAllocRequestor implements Operation {
     **    writePointer (storageServerWritePointer)
     **    bytesToWrite (chunkBytesToWrite)
      */
-    public StorageChunkAllocRequestor(final RequestContext requestContext, final List<Operation> completionCbOpsToRun,
-                                      final int chunkNumber, final MemoryManager memoryManager,
-                                      final BufferManagerPointer writePointer, final int bytesToWrite) {
+    public WriteObjectChunk(final RequestContext requestContext, final List<Operation> completionCbOpsToRun,
+                            final int chunkNumber, final MemoryManager memoryManager,
+                            final BufferManagerPointer writePointer, final int bytesToWrite) {
 
         this.requestContext = requestContext;
         this.callbackOperationsToRun = completionCbOpsToRun;
@@ -153,7 +153,7 @@ public class StorageChunkAllocRequestor implements Operation {
         switch (currState) {
 
             case REQUEST_STORAGE_CHUNK:
-                LOG.info("StorageChunkAllocRequestor() REQUEST_STORAGE_CHUNK");
+                LOG.info("WriteObjectChunk() REQUEST_STORAGE_CHUNK");
 
                 /*
                  ** Call the Storage Chunk Picker - This is a blocking operation and will take time.
@@ -192,7 +192,7 @@ public class StorageChunkAllocRequestor implements Operation {
                 break;
 
             case STORAGE_CHUNK_INFO_SAVED:
-                LOG.info("StorageChunkAllocRequestor() STORAGE_CHUNK_INFO_SAVED");
+                LOG.info("WriteObjectChunk() STORAGE_CHUNK_INFO_SAVED");
 
                 /*
                 ** Start an Md5 digest for the chunk
@@ -246,7 +246,7 @@ public class StorageChunkAllocRequestor implements Operation {
                 }
 
                 if (allResponded) {
-                    LOG.info("StorageChunkAllocRequestor() WRITE_STORAGE_CHUNK_COMPLETE allResponded");
+                    LOG.info("WriteObjectChunk() WRITE_STORAGE_CHUNK_COMPLETE allResponded");
 
                     /*
                      ** For debug purposes, dump out the response results from the Storage Servers
@@ -381,7 +381,7 @@ public class StorageChunkAllocRequestor implements Operation {
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.error("requestId[" + requestContext.getRequestId() + "] StorageChunkAllocRequestor should never be on the timed wait queue");
+            LOG.error("requestId[" + requestContext.getRequestId() + "] WriteObjectChunk should never be on the timed wait queue");
         } else {
             onExecutionQueue = true;
         }
@@ -392,17 +392,17 @@ public class StorageChunkAllocRequestor implements Operation {
     }
 
     /*
-    ** StorageChunkAllocRequestor will never be on the timed wait queue
+    ** WriteObjectChunk will never be on the timed wait queue
      */
     public boolean isOnTimedWaitQueue() {
         return false;
     }
 
     /*
-    ** hasWaitTimeElapsed() should never be called for the StorageChunkAllocRequestor as it will execute as quickly as it can
+    ** hasWaitTimeElapsed() should never be called for the WriteObjectChunk as it will execute as quickly as it can
      */
     public boolean hasWaitTimeElapsed() {
-        LOG.error("requestId[" + requestContext.getRequestId() + "] StorageChunkAllocRequestor should never be on the timed wait queue");
+        LOG.error("requestId[" + requestContext.getRequestId() + "] WriteObjectChunk should never be on the timed wait queue");
         return true;
     }
 

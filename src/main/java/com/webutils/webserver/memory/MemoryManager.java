@@ -30,7 +30,7 @@ public class MemoryManager {
     // These really don't need to be.
     private static final int PRODUCTION_XFER_BUFFER_COUNT = 10000;
 
-    private static final int INTEGRATION_XFER_BUFFER_COUNT = 100;
+    private static final int INTEGRATION_XFER_BUFFER_COUNT = 1000;
 
     private final WebServerFlavor webServerFlavor;
 

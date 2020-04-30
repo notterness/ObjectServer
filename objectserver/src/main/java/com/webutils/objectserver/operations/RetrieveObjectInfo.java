@@ -92,7 +92,7 @@ public class RetrieveObjectInfo implements Operation {
         ObjectTableMgr objectMgr = new ObjectTableMgr(flavor, requestContext);
         if (objectMgr.retrieveObjectInfo(objectPutInfo, objectInfo, tenancyUID) == HttpStatus.OK_200) {
             completeCallback.event();
-        } else {
+         } else {
             errorCallback.event();
         }
     }

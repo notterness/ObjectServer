@@ -30,7 +30,7 @@ public class BufferManagerPointer {
 
     private static final Logger LOG = LoggerFactory.getLogger(BufferManager.class);
 
-    private final Operation operation;
+    private Operation operation;
     private final int bufferArraySize;
 
     private final int identifier;
@@ -154,10 +154,25 @@ public class BufferManagerPointer {
     }
 
     /*
+    ** For pre-allocated BufferManagers, the Operation is not set for the BufferManagerPointer used to
+    **   add the ByteBuffers to the BufferManager. This is where it is associated with the pointer.
+     */
+    public void setOperation(final Operation operation) {
+        this.operation = operation;
+
+        LOG.info("setOperation() Producer("  + identifier + ":" + getOperationType() + ") bufferIndex: " + bufferIndex +
+                " bookmark: " + bookmark);
+    }
+
+    /*
     ** A useful debug routine to show dependency trees in trace statements.
      */
     public OperationTypeEnum getOperationType() {
-        return operation.getOperationType();
+        if (operation != null) {
+            return operation.getOperationType();
+        } else {
+            return OperationTypeEnum.NULL_OPERATION;
+        }
     }
 
     /*

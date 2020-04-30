@@ -95,7 +95,7 @@ public class BufferReadMetering implements Operation {
 
     /*
     ** For the metering, this is where the pointer for buffers that are available are metered out according to
-    **   customer requirements and limitations. The buffers can be preallocated on the BufferManager and only
+    **   customer requirements and limitations. The buffers can be pre-allocated on the BufferManager and only
     **   passed out as needed or as requested.
      */
     public void execute() {

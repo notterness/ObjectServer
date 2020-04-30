@@ -1,7 +1,7 @@
 package com.webutils.objectserver.operations;
 
-import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.buffermgr.ChunkMemoryPool;
 import com.webutils.webserver.common.Md5ResultHandler;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ObjectInfo;
@@ -31,6 +31,21 @@ public class ReadObjectChunks implements Operation {
 
     private final MemoryManager memoryManager;
 
+    private final ChunkMemoryPool chunkMemPool;
+
+    /*
+    ** This is to make the execute() function more manageable
+     */
+    enum ExecutionState {
+        EXTRACT_CHUNK_LOCATION,
+        SETUP_CHUNK_READ,
+        ALL_CHUNKS_READ,
+        EMPTY_STATE
+    }
+
+    private ReadObjectChunks.ExecutionState currState;
+
+
     /*
     ** The ObjectInfo class is used to hold the information required to read in the chunks that make up the requested
     **   object from the various Storage Servers.
@@ -53,7 +68,7 @@ public class ReadObjectChunks implements Operation {
     **   not accessible, then a new server will be attempted (assuming there is a redundant server to read the data
     **   from).
      */
-    List<ServerIdentifier> serversToReadFrom;
+    private final List<ServerIdentifier> serversToReadFrom;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -64,10 +79,12 @@ public class ReadObjectChunks implements Operation {
 
 
     public ReadObjectChunks(final RequestContext requestContext, final MemoryManager memoryManager,
-                            final ObjectInfo objectInfo, final Operation completeCb) {
+                            final ChunkMemoryPool chunkMemPool, final ObjectInfo objectInfo,
+                            final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
+        this.chunkMemPool = chunkMemPool;
         this.objectInfo = objectInfo;
         this.completeCallback = completeCb;
 
@@ -78,12 +95,14 @@ public class ReadObjectChunks implements Operation {
          */
         readChunksOps = new HashMap<>();
 
+        serversToReadFrom = new LinkedList<>();
+
         /*
          ** This starts out not being on any queue
          */
         onExecutionQueue = false;
 
-        setupMethodDone = false;
+        currState = ExecutionState.EXTRACT_CHUNK_LOCATION;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -99,17 +118,6 @@ public class ReadObjectChunks implements Operation {
      **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
-        /*
-         ** Find one chunk for each chunkIndex and request the data for that chunk
-         */
-        serversToReadFrom = new LinkedList<>();
-        int chunkIndexToFind = 0;
-        for (ServerIdentifier server: objectInfo.getChunkList()) {
-            if (server.getChunkNumber() == chunkIndexToFind) {
-                serversToReadFrom.add(server);
-                chunkIndexToFind++;
-            }
-        }
 
         return null;
     }
@@ -122,30 +130,50 @@ public class ReadObjectChunks implements Operation {
     }
 
     public void execute() {
-        if (!setupMethodDone) {
-            BufferWriteMetering writeMetering = new BufferWriteMetering(requestContext, memoryManager);
-            readChunksOps.put(writeMetering.getOperationType(), writeMetering);
-            BufferManagerPointer writeMeteringPtr = writeMetering.initialize();
+        switch (currState) {
+            case EXTRACT_CHUNK_LOCATION:
+                /*
+                 ** Find one chunk for each chunkIndex and request the data for that chunk
+                 */
+                int chunkIndexToFind = 0;
+                for (ServerIdentifier server: objectInfo.getChunkList()) {
+                    if (server.getChunkNumber() == chunkIndexToFind) {
+                        serversToReadFrom.add(server);
 
-            /*
-            ** The accumulation of the chunk reads takes place in the decrypt operation.
-             */
-            DecryptBuffer decryptBuffer = new DecryptBuffer(requestContext, memoryManager, writeMetering,
-                    writeMeteringPtr, this);
-            readChunksOps.put(decryptBuffer.getOperationType(), decryptBuffer);
-            decryptBuffer.initialize();
+                        LOG.info("ReadObjectChunks[" + requestContext.getRequestId() + "] addr: " +
+                                server.getServerIpAddress().toString() + " port: " +
+                                server.getServerTcpPort() + " chunkNumber: " + server.getChunkNumber() + " offset: " +
+                                server.getOffset() + " chunkSize: " + server.getLength());
 
-            /*
-            ** Start the reads for each chunk
-             */
-            for (ServerIdentifier server: serversToReadFrom) {
-                SetupChunkRead chunkRead = new SetupChunkRead(requestContext, server, memoryManager, this,
-                        server.getChunkNumber(), null);
-            }
+                        chunkIndexToFind++;
+                    }
+                }
 
-            setupMethodDone = true;
-        } else {
-            completeCallback.event();
+                currState = ExecutionState.SETUP_CHUNK_READ;
+                event();
+                break;
+
+            case SETUP_CHUNK_READ:
+                currState = ExecutionState.ALL_CHUNKS_READ;
+
+                /*
+                 ** Start the reads for each chunk
+                 */
+                for (ServerIdentifier server: serversToReadFrom) {
+                    SetupChunkRead chunkRead = new SetupChunkRead(requestContext, server, memoryManager, chunkMemPool,
+                            this, server.getChunkNumber(), null);
+                    chunkRead.initialize();
+                    chunkRead.event();
+                }
+                break;
+
+            case ALL_CHUNKS_READ:
+                completeCallback.event();
+                currState = ExecutionState.EMPTY_STATE;
+                break;
+
+            case EMPTY_STATE:
+                break;
         }
     }
 

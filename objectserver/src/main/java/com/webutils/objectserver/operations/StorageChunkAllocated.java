@@ -13,6 +13,11 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
+/*
+** This is called after the Storage Server and the "chunk" on the Storage Server has been picked and the record needs
+**   to be created to associate the "chunk" with the Object. This operation creates the database record with the
+**   information about the "chunk" so it can be accessed later.
+ */
 public class StorageChunkAllocated implements Operation {
 
     private static final Logger LOG = LoggerFactory.getLogger(StorageChunkAllocated.class);
@@ -169,7 +174,7 @@ public class StorageChunkAllocated implements Operation {
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.error("requestId[" + requestContext.getRequestId() + "] StorageChunkAllocRequestor should never be on the timed wait queue");
+            LOG.error("requestId[" + requestContext.getRequestId() + "] WriteObjectChunk should never be on the timed wait queue");
         } else {
             onExecutionQueue = true;
         }
@@ -180,17 +185,17 @@ public class StorageChunkAllocated implements Operation {
     }
 
     /*
-     ** StorageChunkAllocRequestor will never be on the timed wait queue
+     ** WriteObjectChunk will never be on the timed wait queue
      */
     public boolean isOnTimedWaitQueue() {
         return false;
     }
 
     /*
-     ** hasWaitTimeElapsed() should never be called for the StorageChunkAllocRequestor as it will execute as quickly as it can
+     ** hasWaitTimeElapsed() should never be called for the WriteObjectChunk as it will execute as quickly as it can
      */
     public boolean hasWaitTimeElapsed() {
-        LOG.error("requestId[" + requestContext.getRequestId() + "] StorageChunkAllocRequestor should never be on the timed wait queue");
+        LOG.error("requestId[" + requestContext.getRequestId() + "] WriteObjectChunk should never be on the timed wait queue");
         return true;
     }
 

@@ -131,6 +131,7 @@ public class SetupStorageServerGet implements Operation {
             WriteToClient writeToClient = new WriteToClient(requestContext, requestContext.getClientConnection(),
                     closeRequest, objectDataReadyPtr);
             storageServerGetHandlerOps.put(writeToClient.getOperationType(), writeToClient);
+            writeToClient.initialize();
 
             /*
             ** Meter out a buffer to kick off the readFromFile operation (this will actually build the HTTP response
@@ -139,6 +140,8 @@ public class SetupStorageServerGet implements Operation {
             metering.event();
 
             getOperationSetupDone = true;
+        } else {
+            complete();
         }
 
     }

@@ -216,7 +216,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
         NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
         String namespaceUID = namespaceMgr.getNamespaceUID(namespace, tenancyUID);
         if (namespaceUID == null) {
-            LOG.warn("Unable to create Object: " + objectName + " - invalid namespace: " + namespace);
+            LOG.warn("Unable to find Object: " + objectName + " - invalid namespace: " + namespace);
 
             String failureMessage = "\"Namespace not found\",\n  \"namespaceName\": \"" + namespace + "\"";
             objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
@@ -229,7 +229,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
         BucketTableMgr bucketMgr = new BucketTableMgr(flavor, opcRequestId, objectHttpInfo);
         int bucketId = bucketMgr.getBucketId(bucketName, namespaceUID);
         if (bucketId == -1) {
-            LOG.warn("Unable to create Object: " + objectName + " - invalid bucket: " + bucketName);
+            LOG.warn("Unable to find Object: " + objectName + " - invalid bucket: " + bucketName);
 
             String failureMessage = "\"Bucket not found\",\n  \"bucketName\": \"" + bucketName + "\"";
             objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
@@ -320,12 +320,29 @@ public class ObjectTableMgr extends ObjectStorageDb {
         /*
         ** Now use the objectId to get a list of chunks for this object
          */
+        int status = HttpStatus.OK_200;
         if (objectId != -1) {
             StorageChunkTableMgr chunkTableMgr = new StorageChunkTableMgr(flavor, objectHttpInfo);
             chunkTableMgr.getChunks(objectId, info.getChunkList());
+
+            /*
+             ** Verify that this object actually has some data associated with it (meaning there is at least one chunk
+             **   that needs to be read from a StorageServer).
+             */
+            if (info.getChunkList().isEmpty()) {
+                LOG.warn("Object has not data associated with it: " + objectName);
+                String failureMessage = "\"Object data not found\",\n  \"objectName\": \"" + objectName + "\"";
+                objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+                status = HttpStatus.PRECONDITION_FAILED_412;
+            }
+        } else {
+            LOG.warn("Object not found: " + objectName);
+            String failureMessage = "\"Object not found\",\n  \"objectName\": \"" + objectName + "\"";
+            objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+            status = HttpStatus.PRECONDITION_FAILED_412;
         }
 
-        return HttpStatus.OK_200;
+        return status;
     }
 
     /*

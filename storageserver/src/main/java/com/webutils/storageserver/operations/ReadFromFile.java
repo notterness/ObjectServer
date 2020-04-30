@@ -174,7 +174,8 @@ public class ReadFromFile implements Operation {
             readFileChannel = null;
         }
 
-        LOG.info("ReadFromFile[" + requestContext.getRequestId() + "] initialize done");
+        LOG.info("ReadFromFile[" + requestContext.getRequestId() + "] initialize done - bytesToReadFromFile: " +
+                bytesToReadFromFile);
 
         return chunkFileReadPtr;
     }
@@ -203,98 +204,94 @@ public class ReadFromFile implements Operation {
      */
     public void execute() {
         ByteBuffer readBuffer;
-        boolean outOfBuffers = false;
 
-        while (!outOfBuffers) {
-            if ((readBuffer = chunkGetBufferMgr.peek(chunkFileReadPtr)) != null) {
-                if (!respHeaderBuilt) {
-                    boolean goodResponseSent = buildResponseHeader(readBuffer);
+        while ((readBuffer = chunkGetBufferMgr.peek(chunkFileReadPtr)) != null) {
+            if (!respHeaderBuilt) {
+                boolean goodResponseSent = buildResponseHeader(readBuffer);
 
-                    /*
-                     ** Done with this buffer, now check if there is data to read from the file
-                     */
-                    chunkGetBufferMgr.updateConsumerReadPointer(chunkFileReadPtr);
+                /*
+                ** Done with this buffer, now check if there is data to read from the file
+                 */
+                chunkGetBufferMgr.updateConsumerReadPointer(chunkFileReadPtr);
 
-                    if (goodResponseSent) {
-                        bufferMetering.event();
-                    } else {
-                        /*
-                        ** This operation has sent out an error and is all done
-                         */
-                        requestContext.setAllClientBuffersFilled();
-                        completeCallback.event();
-                    }
-
-                    respHeaderBuilt = true;
+                if (goodResponseSent) {
+                    bufferMetering.event();
                 } else {
                     /*
-                     ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
-                     **  affecting the position() and limit() indexes
-                     **
-                     ** NOTE: savedSrcPosition is modifed within the readFileChannel.read() handling as the read may
-                     **   only consume a portion of the buffer and it will take multiple passes through using the same
-                     **   buffer to actually read all the data from the file.
+                    ** This operation has sent out an error and is all done
                      */
-                    ByteBuffer srcBuffer = readBuffer.duplicate();
-                    srcBuffer.position(savedSrcPosition);
+                    requestContext.setAllClientBuffersFilled();
+                    completeCallback.event();
+                }
 
-                    if (readFileChannel != null) {
-                        try {
-                            int bytesRead = readFileChannel.read(srcBuffer);
+                respHeaderBuilt = true;
+            } else {
+                /*
+                ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
+                **  affecting the position() and limit() indexes
+                **
+                ** NOTE: savedSrcPosition is modifed within the readFileChannel.read() handling as the read may
+                **   only consume a portion of the buffer and it will take multiple passes through using the same
+                **   buffer to actually read all the data from the file.
+                 */
+                ByteBuffer srcBuffer = readBuffer.duplicate();
+                srcBuffer.position(savedSrcPosition);
 
-                            fileBytesRead += bytesRead;
-                            if (srcBuffer.remaining() != 0) {
-                                /*
-                                 ** Save this for the next time around since a temporary buffer is being used.
-                                 */
-                                savedSrcPosition = srcBuffer.position();
+                if (readFileChannel != null) {
+                    try {
+                        int bytesRead = readFileChannel.read(srcBuffer);
 
+                        fileBytesRead += bytesRead;
+                        if (srcBuffer.remaining() != 0) {
+                            /*
+                            ** Save this for the next time around since a temporary buffer is being used.
+                             */
+                            savedSrcPosition = srcBuffer.position();
+
+                            /*
+                            ** Queue this up to try again later and force the exit from the while loop
+                             */
+                            this.event();
+                        } else {
+                            /*
+                            ** Done with this buffer, see if there is more data to read from the file
+                             */
+                            chunkGetBufferMgr.updateConsumerReadPointer(chunkFileReadPtr);
+                            savedSrcPosition = 0;
+
+                            LOG.info("ReadFromFile[" + requestContext.getRequestId() + "] read buffer full bytesRead: " +
+                                    fileBytesRead + " bytesToReadFromFile: " + bytesToReadFromFile);
+
+                            /*
+                             ** Check if all the bytes (meaning the amount passed in the content-length in the HTTP header)
+                             **   have been written to the file. If not, dole out another ByteBuffer to the NIO read
+                             **   operation.
+                             */
+                            if (fileBytesRead < bytesToReadFromFile) {
+                                bufferMetering.event();
+                            } else if (fileBytesRead == bytesToReadFromFile) {
                                 /*
-                                 ** Queue this up to try again later and force the exit from the while loop
+                                 ** Done with this operation, so set the flag within the RequestContext that produced this that all
+                                 **   of the data to be written to the Object Server has been filled into the buffers.
                                  */
-                                this.event();
-                                outOfBuffers = true;
-                            } else {
-                                /*
-                                 ** Done with this buffer, see if there is more data to read from the file
-                                 */
-                                chunkGetBufferMgr.updateConsumerReadPointer(chunkFileReadPtr);
-                                savedSrcPosition = 0;
+                                requestContext.setAllClientBuffersFilled();
+                                completeCallback.event();
                             }
-                        } catch (IOException io_ex) {
-                            /*
-                             ** Not going to be able to write anything else, so call complete() and
-                             **   terminate this operation.
-                             */
-                            LOG.info("ReadFromFile[" + requestContext.getRequestId() + "] write exception: " + io_ex.getMessage());
-                            complete();
                         }
-                    } else {
-                        LOG.info("ReadFromFile[" + requestContext.getRequestId() + "] out of read buffers bytesRead: " +
-                                fileBytesRead + " bytesToReadFromFile: " + bytesToReadFromFile);
-
+                    } catch (IOException io_ex) {
                         /*
-                         ** Check if all the bytes (meaning the amount passed in the content-length in the HTTP header)
-                         **   have been written to the file. If not, dole out another ByteBuffer to the NIO read
-                         **   operation.
+                        ** Not going to be able to write anything else, so call complete() and
+                        **   terminate this operation.
                          */
-                        if (fileBytesRead < bytesToReadFromFile) {
-                            bufferMetering.event();
-                        } else if (fileBytesRead == bytesToReadFromFile) {
-                            /*
-                             ** Done with this operation, so set the flag within the RequestContext that produced this that all
-                             **   of the data to be written to the Object Server has been filled into the buffers.
-                             */
-                            requestContext.setAllClientBuffersFilled();
-                            completeCallback.event();
-                        }
-
-                        outOfBuffers = true;
+                        LOG.info("ReadFromFile[" + requestContext.getRequestId() + "] read exception: " + io_ex.getMessage());
+                        completeCallback.event();
                     }
-                } // check if respHeaderBuilt
+                } else {
+                    LOG.error("readFileChannel is null");
+                }
+            } // check if respHeaderBuilt
 
-            } // while()
-        }
+        } // while()
     }
 
     /*

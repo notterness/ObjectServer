@@ -2,6 +2,8 @@ package com.webutils.objectserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.buffermgr.ChunkAllocBufferInfo;
+import com.webutils.webserver.buffermgr.ChunkMemoryPool;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.ConnectComplete;
@@ -42,6 +44,8 @@ public class SetupChunkRead implements Operation {
 
     private final MemoryManager memoryManager;
 
+    private final ChunkMemoryPool chunkMemPool;
+
     private final Operation completeCallback;
 
     /*
@@ -62,8 +66,15 @@ public class SetupChunkRead implements Operation {
      */
     private final String errorInjectString;
 
-    private BufferManager storageServerBufferManager;
-    private BufferManager storageServerResponseBufferManager;
+    private BufferManager requestBufferManager;
+    private BufferManager responseBufferManager;
+
+    /*
+    ** The decryptedBufferManager comes from a pool of pre-allocated BufferManagers that have a full chunks worth of
+    **   ByteBuffers allocated to them.
+     */
+    private ChunkAllocBufferInfo allocInfo;
+    private BufferManager decryptedBufferManager;
 
     private BufferManagerPointer addBufferPointer;
 
@@ -88,13 +99,14 @@ public class SetupChunkRead implements Operation {
      **   up the calls to obtain the VON information and the meta-data write to the database.
      */
     public SetupChunkRead(final RequestContext requestContext, final ServerIdentifier server,
-                           final MemoryManager memoryManager, final Operation completeCb, final int writer,
-                           final String errorInjectString) {
+                          final MemoryManager memoryManager, final ChunkMemoryPool chunkMemPool,
+                          final Operation completeCb, final int writer, final String errorInjectString) {
 
         this.operationType = OperationTypeEnum.fromInt(OperationTypeEnum.SETUP_CHUNK_READ_0.toInt() + writer);
         this.requestContext = requestContext;
         this.storageServer = server;
         this.memoryManager = memoryManager;
+        this.chunkMemPool = chunkMemPool;
 
         this.completeCallback = completeCb;
 
@@ -133,6 +145,19 @@ public class SetupChunkRead implements Operation {
      **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
+
+        /*
+         ** Allocate a BufferManager to hold the decrypted data. THis one must be the size of a chunk since it will
+         **   not be drained until the chunk read is complete and the Md5 digest has been validated.
+         ** The use of a different BufferManager to hold the data prior to pushing it to the client allows for
+         **   failures by a Storage Server to be handled easily. It would be much harder to handle a failure if
+         **   part of the data had been pushed to the client and then a Storage Server stopped sending data.
+         */
+        allocInfo = chunkMemPool.allocateChunk(requestContext);
+        if (allocInfo != null) {
+            decryptedBufferManager = allocInfo.getBufferManager();
+
+        }
         return null;
     }
 
@@ -157,35 +182,39 @@ public class SetupChunkRead implements Operation {
              ** Create a BufferManager with two required entries to send the HTTP Request header to the
              **   Storage Server.
              */
-            storageServerBufferManager = new BufferManager(STORAGE_SERVER_HEADER_BUFFER_COUNT,
+            requestBufferManager = new BufferManager(STORAGE_SERVER_HEADER_BUFFER_COUNT,
                     "StorageServer", 1000 + (writerNumber * 10));
 
             /*
-             ** Create a BufferManager to accept the HTTP Response from the Storage Server
+             ** Allocate ByteBuffer(s) for the GET request header
              */
-            storageServerResponseBufferManager = new BufferManager(STORAGE_SERVER_HEADER_BUFFER_COUNT,
+            addBufferPointer = requestBufferManager.register(this);
+            requestBufferManager.bookmark(addBufferPointer);
+            for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
+                ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, requestBufferManager,
+                        operationType);
+
+                requestBufferManager.offer(addBufferPointer, buffer);
+            }
+
+            requestBufferManager.reset(addBufferPointer);
+
+
+            /*
+             ** Create a BufferManager to accept the response from the Storage Server. This BufferManager is just used
+             **   as a placeholder for buffers while there are decrypted and have their Md5 digest computed. After they
+             **   are decrypted, they are placed in the chunk buffer to be written to the client.
+             **
+             */
+            responseBufferManager = new BufferManager(STORAGE_SERVER_GET_BUFFER_COUNT,
                     "StorageServerResponse", 1100 + (writerNumber * 10));
 
             /*
-             ** Allocate ByteBuffer(s) for the header
-             */
-            addBufferPointer = storageServerBufferManager.register(this);
-            storageServerBufferManager.bookmark(addBufferPointer);
-            for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
-                ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, storageServerBufferManager,
-                        operationType);
-
-                storageServerBufferManager.offer(addBufferPointer, buffer);
-            }
-
-            storageServerBufferManager.reset(addBufferPointer);
-
-            /*
-             ** Allocate ByteBuffer(s) to read in the HTTP Response from the Storage Server. By using a metering operation, the
+             ** Allocate ByteBuffer(s) to read in the response from the Storage Server. By using a metering operation, the
              **   setup for the reading of the Storage Server response header can be be deferred until the TCP connection to the
              **   Storage Server is successful.
              */
-            responseBufferMetering = new StorageServerResponseBufferMetering(requestContext, memoryManager, storageServerResponseBufferManager,
+            responseBufferMetering = new StorageServerResponseBufferMetering(requestContext, memoryManager, responseBufferManager,
                     STORAGE_SERVER_GET_BUFFER_COUNT);
             respBufferPointer = responseBufferMetering.initialize();
 
@@ -204,7 +233,7 @@ public class SetupChunkRead implements Operation {
             /*
              ** The GET Header must be written to the Storage Server so that the data can be read in
              */
-            BuildHeaderToStorageServer headerBuilder = new BuildHeaderToStorageServer(requestContext, storageServerBufferManager,
+            BuildHeaderToStorageServer headerBuilder = new BuildHeaderToStorageServer(requestContext, requestBufferManager,
                     addBufferPointer, storageServer, errorInjectString);
             requestHandlerOperations.put(headerBuilder.getOperationType(), headerBuilder);
             BufferManagerPointer writePointer = headerBuilder.initialize();
@@ -212,7 +241,7 @@ public class SetupChunkRead implements Operation {
             List<Operation> ops = new LinkedList<>();
             ops.add(this);
             WriteHeaderToStorageServer headerWriter = new WriteHeaderToStorageServer(requestContext, storageServerConnection, ops,
-                    storageServerBufferManager, writePointer, storageServer);
+                    requestBufferManager, writePointer, storageServer);
             requestHandlerOperations.put(headerWriter.getOperationType(), headerWriter);
             headerWriter.initialize();
 
@@ -230,12 +259,12 @@ public class SetupChunkRead implements Operation {
              ** Setup the operations to read in the HTTP Response header and process it
              */
             ReadStorageServerResponseBuffer readRespBuffer = new ReadStorageServerResponseBuffer(requestContext,
-                    storageServerConnection, storageServerResponseBufferManager, respBufferPointer);
+                    storageServerConnection, responseBufferManager, respBufferPointer);
             requestHandlerOperations.put(readRespBuffer.getOperationType(), readRespBuffer);
             BufferManagerPointer httpBufferPointer = readRespBuffer.initialize();
 
             StorageServerResponseHandler httpRespHandler = new StorageServerResponseHandler(requestContext,
-                    storageServerResponseBufferManager, httpBufferPointer, this,
+                    responseBufferManager, httpBufferPointer, this,
                     storageServer);
             requestHandlerOperations.put(httpRespHandler.getOperationType(), httpRespHandler);
             httpRespHandler.initialize();
@@ -325,31 +354,30 @@ public class SetupChunkRead implements Operation {
         storageServerConnection = null;
 
         /*
-         ** Return the allocated buffers that were used to send the HTTP Request and the
-         **   Shaw-256 value to the Storage Server
+         ** Return the allocated buffers that were used to send the GET Request to the Storage Server
          */
-        storageServerBufferManager.reset(addBufferPointer);
+        requestBufferManager.reset(addBufferPointer);
         for (int i = 0; i < STORAGE_SERVER_HEADER_BUFFER_COUNT; i++) {
-            ByteBuffer buffer = storageServerBufferManager.getAndRemove(addBufferPointer);
+            ByteBuffer buffer = requestBufferManager.getAndRemove(addBufferPointer);
             if (buffer != null) {
-                memoryManager.poolMemFree(buffer, storageServerBufferManager);
+                memoryManager.poolMemFree(buffer, requestBufferManager);
             } else {
                 LOG.info("SetupChunkRead[" + requestContext.getRequestId() + "] null buffer addBufferPointer index: " + addBufferPointer.getCurrIndex());
             }
         }
 
-        storageServerBufferManager.unregister(addBufferPointer);
+        requestBufferManager.unregister(addBufferPointer);
         addBufferPointer = null;
 
-        storageServerBufferManager.reset();
-        storageServerBufferManager = null;
+        requestBufferManager.reset();
+        requestBufferManager = null;
 
         /*
-         ** Return the allocated buffers that were used to receive the HTTP Response
+         ** Return the allocated buffers that were used to receive the HTTP Response and the data
          **   from the Storage Server
          */
         responseBufferMetering.complete();
-        storageServerResponseBufferManager = null;
+        responseBufferManager = null;
 
         /*
          ** Clear the HTTP Request sent for this Storage Server

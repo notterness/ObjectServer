@@ -5,6 +5,7 @@ import com.webutils.objectserver.operations.SetupObjectServerPost;
 import com.webutils.objectserver.operations.SetupObjectPut;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.buffermgr.ChunkMemoryPool;
 import com.webutils.webserver.http.HttpMethodEnum;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.DbSetup;
@@ -33,6 +34,12 @@ public class ObjectServerRequestContext extends RequestContext {
     protected final BufferManager storageServerWriteBufferManager;
 
     /*
+    ** This is used for the Storage Server GET operations to alloc a chunks worth of ByteBuffers in a pre-allocated
+    **   BufferManager
+     */
+    private final ChunkMemoryPool chunkMemPool;
+
+    /*
      **
      */
     private CloseOutRequest closeRequest;
@@ -56,9 +63,12 @@ public class ObjectServerRequestContext extends RequestContext {
 
 
     public ObjectServerRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn,
-                                      final DbSetup dbSetup, final int threadId, final WebServerFlavor flavor) {
+                                      final DbSetup dbSetup, final ChunkMemoryPool chunkMemPool,
+                                      final int threadId, final WebServerFlavor flavor) {
 
         super(memoryManager, threadThisRunsOn, dbSetup, threadId, flavor);
+
+        this.chunkMemPool = chunkMemPool;
 
         /*
          ** The BufferManager(s) that are allocated here are populated in the following Operations:
@@ -187,7 +197,7 @@ public class ObjectServerRequestContext extends RequestContext {
         SetupObjectServerPost postHandler = new SetupObjectServerPost(this, metering, determineRequestType);
         supportedHttpRequests.put(HttpMethodEnum.POST_METHOD, postHandler);
 
-        SetupObjectGet getHandler = new SetupObjectGet(this, memoryManager, determineRequestType);
+        SetupObjectGet getHandler = new SetupObjectGet(this, memoryManager, chunkMemPool, determineRequestType);
         supportedHttpRequests.put(HttpMethodEnum.GET_METHOD, getHandler);
 
         /*

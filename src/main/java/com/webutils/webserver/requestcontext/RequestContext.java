@@ -42,18 +42,15 @@ public abstract class RequestContext {
      **  (MemoryManager.XFER_BUFFER_SIZE * 64) = 524,288
      **  (MemoryManager.XFER_BUFFER_SIZE * 16k) = 134,217,728 (128MB)
      */
-    public final int TEST_CHUNK_SIZE_IN_BYTES = MemoryManager.XFER_BUFFER_SIZE * 64;
-    public final int CHUNK_SIZE_IN_BYTES = MemoryManager.XFER_BUFFER_SIZE * 4096;
+    private static final int TEST_CHUNK_BUFFER_COUNT = 64;
+    private static final int CHUNK_BUFFER_COUNT = 4096;
+    public static final int TEST_CHUNK_SIZE_IN_BYTES = MemoryManager.XFER_BUFFER_SIZE * TEST_CHUNK_BUFFER_COUNT;
+    public static final int CHUNK_SIZE_IN_BYTES = MemoryManager.XFER_BUFFER_SIZE * CHUNK_BUFFER_COUNT;
 
 
     private static final int MAX_EXEC_WORK_LOOP_COUNT = 10;
 
     private final WebServerFlavor webServerFlavor;
-
-    /*
-    ** This is the Chunk Size used when saving Object data to the Storage Servers
-     */
-    private final int chunkSize;
 
     /*
      ** The HttpRequestInfo is a holding object for all of the data parsed out of the HTTP Request and some
@@ -186,11 +183,6 @@ public abstract class RequestContext {
         this.dbSetup = dbSetup;
         this.threadId = threadId;
         this.webServerFlavor = flavor;
-
-        /*
-         ** Setup the chunk size to use. It is dependent upon if this is running in production or simulation
-         */
-        chunkSize = TEST_CHUNK_SIZE_IN_BYTES;
 
         /*
          ** The BufferManager(s) that are allocated here are populated in the following Operations:
@@ -491,11 +483,23 @@ public abstract class RequestContext {
     }
 
     /*
-    ** Used to obtain the Chunk size used
+     ** Used to obtain the number of buffers required to make up a chunk
+     **     private static final int TEST_CHUNK_BUFFER_COUNT = 64;
+     **     private static final int CHUNK_BUFFER_COUNT = 4096;
      */
-    public int getChunkSize() {
-        return chunkSize;
+    public static int getChunkBufferCount() {
+        return TEST_CHUNK_BUFFER_COUNT;
     }
+
+    /*
+    ** Used to obtain the Chunk size used (this is in bytes)
+    **     public static final int TEST_CHUNK_SIZE_IN_BYTES = MemoryManager.XFER_BUFFER_SIZE * TEST_CHUNK_BUFFER_COUNT;
+    **     public static final int CHUNK_SIZE_IN_BYTES = MemoryManager.XFER_BUFFER_SIZE * CHUNK_BUFFER_COUNT;
+     */
+    public static int getChunkSize() {
+        return CHUNK_SIZE_IN_BYTES;
+    }
+
 
     /*
     ** Used to allow tracing based upon a connection identifier
