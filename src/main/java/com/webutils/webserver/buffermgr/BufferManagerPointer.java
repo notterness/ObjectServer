@@ -413,8 +413,8 @@ public class BufferManagerPointer {
      */
     void generateDependsOnEvents() {
 
-        for (Operation value : ptrWhoDependOnThisList) {
-            value.event();
+        for (Operation operation : ptrWhoDependOnThisList) {
+            operation.event();
         }
     }
 

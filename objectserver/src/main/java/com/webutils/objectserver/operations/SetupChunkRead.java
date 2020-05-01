@@ -4,13 +4,11 @@ import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.buffermgr.ChunkAllocBufferInfo;
 import com.webutils.webserver.buffermgr.ChunkMemoryPool;
+import com.webutils.webserver.common.ResponseMd5ResultHandler;
 import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.IoInterface;
-import com.webutils.webserver.operations.ConnectComplete;
-import com.webutils.webserver.operations.Operation;
-import com.webutils.webserver.operations.OperationTypeEnum;
-import com.webutils.webserver.operations.StorageServerResponseBufferMetering;
+import com.webutils.webserver.operations.*;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.eclipse.jetty.http.HttpStatus;
@@ -57,6 +55,8 @@ public class SetupChunkRead implements Operation {
         SETUP_CHUNK_READ_OPS,
         WAITING_FOR_CONN_COMP,
         WAITING_FOR_RESPONSE_HEADER,
+        READ_CONTENT_DATA,
+        CONTENT_PROCESSED,
         EMPTY_STATE
     }
 
@@ -87,12 +87,30 @@ public class SetupChunkRead implements Operation {
     ** The decryptedBufferManager comes from a pool of pre-allocated BufferManagers that have a full chunks worth of
     **   ByteBuffers allocated to them.
      */
-    private ChunkAllocBufferInfo allocInfo;
-    private BufferManager decryptedBufferManager;
+    private BufferManager decryptBufferManager;
+    private BufferManagerPointer decryptMeteringPointer;
+    private Operation decryptBufferMetering;
 
     private BufferManagerPointer addBufferPointer;
 
+    /*
+    ** The response buffer metering is used by the DecryptBuffer operation
+     */
     private StorageServerResponseBufferMetering responseBufferMetering;
+
+    private BufferManagerPointer httpBufferPointer;
+
+    /*
+    ** The DecryptBuffer operation needs to be check for completion
+     */
+    private DecryptBuffer decryptBuffer;
+
+    /*
+     ** The HttpResponseInfo is unique to this read chunk operation as the response coming back is only for one chunk
+     **   worth of data.
+     */
+    private final HttpResponseInfo httpInfo;
+
 
     /*
      ** The following is a map of all of the created Operations to handle this request.
@@ -105,6 +123,11 @@ public class SetupChunkRead implements Operation {
     private IoInterface storageServerConnection;
 
     private boolean serverConnectionClosedDueToError;
+
+    /*
+    ** The updater used to manage the Md5 digest and its result
+     */
+    private ResponseMd5ResultHandler updater;
 
     /*
      ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
@@ -125,6 +148,12 @@ public class SetupChunkRead implements Operation {
         this.writerNumber = writer;
 
         this.errorInjectString = errorInjectString;
+
+        /*
+         ** First setup the HttpResponseInfo for this request.
+         */
+        this.httpInfo = new HttpResponseInfo(requestContext);
+        this.storageServer.setHttpInfo(httpInfo);
 
         /*
          ** This starts out not being on any queue
@@ -165,11 +194,13 @@ public class SetupChunkRead implements Operation {
          **   failures by a Storage Server to be handled easily. It would be much harder to handle a failure if
          **   part of the data had been pushed to the client and then a Storage Server stopped sending data.
          */
-        allocInfo = chunkMemPool.allocateChunk(requestContext);
+        ChunkAllocBufferInfo allocInfo = chunkMemPool.allocateChunk(requestContext);
         if (allocInfo != null) {
-            decryptedBufferManager = allocInfo.getBufferManager();
-
+            decryptBufferManager = allocInfo.getBufferManager();
+            decryptMeteringPointer = allocInfo.getAddBufferPointer();
+            decryptBufferMetering = allocInfo.getMetering();
         }
+
         return null;
     }
 
@@ -228,12 +259,15 @@ public class SetupChunkRead implements Operation {
                 }
 
             case WAITING_FOR_RESPONSE_HEADER:
+                if (httpInfo.getHeaderComplete())
                 {
-                    int status = requestContext.getStorageResponseResult(storageServer);
+                    int status = httpInfo.getResponseStatus();
+
+                    LOG.info("WAITING_FOR_RESPONSE_HEADER status: " + status);
 
                     if (status == HttpStatus.OK_200) {
-                        currState = ExecutionState.EMPTY_STATE;
-                        complete();
+                        currState = ExecutionState.READ_CONTENT_DATA;
+                        event();
                     } else if (status != -1) {
                         /*
                         ** Some sort of an error response
@@ -241,6 +275,27 @@ public class SetupChunkRead implements Operation {
                         currState = ExecutionState.EMPTY_STATE;
                         complete();
                     }
+                }
+                break;
+
+            case READ_CONTENT_DATA:
+                LOG.info("READ_CONTENT_DATA");
+                currState = ExecutionState.CONTENT_PROCESSED;
+                startContentRead();
+                break;
+
+            case CONTENT_PROCESSED:
+                boolean md5Complete = updater.getMd5DigestComplete();
+                boolean allDecrypted = decryptBuffer.getBuffersAllDecrypted();
+                LOG.info("CONTENT_PROCESSED md5Complete: " + md5Complete + " allDecrypted: " + allDecrypted);
+
+                if (md5Complete && allDecrypted) {
+                    if (updater.checkContentMD5(storageServer.getMd5Digest())) {
+
+                    }
+                    LOG.info("chunk read complete");
+
+                    complete();
                 }
                 break;
 
@@ -266,26 +321,32 @@ public class SetupChunkRead implements Operation {
          **   dependencies are torn down in the correct order. The pointers in
          **   headerWriter are dependent upon the pointers in headerBuilder
          */
-        Operation headerWriter = requestHandlerOperations.get(OperationTypeEnum.WRITE_HEADER_TO_STORAGE_SERVER);
+        Operation headerWriter = requestHandlerOperations.remove(OperationTypeEnum.WRITE_HEADER_TO_STORAGE_SERVER);
         headerWriter.complete();
-        requestHandlerOperations.remove(OperationTypeEnum.WRITE_HEADER_TO_STORAGE_SERVER);
 
-        Operation headerBuilder = requestHandlerOperations.get(OperationTypeEnum.BUILD_HEADER_TO_STORAGE_SERVER);
+        Operation headerBuilder = requestHandlerOperations.remove(OperationTypeEnum.BUILD_HEADER_TO_STORAGE_SERVER);
         headerBuilder.complete();
-        requestHandlerOperations.remove(OperationTypeEnum.BUILD_HEADER_TO_STORAGE_SERVER);
+
+        Operation processResponse = requestHandlerOperations.remove(OperationTypeEnum.STORAGE_SERVER_RESPONSE_HANDLER);
+        if (processResponse != null) {
+            processResponse.complete();
+        }
 
         /*
-         ** The following must be called in order to make sure that the BufferManagerPointer
-         **   dependencies are torn down in the correct order. The pointers in
-         **   httpRespHandler are dependent upon the pointers in readRespBuffer.
+        ** Check if the Md5 and Decrypt operations are present and if so, call complete for them. These may not be
+        **   present if the chunk read from the Storage Server failed early.
+        **
+        ** NOTE: The call to complete() for the Md5Digest is handled when it completes the digest computation.
          */
-        Operation httpRespHandler = requestHandlerOperations.get(OperationTypeEnum.STORAGE_SERVER_RESPONSE_HANDLER);
-        httpRespHandler.complete();
-        requestHandlerOperations.remove(OperationTypeEnum.STORAGE_SERVER_RESPONSE_HANDLER);
+        requestHandlerOperations.remove(OperationTypeEnum.COMPUTE_MD5_DIGEST);
 
-        Operation readRespBuffer = requestHandlerOperations.get(OperationTypeEnum.READ_STORAGE_SERVER_RESPONSE_BUFFER);
-        readRespBuffer.complete();
-        requestHandlerOperations.remove(OperationTypeEnum.READ_STORAGE_SERVER_RESPONSE_BUFFER);
+        Operation decryptBuffer = requestHandlerOperations.remove(OperationTypeEnum.DECRYPT_BUFFER);
+        if (decryptBuffer != null) {
+            decryptBuffer.complete();
+        }
+
+        Operation readBuffer = requestHandlerOperations.remove(OperationTypeEnum.READ_BUFFER);
+        readBuffer.complete();
 
         /*
          ** Remove the HandleChunkReadConnError operation from the createdOperations list. This never has its
@@ -348,7 +409,7 @@ public class SetupChunkRead implements Operation {
         ** remove the HttpResponseInfo association from the ServerIdentifier
          */
         storageServer.setHttpInfo(null);
-        
+
         /*
          ** Now call back the Operation that will handle the completion
          */
@@ -428,12 +489,6 @@ public class SetupChunkRead implements Operation {
      */
     private boolean setupChunkReadOps() {
         /*
-        ** First setup the HttpResponseInfo for this request.
-         */
-        HttpResponseInfo httpInfo = new HttpResponseInfo(requestContext);
-        storageServer.setHttpInfo(httpInfo);
-
-        /*
          ** Create a BufferManager with two required entries to send the HTTP Request header to the
          **   Storage Server.
          */
@@ -512,10 +567,10 @@ public class SetupChunkRead implements Operation {
         /*
          ** Setup the operations to read in the HTTP Response header and process it
          */
-        ReadStorageServerResponseBuffer readRespBuffer = new ReadStorageServerResponseBuffer(requestContext,
-                storageServerConnection, responseBufferManager, respBufferPointer);
-        requestHandlerOperations.put(readRespBuffer.getOperationType(), readRespBuffer);
-        BufferManagerPointer httpBufferPointer = readRespBuffer.initialize();
+        ReadBuffer readBuffer = new ReadBuffer(requestContext, responseBufferManager, respBufferPointer, storageServerConnection);
+        requestHandlerOperations.put(readBuffer.getOperationType(), readBuffer);
+        httpBufferPointer = readBuffer.initialize();
+
 
         StorageServerResponseHandler httpRespHandler = new StorageServerResponseHandler(requestContext,
                 responseBufferManager, httpBufferPointer, responseBufferMetering,this,
@@ -543,4 +598,36 @@ public class SetupChunkRead implements Operation {
         return true;
     }
 
+    private void startContentRead() {
+        /*
+         ** Tear down the response header reader and handler as they are no longer needed.
+         **
+         ** The following must be called in order to make sure that the BufferManagerPointer dependencies are torn down
+         **   in the correct order. The pointers in httpRespHandler are dependent upon the pointers in readRespBuffer.
+         */
+        Operation httpRespHandler = requestHandlerOperations.get(OperationTypeEnum.STORAGE_SERVER_RESPONSE_HANDLER);
+        httpRespHandler.complete();
+        requestHandlerOperations.remove(OperationTypeEnum.STORAGE_SERVER_RESPONSE_HANDLER);
+
+        /*
+         ** The next Operations are run once the response header has been received. The routines are to
+         **   compute the Md5 digest and decrypt all the data into the chunk buffer.
+         **
+         ** NOTE: The initialize() methods are not called until after the header has been processed.
+         */
+        List<Operation> opsToRun = new LinkedList<>();
+        opsToRun.add(this);
+
+        updater = new ResponseMd5ResultHandler(requestContext);
+        ComputeMd5Digest md5Digest = new ComputeMd5Digest(requestContext, opsToRun, httpBufferPointer,
+                responseBufferManager, updater, httpInfo.getContentLength());
+        requestHandlerOperations.put(md5Digest.getOperationType(), md5Digest);
+        md5Digest.initialize();
+
+        decryptBuffer = new DecryptBuffer(requestContext, responseBufferMetering, responseBufferManager,
+                httpBufferPointer, decryptBufferMetering, decryptBufferManager, decryptMeteringPointer,
+                httpInfo.getContentLength(),this);
+        requestHandlerOperations.put(decryptBuffer.getOperationType(), decryptBuffer);
+        decryptBuffer.initialize();
+    }
 }

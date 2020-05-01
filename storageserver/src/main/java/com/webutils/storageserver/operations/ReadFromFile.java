@@ -212,6 +212,7 @@ public class ReadFromFile implements Operation {
                 /*
                 ** Done with this buffer, now check if there is data to read from the file
                  */
+                readBuffer.flip();
                 chunkGetBufferMgr.updateProducerWritePointer(chunkFileReadPtr);
 
                 if (goodResponseSent) {

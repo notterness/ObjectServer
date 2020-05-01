@@ -28,17 +28,17 @@ public class ReadBuffer implements Operation {
     private BufferManagerPointer readBufferPointer;
 
     /*
-     ** The following are used to insure that an Operation is never on a queue more than once
+     ** The following is used to insure that an Operation is never on a queue more than once
      */
     private boolean onExecutionQueue;
 
-    public ReadBuffer(final RequestContext requestContext, final BufferManagerPointer meterBufferPtr,
-                      final IoInterface connection) {
+    public ReadBuffer(final RequestContext requestContext, final BufferManager readBufferMgr,
+                      final BufferManagerPointer meterBufferPtr, final IoInterface connection) {
 
         this.requestContext = requestContext;
         this.meterBufferPtr = meterBufferPtr;
         this.clientConnection = connection;
-        this.bufferManager = this.requestContext.getClientReadBufferManager();
+        this.bufferManager = readBufferMgr;
 
         /*
          ** This starts out not being on any queue
@@ -117,17 +117,17 @@ public class ReadBuffer implements Operation {
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
         //LOG.info("ReadBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("ReadBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("ReadBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("ReadBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
+            LOG.warn("ReadBuffer[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("ReadBuffer[" + requestContext.getRequestId() + "] markAddToQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("ReadBuffer[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }

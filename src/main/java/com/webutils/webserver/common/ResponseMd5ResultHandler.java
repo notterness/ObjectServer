@@ -55,7 +55,7 @@ public class ResponseMd5ResultHandler extends Md5ResultHandler {
             return false;
         }
 
-        if (!md5FromHeader.equals(computedMd5Digest)) {
+        if (!md5DigestFromResponse.equals(computedMd5Digest)) {
             LOG.warn("opc-content-md5 [" + requestContext.getRequestId() + "] did not match computed. expected: " +
                     md5DigestFromResponse + " computed: " + computedMd5Digest);
 

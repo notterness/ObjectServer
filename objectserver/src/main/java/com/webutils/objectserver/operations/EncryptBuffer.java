@@ -159,7 +159,7 @@ public class EncryptBuffer implements Operation {
         }
 
 
-        LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] initialize done");
+        LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] initialize done savedSrcPosition: " + savedSrcPosition);
 
         return encryptInputPointer;
     }

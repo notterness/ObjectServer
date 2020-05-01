@@ -235,7 +235,7 @@ public class SetupClientConnection implements Operation {
         clientOperations.put(readMetering.getOperationType(), readMetering);
         BufferManagerPointer meteringPointer = readMetering.initialize();
 
-        ReadBuffer readBuffer = new ReadBuffer(requestContext, meteringPointer, clientConnection);
+        ReadBuffer readBuffer = new ReadBuffer(requestContext, requestContext.getClientReadBufferManager(), meteringPointer, clientConnection);
         clientOperations.put(readBuffer.getOperationType(), readBuffer);
         BufferManagerPointer readPointer = readBuffer.initialize();
 

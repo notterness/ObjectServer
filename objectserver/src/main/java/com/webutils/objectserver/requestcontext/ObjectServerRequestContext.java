@@ -151,7 +151,7 @@ public class ObjectServerRequestContext extends RequestContext {
         requestHandlerOperations.put(metering.getOperationType(), metering);
         BufferManagerPointer meteringPtr = metering.initialize();
 
-        ReadBuffer readBuffer = new ReadBuffer(this, meteringPtr, clientConnection);
+        ReadBuffer readBuffer = new ReadBuffer(this, clientReadBufferManager, meteringPtr, clientConnection);
         requestHandlerOperations.put(readBuffer.getOperationType(), readBuffer);
         readPointer = readBuffer.initialize();
 

@@ -1,21 +1,17 @@
 package com.webutils.objectserver.operations;
 
-import com.webutils.objectserver.common.ChunkBufferInfo;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.memory.MemoryManager;
-import com.webutils.webserver.operations.BufferReadMetering;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
+import com.webutils.webserver.operations.StorageServerResponseBufferMetering;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class DecryptBuffer implements Operation {
 
@@ -32,15 +28,6 @@ public class DecryptBuffer implements Operation {
     private final RequestContext requestContext;
 
     /*
-     ** The memoryManager is used to allocate ByteBuffer(s) for storageServerWriteBufferMgr to be used for
-     **   encrypted data. It is also passed into the SetupChunkWrite operation.
-     */
-    private final MemoryManager memoryManager;
-
-    private final Operation writeBufferMetering;
-    private final BufferManagerPointer meteringPointer;
-
-    /*
      ** The following are used to insure that an Operation is never on more than one queue and that
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
      **   execution queue (onExecutionQueue) is will always go on the execution queue.
@@ -51,33 +38,28 @@ public class DecryptBuffer implements Operation {
      ** The DecryptBuffer operation is a consumer of ByteBuffers that are filled in by the SetupChunkRead operation.
      **   The ByteBuffers are placed into BufferManager that is owned by the chunk read operation and it is
      **   registered with this on a per chunk basis.
-     ** The buffers are decryted and placed in the clientWriteBufferManager to be written out to the client.
-     *
-     */
-    private final BufferManager writeBufferMgr;
-
-    /*
-    ** The following is used to keep track of the information about the BufferManager and its pointer for data that
-    **   is being read in from the Storage Server.
-     */
-    private final Map<Integer, ChunkBufferInfo> chunkReadBufferInfo;
-
-    /*
-     ** The decryptInputPointer is used to track ByteBuffer(s) that are filled with client object data and are
+     ** The buffers are decrypted and placed in the clientWriteBufferManager to be written out to the client.
+     **
+     ** The encryptedBufferPointer is used to track ByteBuffer(s) that are filled with client object data and are
      **   ready to be decrypted prior to being returned to the client.
-     ** The decryptInputPointer tracks the chunkReadBufferManager where data is placed following reads from
+     ** The encryptedBufferPointer tracks the inputBufferManager where data is placed following reads from
      **   the Storage Server SocketChannel.
      */
-    private BufferManager chunkReadBufferManager;
-    private BufferManagerPointer decryptInputPointer;
+    private final BufferManager inputBufferManager;
+    private final BufferManagerPointer encryptedBufferPointer;
+    private final Operation encryptedBufferMetering;
+    private BufferManagerPointer dataToDecryptPointer;
 
     /*
-    ** The decryptOutputPointer is where the decrypted data is placed in the writeBufferManager prior to being
+    ** The decryptedBufferPointer is where the decrypted data is placed in the writeBufferManager prior to being
     **   transferred to the client.
+    ** The decryptedBufferMetering is used to obtain buffers to write the decrypted data into from the
+    **   decryptBufferManager. The decryptBufferPointer depends upon the metering Pointer.
      */
-    private BufferManagerPointer decryptOutputPointer;
-
-    private int chunkSize;
+    private final BufferManager decryptBufferManager;
+    private BufferManagerPointer decryptedBufferPointer;
+    private final Operation decryptedBufferMetering;
+    private final BufferManagerPointer meteringPointer;
 
     private final Operation completeCallback;
 
@@ -85,8 +67,8 @@ public class DecryptBuffer implements Operation {
      ** The following are used to keep track of how much has been written to this Storage Server and
      **   how much is supposed to be written.
      */
-    private int chunkBytesToDecrypt;
-    private int chunkBytesDecrypted;
+    private int bytesToDecrypt;
+    private int bytesDecrypted;
 
     private int savedSrcPosition;
 
@@ -94,35 +76,45 @@ public class DecryptBuffer implements Operation {
      ** This is set when the number of bytes encrypted matches the value passed in through the
      **   HTTP Header, content-length.
      */
-    private boolean buffersAllDecrypted;
-
-    private int chunkNumber;
+    private final AtomicBoolean buffersAllDecrypted;
 
     /*
-     ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
-     **   up the calls to obtain the VON information and the meta-data write to the database.
+    ** The following are the inputs to the decrypt operation:
+    **   Operation            - encryptedBufferMetering
+    **   BufferManager        - inputBufferMgr
+    **   BufferManagerPointer - encryptedBufferPtr (where the encrypted data is being placed)
+    **
+    **   Operation            - decryptedBufferMetering
+    **   BufferManager        - decryptBufferMgr
+    **   BufferManagerPointer - meteringPtr
+    **
+    **   int                  - bytesToDecrypt
      */
-    public DecryptBuffer(final RequestContext requestContext, final MemoryManager memoryManager,
-                         final Operation writeMetering, final BufferManagerPointer meteringPtr, final Operation completeCb) {
+    public DecryptBuffer(final RequestContext requestContext, final Operation encryptedBufferMetering,
+                         final BufferManager inputBufferMgr, final BufferManagerPointer encryptedBufferPtr,
+                         final Operation decryptedBufferMetering, final BufferManager decryptBufferMgr,
+                         final BufferManagerPointer meteringPtr, final int bytesToDecrypt, final Operation completeCb) {
 
         this.requestContext = requestContext;
-        this.memoryManager = memoryManager;
-        this.writeBufferMetering = writeMetering;
+
+        this.encryptedBufferMetering = encryptedBufferMetering;
+        this.inputBufferManager = inputBufferMgr;
+        this.encryptedBufferPointer = encryptedBufferPtr;
+
+        this.decryptedBufferMetering = decryptedBufferMetering;
+        this.decryptBufferManager = decryptBufferMgr;
         this.meteringPointer = meteringPtr;
 
-        this.completeCallback = completeCb;
+        this.bytesToDecrypt = bytesToDecrypt;
 
-        this.writeBufferMgr = requestContext.getClientWriteBufferManager();
+        this.completeCallback = completeCb;
 
         /*
          ** This starts out not being on any queue
          */
         onExecutionQueue = false;
 
-        chunkReadBufferInfo = new ConcurrentHashMap<>();
-
-        chunkNumber = 0;
-        buffersAllDecrypted = false;
+        buffersAllDecrypted = new AtomicBoolean(false);
     }
 
     public OperationTypeEnum getOperationType() {
@@ -136,31 +128,43 @@ public class DecryptBuffer implements Operation {
      **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
-        decryptOutputPointer = writeBufferMgr.register(this, meteringPointer);
+        /*
+        ** The decryptedBufferPointer is where data that has been decrypted is placed. This will be the pointer
+        **   that is used to write the data back out to the client.
+         */
+        decryptedBufferPointer = decryptBufferManager.register(this, meteringPointer);
+
+        dataToDecryptPointer = inputBufferManager.register(this, encryptedBufferPointer);
 
         /*
-         ** This keeps track of the number of bytes that have been encrypted. When it reaches a chunk
-         **   boundary, it then starts off a new chunk write sequence.
+         ** This keeps track of the number of bytes that have been decrypted.
          */
-        chunkBytesDecrypted = 0;
-
-        chunkBytesToDecrypt = requestContext.getRequestContentLength();
+        bytesDecrypted = 0;
 
         /*
-         ** savedSrcPosition is used to handle the case where there are no buffers available to place
-         **   decrypted data into, so this operation will need to wait until buffers are available.
+         ** savedSrcPosition is used to handle the case where the bytes to decrypt starts somewhere besides the start
+         **   of the ByteBuffer.
          */
-        ByteBuffer writeBuffer;
-        if ((writeBuffer = writeBufferMgr.peek(decryptOutputPointer)) != null) {
-            savedSrcPosition = writeBuffer.position();
+        ByteBuffer readBuffer;
+        if ((readBuffer = inputBufferManager.peek(dataToDecryptPointer)) != null) {
+            savedSrcPosition = readBuffer.position();
+
+            /*
+            ** Add this to the execute queue since there is already data in a buffer to decrypt
+             */
+            event();
         } else {
             savedSrcPosition = 0;
+
+            /*
+            ** There are no buffers waiting to be decrypted so meter out a buffer to force a read
+             */
+            encryptedBufferMetering.event();
         }
 
+        LOG.info("DecryptBuffer[" + requestContext.getRequestId() + "] initialize done savedSrcPosition: " + savedSrcPosition);
 
-        LOG.info("DecryptBuffer[" + requestContext.getRequestId() + "] initialize done");
-
-        return decryptOutputPointer;
+        return decryptedBufferPointer;
     }
 
     /*
@@ -186,13 +190,13 @@ public class DecryptBuffer implements Operation {
      **        buffers available.
      */
     public void execute() {
-        if (!buffersAllDecrypted) {
+        if (!buffersAllDecrypted.get()) {
             ByteBuffer readBuffer;
             ByteBuffer decryptedBuffer;
             boolean outOfBuffers = false;
 
             while (!outOfBuffers) {
-                if ((readBuffer = chunkReadBufferManager.peek(decryptInputPointer)) != null) {
+                if ((readBuffer = inputBufferManager.peek(dataToDecryptPointer)) != null) {
                     /*
                      ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
                      **  affecting the position() and limit() indexes.
@@ -205,27 +209,37 @@ public class DecryptBuffer implements Operation {
                     /*
                      ** Is there an available buffer in the client writeBufferMgr to save the decrypted data
                      */
-                    if ((decryptedBuffer = writeBufferMgr.peek(decryptOutputPointer)) != null) {
+                    if ((decryptedBuffer = decryptBufferManager.peek(decryptedBufferPointer)) != null) {
 
                         /*
-                         ** Encrypt the buffers and place them into the storageServerWriteBufferMgr
+                         ** Decrypt the buffers and place them into the decryptBufferManager. This is what will
                          */
                         decryptBuffer(srcBuffer, decryptedBuffer);
                     } else {
+                        /*
+                        ** Need to obtain another buffer to place the decrypted data inot
+                         */
+                        decryptedBufferMetering.event();
                         outOfBuffers = true;
                     }
                 } else {
 
-                    if (chunkBytesDecrypted < chunkBytesToDecrypt) {
-                        writeBufferMetering.event();
-                    } else if (chunkBytesDecrypted == chunkBytesToDecrypt) {
+                    if (bytesDecrypted < bytesToDecrypt) {
+                        /*
+                        ** Need to read in another buffers worth of encrypted data to feed into the decryption engine
+                         */
+                        LOG.info("DecryptBuffer[" + requestContext.getRequestId() + "] bytesDecrypted: " +
+                                bytesDecrypted + " bytesDecrypted: " + bytesDecrypted);
+
+                        encryptedBufferMetering.event();
+                    } else if (bytesDecrypted == bytesToDecrypt) {
                         /*
                          ** No more buffers should arrive at this point from the client
                          */
-                        LOG.info("DecryptBuffer[" + requestContext.getRequestId() + "] all buffers decrypted chunkBytesDecrypted: " +
-                                chunkBytesDecrypted + " chunkBytesDecrypted: " + chunkBytesDecrypted);
+                        LOG.info("DecryptBuffer[" + requestContext.getRequestId() + "] all buffers decrypted bytesDecrypted: " +
+                                bytesDecrypted + " bytesToDecrypt: " + bytesToDecrypt);
 
-                        buffersAllDecrypted = true;
+                        buffersAllDecrypted.set(true);
                     }
 
                     outOfBuffers = true;
@@ -233,11 +247,11 @@ public class DecryptBuffer implements Operation {
             }
         } else {
             /*
-             ** Need to cleanup here from the Decrypt operation
+             ** Now need to inform the higher level Operation that the decryption has completed
              */
-            requestContext.setAllPutDataWritten();
-
-            complete();
+            if (completeCallback != null) {
+                completeCallback.complete();
+            }
         }
     }
 
@@ -250,16 +264,14 @@ public class DecryptBuffer implements Operation {
         /*
          ** Remove the reference to the passed in meteringPointer (it is not owned by this Operation)
          */
-        writeBufferMgr.unregister(decryptOutputPointer);
-        decryptOutputPointer = null;
+        decryptBufferManager.unregister(decryptedBufferPointer);
+        decryptedBufferPointer = null;
 
-        /*
-         ** Now need to send out the final status
-         */
-        if (completeCallback != null){
-            completeCallback.complete();
-        }
+        inputBufferManager.unregister(dataToDecryptPointer);
+        dataToDecryptPointer = null;
     }
+
+    public boolean getBuffersAllDecrypted() { return buffersAllDecrypted.get(); }
 
     /*
      ** The following are used to add the Operation to the event thread's event queue. To simplify the design an
@@ -311,18 +323,6 @@ public class DecryptBuffer implements Operation {
     }
 
     /*
-    ** The following is used to register a chunk reader with the decrypt operation. This sets the following:
-    **   chunkBufferMgr - The BufferManager that is used to hold the data being read in from the Storage Server for
-    **     this chunks worth of data.
-    **   chunkDataPtr - This is the BufferManagerPointer that points to the current buffer that needs to be decrypted.
-    **   chunkNumber - This is the chunk that data is being transferred for. This is an integer that starts at 0.
-    **   chunkSize - The number of bytes to be transferred for this chunk.
-     */
-    public void registerChunkInfo(final ChunkBufferInfo chunkBufferInfo) {
-        chunkReadBufferInfo.put(chunkBufferInfo.getChunkNumber(), chunkBufferInfo);
-    }
-
-    /*
      ** This method is used to decrypt a buffer and place it into another location. This method has the following
      **   side effects:
      **     -> If the entire srcBuffer is consumed, it will increment the clientReadBufferMgr.peek(clientBufferPtr)
@@ -351,32 +351,27 @@ public class DecryptBuffer implements Operation {
         if (bytesToDecrypt <= bytesInTgtBuffer) {
             tgtBuffer.put(srcBuffer);
 
-            //LOG.info("DecryptBuffer[" + requestContext.getRequestId() + "] 1 - remaining: " + tgtBuffer.remaining());
+            LOG.info("DecryptBuffer[" + requestContext.getRequestId() + "] 1 - remaining: " + tgtBuffer.remaining());
 
             /*
              ** This is the case where the amount of data remaining to be encrypted in the srcBuffer
              **   completely fills the tgtBuffer.
              */
-            if ((tgtBuffer.remaining() == 0) || ((tgtBuffer.remaining() + chunkBytesDecrypted) == chunkBytesToDecrypt)) {
-
-                /*
-                 ** The buffer is either full or all the data has been received for the client object
-                 */
-                checkForNewChunkStart();
+            if ((tgtBuffer.remaining() == 0) || ((tgtBuffer.remaining() + bytesDecrypted) == bytesToDecrypt)) {
 
                 /*
                  ** Update the number of bytes that have been encrypted
                  */
-                chunkBytesDecrypted += tgtBuffer.limit();
-                //LOG.info("DecryptBuffer[" + requestContext.getRequestId() + "] 1 - chunkBytesToDecrypt: " + chunkBytesToDecrypt +
-                //        " chunkBytesDecrypted: " + chunkBytesDecrypted);
+                bytesDecrypted += tgtBuffer.limit();
+                LOG.info("DecryptBuffer[" + requestContext.getRequestId() + "] 1 - bytesToDecrypt: " + bytesToDecrypt +
+                        " bytesDecrypted: " + bytesDecrypted);
 
                 /*
                  ** Since the target buffer has been written to, its position() is set to its limit(), so
                  **   reset the position() back to the start.
                  */
                 tgtBuffer.flip();
-                writeBufferMgr.updateProducerWritePointer(decryptOutputPointer);
+                decryptBufferManager.updateProducerWritePointer(decryptedBufferPointer);
             }
 
             /*
@@ -385,11 +380,11 @@ public class DecryptBuffer implements Operation {
              **   obtained.
              */
             savedSrcPosition = 0;
-            chunkReadBufferManager.updateConsumerReadPointer(decryptInputPointer);
+            inputBufferManager.updateConsumerReadPointer(dataToDecryptPointer);
 
         } else {
-            //LOG.info("DecryptBuffer[" + requestContext.getRequestId() + "] full src: " + srcBuffer.remaining() +
-            //        " tgt: " + tgtBuffer.remaining());
+            LOG.info("DecryptBuffer[" + requestContext.getRequestId() + "] full src: " + srcBuffer.remaining() +
+                    " tgt: " + tgtBuffer.remaining());
 
             /*
              ** This is the case where the srcBuffer has more data to encrypt than the tgtBuffer can accept.
@@ -403,42 +398,17 @@ public class DecryptBuffer implements Operation {
             savedSrcPosition = srcBuffer.position() + bytesInTgtBuffer;
 
             /*
-             ** The target buffer is full, so check for a chunk start
-             */
-            checkForNewChunkStart();
-
-            /*
              ** Increment the encrypted bytes since this tgt buffer is full
              */
-            chunkBytesDecrypted += tgtBuffer.limit();
-            //LOG.info("DecryptBuffer[" + requestContext.getRequestId() + "] 2 - chunkBytesToDecrypt: " + chunkBytesToDecrypt +
-            //        " chunkBytesDecrypted: " + chunkBytesDecrypted);
+            bytesDecrypted += tgtBuffer.limit();
+            LOG.info("DecryptBuffer[" + requestContext.getRequestId() + "] 2 - bytesToDecrypt: " + bytesToDecrypt +
+                    " bytesDecrypted: " + bytesDecrypted);
 
             /*
              ** The tgtBuffer is now full.
              */
             tgtBuffer.flip();
-            writeBufferMgr.updateProducerWritePointer(decryptOutputPointer);
-        }
-    }
-
-    /*
-     ** If this buffer is the first one for a chunk, add a bookmark and also kick off the
-     **   SetupWriteChunk operation
-     */
-    private void checkForNewChunkStart() {
-        /*
-         ** The buffer is full, so check if it is time to start a new chunk
-         */
-        if ((chunkBytesDecrypted % chunkSize) == 0) {
-            /*
-             ** This bookmark will be used by the WriteToStorageServer operations. The WriteStorageServer
-             **   operations will be created by the SetupChunkWrite once it has determined the
-             **   VON information.
-             */
-            writeBufferMgr.bookmarkThis(decryptOutputPointer);
-
-            chunkNumber++;
+            decryptBufferManager.updateProducerWritePointer(decryptedBufferPointer);
         }
     }
 
@@ -463,12 +433,17 @@ public class DecryptBuffer implements Operation {
                 {2048, 512},
         };
 
+        final int BUFFERS_TO_ALLOCATE = 10;
+
         LOG.info("DecryptBuffer[" + requestContext.getRequestId() + "] testEncryption() start");
+
+        MemoryManager memoryManager = new MemoryManager(requestContext.getWebServerFlavor());
 
         /*
          ** Setup the BufferReadMetering to populate the clientReadBufferManager with ByteBuffer(s)
          */
-        BufferReadMetering metering = new BufferReadMetering(requestContext, memoryManager);
+        StorageServerResponseBufferMetering metering = new StorageServerResponseBufferMetering(requestContext,
+                memoryManager, inputBufferManager, BUFFERS_TO_ALLOCATE);
         BufferManagerPointer meteringPtr = metering.initialize();
 
         /*
@@ -476,8 +451,7 @@ public class DecryptBuffer implements Operation {
          **   be used to perform the encryption. The buffers added to the clientReadBufferMgr are
          **   initialized to a known pattern.
          */
-        BufferManager clientReadBufferMgr = requestContext.getClientReadBufferManager();
-        BufferManagerPointer readFillPtr = clientReadBufferMgr.register(this, meteringPtr);
+        BufferManagerPointer readFillPtr = inputBufferManager.register(this, meteringPtr);
 
         /*
          ** Create the two dependent pointers to read the ByteBuffers from one BufferManager, encrypt the buffer, and
@@ -486,13 +460,13 @@ public class DecryptBuffer implements Operation {
          ** NOTE: This needs to be done prior to adding buffers to the BufferManager as the dependent
          **   BufferManagerPointer picks up the producers current write index as its starting read index.
          */
-        decryptInputPointer = clientReadBufferMgr.register(this, readFillPtr);
+        dataToDecryptPointer = inputBufferManager.register(this, readFillPtr);
 
         /*
          ** Now create one more dependent BufferManagerPointer on the storageServerWritePointer to read all of
          **   the encrypted data back to insure it matches what is expected.
          */
-        BufferManagerPointer validatePtr = writeBufferMgr.register(this, decryptOutputPointer);
+        BufferManagerPointer validatePtr = decryptBufferManager.register(this, decryptedBufferPointer);
 
         /*
          ** Now add buffers the the two BufferManagers
@@ -503,7 +477,7 @@ public class DecryptBuffer implements Operation {
             int capacity = allocations[i][0];
 
             metering.execute();
-            buffer = clientReadBufferMgr.poll(readFillPtr);
+            buffer = inputBufferManager.poll(readFillPtr);
             if (buffer != null) {
                 buffer.limit(capacity);
 
@@ -518,21 +492,22 @@ public class DecryptBuffer implements Operation {
             /*
              ** Now add in the buffers to decrypt the data into
              */
+            decryptedBufferMetering.execute();
             capacity = allocations[i][1];
-            buffer = writeBufferMgr.poll(decryptOutputPointer);
+            buffer = decryptBufferManager.poll(decryptedBufferPointer);
             if (buffer != null) {
                 buffer.limit(capacity);
             }
         }
 
-        writeBufferMgr.reset(decryptOutputPointer);
+        decryptBufferManager.reset(decryptedBufferPointer);
 
         /*
          ** Need to set the chunkBytesToEncrypt to prevent the encryption loop from doing odd things
          */
-        chunkBytesToDecrypt = 0;
+        bytesToDecrypt = 0;
         for (int i = 0; i < allocations.length; i++) {
-            chunkBytesToDecrypt += allocations[i][0];
+            bytesToDecrypt += allocations[i][0];
         }
 
         /*
@@ -549,7 +524,7 @@ public class DecryptBuffer implements Operation {
         int decryptedValue;
         int tgtBuffer = 0;
         fillValue = 0;
-        while ((readBuffer = writeBufferMgr.poll(validatePtr)) != null) {
+        while ((readBuffer = decryptBufferManager.poll(validatePtr)) != null) {
             for (int j = 0; j < readBuffer.limit(); j = j + 4) {
                 decryptedValue = readBuffer.getInt();
                 if (decryptedValue != fillValue) {
@@ -568,10 +543,10 @@ public class DecryptBuffer implements Operation {
         /*
          ** Cleanup the test. Start by removing all the BufferManagerPointer(s) from the BufferManager(s)
          */
-        writeBufferMgr.unregister(validatePtr);
+        decryptBufferManager.unregister(validatePtr);
         complete();
 
-        clientReadBufferMgr.unregister(readFillPtr);
+        inputBufferManager.unregister(readFillPtr);
         metering.complete();
     }
 
@@ -581,8 +556,8 @@ public class DecryptBuffer implements Operation {
     public void dumpCreatedOperations(final int level) {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
 
-        if (decryptOutputPointer != null) {
-            decryptOutputPointer.dumpPointerInfo();
+        if (decryptedBufferPointer != null) {
+            decryptedBufferPointer.dumpPointerInfo();
         }
         LOG.info("");
     }
