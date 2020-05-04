@@ -2,14 +2,13 @@ package com.webutils.objectserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.buffermgr.ChunkMemoryPool;
-import com.webutils.webserver.common.Md5ResultHandler;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ObjectInfo;
-import com.webutils.webserver.operations.BufferWriteMetering;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
+import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,7 +21,9 @@ public class ReadObjectChunks implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.READ_OBJECT_CHUNKS;
+    private final OperationTypeEnum operationType = OperationTypeEnum.READ_OBJECT_CHUNKS;
+
+    private final int MAXIMUM_NUMBER_OF_CHUNKS_PER_OBJECT = 10;
 
     /*
      ** The operations are all tied together via the RequestContext
@@ -37,9 +38,10 @@ public class ReadObjectChunks implements Operation {
     ** This is to make the execute() function more manageable
      */
     enum ExecutionState {
-        EXTRACT_CHUNK_LOCATION,
+        DETERMINE_STORAGE_SERVERS,
         SETUP_CHUNK_READ,
-        ALL_CHUNKS_READ,
+        VERIFY_CHUNK_READ,
+        ALL_CHUNKS_COMPLETED,
         EMPTY_STATE
     }
 
@@ -54,21 +56,26 @@ public class ReadObjectChunks implements Operation {
 
     private final Operation completeCallback;
 
-    private final Md5ResultHandler updater;
-
     /*
      ** The following is a map of all of the created Operations to handle this request.
      */
     private final Map<OperationTypeEnum, Operation> readChunksOps;
-
-    private boolean setupMethodDone;
 
     /*
     ** The following is the list of Storage Servers to attempt to read in chunk data from. In the event the server is
     **   not accessible, then a new server will be attempted (assuming there is a redundant server to read the data
     **   from).
      */
-    private final List<ServerIdentifier> serversToReadFrom;
+    private final ServerIdentifier[] serversToReadFrom;
+
+    /*
+     ** The following is used to keep track of the SetupChunkRead operation that is used to read the chunk in from the
+     **   Storage Server, process the chunk and then send it to the client.
+     */
+    private final SetupChunkRead[] chunkReadOps;
+
+    private int totalChunksToProcess;
+    private int chunkToWrite;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -88,21 +95,22 @@ public class ReadObjectChunks implements Operation {
         this.objectInfo = objectInfo;
         this.completeCallback = completeCb;
 
-        this.updater = requestContext.getMd5ResultHandler();
-
         /*
          ** Setup the list of Operations currently used to handle the GET object method
          */
         readChunksOps = new HashMap<>();
 
-        serversToReadFrom = new LinkedList<>();
+        serversToReadFrom = new ServerIdentifier[MAXIMUM_NUMBER_OF_CHUNKS_PER_OBJECT];
+        chunkReadOps = new SetupChunkRead[MAXIMUM_NUMBER_OF_CHUNKS_PER_OBJECT];
+
 
         /*
          ** This starts out not being on any queue
          */
         onExecutionQueue = false;
 
-        currState = ExecutionState.EXTRACT_CHUNK_LOCATION;
+        chunkToWrite = 0;
+        currState = ExecutionState.DETERMINE_STORAGE_SERVERS;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -131,43 +139,139 @@ public class ReadObjectChunks implements Operation {
 
     public void execute() {
         switch (currState) {
-            case EXTRACT_CHUNK_LOCATION:
-                /*
-                 ** Find one chunk for each chunkIndex and request the data for that chunk
-                 */
-                int chunkIndexToFind = 0;
-                for (ServerIdentifier server: objectInfo.getChunkList()) {
-                    if (server.getChunkNumber() == chunkIndexToFind) {
-                        serversToReadFrom.add(server);
+            case DETERMINE_STORAGE_SERVERS:
+                {
+                    /*
+                     ** Find one chunk for each chunkIndex and request the data for that chunk
+                     */
+                    int chunkIndexToFind = 0;
+                    for (ServerIdentifier server : objectInfo.getChunkList()) {
+                        if (server.getChunkNumber() == chunkIndexToFind) {
+                            serversToReadFrom[chunkIndexToFind] = server;
 
-                        LOG.info("ReadObjectChunks[" + requestContext.getRequestId() + "] addr: " +
-                                server.getServerIpAddress().toString() + " port: " +
-                                server.getServerTcpPort() + " chunkNumber: " + server.getChunkNumber() + " offset: " +
-                                server.getOffset() + " chunkSize: " + server.getLength());
+                            LOG.info("ReadObjectChunks[" + requestContext.getRequestId() + "] addr: " +
+                                    server.getServerIpAddress().toString() + " port: " +
+                                    server.getServerTcpPort() + " chunkNumber: " + server.getChunkNumber() + " offset: " +
+                                    server.getOffset() + " chunkSize: " + server.getLength());
 
-                        chunkIndexToFind++;
+                            chunkIndexToFind++;
+                        }
+                    }
+                    totalChunksToProcess = chunkIndexToFind;
+
+                    /*
+                     ** Remove the servers so they will not be used again if there is an error reading from any of them
+                     */
+                    for (int i = 0; i < totalChunksToProcess; i++) {
+                        ServerIdentifier server = serversToReadFrom[i];
+                        if (server != null) {
+                            objectInfo.getChunkList().remove(server);
+                        }
+                    }
+
+
+                    LOG.info("ReadObjectChunks totalChunksToProcess: " + totalChunksToProcess);
+                }
+
+                if (totalChunksToProcess > 0) {
+                    currState = ExecutionState.SETUP_CHUNK_READ;
+                    /*
+                     ** Fall through
+                     */
+                } else {
+                    currState = ExecutionState.ALL_CHUNKS_COMPLETED;
+                    event();
+                    break;
+                }
+
+            case SETUP_CHUNK_READ:
+                {
+                    currState = ExecutionState.VERIFY_CHUNK_READ;
+
+                    /*
+                    ** Start the reads for each chunk
+                     */
+                    int chunkIndex = 0;
+                    while (chunkIndex < totalChunksToProcess) {
+                        ServerIdentifier server = serversToReadFrom[chunkIndex];
+
+                        if (server != null) {
+                            SetupChunkRead chunkRead = new SetupChunkRead(requestContext, server, memoryManager, chunkMemPool,
+                                this, server.getChunkNumber(), null);
+                            chunkReadOps[chunkIndex] = chunkRead;
+
+                            chunkRead.initialize();
+                            chunkRead.event();
+                        }
+                        chunkIndex++;
+                    }
+                }
+                break;
+
+            case VERIFY_CHUNK_READ:
+                {
+                    int chunkIndex = 0;
+                    while (chunkIndex < totalChunksToProcess) {
+
+                        ServerIdentifier server = serversToReadFrom[chunkIndex];
+                        if ((server != null) && (server.getChunkNumber() == chunkToWrite)) {
+                            /*
+                            ** First check if this chunks write to the client has completed
+                             */
+                            if (server.getClientChunkWriteDone()) {
+                                chunkReadOps[chunkToWrite].complete();
+
+                                /*
+                                ** Remove the references
+                                 */
+                                chunkReadOps[chunkToWrite] = null;
+                                serversToReadFrom[chunkToWrite] = null;
+                                chunkToWrite++;
+                            } else if (server.getResponseStatus() == HttpStatus.OK_200) {
+                                /*
+                                 ** Since the previous chunk write to the client has complete, check if the next chunk
+                                 **   is ready to be written out to the client (which is true since the status was
+                                 **   OK_200).
+                                 ** Only start the write to the client if there has not been an error
+                                 */
+                                if (requestContext.getHttpParseStatus() == HttpStatus.OK_200) {
+                                    chunkReadOps[chunkToWrite].event();
+                                } else {
+                                    /*
+                                    ** Clean up
+                                     */
+                                    chunkReadOps[chunkToWrite].complete();
+
+                                    /*
+                                     ** Remove the references and mark this chunk as "written"
+                                     */
+                                    chunkReadOps[chunkToWrite] = null;
+                                    serversToReadFrom[chunkToWrite] = null;
+                                    chunkToWrite++;
+                                }
+                            } else {
+                                /*
+                                 ** Waiting for either the chunk to be read in or to be written to the client so there
+                                 **   is nothing to do for now
+                                 */
+                                break;
+                            }
+                        }
+
+                        chunkIndex++;
+                    }   // end of while()
+
+                    if (chunkToWrite == totalChunksToProcess) {
+                        currState = ExecutionState.ALL_CHUNKS_COMPLETED;
+                        /*
+                        ** Fall through
+                         */
+                    } else {
+                        break;
                     }
                 }
 
-                currState = ExecutionState.SETUP_CHUNK_READ;
-                event();
-                break;
-
-            case SETUP_CHUNK_READ:
-                currState = ExecutionState.ALL_CHUNKS_READ;
-
-                /*
-                 ** Start the reads for each chunk
-                 */
-                for (ServerIdentifier server: serversToReadFrom) {
-                    SetupChunkRead chunkRead = new SetupChunkRead(requestContext, server, memoryManager, chunkMemPool,
-                            this, server.getChunkNumber(), null);
-                    chunkRead.initialize();
-                    chunkRead.event();
-                }
-                break;
-
-            case ALL_CHUNKS_READ:
+            case ALL_CHUNKS_COMPLETED:
                 completeCallback.event();
                 currState = ExecutionState.EMPTY_STATE;
                 break;

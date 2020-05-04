@@ -34,7 +34,7 @@ public class HttpResponseListener implements HttpParser.ResponseHandler {
     @Override
     public void parsedHeader(HttpField field) {
 
-        LOG.info("parseHeader(resp) _hdr: " + field.getName() + " _val: " + field.getValue());
+        //LOG.info("parseHeader(resp) _hdr: " + field.getName() + " _val: " + field.getValue());
 
         httpInfo.addHeaderValue(field);
     }

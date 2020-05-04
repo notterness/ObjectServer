@@ -22,7 +22,7 @@ public class ReadFromFile implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.READ_FROM_FILE;
+    private final OperationTypeEnum operationType = OperationTypeEnum.READ_FROM_FILE;
 
     /*
      ** Strings used to build the success response for the chunk read

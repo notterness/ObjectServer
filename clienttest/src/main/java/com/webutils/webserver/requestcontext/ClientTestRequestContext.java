@@ -93,4 +93,21 @@ public class ClientTestRequestContext extends RequestContext {
         return null;
     }
 
+    public void cleanupServerRequest() {
+
+        clientConnection.closeConnection();
+
+        /*
+         ** Call reset() to make sure the BufferManager(s) have released all the references to
+         **   ByteBuffer(s).
+         */
+        reset();
+
+        /*
+         ** Finally release the clientConnection back to the free pool.
+         */
+        releaseConnection(clientConnection);
+        clientConnection = null;
+    }
+
 }

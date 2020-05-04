@@ -133,6 +133,7 @@ public class DecryptBuffer implements Operation {
         **   that is used to write the data back out to the client.
          */
         decryptedBufferPointer = decryptBufferManager.register(this, meteringPointer);
+        decryptBufferManager.bookmarkThis(decryptedBufferPointer);
 
         dataToDecryptPointer = inputBufferManager.register(this, encryptedBufferPointer);
 

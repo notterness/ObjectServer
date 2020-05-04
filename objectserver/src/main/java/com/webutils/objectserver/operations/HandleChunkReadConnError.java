@@ -16,7 +16,7 @@ public class HandleChunkReadConnError implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.HANDLE_CHUNK_WRITE_CONN_ERROR;
+    private final OperationTypeEnum operationType = OperationTypeEnum.HANDLE_CHUNK_READ_CONN_ERROR;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.

@@ -5,6 +5,7 @@ import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.Operation;
+import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -95,6 +96,10 @@ public class TestEventThread implements EventPollThread {
         if (waitingOperation != null) {
             waitingOperation.event();
         }
+    }
+
+    public void releaseContext(final RequestContext requestContext) {
+
     }
 
     /*

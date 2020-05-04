@@ -32,8 +32,6 @@ public abstract class RequestContext {
 
     private static final Logger LOG = LoggerFactory.getLogger(RequestContext.class);
 
-    public static final int STORAGE_SERVER_PORT_BASE = 5010;
-
     /*
      ** This is the define for the chunk size in bytes. There are two different defines, one to allow easy testing of
      **   the chunk boundary crossing in a simulation environment and the other for production
@@ -244,22 +242,7 @@ public abstract class RequestContext {
     **   a pristine state so it can be used for a new request.
     ** Once it is cleaned up, this RequestContext is added back to the free list so it can be used again.
      */
-    public void cleanupServerRequest() {
-
-        clientConnection.closeConnection();
-
-        /*
-        ** Call reset() to make sure the BufferManager(s) have released all the references to
-        **   ByteBuffer(s).
-         */
-        reset();
-
-        /*
-        ** Finally release the clientConnection back to the free pool.
-         */
-        releaseConnection(clientConnection);
-        clientConnection = null;
-    }
+    public abstract void cleanupServerRequest();
 
     /*
     ** This is used to clean up both the Client and Server side for the RequestContext.
@@ -480,6 +463,11 @@ public abstract class RequestContext {
 
     public void releaseConnection(final IoInterface connection) {
         threadThisContextRunsOn.releaseConnection(connection);
+    }
+
+    public void releaseContext() {
+        LOG.info("releaseContext()");
+        threadThisContextRunsOn.releaseContext(this);
     }
 
     /*

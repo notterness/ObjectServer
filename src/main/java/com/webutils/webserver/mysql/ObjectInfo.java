@@ -20,8 +20,16 @@ public class ObjectInfo {
      */
     private final List<ServerIdentifier> chunkList;
 
+    private int objectId;
+
     private int contentLength;
     private String contentMd5;
+
+    private String lastModified;
+    private String versionId;
+
+    private String etag;
+
 
     public ObjectInfo(final HttpRequestInfo objectHttpInfo) {
 
@@ -33,17 +41,17 @@ public class ObjectInfo {
     }
 
     public String getNamespace() { return namespace; }
-
     public String getBucketName() { return bucketName; }
-
     public String getObjectName() {
         return objectName;
     }
 
+    public void setObjectId(final int uniqueId) { objectId = uniqueId; }
+    public int getObjectId() { return objectId; }
+
     public void setContentLength(final int length) {
         contentLength = length;
     }
-
     public int getContentLength() {
         return contentLength;
     }
@@ -51,7 +59,6 @@ public class ObjectInfo {
     public void setContentMd5(final String digest) {
         contentMd5 = digest;
     }
-
     public String getContentMd5() {
         return contentMd5;
     }
@@ -59,4 +66,13 @@ public class ObjectInfo {
     public List<ServerIdentifier> getChunkList() {
         return chunkList;
     }
+
+    public void setLastModified( final String date ) { lastModified = date; }
+    public String getLastModified() { return lastModified; }
+
+    public void setVersionId(final String id) { versionId = id; }
+    public String getVersionId() { return versionId; }
+
+    public void setEtag( final String objectUUID ) { etag = objectUUID; }
+    public String getEtag() {return etag; }
 }

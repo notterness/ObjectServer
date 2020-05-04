@@ -21,7 +21,7 @@ public class SendFinalStatus implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.SEND_FINAL_STATUS;
+    private final OperationTypeEnum operationType = OperationTypeEnum.SEND_FINAL_STATUS;
 
     /*
     ** The RequestContext is used to keep the overall state and various data used to track this Request.

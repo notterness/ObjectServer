@@ -297,6 +297,11 @@ public class ObjectServerRequestContext extends RequestContext {
          */
         releaseConnection(clientConnection);
         clientConnection = null;
+
+        /*
+         ** Add the context back to the free pool
+         */
+        releaseContext();
     }
 
     /*

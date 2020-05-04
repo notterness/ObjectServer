@@ -6,8 +6,10 @@ import com.webutils.webserver.common.Md5ResultHandler;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ObjectInfo;
+import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
+import com.webutils.webserver.operations.WriteToClient;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,19 +25,7 @@ public class SetupObjectGet implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_OBJECT_GET;
-
-    /*
-     ** Strings used to build the success response for the chunk write
-     */
-    private final static String SUCCESS_HEADER_1 = "opc-client-request-id: ";
-    private final static String SUCCESS_HEADER_2 = "opc-request-id: ";
-    private final static String SUCCESS_HEADER_3 = "Etag: ";
-    private final static String SUCCESS_HEADER_4 = "Content-MD5: ";
-    private final static String SUCCESS_HEADER_5 = "last-modified: ";
-    private final static String SUCCESS_HEADER_6 = "archival-state: ";
-    private final static String SUCCESS_HEADER_7 = "version-id ";
-    private final static String SUCCESS_HEADER_8 = "Content-Length: ";
+    private final OperationTypeEnum operationType = OperationTypeEnum.SETUP_OBJECT_GET;
 
 
     /*
@@ -80,11 +70,11 @@ public class SetupObjectGet implements Operation {
      ** This is used to setup the initial Operation dependencies required to handle the Storage Server GET
      **   request. This is how chunks of data for an Object are read to the backing storage.
      */
-    public SetupObjectGet(final RequestContext requestContext, final MemoryManager mempryManager,
+    public SetupObjectGet(final RequestContext requestContext, final MemoryManager memoryManager,
                           final ChunkMemoryPool chunkMemPool, final Operation completeCb) {
 
         this.requestContext = requestContext;
-        this.memoryManager = mempryManager;
+        this.memoryManager = memoryManager;
         this.chunkMemPool = chunkMemPool;
         this.completeCallback = completeCb;
 
@@ -142,7 +132,24 @@ public class SetupObjectGet implements Operation {
             objectGetHandlerOps.put(readChunks.getOperationType(), readChunks);
             readChunks.initialize();
 
-            RetrieveObjectInfo retrieveObjectInfo = new RetrieveObjectInfo(requestContext, objectInfo, readChunks, this);
+            /*
+            ** In the good path, after the HTTP Response is sent back to the client, then start reading in the chunks
+            **   that make up the requested object.
+             */
+            SendObjectGetResponse sendResponse = new SendObjectGetResponse(requestContext, memoryManager, objectInfo);
+            objectGetHandlerOps.put(sendResponse.getOperationType(), sendResponse);
+            BufferManagerPointer clientWritePtr = sendResponse.initialize();
+
+            IoInterface clientConnection = requestContext.getClientConnection();
+            WriteToClient writeToClient = new WriteToClient(requestContext, clientConnection, readChunks, clientWritePtr);
+            objectGetHandlerOps.put(writeToClient.getOperationType(), writeToClient);
+            writeToClient.initialize();
+
+            /*
+            ** When all the data is read in from the database (assuming it was successful), then send the HTTP Response
+            **   back to the client.
+             */
+            RetrieveObjectInfo retrieveObjectInfo = new RetrieveObjectInfo(requestContext, objectInfo, sendResponse, this);
             objectGetHandlerOps.put(retrieveObjectInfo.getOperationType(), retrieveObjectInfo);
             retrieveObjectInfo.initialize();
             retrieveObjectInfo.event();
@@ -160,6 +167,12 @@ public class SetupObjectGet implements Operation {
     public void complete() {
 
         LOG.info("SetupObjectGet[" + requestContext.getRequestId() + "] complete()");
+
+        Operation writeToClient = objectGetHandlerOps.remove(OperationTypeEnum.WRITE_TO_CLIENT);
+        writeToClient.complete();
+
+        Operation sendResponse = objectGetHandlerOps.remove(OperationTypeEnum.SEND_OBJECT_GET_RESPONSE);
+        sendResponse.complete();
 
         /*
          ** Remove the COMPUTE_MD5_DIGEST operation from the list since it will have already called it's
@@ -243,30 +256,6 @@ public class SetupObjectGet implements Operation {
             createdOperation.dumpCreatedOperations(level + 1);
         }
         LOG.info("");
-    }
-
-    /*
-     ** This builds the OK_200 response headers for the GET Object command. This returns the following headers:
-     **
-     **   opc-client-request-id - If the client passed one in, otherwise it it will not be returned
-     **   opc-request-id
-     **   Content-Md5
-     */
-    private String buildSuccessHeader() {
-        String successHeader;
-
-        String contentMD5 = updater.getComputedMd5Digest();
-        String opcClientRequestId = requestContext.getHttpInfo().getOpcClientRequestId();
-        String opcRequestId = requestContext.getHttpInfo().getOpcRequestId();
-
-        if (opcClientRequestId != null) {
-            successHeader = SUCCESS_HEADER_1 + opcClientRequestId + "\n" + SUCCESS_HEADER_2 + opcRequestId + "\n" +
-                    SUCCESS_HEADER_3 + contentMD5 + "\n";
-        } else {
-            successHeader = SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + contentMD5 + "\n";
-        }
-
-        return successHeader;
     }
 
 }

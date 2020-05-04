@@ -327,7 +327,7 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
                                 StringTokenizer stk = new StringTokenizer(ip, " /");
                                 if (stk.hasMoreTokens()) {
                                     hostName = stk.nextToken();
-                                    LOG.info("hostName: " + hostName + " length: " + length);
+                                    LOG.info("hostName: " + hostName + " chunkIndex: " + chunkIndex + " length: " + length);
                                 }
 
                                 /*

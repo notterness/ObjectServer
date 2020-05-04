@@ -130,6 +130,11 @@ public class NioEventPollThread implements Runnable, EventPollThread {
         }
     }
 
+    public void releaseContext(final RequestContext requestContext) {
+        LOG.info("releaseContext()");
+        requestContextPool.releaseContext(requestContext);
+    }
+
     /*
     ** This is where a RequestContext is acquired for a connection and the association between the connection and
     **   the SocketChannel is made. This is how the NIO layer is linked into the actual RequestContext and its

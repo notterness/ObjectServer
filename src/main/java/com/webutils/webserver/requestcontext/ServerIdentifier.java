@@ -1,8 +1,10 @@
 package com.webutils.webserver.requestcontext;
 
 import com.webutils.webserver.http.HttpResponseInfo;
+import org.eclipse.jetty.http.HttpStatus;
 
 import java.net.InetAddress;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /*
 ** This is used to uniquely identify a Storage Server and a chunk operation
@@ -20,6 +22,18 @@ public class ServerIdentifier {
     private String chunkLocation;
 
     private String md5Digest;
+
+    /*
+    ** The following are used to keep track of the status for this chunk operation
+     */
+    private final AtomicBoolean statusSet;
+    private int status;
+
+    /*
+    ** The following is set to indicate that the write to the client completed successfully. If there was an error
+    **   the RequestContext error will be set
+     */
+    private final AtomicBoolean clientChunkWriteDone;
 
     /*
     ** This is used to handle the HTTP Information that is parsed out of the response from the request to this
@@ -40,6 +54,9 @@ public class ServerIdentifier {
         this.chunkNumber = chunkNumber;
 
         chunkUniqueId = -1;
+
+        statusSet = new AtomicBoolean(false);
+        clientChunkWriteDone = new AtomicBoolean(false);
     }
 
     public String getServerName() { return serverName; }
@@ -91,4 +108,35 @@ public class ServerIdentifier {
     public void setHttpInfo(final HttpResponseInfo httpResponseInfo) { httpInfo = httpResponseInfo; }
 
     public HttpResponseInfo getHttpInfo() { return httpInfo; }
+
+    /*
+    **
+     */
+    public void setResponseStatus(final int responseStatus) {
+        boolean alreadySet = statusSet.getAndSet(true);
+
+        if (!alreadySet) {
+            status = responseStatus;
+        } else if (status == HttpStatus.OK_200) {
+            /*
+            ** If there was already a status update, do not overwrite a previous error
+             */
+            status = responseStatus;
+        }
+    }
+
+    public int getResponseStatus() {
+        if (statusSet.get()) {
+            return status;
+        }
+
+        return -1;
+    }
+
+    /*
+    **
+     */
+    public void setClientChunkWriteDone() { clientChunkWriteDone.set(true);}
+
+    public boolean getClientChunkWriteDone() { return clientChunkWriteDone.get(); }
 }

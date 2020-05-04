@@ -17,10 +17,17 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SetupChunkRead implements Operation {
 
     private static final Logger LOG = LoggerFactory.getLogger(SetupChunkRead.class);
+
+    /*
+     ** A unique identifier for this Operation so it can be tracked.
+     */
+    private final OperationTypeEnum operationType;
+
 
     private final int STORAGE_SERVER_HEADER_BUFFER_COUNT = 4;
     private final int STORAGE_SERVER_GET_BUFFER_COUNT = 10;
@@ -28,7 +35,6 @@ public class SetupChunkRead implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -57,6 +63,10 @@ public class SetupChunkRead implements Operation {
         WAITING_FOR_RESPONSE_HEADER,
         READ_CONTENT_DATA,
         CONTENT_PROCESSED,
+        WRITE_CHUNK_TO_CLIENT,
+        CALLBACK_OPS_CHUNK_READ,
+        CHUNK_DATA_WRITTEN,
+        CALLBACK_OPS,
         EMPTY_STATE
     }
 
@@ -87,6 +97,7 @@ public class SetupChunkRead implements Operation {
     ** The decryptedBufferManager comes from a pool of pre-allocated BufferManagers that have a full chunks worth of
     **   ByteBuffers allocated to them.
      */
+    private ChunkAllocBufferInfo allocInfo;
     private BufferManager decryptBufferManager;
     private BufferManagerPointer decryptMeteringPointer;
     private Operation decryptBufferMetering;
@@ -124,6 +135,9 @@ public class SetupChunkRead implements Operation {
 
     private boolean serverConnectionClosedDueToError;
 
+    private WriteChunkToClient writeChunkToClient;
+    private final AtomicBoolean allChunkDataWritten;
+
     /*
     ** The updater used to manage the Md5 digest and its result
      */
@@ -138,6 +152,7 @@ public class SetupChunkRead implements Operation {
                           final Operation completeCb, final int writer, final String errorInjectString) {
 
         this.operationType = OperationTypeEnum.fromInt(OperationTypeEnum.SETUP_CHUNK_READ_0.toInt() + writer);
+
         this.requestContext = requestContext;
         this.storageServer = server;
         this.memoryManager = memoryManager;
@@ -169,6 +184,8 @@ public class SetupChunkRead implements Operation {
 
         serverConnectionClosedDueToError = false;
 
+        allChunkDataWritten = new AtomicBoolean(false);
+
         LOG.info("SetupChunkRead[" + requestContext.getRequestId() + "] addr: " +
                 storageServer.getServerIpAddress().toString() + " port: " +
                 storageServer.getServerTcpPort() + " chunkNumber: " + storageServer.getChunkNumber() + " offset: " +
@@ -194,7 +211,7 @@ public class SetupChunkRead implements Operation {
          **   failures by a Storage Server to be handled easily. It would be much harder to handle a failure if
          **   part of the data had been pushed to the client and then a Storage Server stopped sending data.
          */
-        ChunkAllocBufferInfo allocInfo = chunkMemPool.allocateChunk(requestContext);
+        allocInfo = chunkMemPool.allocateChunk(requestContext);
         if (allocInfo != null) {
             decryptBufferManager = allocInfo.getBufferManager();
             decryptMeteringPointer = allocInfo.getAddBufferPointer();
@@ -221,7 +238,12 @@ public class SetupChunkRead implements Operation {
                 if (setupChunkReadOps()) {
                     currState = ExecutionState.WAITING_FOR_CONN_COMP;
                 } else {
-                    currState = ExecutionState.EMPTY_STATE;
+                    /*
+                    ** This is the case where the connection to the Storage Server could not be established
+                     */
+                    storageServer.setResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR_500);
+                    currState = ExecutionState.CALLBACK_OPS;
+                    event();
                 }
                 break;
 
@@ -244,16 +266,10 @@ public class SetupChunkRead implements Operation {
                             storageServer.getServerTcpPort() + " chunkNumber: " + storageServer.getChunkNumber() +
                             " writer: " + writerNumber);
 
-                        /*
-                        ** TODO: This needs to check if there is another storage server
-                         */
-                        StringBuilder failureMessage = new StringBuilder("\"Unable to obtain read chunk data - failed Storage Server\"");
-                        failureMessage.append(",\n  \"StorageServer\": \"").append(storageServer.getServerName()).append("\"");
+                        storageServer.setResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR_500);
 
-                        requestContext.getHttpInfo().setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage.toString());
-
-                        currState = ExecutionState.EMPTY_STATE;
-                        complete();
+                        currState = ExecutionState.CALLBACK_OPS;
+                        event();
                         break;
                     }
                 }
@@ -272,8 +288,9 @@ public class SetupChunkRead implements Operation {
                         /*
                         ** Some sort of an error response
                          */
-                        currState = ExecutionState.EMPTY_STATE;
-                        complete();
+                        storageServer.setResponseStatus(HttpStatus.OK_200);
+                        currState = ExecutionState.CALLBACK_OPS;
+                        event();
                     }
                 }
                 break;
@@ -291,11 +308,74 @@ public class SetupChunkRead implements Operation {
 
                 if (md5Complete && allDecrypted) {
                     if (updater.checkContentMD5(storageServer.getMd5Digest())) {
-
+                        storageServer.setResponseStatus(HttpStatus.OK_200);
+                    } else {
+                        storageServer.setResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY_422);
                     }
-                    LOG.info("chunk read complete");
+                    LOG.info("chunk read from Storage Server complete");
+                    /*
+                     ** Fall through
+                     */
+                    currState = ExecutionState.CALLBACK_OPS_CHUNK_READ;
+                } else {
+                    /*
+                    ** Still waiting for the md5 and decrypt operations to complete
+                     */
+                    break;
+                }
 
-                    complete();
+            case CALLBACK_OPS_CHUNK_READ:
+                /*
+                ** This wakes up the ReadObjectChunk operation to determine what needs to be done with this chunks
+                **   worth of data. The options are:
+                **     - Assuming the chunk was read in successfully and it passed the Md5 digest check, it will
+                **         be queued up to be written up to the client in the correct order. That is contingent upon
+                **         the client still being able to accept data and the prior chunk being successfully written
+                **         back to the client.
+                **     - If there was an error with this chunk being read from the Storage Server, then a new attempt
+                **         to read the chunk will be made from a different Storage Server (assuming one is available).
+                **
+                 */
+                if (storageServer.getResponseStatus() == HttpStatus.OK_200) {
+                    currState = ExecutionState.WRITE_CHUNK_TO_CLIENT;
+                } else {
+                    /*
+                    ** There was an error reading in this chunk, so nothing more to do
+                     */
+                    currState = ExecutionState.EMPTY_STATE;
+                }
+
+                /*
+                 ** Now call back the ReadObjectChunks Operation that will handle the collection of chunks
+                 */
+                completeCallback.event();
+                break;
+
+            case WRITE_CHUNK_TO_CLIENT:
+                LOG.info("SetupChunkRead WRITE_CHUNK_TO_CLIENT");
+                currState = ExecutionState.CHUNK_DATA_WRITTEN;
+                writeChunkToClient.initialize();
+                writeChunkToClient.event();
+                break;
+
+            case CHUNK_DATA_WRITTEN:
+                LOG.info("SetupChunkRead CHUNK_DATA_WRITTEN dataWritten: " + storageServer.getClientChunkWriteDone());
+
+                /*
+                **
+                 */
+                if (storageServer.getClientChunkWriteDone()) {
+                    currState = ExecutionState.EMPTY_STATE;
+
+                    /*
+                    ** Release the Chunk Buffer
+                     */
+                    chunkMemPool.releaseChunk(allocInfo);
+
+                    /*
+                     ** Now call back the ReadObjectChunks Operation that will handle the collection of chunks
+                     */
+                    completeCallback.event();
                 }
                 break;
 
@@ -311,7 +391,7 @@ public class SetupChunkRead implements Operation {
      */
     public void complete() {
 
-        LOG.info("SetupChunkRead[" + requestContext.getRequestId() + "] complete addr: " +
+        LOG.info("SetupChunkRead[" + requestContext.getRequestId() + "] complete() addr: " +
                 storageServer.getServerIpAddress().toString() + " port: " +
                 storageServer.getServerTcpPort() + " chunkNumber: " + storageServer.getChunkNumber() +
                 " writer: " + writerNumber);
@@ -339,6 +419,12 @@ public class SetupChunkRead implements Operation {
         ** NOTE: The call to complete() for the Md5Digest is handled when it completes the digest computation.
          */
         requestHandlerOperations.remove(OperationTypeEnum.COMPUTE_MD5_DIGEST);
+
+        Operation writeChunk = requestHandlerOperations.remove(OperationTypeEnum.WRITE_CHUNK_TO_CLIENT);
+        if (writeChunk != null) {
+            writeChunk.complete();
+            writeChunkToClient = null;
+        }
 
         Operation decryptBuffer = requestHandlerOperations.remove(OperationTypeEnum.DECRYPT_BUFFER);
         if (decryptBuffer != null) {
@@ -410,15 +496,13 @@ public class SetupChunkRead implements Operation {
          */
         storageServer.setHttpInfo(null);
 
-        /*
-         ** Now call back the Operation that will handle the completion
-         */
-        completeCallback.event();
     }
 
     public void connectionCloseDueToError() {
         serverConnectionClosedDueToError = true;
     }
+
+    public void setAllDataWritten() { storageServer.setClientChunkWriteDone(); }
 
     /*
      ** The following are used to add the Operation to the event thread's event queue. The
@@ -628,6 +712,11 @@ public class SetupChunkRead implements Operation {
                 httpBufferPointer, decryptBufferMetering, decryptBufferManager, decryptMeteringPointer,
                 httpInfo.getContentLength(),this);
         requestHandlerOperations.put(decryptBuffer.getOperationType(), decryptBuffer);
-        decryptBuffer.initialize();
+        BufferManagerPointer decryptedPtr = decryptBuffer.initialize();
+
+        IoInterface clientConnection = requestContext.getClientConnection();
+        writeChunkToClient = new WriteChunkToClient(requestContext, clientConnection, this,
+                decryptBufferManager, decryptedPtr);
+        requestHandlerOperations.put(writeChunkToClient.getOperationType(), writeChunkToClient);
     }
 }

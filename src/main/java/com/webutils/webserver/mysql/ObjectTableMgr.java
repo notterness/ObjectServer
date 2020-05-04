@@ -20,13 +20,14 @@ public class ObjectTableMgr extends ObjectStorageDb {
 
     private final static String CREATE_OBJECT_1 = "INSERT INTO object VALUES ( NULL, '";       // objectName
     private final static String CREATE_OBJECT_2 = "', '0', '";                                 // versionId, opcClientRequestId not null
-    private final static String CREATE_OBJECT_2_NULL = "', '0', NULL, ";                            // versionId, contentLength when opcClientRequestId is null
+    private final static String CREATE_OBJECT_2_NULL = "', '0', NULL, ";                       // versionId, contentLength when opcClientRequestId is null
     private final static String CREATE_OBJECT_3 = "', ";                                       // contentLength
     private final static String CREATE_OBJECT_4 = " , ";                                       // storageType
-    private final static String CREATE_OBJECT_5 = " , NULL, CURRENT_TIMESTAMP(), NULL, 0, CURRENT_TIMESTAMP(), UUID_TO_BIN(UUID()), 0, ";
-    private final static String CREATE_OBJECT_6 = " (SELECT bucketId FROM bucket WHERE bucketUID = UUID_TO_BIN('";
-    private final static String CREATE_OBJECT_7 = "') ), (SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN('";
-    private final static String CREATE_OBJECT_8 = "') ) )";
+    private final static String CREATE_OBJECT_5 = " , NULL";                                   // contentMd5
+    private final static String CREATE_OBJECT_6 = " , CURRENT_TIMESTAMP(), NULL, 0, CURRENT_TIMESTAMP(), UUID_TO_BIN(UUID()), 0, ";
+    private final static String CREATE_OBJECT_7 = " (SELECT bucketId FROM bucket WHERE bucketUID = UUID_TO_BIN('";
+    private final static String CREATE_OBJECT_8 = "') ), (SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN('";
+    private final static String CREATE_OBJECT_9 = "') ) )";
 
     private final static String GET_OBJECT_UID_1 = "SELECT BIN_TO_UUID(objectUID) objectUID FROM object WHERE objectName = '";
     private final static String GET_OBJECT_UID_2 = "' AND bucketId = ( SELECT bucketId FROM bucket WHERE bucketUID = UUID_TO_BIN('";
@@ -122,16 +123,25 @@ public class ObjectTableMgr extends ObjectStorageDb {
         }
 
         StorageTierEnum tier = bucketMgr.getBucketStorageTier(bucketUID);
+        String contentMd5 = objectCreateInfo.getContentMd5();
+        if (!contentMd5.equals("NULL")) {
+            byte[] md5DigestBytes = BaseEncoding.base64().decode(contentMd5);
+            if (md5DigestBytes.length != 16) {
+                LOG.warn("The value of the digest '" + contentMd5 + "' incorrect length after base-64 decoding");
+                return HttpStatus.PRECONDITION_FAILED_412;
+            }
+        }
+
 
         String createObjectStr;
         if (opcClientRequestId != null) {
             createObjectStr = CREATE_OBJECT_1 + objectName + CREATE_OBJECT_2 + opcClientRequestId + CREATE_OBJECT_3 +
-                    contentLength + CREATE_OBJECT_4 + tier.toInt() + CREATE_OBJECT_5 + CREATE_OBJECT_6 + bucketUID +
-                    CREATE_OBJECT_7 + namespaceUID + CREATE_OBJECT_8;
+                    contentLength + CREATE_OBJECT_4 + tier.toInt() + CREATE_OBJECT_5 + CREATE_OBJECT_6 +
+                    CREATE_OBJECT_7 + bucketUID + CREATE_OBJECT_8 + namespaceUID + CREATE_OBJECT_9;
         } else {
             createObjectStr = CREATE_OBJECT_1 + objectName + CREATE_OBJECT_2_NULL +
-                    contentLength + CREATE_OBJECT_4 + tier.toInt() + CREATE_OBJECT_5 + CREATE_OBJECT_6 + bucketUID +
-                    CREATE_OBJECT_7 + namespaceUID + CREATE_OBJECT_8;
+                    contentLength + CREATE_OBJECT_4 + tier.toInt() + CREATE_OBJECT_5 + CREATE_OBJECT_6 +
+                    CREATE_OBJECT_7 + bucketUID + CREATE_OBJECT_8 + namespaceUID + CREATE_OBJECT_9;
         }
 
         Connection conn = getObjectStorageDbConn();
@@ -267,6 +277,13 @@ public class ObjectTableMgr extends ObjectStorageDb {
                                 ** objectId is the unique identifier for the object
                                  */
                                 objectId = rs.getInt(1);
+                                info.setObjectId(objectId);
+
+                                /*
+                                ** versionId - field 3
+                                 */
+                                String versionId = rs.getString(3);
+                                info.setVersionId(versionId);
 
                                 /*
                                 ** Field 5 (INT) - contentLength
@@ -277,10 +294,18 @@ public class ObjectTableMgr extends ObjectStorageDb {
                                 ** Field 6 (BINARY(16)) - contentMd5
                                  */
                                 byte[] md5Bytes = rs.getBytes(6);
-                                if (md5Bytes != null) {
+                                if (!rs.wasNull() && (md5Bytes != null)) {
                                     String md5DigestStr = BaseEncoding.base64().encode(md5Bytes);
                                     info.setContentMd5(md5DigestStr);
+                                } else {
+                                    info.setContentMd5(null);
                                 }
+
+                                /*
+                                ** Field 11 - lastUpdateTime
+                                 */
+                                String lastModifiedTime = rs.getString(11);
+                                info.setLastModified(lastModifiedTime);
                             }
 
                             count++;

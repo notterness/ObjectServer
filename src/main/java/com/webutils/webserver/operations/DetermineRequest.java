@@ -116,11 +116,11 @@ public class DetermineRequest implements Operation {
                      */
                     requestContext.addOperation(httpRequestSetup);
 
-                    LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] execute() " + method.toString());
+                    LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] execute(1) " + method.toString());
                     httpRequestSetup.initialize();
                     httpRequestSetup.event();
                 } else {
-                    LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] execute() unsupported request " + method.toString());
+                    LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] execute(1) unsupported request " + method.toString());
                     httpRequestInfo.setParseFailureCode(HttpStatus.METHOD_NOT_ALLOWED_405);
 
                     sendFinalStatus.event();
@@ -129,7 +129,22 @@ public class DetermineRequest implements Operation {
 
             methodDeterminationDone = true;
         } else {
-            sendFinalStatus.event();
+            HttpMethodEnum method = httpRequestInfo.getMethod();
+            LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] execute(2) " + method.toString());
+
+            if (method != HttpMethodEnum.GET_METHOD) {
+                sendFinalStatus.event();
+            } else {
+                Operation closeOutRequest = requestContext.getOperation(OperationTypeEnum.CLOSE_OUT_REQUEST);
+                if (closeOutRequest != null) {
+                    /*
+                    ** This will finish up this request
+                     */
+                    closeOutRequest.event();
+                } else {
+                    LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] closeOutRequest null");
+                }
+            }
         }
     }
 

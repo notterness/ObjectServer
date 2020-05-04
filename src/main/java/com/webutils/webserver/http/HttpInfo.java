@@ -459,8 +459,8 @@ abstract public class HttpInfo {
 
     public String getContentMd5 () {
         String md5 = getHeaderString(CONTENT_MD5);
-        if ((md5 != null) && md5.isEmpty()) {
-            md5 = null;
+        if ((md5 == null) || ((md5 != null) && md5.isEmpty())) {
+            md5 = "NULL";
         }
 
         return md5;

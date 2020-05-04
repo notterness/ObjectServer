@@ -29,6 +29,8 @@ public interface EventPollThread {
 
     boolean registerClientSocket(final SocketChannel clientChannel);
 
+    void releaseContext(final RequestContext requestContext);
+
     boolean runComputeWork(final Operation computeOperation);
 
     void removeComputeWork(final Operation computeOperation);

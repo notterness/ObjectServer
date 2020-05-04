@@ -145,7 +145,7 @@ public class StorageServerRequestContext extends RequestContext {
      */
     public void cleanupServerRequest() {
 
-        LOG.info("cleanupServerRequest()");
+        LOG.info("StorageServerRequestContext cleanupServerRequest()");
 
         if (clientConnection != null) {
             clientConnection.closeConnection();
@@ -188,6 +188,11 @@ public class StorageServerRequestContext extends RequestContext {
              */
             releaseConnection(clientConnection);
             clientConnection = null;
+
+            /*
+             ** Add the context back to the free pool
+             */
+            releaseContext();
         }
     }
 
