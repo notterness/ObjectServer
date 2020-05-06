@@ -22,7 +22,7 @@ public class BuildHeaderToStorageServer implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.BUILD_HEADER_TO_STORAGE_SERVER;
+    private final OperationTypeEnum operationType = OperationTypeEnum.BUILD_HEADER_TO_STORAGE_SERVER;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.

@@ -6,7 +6,7 @@ import com.webutils.webserver.common.Md5Digest;
 import com.webutils.webserver.http.parser.ByteBufferHttpParser;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.IoInterface;
-import com.webutils.webserver.requestcontext.ClientTestContextPool;
+import com.webutils.webserver.requestcontext.ClientContextPool;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import com.webutils.webserver.testio.TestEventThread;
@@ -28,7 +28,7 @@ public abstract class WebServerTest {
     private static final int threadId = 0x1000;
     private static final int requestId = 56;
 
-    private final ClientTestContextPool contextPool;
+    private final ClientContextPool contextPool;
 
     protected final String testName;
 
@@ -52,7 +52,7 @@ public abstract class WebServerTest {
         testEventThread = new TestEventThread(threadId, this);
         testEventThread.start();
 
-        this.contextPool = new ClientTestContextPool(webServerFlavor, memoryManager, null);
+        this.contextPool = new ClientContextPool(webServerFlavor, memoryManager, null);
         this.requestContext = this.contextPool.allocateContext(threadId);
 
         IoInterface connection = testEventThread.allocateConnection(null);

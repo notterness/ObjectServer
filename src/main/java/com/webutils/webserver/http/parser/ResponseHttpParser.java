@@ -49,7 +49,7 @@ public class ResponseHttpParser {
             int remaining = bufferToParse.remaining();
 
             String tmpStr = chunk.bb_to_str(bufferToParse);
-            LOG.info("ResponseHttpParser parseHttpData() " + tmpStr);
+            //LOG.info("ResponseHttpParser parseHttpData() " + tmpStr);
 
             while (!httpParser.isState(HttpParser.State.END) && (remaining > 0)) {
                 int was_remaining = remaining;

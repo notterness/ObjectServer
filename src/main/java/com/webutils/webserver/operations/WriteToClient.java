@@ -4,6 +4,7 @@ import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.requestcontext.RequestContext;
+import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,6 +30,8 @@ public class WriteToClient implements Operation {
      */
     private final Operation finalOperationToRun;
 
+    private final ServerIdentifier server;
+
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
@@ -42,12 +45,15 @@ public class WriteToClient implements Operation {
     private BufferManagerPointer writeDonePointer;
 
     public WriteToClient(final RequestContext requestContext, final IoInterface connection,
-                         final Operation operationToRun, final BufferManagerPointer bufferInfillPtr) {
+                         final Operation operationToRun, final BufferManagerPointer bufferInfillPtr,
+                         final ServerIdentifier server) {
 
         this.requestContext = requestContext;
         this.clientConnection = connection;
         this.finalOperationToRun = operationToRun;
         this.bufferInfillPointer = bufferInfillPtr;
+
+        this.server = server;
 
         this.clientWriteBufferManager = requestContext.getClientWriteBufferManager();
 
@@ -111,7 +117,15 @@ public class WriteToClient implements Operation {
             **   and from this server's perspective it is done IF all of the buffers have been filled.
             ** Done with this client connection as well since this is only being used to write the HTTP Response
              */
+            LOG.info("WriteToClient allClientBffersFilled: " + requestContext.getAllClientBuffersFilled());
             if (requestContext.getAllClientBuffersFilled()) {
+                /*
+                **
+                 */
+                if (server != null) {
+                    requestContext.setHttpRequestSent(server);
+                }
+
                 finalOperationToRun.event();
             }
         }

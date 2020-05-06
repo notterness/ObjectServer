@@ -22,6 +22,9 @@ public class HandleClientError implements Operation {
      */
     private final RequestContext requestContext;
 
+    private final Operation callbackOperation;
+
+
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
@@ -31,8 +34,10 @@ public class HandleClientError implements Operation {
     private boolean onExecutionQueue;
     private long nextExecuteTime;
 
-    HandleClientError(final RequestContext requestContext) {
+    HandleClientError(final RequestContext requestContext, final Operation callbackOperation) {
+
         this.requestContext = requestContext;
+        this.callbackOperation = callbackOperation;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -61,6 +66,7 @@ public class HandleClientError implements Operation {
      **
      */
     public void execute() {
+        callbackOperation.event();
     }
 
     /*

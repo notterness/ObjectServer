@@ -61,11 +61,15 @@ public class HttpResponseListener implements HttpParser.ResponseHandler {
 
     @Override
     public boolean messageComplete() {
-        LOG.info("messageComplete(resp)");
-
         httpInfo.setMessageComplete();
 
-        httpResponseCb.httpResponse(httpInfo.getResponseStatus(), httpInfo.getHeaderComplete(), true);
+        if (httpResponseCb != null) {
+            LOG.info("messageComplete(resp)");
+
+            httpResponseCb.httpResponse(httpInfo.getResponseStatus(), httpInfo.getHeaderComplete(), true);
+        } else {
+            LOG.info("messageComplete(resp) httpResponseCb null");
+        }
         return true;
     }
 

@@ -368,15 +368,20 @@ public class SetupChunkRead implements Operation {
                     currState = ExecutionState.EMPTY_STATE;
 
                     /*
-                    ** Release the Chunk Buffer
-                     */
-                    chunkMemPool.releaseChunk(allocInfo);
-
-                    /*
                      ** Now call back the ReadObjectChunks Operation that will handle the collection of chunks
                      */
                     completeCallback.event();
                 }
+                break;
+
+            case CALLBACK_OPS:
+                LOG.info("CALLBACK_OPS status: " + storageServer.getResponseStatus());
+                currState = ExecutionState.EMPTY_STATE;
+
+                /*
+                 ** Now call back the ReadObjectChunks Operation that will handle the collection of chunks
+                 */
+                completeCallback.event();
                 break;
 
             case EMPTY_STATE:
@@ -496,6 +501,10 @@ public class SetupChunkRead implements Operation {
          */
         storageServer.setHttpInfo(null);
 
+        /*
+         ** Release the Chunk Buffer
+         */
+        chunkMemPool.releaseChunk(allocInfo);
     }
 
     public void connectionCloseDueToError() {

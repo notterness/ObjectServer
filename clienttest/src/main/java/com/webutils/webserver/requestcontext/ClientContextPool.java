@@ -8,13 +8,13 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.LinkedBlockingQueue;
 
-public class ClientTestContextPool extends RequestContextPool {
+public class ClientContextPool extends RequestContextPool {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ClientTestContextPool.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ClientContextPool.class);
 
     private final DbSetup dbSetup;
 
-    public ClientTestContextPool(final WebServerFlavor flavor, final MemoryManager memoryManager, final DbSetup dbSetup) {
+    public ClientContextPool(final WebServerFlavor flavor, final MemoryManager memoryManager, final DbSetup dbSetup) {
         super(flavor, memoryManager, "ClientTest");
         this.dbSetup = dbSetup;
     }
@@ -22,9 +22,9 @@ public class ClientTestContextPool extends RequestContextPool {
     /*
      ** This will allocate an ObjectServerRequestContext if this pool has been setup for the running thread.
      */
-    public RequestContext allocateContext(final int threadId) {
+    public ClientRequestContext allocateContext(final int threadId) {
 
-        ClientTestRequestContext requestContext;
+        ClientRequestContext requestContext;
 
         EventPollThread threadThisRequestRunsOn = threadRequestRunsOn.get(threadId);
 
@@ -32,7 +32,7 @@ public class ClientTestContextPool extends RequestContextPool {
             LinkedBlockingQueue<RequestContext> contextList = runningContexts.get(threadId);
 
             if (contextList != null) {
-                requestContext = new ClientTestRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup,
+                requestContext = new ClientRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup,
                         threadId, flavor);
 
                 if (contextList.offer(requestContext)) {

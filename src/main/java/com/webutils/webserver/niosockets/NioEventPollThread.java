@@ -122,6 +122,8 @@ public class NioEventPollThread implements Runnable, EventPollThread {
     }
 
     public void releaseConnection(final IoInterface connection) {
+        LOG.info("releaseConnection [" + eventPollThreadBaseId + "]");
+
         freeConnections.add(connection);
 
         Operation waitingOperation = waitingForConnections.poll();

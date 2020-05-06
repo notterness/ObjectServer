@@ -129,7 +129,7 @@ public class SetupStorageServerGet implements Operation {
             closeRequest.initialize();
 
             WriteToClient writeToClient = new WriteToClient(requestContext, requestContext.getClientConnection(),
-                    closeRequest, objectDataReadyPtr);
+                    closeRequest, objectDataReadyPtr, null);
             storageServerGetHandlerOps.put(writeToClient.getOperationType(), writeToClient);
             writeToClient.initialize();
 

@@ -175,7 +175,7 @@ public class ObjectServerRequestContext extends RequestContext {
         closeRequest.initialize();
 
         WriteToClient writeToClient = new WriteToClient(this, clientConnection,
-                closeRequest, clientWritePtr);
+                closeRequest, clientWritePtr, null);
         requestHandlerOperations.put(writeToClient.getOperationType(), writeToClient);
         writeToClient.initialize();
 

@@ -256,8 +256,7 @@ public class StorageServerDetermineRequest implements Operation {
         finalStatusOps.put(closeRequest.getOperationType(), closeRequest);
         closeRequest.initialize();
 
-        WriteToClient writeToClient = new WriteToClient(requestContext, clientConnection,
-                closeRequest, clientWritePtr);
+        WriteToClient writeToClient = new WriteToClient(requestContext, clientConnection, closeRequest, clientWritePtr, null);
         finalStatusOps.put(writeToClient.getOperationType(), writeToClient);
         writeToClient.initialize();
 

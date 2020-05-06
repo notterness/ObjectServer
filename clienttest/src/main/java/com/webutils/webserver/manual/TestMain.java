@@ -1,7 +1,6 @@
 package com.webutils.webserver.manual;
 
 import com.google.common.io.BaseEncoding;
-import com.webutils.objectserver.manual.TestChunkWrite;
 import com.webutils.objectserver.manual.TestEncryptBuffer;
 import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
 import com.webutils.storageserver.requestcontext.StorageServerContextPool;
@@ -10,7 +9,7 @@ import com.webutils.webserver.mysql.*;
 import com.webutils.webserver.niosockets.NioTestClient;
 import com.webutils.webserver.kubernetes.KubernetesInfo;
 import com.webutils.webserver.niosockets.NioServerHandler;
-import com.webutils.webserver.requestcontext.ClientTestContextPool;
+import com.webutils.webserver.requestcontext.ClientContextPool;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 
 import java.io.IOException;
@@ -250,22 +249,22 @@ public class TestMain {
 
         MemoryManager clientTestMemoryManager = new MemoryManager(flavor);
 
-        ClientTestContextPool clientTestContextPool = new ClientTestContextPool(flavor, clientTestMemoryManager, dbSetup);
-        NioTestClient testClient = new NioTestClient(clientTestContextPool);
+        ClientContextPool clientContextPool = new ClientContextPool(flavor, clientTestMemoryManager, dbSetup);
+        NioTestClient testClient = new NioTestClient(clientContextPool);
         testClient.start();
 
+        /*
         ClientTest client_CreateBucket_Simple = new ClientTest_CreateBucket_Simple("CreateBucket_Simple", testClient,
                 serverIpAddr, serverTcpPort, threadCount);
         client_CreateBucket_Simple.execute();
 
-        //ClientTest client_1 = new ClientTest_2("ClientTest_2", testClient, serverTcpPort, threadCount);
-        //client_1.execute();
         ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverIpAddr, serverTcpPort, threadCount);
         checkMd5.execute();
 
         waitForTestsToComplete(threadCount);
+*/
 
-        ClientTest getObjectSimple = new ClientTest_GetObjectSimple("GetObjectSimple", testClient, serverIpAddr, serverTcpPort, threadCount);
+        GetObjectSimple getObjectSimple = new GetObjectSimple(serverIpAddr, serverTcpPort, threadCount);
         getObjectSimple.execute();
 
         /*

@@ -12,9 +12,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class ClientTestRequestContext extends RequestContext {
+public class ClientRequestContext extends RequestContext {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ClientTestRequestContext.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ClientRequestContext.class);
 
 
     /*
@@ -25,15 +25,18 @@ public class ClientTestRequestContext extends RequestContext {
      */
     private final Map<ServerIdentifier, AtomicBoolean> httpRequestSent;
 
+    private final AtomicBoolean allObjectDataWritten;
 
-    ClientTestRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn, final DbSetup dbSetup,
-                             final int threadId, final WebServerFlavor flavor) {
+    ClientRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn, final DbSetup dbSetup,
+                         final int threadId, final WebServerFlavor flavor) {
         super(memoryManager, threadThisRunsOn, dbSetup, threadId, flavor);
 
         /*
          ** Setup the map for the HTTP Request Sent
          */
         this.httpRequestSent = new HashMap<>();
+
+        this.allObjectDataWritten = new AtomicBoolean(false);
     }
 
     public void initializeServer(final IoInterface connection, final int requestId) {
@@ -46,30 +49,33 @@ public class ClientTestRequestContext extends RequestContext {
 
     /*
      ** The following are used to keep track of Object Servers and if the HTTP Request has been sent successfully
-     **   to it. The setter (setHttpResponseSent() is called by WriteHeaderToStorageServer after the buffer has been
+     **   to it. The setter (setHttpResponseSent() is called by WriteToClient after the buffer has been
      **   written to the SocketChannel.
      */
-    public boolean hasHttpRequestBeenSent(final ServerIdentifier storageServerId) {
-        AtomicBoolean responseSent = httpRequestSent.get(storageServerId);
+    public boolean hasHttpRequestBeenSent(final ServerIdentifier objectServer) {
+        AtomicBoolean responseSent = httpRequestSent.get(objectServer);
         if (responseSent != null) {
             return responseSent.get();
         }
         return false;
     }
 
-    public void setHttpRequestSent(final ServerIdentifier storageServerId) {
+    public void setHttpRequestSent(final ServerIdentifier objectServer) {
         AtomicBoolean httpSent = new AtomicBoolean(true);
-        httpRequestSent.put(storageServerId, httpSent);
+        httpRequestSent.put(objectServer, httpSent);
+    }
+
+    public void removeHttpRequestSent(final ServerIdentifier objectServer) {
+        if (httpRequestSent.remove(objectServer) == null) {
+            LOG.warn("ClientRequestContext[" + getRequestId() + "] HTTP Request remove failed targetPort: " +
+                    objectServer.getServerIpAddress() + ":" + objectServer.getServerTcpPort());
+        }
     }
 
     /*
      ** The following are stubs until I sort out how the RequestContext and RequestContext pool objects should be
      **   properly handled.
      */
-    public void removeHttpRequestSent(final ServerIdentifier storageServerId) {
-        LOG.error("removeHttpRequestSent() Invalid function");
-    }
-
     public boolean hasStorageServerResponseArrived(final ServerIdentifier storageServerId) {
         LOG.error("hasStorageServerResponseArrived() Invalid function");
         return false;
@@ -110,4 +116,6 @@ public class ClientTestRequestContext extends RequestContext {
         clientConnection = null;
     }
 
+    public void setAllObjectDataWritten() { allObjectDataWritten.set(true); }
+    public boolean getAllObjectDataWritten() { return allObjectDataWritten.get(); }
 }

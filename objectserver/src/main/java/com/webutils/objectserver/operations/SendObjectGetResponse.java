@@ -3,6 +3,7 @@ package com.webutils.objectserver.operations;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.BuildHttpResult;
+import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ObjectInfo;
 import com.webutils.webserver.operations.Operation;
@@ -128,7 +129,11 @@ public class SendObjectGetResponse implements Operation {
                     operationType);
             if (respBuffer != null) {
 
-                buildSuccessHeader(respBuffer);
+                if (requestContext.getHttpParseStatus() == HttpStatus.OK_200) {
+                    buildSuccessHeader(respBuffer);
+                } else {
+                    buildFailureHeader(respBuffer);
+                }
 
                 respBuffer.flip();
 
@@ -288,14 +293,48 @@ public class SendObjectGetResponse implements Operation {
         if (contentMd5 != null) {
             successHeader += SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + etag + "\n" +
                     SUCCESS_HEADER_4 + contentMd5 + "\n" + SUCCESS_HEADER_5 + lastModified + "\n" +
-                    SUCCESS_HEADER_7 + versionId + "\n" + SUCCESS_HEADER_8 + contentLength + "\n";
+                    SUCCESS_HEADER_7 + versionId + "\n" + SUCCESS_HEADER_8 + contentLength + "\n\n";
         } else {
             successHeader += SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + etag + "\n" +
                     SUCCESS_HEADER_5 + lastModified + "\n" +
-                    SUCCESS_HEADER_7 + versionId + "\n" + SUCCESS_HEADER_8 + contentLength + "\n";
+                    SUCCESS_HEADER_7 + versionId + "\n" + SUCCESS_HEADER_8 + contentLength + "\n\n";
         }
 
         str_to_bb(respBuffer, successHeader);
+    }
+
+    /*
+     ** This builds the error response headers for the GET Object command. This returns the following headers:
+     **
+     **   opc-client-request-id - If the client passed one in, otherwise it it will not be returned
+     **   opc-request-id
+     **   ETAG
+     **   Content-Length - 0
+     */
+    private void buildFailureHeader(final ByteBuffer respBuffer) {
+        String failureHeader;
+
+        HttpRequestInfo httpInfo = requestContext.getHttpInfo();
+
+        String opcClientRequestId = httpInfo.getOpcClientRequestId();
+        int opcRequestId = requestContext.getRequestId();
+        String etag = objectInfo.getEtag();
+
+        LOG.info("buildFailureHeader() etag: " + etag + " opc-client-request-id: " + opcClientRequestId +
+                " opc-request-id: " + opcRequestId);
+
+        if (opcClientRequestId != null) {
+            failureHeader = "HTTP/1.1 " + httpInfo.getParseFailureCode() + " FAILED\r\n" +
+                    "Content-Type: text/html\n" + SUCCESS_HEADER_1 + opcClientRequestId + "\n";
+        } else {
+            failureHeader = "HTTP/1.1 " + httpInfo.getParseFailureCode() + " FAILED\r\n" +
+                    "Content-Type: text/html\n";
+        }
+
+        failureHeader += SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + etag + "\n" +
+                    SUCCESS_HEADER_8 + 0 + "\n\nConnection: close\r\n";
+
+        str_to_bb(respBuffer, failureHeader);
     }
 
     private void str_to_bb(ByteBuffer out, String in) {

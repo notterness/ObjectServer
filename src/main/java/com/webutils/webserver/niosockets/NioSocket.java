@@ -470,7 +470,7 @@ public class NioSocket implements IoInterface {
 
                 if (bytesWritten > 0) {
                     LOG.info(" write (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bytesWritten: " +
-                            bytesWritten + " position: " + tempBuffer.position() + " reamining: " + tempBuffer.remaining());
+                            bytesWritten + " position: " + tempBuffer.position() + " remaining: " + tempBuffer.remaining());
 
                     /*
                      ** Update the pointer if the entire buffer was written out

@@ -43,8 +43,6 @@ public class SetupObjectGet implements Operation {
     private final Operation completeCallback;
 
     /*
-     ** There are two operations required to read data out of the clientReadBufferMgr and process it
-     **   The Md5 Digest and the Encryption operations.
      **
      ** The following is a map of all of the created Operations to handle this request.
      */
@@ -133,23 +131,10 @@ public class SetupObjectGet implements Operation {
             readChunks.initialize();
 
             /*
-            ** In the good path, after the HTTP Response is sent back to the client, then start reading in the chunks
-            **   that make up the requested object.
-             */
-            SendObjectGetResponse sendResponse = new SendObjectGetResponse(requestContext, memoryManager, objectInfo);
-            objectGetHandlerOps.put(sendResponse.getOperationType(), sendResponse);
-            BufferManagerPointer clientWritePtr = sendResponse.initialize();
-
-            IoInterface clientConnection = requestContext.getClientConnection();
-            WriteToClient writeToClient = new WriteToClient(requestContext, clientConnection, readChunks, clientWritePtr);
-            objectGetHandlerOps.put(writeToClient.getOperationType(), writeToClient);
-            writeToClient.initialize();
-
-            /*
             ** When all the data is read in from the database (assuming it was successful), then send the HTTP Response
             **   back to the client.
              */
-            RetrieveObjectInfo retrieveObjectInfo = new RetrieveObjectInfo(requestContext, objectInfo, sendResponse, this);
+            RetrieveObjectInfo retrieveObjectInfo = new RetrieveObjectInfo(requestContext, objectInfo, readChunks, this);
             objectGetHandlerOps.put(retrieveObjectInfo.getOperationType(), retrieveObjectInfo);
             retrieveObjectInfo.initialize();
             retrieveObjectInfo.event();
@@ -168,12 +153,6 @@ public class SetupObjectGet implements Operation {
 
         LOG.info("SetupObjectGet[" + requestContext.getRequestId() + "] complete()");
 
-        Operation writeToClient = objectGetHandlerOps.remove(OperationTypeEnum.WRITE_TO_CLIENT);
-        writeToClient.complete();
-
-        Operation sendResponse = objectGetHandlerOps.remove(OperationTypeEnum.SEND_OBJECT_GET_RESPONSE);
-        sendResponse.complete();
-
         /*
          ** Remove the COMPUTE_MD5_DIGEST operation from the list since it will have already called it's
          **   complete() operation.
@@ -190,8 +169,6 @@ public class SetupObjectGet implements Operation {
         objectGetHandlerOps.clear();
 
         completeCallback.event();
-
-        LOG.info("SetupObjectGet[" + requestContext.getRequestId() + "] completed");
     }
 
 

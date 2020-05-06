@@ -1,10 +1,11 @@
-package com.webutils.storageserver.operations;
+package com.webutils.webserver.operations;
 
+import com.webutils.storageserver.operations.WriteToFile;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.operations.Operation;
-import com.webutils.webserver.operations.OperationTypeEnum;
+import com.webutils.webserver.requestcontext.ClientRequestContext;
 import com.webutils.webserver.requestcontext.RequestContext;
+import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,19 +19,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-public class WriteToFile implements Operation {
+public class WriteObjectToFile implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(WriteToFile.class);
+    private static final Logger LOG = LoggerFactory.getLogger(WriteObjectToFile.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    private final OperationTypeEnum operationType = OperationTypeEnum.WRITE_TO_FILE;
+    private final OperationTypeEnum operationType = OperationTypeEnum.WRITE_OBJECT_TO_FILE;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
-    private final RequestContext requestContext;
+    private final ClientRequestContext requestContext;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -52,9 +53,14 @@ public class WriteToFile implements Operation {
     private final Operation readBufferMetering;
 
     /*
-    ** The following operations complete() method will be called when this operation and it's
-    **   dependent operation are finished. This allows the upper layer to clean up and
-    **   release any resources.
+    ** The name of the file that Object will be saved in
+     */
+    private final String fileName;
+
+    /*
+     ** The following operations complete() method will be called when this operation and it's
+     **   dependent operation are finished. This allows the upper layer to clean up and
+     **   release any resources.
      */
     private final Operation completeCallback;
 
@@ -70,22 +76,23 @@ public class WriteToFile implements Operation {
     private int savedSrcPosition;
 
     /*
-    ** The following are used for the file management
+     ** The following are used for the file management
      */
     private FileChannel writeFileChannel;
 
     /*
      */
-    public WriteToFile(final RequestContext requestContext, final BufferManagerPointer readBufferPtr,
-                       final Operation completeCb) {
+    public WriteObjectToFile(final ClientRequestContext requestContext, final BufferManagerPointer readBufferPtr,
+                             final Operation metering, final String fileName, final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.clientReadBufferMgr = requestContext.getClientReadBufferManager();
+        this.fileName = fileName;
         this.completeCallback = completeCb;
 
         this.readBufferPointer = readBufferPtr;
 
-        this.readBufferMetering = requestContext.getOperation(OperationTypeEnum.METER_READ_BUFFERS);
+        this.readBufferMetering = metering;
         this.bytesToWriteToFile = requestContext.getRequestContentLength();
 
         /*
@@ -115,7 +122,7 @@ public class WriteToFile implements Operation {
          ** Register this with the Buffer Manager to allow it to be event(ed) when
          **   buffers are added by the read producer.
          **
-         ** This operation (WriteToFile) is a consumer of ByteBuffer(s) produced by the ReadBuffer operation.
+         ** This operation (WriteObectToFile) is a consumer of ByteBuffer(s) produced by the ReadBuffer operation.
          */
         clientFileWritePtr = clientReadBufferMgr.register(this, readBufferPointer);
 
@@ -128,27 +135,34 @@ public class WriteToFile implements Operation {
         ByteBuffer readBuffer;
         if ((readBuffer = clientReadBufferMgr.peek(clientFileWritePtr)) != null) {
             savedSrcPosition = readBuffer.position();
+
+            /*
+             ** Add this to the execute queue since there is already data in a buffer to decrypt
+             */
+            event();
         } else {
             savedSrcPosition = 0;
-        }
 
-        String filePathNameStr = buildChunkFileName();
-        if (filePathNameStr == null) {
-            return null;
+            /*
+            ** Need to provide a buffer to the READ_BUFFER operation to allow the NioSocket to read in the next data
+            **   bytes.
+             */
+            readBufferMetering.event();
         }
 
         /*
-        ** Open up the File for writing
+         ** Open up the File for writing
          */
-        File outFile = new File(filePathNameStr);
+        File outFile = new File("/Users/notterness/WebServer/webserver/logs/" + fileName);
         try {
             writeFileChannel = new FileOutputStream(outFile, false).getChannel();
         } catch (FileNotFoundException ex) {
-            LOG.info("WriteToFile[" + requestContext.getRequestId() + "] file not found: " + ex.getMessage());
+            LOG.info("WriteObjectToFile[" + requestContext.getRequestId() + "] file not found fileName: " +fileName +
+                    " exception: " + ex.getMessage());
             writeFileChannel = null;
         }
 
-        LOG.info("WriteToFile[" + requestContext.getRequestId() + "] initialize done savedSrcPosition: " + savedSrcPosition);
+        LOG.info("WriteObjectToFile[" + requestContext.getRequestId() + "] initialize done savedSrcPosition: " + savedSrcPosition);
 
         return clientFileWritePtr;
     }
@@ -199,52 +213,55 @@ public class WriteToFile implements Operation {
                         fileBytesWritten += bytesWritten;
                         if (srcBuffer.remaining() != 0) {
                             /*
-                            ** Save this for the next time around since a temporary buffer is being used.
+                             ** Save this for the next time around since a temporary buffer is being used.
                              */
                             savedSrcPosition = srcBuffer.position();
 
                             /*
-                            ** Queue this up to try again later and force the exit from the while loop
+                             ** Queue this up to try again later and force the exit from the while loop
                              */
                             this.event();
                             outOfBuffers = true;
                         } else {
                             /*
-                            ** Done with this buffer, see if there are more to write to the file
+                             ** Done with this buffer, see if there are more to write to the file
                              */
                             clientReadBufferMgr.updateConsumerReadPointer(clientFileWritePtr);
                             savedSrcPosition = 0;
                         }
                     } catch (IOException io_ex) {
                         /*
-                        ** Not going to be able to write anything else, so call complete() and
-                        **   terminate this operation.
+                         ** Not going to be able to write anything else, so call complete() and
+                         **   terminate this operation.
                          */
-                        LOG.info("WriteToFile[" + requestContext.getRequestId() + "] write exception: " + io_ex.getMessage());
+                        requestContext.getHttpInfo().setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500,
+                                "\"WriteObjectToFile failure\"");
+                        LOG.info("WriteObjectToFile[" + requestContext.getRequestId() + "] write exception: " + io_ex.getMessage());
+
                         closeOutFile(true);
                         completeCallback.event();
                     }
                 }
 
             } else {
-                LOG.info("WriteToFile[" + requestContext.getRequestId() + "] out of read buffers bytesWritten: " +
+                LOG.info("WriteObjectToFile[" + requestContext.getRequestId() + "] out of read buffers bytesWritten: " +
                         fileBytesWritten + " bytesToWriteToFile: " + bytesToWriteToFile);
 
                 /*
-                ** Check if all the bytes (meaning the amount passed in the content-length in the HTTP header)
-                **   have been written to the file. If not, dole out another ByteBuffer to the NIO read
-                **   operation.
+                 ** Check if all the bytes (meaning the amount passed in the content-length in the HTTP header)
+                 **   have been written to the file. If not, dole out another ByteBuffer to the NIO read
+                 **   operation.
                  */
                 if (fileBytesWritten < bytesToWriteToFile) {
                     readBufferMetering.event();
                 } else if (fileBytesWritten == bytesToWriteToFile) {
                     /*
-                    ** Done with this operation, so set the flag within the RequestContext. The SetupStorageServerPut
-                    **   operation is dependent upon this write of the data to disk completing as well as the Md5 digest
-                    **   being completed before it can send status back to the Object Server.
-                    ** Tell the SetupStorageServerPut operation that produced this that it is done.
+                     ** Done with this operation, so set the flag within the RequestContext. The SetupStorageServerPut
+                     **   operation is dependent upon this write of the data to disk completing as well as the Md5 digest
+                     **   being completed before it can send status back to the Object Server.
+                     ** Tell the SetupStorageServerPut operation that produced this that it is done.
                      */
-                    requestContext.setAllPutDataWritten();
+                    requestContext.setAllObjectDataWritten();
 
                     closeOutFile(false);
                     completeCallback.event();
@@ -256,7 +273,7 @@ public class WriteToFile implements Operation {
     }
 
     /*
-     ** This is used to close out the file. It has a flag to delete the file in the case of an error
+    ** This is used to close out the file. It has a flag to delete the file in the case of an error
      */
     private void closeOutFile(final boolean deleteFile) {
         try {
@@ -266,8 +283,8 @@ public class WriteToFile implements Operation {
         }
         writeFileChannel = null;
 
+        System.out.println("WriteToFile closeOutFile() filename: " + fileName);
         if (deleteFile) {
-            String fileName = buildChunkFileName();
             LOG.warn("Deleting file: " + fileName + " due to error: " + requestContext.getHttpParseStatus());
 
             Path filePath = Paths.get(fileName);
@@ -280,29 +297,9 @@ public class WriteToFile implements Operation {
     }
 
     /*
-    ** This builds the filePath to where the chunk of data will be saved.
-    **
-    ** It is comprised of the chunk number, chunk lba and located at
-    **   ./logs/StorageServer"IoInterfaceIdentifier"/"chunk location"
-     */
-    private String buildChunkFileName() {
-        int chunkNumber = requestContext.getHttpInfo().getObjectChunkNumber();
-        int chunkLba = requestContext.getHttpInfo().getObjectChunkLba();
-        String chunkLocation = requestContext.getHttpInfo().getObjectChunkLocation();
-
-        if ((chunkNumber == -1) || (chunkLba == -1) || (chunkLocation == null)) {
-            LOG.error("WriteToFile chunkNumber: " + chunkNumber + " chunkLba: " + chunkLba + " chunkLocation: " + chunkLocation);
-            return null;
-        }
-
-        return "./logs/StorageServer" + requestContext.getIoInterfaceIdentifier() +
-                "/chunk_" + chunkNumber + "_" + chunkLba + ".dat";
-    }
-
-    /*
      */
     public void complete() {
-        LOG.info("WriteToFile[" + requestContext.getRequestId() + "] complete");
+        LOG.info("WriteObjectToFile[" + requestContext.getRequestId() + "] complete");
 
         clientReadBufferMgr.unregister(clientFileWritePtr);
         clientFileWritePtr = null;
@@ -324,19 +321,19 @@ public class WriteToFile implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("WriteToFile[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("WriteObjectToFile[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("WriteToFile[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("WriteObjectToFile[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("WriteToFile[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("WriteObjectToFile[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("WriteToFile[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("WriteObjectToFile[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -351,7 +348,7 @@ public class WriteToFile implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("WriteToFile[" + requestContext.getRequestId() +
+        LOG.warn("WriteObjectToFile[" + requestContext.getRequestId() +
                 "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
