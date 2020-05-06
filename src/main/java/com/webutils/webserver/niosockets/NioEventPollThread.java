@@ -133,7 +133,7 @@ public class NioEventPollThread implements Runnable, EventPollThread {
     }
 
     public void releaseContext(final RequestContext requestContext) {
-        LOG.info("releaseContext()");
+        LOG.info("releaseContext[" + eventPollThreadBaseId + "]");
         requestContextPool.releaseContext(requestContext);
     }
 

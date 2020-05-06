@@ -81,7 +81,6 @@ public class ClientInterface {
          ** Allocate an IoInterface to use and assign it to the ClientRequestContext
          */
         IoInterface connection = eventThread.allocateConnection(null);
-
         clientContext.initializeServer(connection, 1);
 
         try {

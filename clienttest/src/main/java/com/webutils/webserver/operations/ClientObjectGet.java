@@ -106,7 +106,7 @@ public class ClientObjectGet implements Operation {
     /*
      ** The following is the connection used to communicate with the Storage Server
      */
-    private IoInterface objectServerConnection;
+    private final IoInterface objectServerConn;
 
     private boolean serverConnectionClosedDueToError;
 
@@ -135,6 +135,8 @@ public class ClientObjectGet implements Operation {
          */
         this.httpInfo = server.getHttpInfo();
 
+        this.objectServerConn = requestContext.getClientConnection();
+
         /*
          ** This starts out not being on any queue
          */
@@ -161,8 +163,6 @@ public class ClientObjectGet implements Operation {
     public int getRequestId() { return requestContext.getRequestId(); }
 
     /*
-     ** This returns the BufferManagerPointer obtained by this operation, if there is one. If this operation
-     **   does not use a BufferManagerPointer, it will return null.
      */
     public BufferManagerPointer initialize() {
 
@@ -379,11 +379,10 @@ public class ClientObjectGet implements Operation {
          ** clear out the reference to the connection so it may be released back to the pool.
          */
         if (!serverConnectionClosedDueToError) {
-            objectServerConnection.closeConnection();
+            objectServerConn.closeConnection();
         }
 
-        requestContext.releaseConnection(objectServerConnection);
-        objectServerConnection = null;
+        requestContext.releaseConnection(objectServerConn);
 
         /*
          ** Return the allocated buffers that were used to send the GET Request to the Storage Server
@@ -539,11 +538,6 @@ public class ClientObjectGet implements Operation {
         requestHandlerOperations.put(errorHandler.getOperationType(), errorHandler);
 
         /*
-         ** For the Object Server, create the connection used to communicate with it.
-         */
-        objectServerConnection = requestContext.allocateConnection(this);
-
-        /*
          ** The GET Header must be written to the Object Server so that the data can be read in
          */
         BuildObjectGetHeader headerBuilder = new BuildObjectGetHeader(requestContext, requestBufferManager,
@@ -551,7 +545,7 @@ public class ClientObjectGet implements Operation {
         requestHandlerOperations.put(headerBuilder.getOperationType(), headerBuilder);
         BufferManagerPointer writePointer = headerBuilder.initialize();
 
-        WriteToClient headerWriter = new WriteToClient(requestContext, objectServerConnection, this,
+        WriteToClient headerWriter = new WriteToClient(requestContext, objectServerConn, this,
                 writePointer, objectServer);
         requestHandlerOperations.put(headerWriter.getOperationType(), headerWriter);
         headerWriter.initialize();
@@ -569,20 +563,20 @@ public class ClientObjectGet implements Operation {
         /*
          ** Setup the operations to read in the HTTP Response header and process it
          */
-        ReadBuffer readBuffer = new ReadBuffer(requestContext, responseBufferManager, respBufferPointer, objectServerConnection);
+        ReadBuffer readBuffer = new ReadBuffer(requestContext, responseBufferManager, respBufferPointer, objectServerConn);
         requestHandlerOperations.put(readBuffer.getOperationType(), readBuffer);
         httpBufferPointer = readBuffer.initialize();
 
 
         ResponseHandler httpRespHandler = new ResponseHandler(requestContext, responseBufferManager, httpBufferPointer,
-                responseBufferMetering,this, objectServer);
+                responseBufferMetering, this, objectServer);
         requestHandlerOperations.put(httpRespHandler.getOperationType(), httpRespHandler);
         httpRespHandler.initialize();
 
         /*
          ** Now open a initiator connection to write encrypted buffers out of.
          */
-        if (!objectServerConnection.startInitiator(objectServer.getServerIpAddress(),
+        if (!objectServerConn.startInitiator(objectServer.getServerIpAddress(),
                 objectServer.getServerTcpPort(), connectComplete, errorHandler)) {
             /*
              ** This means the SocketChannel could not be opened. Need to indicate a problem

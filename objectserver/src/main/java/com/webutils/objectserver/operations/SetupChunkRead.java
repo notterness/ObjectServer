@@ -131,7 +131,7 @@ public class SetupChunkRead implements Operation {
     /*
      ** The following is the connection used to communicate with the Storage Server
      */
-    private IoInterface storageServerConnection;
+    private IoInterface storageServerConn;
 
     private boolean serverConnectionClosedDueToError;
 
@@ -460,10 +460,10 @@ public class SetupChunkRead implements Operation {
          ** clear out the reference to the connection so it may be released back to the pool.
          */
         if (!serverConnectionClosedDueToError) {
-            storageServerConnection.closeConnection();
+            storageServerConn.closeConnection();
         }
-        requestContext.releaseConnection(storageServerConnection);
-        storageServerConnection = null;
+        requestContext.releaseConnection(storageServerConn);
+        storageServerConn = null;
 
         /*
          ** Return the allocated buffers that were used to send the GET Request to the Storage Server
@@ -630,7 +630,7 @@ public class SetupChunkRead implements Operation {
         /*
          ** For each Storage Server, create the connection used to communicate with it.
          */
-        storageServerConnection = requestContext.allocateConnection(this);
+        storageServerConn = requestContext.allocateConnection(this);
 
         /*
          ** The GET Header must be written to the Storage Server so that the data can be read in
@@ -642,7 +642,7 @@ public class SetupChunkRead implements Operation {
 
         List<Operation> ops = new LinkedList<>();
         ops.add(this);
-        WriteHeaderToStorageServer headerWriter = new WriteHeaderToStorageServer(requestContext, storageServerConnection, ops,
+        WriteHeaderToStorageServer headerWriter = new WriteHeaderToStorageServer(requestContext, storageServerConn, ops,
                 requestBufferManager, writePointer, storageServer);
         requestHandlerOperations.put(headerWriter.getOperationType(), headerWriter);
         headerWriter.initialize();
@@ -660,7 +660,7 @@ public class SetupChunkRead implements Operation {
         /*
          ** Setup the operations to read in the HTTP Response header and process it
          */
-        ReadBuffer readBuffer = new ReadBuffer(requestContext, responseBufferManager, respBufferPointer, storageServerConnection);
+        ReadBuffer readBuffer = new ReadBuffer(requestContext, responseBufferManager, respBufferPointer, storageServerConn);
         requestHandlerOperations.put(readBuffer.getOperationType(), readBuffer);
         httpBufferPointer = readBuffer.initialize();
 
@@ -674,7 +674,7 @@ public class SetupChunkRead implements Operation {
         /*
          ** Now open a initiator connection to write encrypted buffers out of.
          */
-        if (!storageServerConnection.startInitiator(storageServer.getServerIpAddress(),
+        if (!storageServerConn.startInitiator(storageServer.getServerIpAddress(),
                 storageServer.getServerTcpPort(), connectComplete, errorHandler)) {
             /*
              ** This means the SocketChannel could not be opened. Need to indicate a problem

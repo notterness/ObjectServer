@@ -154,12 +154,6 @@ public class SetupObjectGet implements Operation {
         LOG.info("SetupObjectGet[" + requestContext.getRequestId() + "] complete()");
 
         /*
-         ** Remove the COMPUTE_MD5_DIGEST operation from the list since it will have already called it's
-         **   complete() operation.
-         */
-        objectGetHandlerOps.remove(OperationTypeEnum.COMPUTE_MD5_DIGEST);
-
-        /*
          ** Call the complete() method for any operations that this one created.
          */
         Collection<Operation> createdOperations = objectGetHandlerOps.values();

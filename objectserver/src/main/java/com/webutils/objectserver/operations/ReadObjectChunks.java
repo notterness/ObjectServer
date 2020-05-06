@@ -265,10 +265,10 @@ public class ReadObjectChunks implements Operation {
                                 if (requestContext.getHttpParseStatus() == HttpStatus.OK_200) {
                                     HttpRequestInfo httpInfo = requestContext.getHttpInfo();
 
-                                    StringBuilder failureMessage = new StringBuilder("\"Unable to obtain read chunk data - failed Storage Server\"");
-                                    failureMessage.append(",\n  \"StorageServer\": \"").append(server.getServerName()).append("\"");
+                                    String failureMessage = "\"Unable to obtain read chunk data - failed Storage Server\"";
+                                    failureMessage += ",\n  \"StorageServer\": \"" + server.getServerName() + "\"";
 
-                                    httpInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage.toString());
+                                    httpInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
                                 }
                             } else {
                                 /*
@@ -330,6 +330,10 @@ public class ReadObjectChunks implements Operation {
                             ** First check if this chunks write to the client has completed
                              */
                             if (server.getClientChunkWriteDone()) {
+                                LOG.info("ReadObjectChunks[" + requestContext.getRequestId() + "] writeDone addr: " +
+                                        server.getServerIpAddress().toString() + " port: " +
+                                        server.getServerTcpPort() + " chunkNumber: " + server.getChunkNumber());
+
                                 /*
                                  ** Cleanup the SetupChunkRead operation and remove the references
                                  */
@@ -348,6 +352,13 @@ public class ReadObjectChunks implements Operation {
                                 if (requestContext.getHttpParseStatus() == HttpStatus.OK_200) {
                                     chunkReadOps[chunkToWrite].event();
                                 } else {
+                                    /*
+                                    ** There was an error for this operation. Do not write the data back to the client.
+                                     */
+                                    LOG.info("ReadObjectChunks[" + requestContext.getRequestId() + "] request error addr: " +
+                                            server.getServerIpAddress().toString() + " port: " +
+                                            server.getServerTcpPort() + " chunkNumber: " + server.getChunkNumber());
+
                                     /*
                                     ** Clean up SetupChunkRead operations and remove references. Mark this chunk as
                                     **   written (back incrementing the chunkToWrite index) so the next one can be
@@ -371,6 +382,8 @@ public class ReadObjectChunks implements Operation {
                         chunkIndex++;
                     }   // end of while()
 
+                    LOG.info("ReadObjectChunks VERIFY_CHUNK_READ chunkToWrite: " + chunkToWrite + " totalChunksToProcess: " +
+                            totalChunksToProcess);
                     if (chunkToWrite == totalChunksToProcess) {
                         currState = ExecutionState.ALL_CHUNKS_COMPLETED;
                         /*
@@ -382,6 +395,7 @@ public class ReadObjectChunks implements Operation {
                 }
 
             case ALL_CHUNKS_COMPLETED:
+                LOG.info("ALL_CHUNKS_COMPLETED");
                 /*
                 ** For error cases, cleanup and SetupChunkRead operations that are still outstanding
                  */
@@ -393,6 +407,7 @@ public class ReadObjectChunks implements Operation {
                         chunkReadOps[chunkToWrite] = null;
                         serversToReadFrom[chunkToWrite] = null;
                     }
+                    chunkIndex++;
                 }
 
                 completeCallback.event();
