@@ -2,14 +2,11 @@ package com.webutils.objectserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.buffermgr.ChunkMemoryPool;
-import com.webutils.webserver.common.Md5ResultHandler;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ObjectInfo;
-import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
-import com.webutils.webserver.operations.WriteToClient;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,8 +45,6 @@ public class SetupObjectGet implements Operation {
      */
     private final Map<OperationTypeEnum, Operation> objectGetHandlerOps;
 
-    private final Md5ResultHandler updater;
-
     /*
      ** This is used to prevent the Operation setup code from being called multiple times in the execute() method
      */
@@ -80,8 +75,6 @@ public class SetupObjectGet implements Operation {
          ** Setup the list of Operations currently used to handle the V2 PUT
          */
         this.objectGetHandlerOps = new HashMap<>();
-
-        this.updater = requestContext.getMd5ResultHandler();
 
         /*
          ** This starts out not being on any queue

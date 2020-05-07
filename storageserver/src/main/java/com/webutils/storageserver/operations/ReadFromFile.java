@@ -120,8 +120,7 @@ public class ReadFromFile implements Operation {
      */
     public BufferManagerPointer initialize() {
         /*
-         ** This keeps track of the number of bytes that have been written and how many
-         **   need to be written.
+         ** This keeps track of the number of bytes that have been read to determine how many still need to be read
          */
         fileBytesRead = 0;
 
@@ -231,7 +230,7 @@ public class ReadFromFile implements Operation {
                 ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
                 **  affecting the position() and limit() indexes
                 **
-                ** NOTE: savedSrcPosition is modifed within the readFileChannel.read() handling as the read may
+                ** NOTE: savedSrcPosition is modified within the readFileChannel.read() handling as the read may
                 **   only consume a portion of the buffer and it will take multiple passes through using the same
                 **   buffer to actually read all the data from the file.
                  */
@@ -252,7 +251,7 @@ public class ReadFromFile implements Operation {
                             /*
                             ** Queue this up to try again later and force the exit from the while loop
                              */
-                            this.event();
+                            event();
                         } else {
                             /*
                             ** Done with this buffer, see if there is more data to read from the file
@@ -264,9 +263,8 @@ public class ReadFromFile implements Operation {
                                     fileBytesRead + " bytesToReadFromFile: " + bytesToReadFromFile);
 
                             /*
-                             ** Check if all the bytes (meaning the amount passed in the content-length in the HTTP header)
-                             **   have been written to the file. If not, dole out another ByteBuffer to the NIO read
-                             **   operation.
+                             ** Check if all the bytes have been read from the file. If not, dole out another ByteBuffer
+                             **   to the NIO read operation.
                              */
                             if (fileBytesRead < bytesToReadFromFile) {
                                 bufferMetering.event();
@@ -281,8 +279,7 @@ public class ReadFromFile implements Operation {
                         }
                     } catch (IOException io_ex) {
                         /*
-                        ** Not going to be able to write anything else, so call complete() and
-                        **   terminate this operation.
+                        ** Not going to be able to read anything else, so call complete() and terminate this operation.
                          */
                         LOG.info("ReadFromFile[" + requestContext.getRequestId() + "] read exception: " + io_ex.getMessage());
                         completeCallback.event();
@@ -329,19 +326,19 @@ public class ReadFromFile implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("WriteToFile[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("ReadFromFile[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("WriteToFile[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("ReadFromFile[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("WriteToFile[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("ReadFromFile[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("WriteToFile[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("ReadFromFile[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -356,7 +353,7 @@ public class ReadFromFile implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("WriteToFile[" + requestContext.getRequestId() +
+        LOG.warn("ReadFromFile[" + requestContext.getRequestId() +
                 "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }

@@ -3,18 +3,7 @@ package com.webutils.webserver.common;
 /*
 ** These are the parameters needed to send the GET object command to the Object Server
  */
-public class GetObjectParams {
-
-    /*
-    ** The namespaceName, bucketName and objectName are required parameters to construct the GET Object request.
-    **
-    **   GET /n/{namespaceName}/b/{bucketName}/o/{objectName}
-     */
-    private final String namespaceName;
-
-    private final String bucketName;
-
-    private final String objectName;
+public class GetObjectParams extends ObjectParams {
 
     /*
     ** The following are optional headers
@@ -27,12 +16,11 @@ public class GetObjectParams {
     private String opcClientRequestId;
     private String hostName;
 
-    public GetObjectParams(final String namespace, final String bucket, final String object) {
-        this.namespaceName = namespace;
-        this.bucketName = bucket;
-        this.objectName = object;
+    private String objectFilePath;
 
-        this.hostName = null;
+    public GetObjectParams(final String namespace, final String bucket, final String object, final String objectFilePath) {
+
+        super(namespace, bucket, object, objectFilePath);
         this.opcClientRequestId = null;
     }
 
@@ -65,8 +53,5 @@ public class GetObjectParams {
         return request;
     }
 
-    public void setHostName(final String host) { hostName = host; }
-
-    public void setOpcClientRequestId(final String clientRequestId) { opcClientRequestId = clientRequestId; }
 }
 

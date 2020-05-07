@@ -2,7 +2,7 @@ package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.common.GetObjectParams;
+import com.webutils.webserver.common.ObjectParams;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,19 +38,19 @@ public class BuildObjectGetHeader implements Operation {
     private final BufferManagerPointer addBufferPointer;
     private BufferManagerPointer writePointer;
 
-    private final GetObjectParams requestParams;
+    private final ObjectParams requestParams;
 
     private boolean headerNotBuilt;
 
     public BuildObjectGetHeader(final RequestContext requestContext, final BufferManager requestBufferManager,
-                                final BufferManagerPointer addBufferPtr, final GetObjectParams getRequestParams) {
+                                final BufferManagerPointer addBufferPtr, final ObjectParams requestParams) {
 
         this.requestContext = requestContext;
 
         this.requestBufferManager = requestBufferManager;
         this.addBufferPointer = addBufferPtr;
 
-        this.requestParams = getRequestParams;
+        this.requestParams = requestParams;
 
 
         /*

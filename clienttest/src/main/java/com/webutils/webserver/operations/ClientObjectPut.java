@@ -2,7 +2,7 @@ package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.common.GetObjectParams;
+import com.webutils.webserver.common.PutObjectParams;
 import com.webutils.webserver.common.ResponseMd5ResultHandler;
 import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.manual.ClientInterface;
@@ -14,22 +14,17 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
 
-public class ClientObjectGet implements Operation {
+public class ClientObjectPut implements Operation {
 
-
-    private static final Logger LOG = LoggerFactory.getLogger(ClientObjectGet.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ClientObjectPut.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_OBJECT_GET;
+    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_OBJECT_PUT;
 
 
     private final int OBJECT_SERVER_HEADER_BUFFER_COUNT = 4;
@@ -50,7 +45,7 @@ public class ClientObjectGet implements Operation {
      */
     private final ServerIdentifier objectServer;
 
-    private final GetObjectParams requestParams;
+    private final PutObjectParams requestParams;
 
     private final MemoryManager memoryManager;
 
@@ -68,7 +63,7 @@ public class ClientObjectGet implements Operation {
         EMPTY_STATE
     }
 
-    private ClientObjectGet.ExecutionState currState;
+    private ExecutionState currState;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -117,14 +112,14 @@ public class ClientObjectGet implements Operation {
      ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
      **   up the calls to obtain the VON information and the meta-data write to the database.
      */
-    public ClientObjectGet(final ClientInterface clientInterface, final ClientRequestContext requestContext,
+    public ClientObjectPut(final ClientInterface clientInterface, final ClientRequestContext requestContext,
                            final MemoryManager memoryManager, final ServerIdentifier server,
-                           final GetObjectParams getRequestParams) {
+                           final PutObjectParams putParams) {
 
         this.clientInterface = clientInterface;
         this.requestContext = requestContext;
         this.objectServer = server;
-        this.requestParams = getRequestParams;
+        this.requestParams = putParams;
         this.memoryManager = memoryManager;
 
         /*
@@ -232,7 +227,7 @@ public class ClientObjectGet implements Operation {
                     if (status == HttpStatus.OK_200) {
                         currState = ExecutionState.READ_CONTENT_DATA;
                         /*
-                        ** This code path could fall through instead of running through the scheduler
+                         ** This code path could fall through instead of running through the scheduler
                          */
                         event();
                     } else if (status != -1) {
@@ -273,7 +268,7 @@ public class ClientObjectGet implements Operation {
                     currState = ExecutionState.CALLBACK_OPS;
                 } else if (parseError) {
                     /*
-                    ** Need to callback the higher level. The file will have already been deleted.
+                     ** Need to callback the higher level. The file will have already been deleted.
                      */
                 } else {
                     /*
@@ -293,21 +288,6 @@ public class ClientObjectGet implements Operation {
                 break;
 
             case DELETE_FILE:
-                {
-                    String fileName = requestParams.getFilePathName();
-
-                    /*
-                    ** Some sort of error, so need to delete the file
-                     */
-                    LOG.warn("Deleting file: " + fileName + " due to error: " + requestContext.getHttpParseStatus());
-
-                    Path filePath = Paths.get(fileName);
-                    try {
-                        Files.deleteIfExists(filePath);
-                    } catch (IOException ex) {
-                        LOG.warn("Failure deleting file: " + fileName + " exception: " + ex.getMessage());
-                    }
-                }
                 break;
 
             case EMPTY_STATE:
@@ -538,7 +518,7 @@ public class ClientObjectGet implements Operation {
         requestHandlerOperations.put(errorHandler.getOperationType(), errorHandler);
 
         /*
-         ** The GET Header must be written to the Object Server so that the data can be read in
+         ** The PUT Header must be written to the Object Server so that the data can be read in
          */
         BuildObjectGetHeader headerBuilder = new BuildObjectGetHeader(requestContext, requestBufferManager,
                 addBufferPointer, requestParams);
@@ -621,4 +601,5 @@ public class ClientObjectGet implements Operation {
         requestHandlerOperations.put(writeObjectToFile.getOperationType(), writeObjectToFile);
         writeObjectToFile.initialize();
     }
+
 }

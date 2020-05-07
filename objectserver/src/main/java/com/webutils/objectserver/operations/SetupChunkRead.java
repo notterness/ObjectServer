@@ -17,7 +17,6 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SetupChunkRead implements Operation {
 
@@ -136,7 +135,6 @@ public class SetupChunkRead implements Operation {
     private boolean serverConnectionClosedDueToError;
 
     private WriteChunkToClient writeChunkToClient;
-    private final AtomicBoolean allChunkDataWritten;
 
     /*
     ** The updater used to manage the Md5 digest and its result
@@ -183,8 +181,6 @@ public class SetupChunkRead implements Operation {
         currState = ExecutionState.SETUP_CHUNK_READ_OPS;
 
         serverConnectionClosedDueToError = false;
-
-        allChunkDataWritten = new AtomicBoolean(false);
 
         LOG.info("SetupChunkRead[" + requestContext.getRequestId() + "] addr: " +
                 storageServer.getServerIpAddress().toString() + " port: " +

@@ -27,8 +27,6 @@ public class CloseOutRequest implements Operation {
      */
     private boolean onExecutionQueue;
 
-    private BufferManagerPointer writeStatusPtr;
-
     public CloseOutRequest(final RequestContext requestContext) {
 
         this.requestContext = requestContext;
