@@ -37,10 +37,10 @@ public class GetObjectSimple {
         cliClient.start();
 
         GetObjectParams params = new GetObjectParams("Namespace-xyz-987", "CreateBucket_Simple",
-                "5e223890-ea13-11e9-851d-234132e0fb02");
+                "5e223890-ea13-11e9-851d-234132e0fb02", "testObjectFile");
 
         cli = new ClientInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
-                params, "testObjectFile", testCount);
+                params, testCount);
     }
 
     public void execute() {

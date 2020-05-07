@@ -81,8 +81,6 @@ public class StorageServerDetermineRequest implements Operation {
          ** Map of the operations required to send out the final status
          */
         this.finalStatusOps = new HashMap<>();
-
-
     }
 
     public OperationTypeEnum getOperationType() {
@@ -173,7 +171,7 @@ public class StorageServerDetermineRequest implements Operation {
             operation = finalStatusOps.remove(OperationTypeEnum.WRITE_TO_CLIENT);
             operation.complete();
 
-            operation = finalStatusOps.remove(OperationTypeEnum.SEND_FINAL_STATUS);
+            operation = finalStatusOps.remove(OperationTypeEnum.STORAGE_SERVER_SEND_FINAL_STATUS);
             operation.complete();
 
             operation = finalStatusOps.remove(OperationTypeEnum.CLOSE_OUT_REQUEST);

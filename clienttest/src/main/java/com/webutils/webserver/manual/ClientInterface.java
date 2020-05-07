@@ -24,7 +24,6 @@ public class ClientInterface {
 
     private boolean statusSignalSent;
 
-    private final String fileName;
     private final GetObjectParams requestParams;
 
     /*
@@ -44,14 +43,13 @@ public class ClientInterface {
     private static final String clientName = "ObjectCLI/0.0.1";
 
     ClientInterface(final NioCliClient cliClient, final MemoryManager memoryManger, final InetAddress serverIpAddr, final int serverTcpPort,
-                    final GetObjectParams getRequestParams, final String fileName, AtomicInteger testCount) {
+                    final GetObjectParams getRequestParams, AtomicInteger testCount) {
 
         this.memoryManager = memoryManger;
 
         this.serverIpAddr = serverIpAddr;
         this.serverTcpPort = serverTcpPort;
 
-        this.fileName = fileName;
         this.requestParams = getRequestParams;
 
         this.runningTestCount = testCount;
@@ -98,7 +96,7 @@ public class ClientInterface {
         HttpResponseInfo httpResponseInfo = new HttpResponseInfo(clientContext);
         objectServer.setHttpInfo(httpResponseInfo);
         ClientObjectGet objectGet = new ClientObjectGet(this, clientContext, memoryManager, objectServer,
-                fileName, requestParams);
+                requestParams);
         objectGet.initialize();
 
         /*

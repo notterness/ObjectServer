@@ -5,9 +5,12 @@ import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.common.Md5ResultHandler;
 import com.webutils.webserver.memory.MemoryManager;
+import com.webutils.webserver.mysql.ObjectTableMgr;
 import com.webutils.webserver.operations.ComputeMd5Digest;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
+import com.webutils.webserver.requestcontext.WebServerFlavor;
+import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -164,6 +167,16 @@ public class ObjectPut_P2 implements Operation {
              */
             updater.validateMD5Header();
             updater.checkContentMD5();
+
+            /*
+            ** If there was an error, delete the Object record
+             */
+            if (requestContext.getHttpParseStatus() != HttpStatus.OK_200) {
+                WebServerFlavor flavor = requestContext.getWebServerFlavor();
+
+                ObjectTableMgr objectMgr = new ObjectTableMgr(flavor, requestContext);
+                objectMgr.deleteObject(requestContext.getObjectId());
+            }
 
             completeCallback.event();
 

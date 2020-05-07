@@ -1,12 +1,12 @@
 package com.webutils.objectserver.operations;
 
+import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.mysql.ObjectTableMgr;
 import com.webutils.webserver.mysql.TenancyTableMgr;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
-import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -21,7 +21,7 @@ public class CreateObject implements Operation {
      */
     public final OperationTypeEnum operationType = OperationTypeEnum.CREATE_OBJECT;
 
-    private final RequestContext requestContext;
+    private final ObjectServerRequestContext requestContext;
 
     private final Operation completeCallback;
 
@@ -34,7 +34,7 @@ public class CreateObject implements Operation {
      */
     private boolean onExecutionQueue;
 
-    public CreateObject(final RequestContext requestContext, final Operation completeCb, final Operation errorCb) {
+    public CreateObject(final ObjectServerRequestContext requestContext, final Operation completeCb, final Operation errorCb) {
         this.requestContext = requestContext;
         this.completeCallback = completeCb;
         this.errorCallback = errorCb;
@@ -76,7 +76,13 @@ public class CreateObject implements Operation {
 
         ObjectTableMgr objectMgr = new ObjectTableMgr(flavor, requestContext);
         if (objectMgr.createObjectEntry(objectPutInfo, tenancyUID) == HttpStatus.OK_200) {
-            completeCallback.event();
+            int objectId = objectMgr.getObjectId(objectPutInfo, tenancyUID);
+            if (objectId != -1) {
+                completeCallback.event();
+            } else {
+                requestContext.setObjectId(objectId);
+                errorCallback.event();
+            }
         } else {
             errorCallback.event();
         }

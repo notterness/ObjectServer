@@ -9,25 +9,26 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 
 public class ObjectTableMgr extends ObjectStorageDb {
 
     private static final Logger LOG = LoggerFactory.getLogger(BucketTableMgr.class);
 
-    private final static String CREATE_OBJECT_1 = "INSERT INTO object VALUES ( NULL, '";       // objectName
-    private final static String CREATE_OBJECT_2 = "', '0', '";                                 // versionId, opcClientRequestId not null
-    private final static String CREATE_OBJECT_2_NULL = "', '0', NULL, ";                       // versionId, contentLength when opcClientRequestId is null
-    private final static String CREATE_OBJECT_3 = "', ";                                       // contentLength
-    private final static String CREATE_OBJECT_4 = " , ";                                       // storageType
-    private final static String CREATE_OBJECT_5 = " , NULL";                                   // contentMd5
-    private final static String CREATE_OBJECT_6 = " , CURRENT_TIMESTAMP(), NULL, 0, CURRENT_TIMESTAMP(), UUID_TO_BIN(UUID()), 0, ";
-    private final static String CREATE_OBJECT_7 = " (SELECT bucketId FROM bucket WHERE bucketUID = UUID_TO_BIN('";
-    private final static String CREATE_OBJECT_8 = "') ), (SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN('";
-    private final static String CREATE_OBJECT_9 = "') ) )";
+    /*
+    ** Fields for the prepared statement are:
+    **   1 - objectName (String)
+    **   2 - versionId  (String)
+    **   3 - opcClientRequestId (String, may be NULL)
+    **   4 - contentLength (int)
+    **   5 - storageType (int)
+    **   6 - contentMd5  (String)
+    **   7 - bucketUID (String)
+    **   8 - namespaceUID (String)
+     */
+    private final static String CREATE_OBJ_1 = "INSERT INTO object VALUES ( NULL, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(), NULL, 0, CURRENT_TIMESTAMP(), UUID_TO_BIN(UUID()), 0,";
+    private final static String CREATE_OBJ_2 = " (SELECT bucketId FROM bucket WHERE bucketUID = UUID_TO_BIN(?)), ";
+    private final static String CREATE_OBJ_3 = " (SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN(?)) )";
 
     private final static String GET_OBJECT_UID_1 = "SELECT BIN_TO_UUID(objectUID) objectUID FROM object WHERE objectName = '";
     private final static String GET_OBJECT_UID_2 = "' AND bucketId = ( SELECT bucketId FROM bucket WHERE bucketUID = UUID_TO_BIN('";
@@ -53,6 +54,9 @@ public class ObjectTableMgr extends ObjectStorageDb {
     private final static String RETRIEVE_OBJECT_QUERY_1 = "SELECT * FROM object WHERE objectName = '";
     private final static String RETRIEVE_OBJECT_QUERY_2 = "' AND bucketId = ";
 
+    private final static String DELETE_OBJECT_USING_ID = "DELETE FROM object WHERE objectId = ";
+
+
     /*
      ** The opcRequestId is used to track the request through the system. It is uniquely generated for each
      **   request connection.
@@ -70,9 +74,9 @@ public class ObjectTableMgr extends ObjectStorageDb {
     }
 
     /*
-    ** This is used to create an object representation in the ObjectStorageDb database.
-    **
-    ** TODO: Handle the "if-match", "if-none-match" headers. Create a function to generate a new object versionId.
+     ** This is used to create an object representation in the ObjectStorageDb database.
+     **
+     ** TODO: Handle the "if-match", "if-none-match" headers. Create a function to generate a new object versionId.
      */
     public int createObjectEntry(final HttpRequestInfo objectCreateInfo, final String tenancyUID) {
         int status = HttpStatus.OK_200;
@@ -97,7 +101,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
         LOG.info("createObjectEntry() objectName: " + objectName + " bucketName: " + bucketName);
 
         /*
-        ** First need to validate that the namespace exists
+         ** First need to validate that the namespace exists
          */
         NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
         String namespaceUID = namespaceMgr.getNamespaceUID(namespace, tenancyUID);
@@ -110,7 +114,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
         }
 
         /*
-        ** Now make sure the Bucket that this Object is stored within actually exists.
+         ** Now make sure the Bucket that this Object is stored within actually exists.
          */
         BucketTableMgr bucketMgr = new BucketTableMgr(flavor, opcRequestId, objectCreateInfo);
         String bucketUID = bucketMgr.getBucketUID(bucketName, namespaceUID);
@@ -133,25 +137,49 @@ public class ObjectTableMgr extends ObjectStorageDb {
         }
 
 
-        String createObjectStr;
-        if (opcClientRequestId != null) {
-            createObjectStr = CREATE_OBJECT_1 + objectName + CREATE_OBJECT_2 + opcClientRequestId + CREATE_OBJECT_3 +
-                    contentLength + CREATE_OBJECT_4 + tier.toInt() + CREATE_OBJECT_5 + CREATE_OBJECT_6 +
-                    CREATE_OBJECT_7 + bucketUID + CREATE_OBJECT_8 + namespaceUID + CREATE_OBJECT_9;
-        } else {
-            createObjectStr = CREATE_OBJECT_1 + objectName + CREATE_OBJECT_2_NULL +
-                    contentLength + CREATE_OBJECT_4 + tier.toInt() + CREATE_OBJECT_5 + CREATE_OBJECT_6 +
-                    CREATE_OBJECT_7 + bucketUID + CREATE_OBJECT_8 + namespaceUID + CREATE_OBJECT_9;
-        }
+        String createObjectStr = CREATE_OBJ_1 + CREATE_OBJ_2 + CREATE_OBJ_3;
 
         Connection conn = getObjectStorageDbConn();
 
         if (conn != null) {
-            Statement stmt = null;
+            PreparedStatement stmt = null;
 
             try {
-                stmt = conn.createStatement();
-                stmt.execute(createObjectStr);
+                /*
+                 ** Fields for the prepared statement are:
+                 **   1 - objectName (String)
+                 **   2 - versionId  (String)
+                 **   3 - opcClientRequestId (String, may be NULL)
+                 **   4 - contentLength (int)
+                 **   5 - storageType (int)
+                 **   6 - contentMd5  (BINARY)
+                 **   7 - bucketUID (String)
+                 **   8 - namespaceUID (String)
+                 */
+                stmt = conn.prepareStatement(createObjectStr);
+                stmt.setString(1, objectName);
+                stmt.setString(2, "0");
+                LOG.info("createObjectEntry opcClientRequestId: " + opcClientRequestId);
+                if (opcClientRequestId != null) {
+                    stmt.setString(3, opcClientRequestId);
+                } else {
+                    stmt.setNull(3, Types.VARCHAR);
+                }
+
+                stmt.setInt(4, contentLength);
+                stmt.setInt(5, tier.toInt());
+
+                if (!contentMd5.equals("NULL")) {
+                    byte[] md5DigestBytes = BaseEncoding.base64().decode(contentMd5);
+                    stmt.setBytes(6, md5DigestBytes);
+                } else {
+                    stmt.setNull(6, Types.BINARY);
+                }
+
+
+                stmt.setString(7, bucketUID);
+                stmt.setString(8, namespaceUID);
+                stmt.executeUpdate();
             } catch (SQLException sqlEx) {
                 LOG.error("createObjectEntry() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                 LOG.error("Bad SQL command: " + createObjectStr);
@@ -177,12 +205,12 @@ public class ObjectTableMgr extends ObjectStorageDb {
         }
 
         /*
-        ** When the request is successful, there are a number of headers to return.
+         ** When the request is successful, there are a number of headers to return.
          */
         if (status == HttpStatus.OK_200) {
             /*
-            ** Set the objectId in the HttpRequestInfo object so it can easily be accessed when writing out the
-            **   chunk information.
+             ** Set the objectId in the HttpRequestInfo object so it can easily be accessed when writing out the
+             **   chunk information.
              */
             int id = getObjectId(objectName, bucketUID);
             if (id != -1) {
@@ -394,6 +422,58 @@ public class ObjectTableMgr extends ObjectStorageDb {
         return getId(getObjectIdStr);
     }
 
+    /*
+    ** The full way to obtain unique identifier for an Object
+     */
+    public int getObjectId(final HttpRequestInfo objectCreateInfo, final String tenancyUID) {
+        /*
+         ** Obtain the fields required to build the Object table entry. Verify that the required fields are not missing.
+         */
+        String objectName = objectCreateInfo.getObject();
+        String namespace = objectCreateInfo.getNamespace();
+        String bucketName = objectCreateInfo.getBucket();
+
+        if ((objectName == null) || (bucketName == null) || (namespace == null)) {
+            String failureMessage = "\"getObjectId() missing required attributes\",\n  \"objectName\": \"" + objectName +
+                    "\",\n  \"bucketName\": \"" + bucketName + "\",\n \"namespaceName\": \"" + namespace + "\"";
+            LOG.warn(failureMessage);
+            objectCreateInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
+            return HttpStatus.BAD_REQUEST_400;
+        }
+
+        LOG.info("getObjectId() objectName: " + objectName + " bucketName: " + bucketName);
+
+        /*
+         ** First need to validate that the namespace exists
+         */
+        NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
+        String namespaceUID = namespaceMgr.getNamespaceUID(namespace, tenancyUID);
+        if (namespaceUID == null) {
+            LOG.warn("Unable to retrieve Object ID: " + objectName + " - invalid namespace: " + namespace);
+
+            String failureMessage = "\"Namespace not found\",\n  \"namespaceName\": \"" + namespace + "\"";
+            objectCreateInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+            return HttpStatus.PRECONDITION_FAILED_412;
+        }
+
+        /*
+         ** Now make sure the Bucket that this Object is stored within actually exists.
+         */
+        BucketTableMgr bucketMgr = new BucketTableMgr(flavor, opcRequestId, objectCreateInfo);
+        String bucketUID = bucketMgr.getBucketUID(bucketName, namespaceUID);
+        if (bucketUID == null) {
+            LOG.warn("Unable to retrieve Object ID: " + objectName + " - invalid bucket: " + bucketName);
+
+            String failureMessage = "\"Bucket not found\",\n  \"bucketName\": \"" + bucketName + "\"";
+            objectCreateInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+            return HttpStatus.PRECONDITION_FAILED_412;
+        }
+
+        String getObjectIdStr = GET_OBJECT_ID_1 + objectName + GET_OBJECT_ID_2 + bucketUID + GET_OBJECT_ID_3;
+
+        return getId(getObjectIdStr);
+    }
+
     private String getObjectCreationTime(final int objectId) {
         String getCreateTime = GET_OBJECT_CREATE_TIME + objectId;
 
@@ -404,6 +484,12 @@ public class ObjectTableMgr extends ObjectStorageDb {
         String getOpClientId = GET_OPC_CLIENT_ID + objectId;
 
         return getSingleStr(getOpClientId);
+    }
+
+    public void deleteObject(final int objectId) {
+        String deleteObjStr = DELETE_OBJECT_USING_ID + objectId;
+
+        executeSqlStatement(deleteObjStr);
     }
 
     /*
