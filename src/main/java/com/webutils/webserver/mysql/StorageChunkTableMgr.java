@@ -25,7 +25,7 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
     private final static String CREATE_CHUNK_5 = "', '";                                       // serverIp
     private final static String CREATE_CHUNK_6 = "', ";                                        // serverPort
     private final static String CREATE_CHUNK_7 = ", '";                                        // storageLocation
-    private final static String CREATE_CHUCK_8 = "', 0, NULL, ";                               // dataWritten, chunkMd5, ownerObject
+    private final static String CREATE_CHUCK_8 = "', 0, 0, 0, NULL, ";    // dataWritten, readFailureCount, chunkOffline, chunkMd5, ownerObject
     private final static String CREATE_CHUNK_9 = " )";
 
     private final static String CHECK_FOR_DUPLICATE_1 = "SELECT chunkId FROM storageChunk WHERE offset = ";
@@ -43,13 +43,14 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
 
     private final static String GET_CHUNKS_FOR_OBJECT = "SELECT * FROM storageChunk WHERE ownerObject = ";
 
+    private final static String INCREMENT_READ_FAILURES = "UPDATE storageChunk SET readFailureCount = readFailureCount + 1 WHERE chunkId = ";
+
+    private final static String SET_CHUNK_OFFLINE = "UPDATE storageChunk SET readFailureCount = readFailureCount + 1, chunkOffline = 1 WHERE chunkId = ";
 
     private final HttpRequestInfo objectCreateInfo;
 
     public StorageChunkTableMgr(final WebServerFlavor flavor, final HttpRequestInfo objectCreateInfo) {
         super(flavor);
-
-        //LOG.info("ObjectTableMgr() flavor: " + flavor);
 
         this.objectCreateInfo = objectCreateInfo;
     }
@@ -282,9 +283,8 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
     }
 
     /*
-     ** The chunkMd5 is stored in the storageChunk table after the chunk is successfully written to the Storage Server.
-     **   The chunkMd5 is then used when reading data back from the Storage Server to insure that it matches what was
-     **   sent to the Storage Server earlier.
+     ** The getChunks() method is used to retrieve all of the chunks associated with an object. This pulls in the
+     **   information about that chunk.
      */
     public void getChunks(final int objectId, final List<ServerIdentifier> chunkList) {
         String chunkQuery = GET_CHUNKS_FOR_OBJECT + objectId;
@@ -330,10 +330,13 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
                                     LOG.info("hostName: " + hostName + " chunkIndex: " + chunkIndex + " length: " + length);
                                 }
 
+                                int readFailureCount = rs.getInt(10);
+                                boolean chunkOffline = rs.getBoolean(11);
+
                                 /*
                                  ** The rs.getBytes(10) is the BINARY() representation of the Md5 Digest.
                                  */
-                                byte[] md5Bytes = rs.getBytes(10);
+                                byte[] md5Bytes = rs.getBytes(12);
                                 md5DigestStr = BaseEncoding.base64().encode(md5Bytes);
 
                                 if (hostName != null) {
@@ -383,8 +386,11 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
         }
     }
 
-
     public void deleteChunk(final int chunkId) {
         executeSqlStatement(DELETE_CHUNK + chunkId);
     }
+
+    public void incrementChunkReadFailure(final int chunkId) { executeSqlStatement(INCREMENT_READ_FAILURES + chunkId); }
+
+    public void setChunkOffline(final int chunkId) { executeSqlStatement(SET_CHUNK_OFFLINE + chunkId); }
 }

@@ -1,5 +1,6 @@
 package com.webutils.objectserver.operations;
 
+import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.mysql.ObjectInfo;
@@ -7,7 +8,6 @@ import com.webutils.webserver.mysql.ObjectTableMgr;
 import com.webutils.webserver.mysql.TenancyTableMgr;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
-import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -25,7 +25,7 @@ public class RetrieveObjectInfo implements Operation {
      */
     public final OperationTypeEnum operationType = OperationTypeEnum.RETRIEVE_OBJECT_INFO;
 
-    private final RequestContext requestContext;
+    private final ObjectServerRequestContext requestContext;
 
     private final ObjectInfo objectInfo;
 
@@ -39,7 +39,7 @@ public class RetrieveObjectInfo implements Operation {
      */
     private boolean onExecutionQueue;
 
-    public RetrieveObjectInfo(final RequestContext requestContext, final ObjectInfo objectInfo,
+    public RetrieveObjectInfo(final ObjectServerRequestContext requestContext, final ObjectInfo objectInfo,
                               final Operation completeCb, final Operation errorCb) {
         this.requestContext = requestContext;
 
@@ -93,6 +93,8 @@ public class RetrieveObjectInfo implements Operation {
         if (objectMgr.retrieveObjectInfo(objectPutInfo, objectInfo, tenancyUID) == HttpStatus.OK_200) {
             int objectId = objectInfo.getObjectId();
             objectInfo.setEtag(objectMgr.getObjectUID(objectId));
+
+            requestContext.setObjectId(objectId);
 
             completeCallback.event();
          } else {

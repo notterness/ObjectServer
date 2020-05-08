@@ -1,15 +1,16 @@
 package com.webutils.objectserver.operations;
 
+import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.buffermgr.ChunkMemoryPool;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ObjectInfo;
+import com.webutils.webserver.mysql.ObjectTableMgr;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.operations.WriteToClient;
-import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -31,7 +32,7 @@ public class ReadObjectChunks implements Operation {
     /*
      ** The operations are all tied together via the RequestContext
      */
-    private final RequestContext requestContext;
+    private final ObjectServerRequestContext requestContext;
 
     private final MemoryManager memoryManager;
 
@@ -92,7 +93,7 @@ public class ReadObjectChunks implements Operation {
     private boolean onExecutionQueue;
 
 
-    public ReadObjectChunks(final RequestContext requestContext, final MemoryManager memoryManager,
+    public ReadObjectChunks(final ObjectServerRequestContext requestContext, final MemoryManager memoryManager,
                             final ChunkMemoryPool chunkMemPool, final ObjectInfo objectInfo,
                             final Operation completeCb) {
 
@@ -215,7 +216,7 @@ public class ReadObjectChunks implements Operation {
 
                         if (server != null) {
                             SetupChunkRead chunkRead = new SetupChunkRead(requestContext, server, memoryManager, chunkMemPool,
-                                this, server.getChunkNumber(), null);
+                                this, null);
                             chunkReadOps[chunkIndex] = chunkRead;
 
                             chunkRead.initialize();
@@ -234,7 +235,7 @@ public class ReadObjectChunks implements Operation {
                         ServerIdentifier server = serversToReadFrom[chunkIndex];
                         if ((server != null) && (server.getChunkNumber() == chunkToWrite)) {
                             /*
-                            ** First check if this chunks write to the client has completed
+                            ** First check if this chunk read has completed successfully
                              */
                             int responseCode = server.getResponseStatus();
                             if (responseCode == HttpStatus.OK_200) {
@@ -299,9 +300,13 @@ public class ReadObjectChunks implements Operation {
                     sendResponse.event();
                 } else {
                     /*
-                    ** Nothing more to do, some sort of an error
+                    ** Nothing more to do, some sort of an error that should have never happened
                      */
                     LOG.error("SEND_RESPONSE operation is null");
+                    HttpRequestInfo httpInfo = requestContext.getHttpInfo();
+                    String failureMessage = "\"Invalid State - ReadObjectChunks\"";
+
+                    httpInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
                     currState = ExecutionState.ALL_CHUNKS_COMPLETED;
                     event();
                 }
@@ -309,7 +314,7 @@ public class ReadObjectChunks implements Operation {
 
             case WAIT_FOR_RESPONSE_SEND:
                 if (requestContext.getHttpParseStatus() != HttpStatus.OK_200) {
-                    LOG.warn("WAIT_FOR_RESPONSE_SENT error");
+                    LOG.warn("WAIT_FOR_RESPONSE_SENT error error: " + requestContext.getHttpParseStatus());
                     currState = ExecutionState.ALL_CHUNKS_COMPLETED;
                     event();
                     break;
@@ -355,7 +360,7 @@ public class ReadObjectChunks implements Operation {
                                     /*
                                     ** There was an error for this operation. Do not write the data back to the client.
                                      */
-                                    LOG.info("ReadObjectChunks[" + requestContext.getRequestId() + "] request error addr: " +
+                                    LOG.warn("ReadObjectChunks[" + requestContext.getRequestId() + "] request error addr: " +
                                             server.getServerIpAddress().toString() + " port: " +
                                             server.getServerTcpPort() + " chunkNumber: " + server.getChunkNumber());
 
@@ -396,6 +401,13 @@ public class ReadObjectChunks implements Operation {
 
             case ALL_CHUNKS_COMPLETED:
                 LOG.info("ALL_CHUNKS_COMPLETED");
+
+                /*
+                ** Update the object record's lastReadAccessTime and readAccessCount fields
+                 */
+                ObjectTableMgr objectMgr = new ObjectTableMgr(requestContext.getWebServerFlavor(), requestContext);
+                objectMgr.updateLastReadAccess(objectInfo.getObjectId());
+
                 /*
                 ** For error cases, cleanup and SetupChunkRead operations that are still outstanding
                  */

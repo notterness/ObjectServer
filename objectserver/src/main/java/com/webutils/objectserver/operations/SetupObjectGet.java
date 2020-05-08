@@ -1,5 +1,6 @@
 package com.webutils.objectserver.operations;
 
+import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.buffermgr.ChunkMemoryPool;
 import com.webutils.webserver.http.HttpRequestInfo;
@@ -7,7 +8,6 @@ import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ObjectInfo;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
-import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,7 +28,7 @@ public class SetupObjectGet implements Operation {
     /*
      ** The operations are all tied together via the RequestContext
      */
-    private final RequestContext requestContext;
+    private final ObjectServerRequestContext requestContext;
 
     private final MemoryManager memoryManager;
 
@@ -63,7 +63,7 @@ public class SetupObjectGet implements Operation {
      ** This is used to setup the initial Operation dependencies required to handle the Storage Server GET
      **   request. This is how chunks of data for an Object are read to the backing storage.
      */
-    public SetupObjectGet(final RequestContext requestContext, final MemoryManager memoryManager,
+    public SetupObjectGet(final ObjectServerRequestContext requestContext, final MemoryManager memoryManager,
                           final ChunkMemoryPool chunkMemPool, final Operation completeCb) {
 
         this.requestContext = requestContext;
@@ -139,8 +139,8 @@ public class SetupObjectGet implements Operation {
     }
 
     /*
-     ** This complete() is called when the WriteToFile operation has written all of its buffers
-     **   to the file.
+     ** This complete() is called when the ReadObjectChunks operation has read all the chunks in and transferred the
+     **   data to the client.
      */
     public void complete() {
 

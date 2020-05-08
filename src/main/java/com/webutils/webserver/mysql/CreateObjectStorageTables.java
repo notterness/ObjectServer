@@ -90,7 +90,7 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             " readAccessCount INT," +
             " lastUpdateTime TIMESTAMP NOT NULL," +
             " objectUID BINARY(16) NOT NULL," +
-            " deleteMarker INT NOT NULL," +
+            " deleteMarker BOOL NOT NULL," +
             " bucketId INT NOT NULL," +
             " namespaceId INT NOT NULL," +
             " FOREIGN KEY (bucketId)" +
@@ -112,6 +112,8 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             " serverPort INT NOT NULL," +
             " storageLocation VARCHAR(128) NOT NULL," +
             " dataWritten INT NOT NULL," +
+            " readFailureCount INT NOT NULL," +
+            " chunkOffline BOOL NOT NULL," +
             " chunkMd5 BINARY(16)," +
             " ownerObject INT NOT NULL," +
             " FOREIGN KEY (ownerObject)" +

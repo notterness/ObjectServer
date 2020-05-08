@@ -56,6 +56,8 @@ public class ObjectTableMgr extends ObjectStorageDb {
 
     private final static String DELETE_OBJECT_USING_ID = "DELETE FROM object WHERE objectId = ";
 
+    private final static String UPDATE_LAST_READ_ACCESS = "UPDATE object SET readAccessCount = readAccessCount + 1, lastReadAccessTime = CURRENT_TIMESTAMP() WHERE objectId =";
+
 
     /*
      ** The opcRequestId is used to track the request through the system. It is uniquely generated for each
@@ -299,57 +301,63 @@ public class ObjectTableMgr extends ObjectStorageDb {
                         int count = 0;
                         while (rs.next()) {
                             /*
+                            ** Check if any of the records for the objects are in the process of being deleted.
                              */
-                            if (count == 0) {
-                                /*
-                                ** objectId is the unique identifier for the object
-                                 */
-                                objectId = rs.getInt(1);
-                                info.setObjectId(objectId);
+                            boolean deleteMarker = rs.getBoolean(13);
+                            if (!deleteMarker) {
+                                if (count == 0) {
+                                    /*
+                                     ** objectId is the unique identifier for the object
+                                     */
+                                    objectId = rs.getInt(1);
+                                    info.setObjectId(objectId);
 
-                                /*
-                                ** versionId - field 3
-                                 */
-                                String versionId = rs.getString(3);
-                                info.setVersionId(versionId);
+                                    /*
+                                     ** versionId - field 3
+                                     */
+                                    String versionId = rs.getString(3);
+                                    info.setVersionId(versionId);
 
-                                /*
-                                ** Field 5 (INT) - contentLength
-                                 */
-                                info.setContentLength(rs.getInt(5));
+                                    /*
+                                     ** Field 5 (INT) - contentLength
+                                     */
+                                    info.setContentLength(rs.getInt(5));
 
-                                /*
-                                ** Field 6 (BINARY(16)) - contentMd5
-                                 */
-                                byte[] md5Bytes = rs.getBytes(6);
-                                if (!rs.wasNull() && (md5Bytes != null)) {
-                                    String md5DigestStr = BaseEncoding.base64().encode(md5Bytes);
-                                    info.setContentMd5(md5DigestStr);
-                                } else {
-                                    info.setContentMd5(null);
+                                    /*
+                                     ** Field 6 (BINARY(16)) - contentMd5
+                                     */
+                                    byte[] md5Bytes = rs.getBytes(6);
+                                    if (!rs.wasNull() && (md5Bytes != null)) {
+                                        String md5DigestStr = BaseEncoding.base64().encode(md5Bytes);
+                                        info.setContentMd5(md5DigestStr);
+                                    } else {
+                                        info.setContentMd5(null);
+                                    }
+
+                                    /*
+                                     ** Field 11 - lastUpdateTime
+                                     */
+                                    String lastModifiedTime = rs.getString(11);
+                                    info.setLastModified(lastModifiedTime);
                                 }
-
-                                /*
-                                ** Field 11 - lastUpdateTime
-                                 */
-                                String lastModifiedTime = rs.getString(11);
-                                info.setLastModified(lastModifiedTime);
+                                count++;
                             }
-
-                            count++;
                         }
 
                         if (count != 1) {
-                            LOG.warn("retrieveObjectInfo() too many responses count: " + count);
-                            LOG.warn(queryStr);
+                            LOG.warn("retrieveObjectInfo() invalid responses count: " + count);
+                            objectId = -1;
                         }
                     } catch (SQLException sqlEx) {
+                        LOG.error("retrieveObjectInfo() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                         System.out.println("retrieveObjectInfo() SQL conn rs.next() SQLException: " + sqlEx.getMessage());
+                        objectId = -1;
                     }
 
                     try {
                         rs.close();
                     } catch (SQLException sqlEx) {
+                        LOG.error("retrieveObjectInfo() rs close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                         System.out.println("retrieveObjectInfo() SQL conn rs.close() SQLException: " + sqlEx.getMessage());
                     }
                 }
@@ -358,7 +366,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
                     try {
                         stmt.close();
                     } catch (SQLException sqlEx) {
-                        LOG.error("retrieveObjectInfo() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        LOG.error("retrieveObjectInfo() stmt close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                         System.out.println("SQLException: " + sqlEx.getMessage());
                     }
                 }
@@ -490,6 +498,13 @@ public class ObjectTableMgr extends ObjectStorageDb {
         String deleteObjStr = DELETE_OBJECT_USING_ID + objectId;
 
         executeSqlStatement(deleteObjStr);
+    }
+
+    public void updateLastReadAccess(final int objectId) {
+        LOG.info("updateLastReadAccess() objectId: " + objectId);
+        String updateReadAccessStr = UPDATE_LAST_READ_ACCESS + objectId;
+
+        executeSqlStatement(updateReadAccessStr);
     }
 
     /*

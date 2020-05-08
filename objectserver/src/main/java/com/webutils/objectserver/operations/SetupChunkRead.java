@@ -7,6 +7,7 @@ import com.webutils.webserver.buffermgr.ChunkMemoryPool;
 import com.webutils.webserver.common.ResponseMd5ResultHandler;
 import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.memory.MemoryManager;
+import com.webutils.webserver.mysql.StorageChunkTableMgr;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.*;
 import com.webutils.webserver.requestcontext.RequestContext;
@@ -147,9 +148,8 @@ public class SetupChunkRead implements Operation {
      */
     public SetupChunkRead(final RequestContext requestContext, final ServerIdentifier server,
                           final MemoryManager memoryManager, final ChunkMemoryPool chunkMemPool,
-                          final Operation completeCb, final int writer, final String errorInjectString) {
+                          final Operation completeCb, final String errorInjectString) {
 
-        this.operationType = OperationTypeEnum.fromInt(OperationTypeEnum.SETUP_CHUNK_READ_0.toInt() + writer);
 
         this.requestContext = requestContext;
         this.storageServer = server;
@@ -158,7 +158,8 @@ public class SetupChunkRead implements Operation {
 
         this.completeCallback = completeCb;
 
-        this.writerNumber = writer;
+        this.writerNumber = server.getChunkNumber();
+        this.operationType = OperationTypeEnum.fromInt(OperationTypeEnum.SETUP_CHUNK_READ_0.toInt() + this.writerNumber);
 
         this.errorInjectString = errorInjectString;
 
@@ -226,6 +227,34 @@ public class SetupChunkRead implements Operation {
     }
 
     /*
+     ** The execute method is actually a state machine that goes through the following states:
+     **
+     **   SETUP_CHUNK_READ - This is where the various operations that are required to read in a chunk from a Storage
+     **     Server are set up. The final step is to try and create the connection to the Storage Server. If this
+     **     is successful, the next step is to wait for the connection to be completed.
+     **   WAITING_FOR_CONN_COMP - This is called back when the connection is complete and the GET chunk request has
+     **     been sent to the Storage Server.
+     **   WAITING_FOR_RESPONSE_HEADER - This is the state this operation waits at until the response has been
+     **     sent back by the Storage Server. If the response is good, then the next step is to read in the data
+     **     into the chunk buffer. This is done in the READ_CONTENT_DATA state.
+     **   READ_CONTENT_DATA - This cleans up the StorageServerResponseHandler operation (which is used to parse the
+     **     response headers) as it is no longer needed, It sets up the dependencies for the DecryptBuffer and
+     **     Md5Digest operations on the ReadBuffer operation. It also sets up the WriteChunkToClient operation
+     **     with a dependency upon the DecryptBuffer operation. At this point, the data is brought into the
+     **     Object Server and an Md5 digest is computed along with the data being decrypted.
+     **   CONTENT_PROCESSED - This waits for all the data to be decrypted and the Md5 digest to be computed. This then
+     **     calls back the ReadObjectChunks operation (the overall manager for reading in the various chunks of data
+     **     that make up the object). This is required since all of the chunks of data need to be read in prior to
+     **     sending the response back to the client (to handle the case where there are errors and the object's
+     **     data cannot be returned). Once all of the chunks are read into the Object Server and the response has been
+     **     sent to the client, then the SetupChunkRead is woken up again to send the data to the client.
+     **   WRITE_CHUNK_TO_CLIENT - This starts up the WriteChunkToClient operation to stream the data to the client.
+     **   CHUNK_DATA_WRITTEN - This is the state when all of the chunk data has been written to the client. This wakes
+     **     up the ReadObjectChunks operation to let it know that the next chunk of data can be sent to the client.
+     **     This is done so that the chunks are sent to the client in the correct order to actually recreate the
+     **     object.
+     **   CALLBACK_OPS - This checks if there were any errors reading the data and updates the chunks record in the
+     **     database. It then wakes up the ReadObjectChunks to let it know that it is complete.
      **
      */
     public void execute() {
@@ -237,6 +266,10 @@ public class SetupChunkRead implements Operation {
                     /*
                     ** This is the case where the connection to the Storage Server could not be established
                      */
+                    LOG.warn("SetupChunkRead[" + requestContext.getRequestId() + "] setupInitiator failure addr: " +
+                            storageServer.getServerIpAddress().toString() + " port: " +
+                            storageServer.getServerTcpPort() + " chunkNumber: " + storageServer.getChunkNumber());
+
                     storageServer.setResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR_500);
                     currState = ExecutionState.CALLBACK_OPS;
                     event();
@@ -259,8 +292,7 @@ public class SetupChunkRead implements Operation {
                     } else if ((status = requestContext.getStorageResponseResult(storageServer)) != HttpStatus.OK_200) {
                         LOG.warn("SetupChunkRead[" + requestContext.getRequestId() + "] failure: " + status + " addr: " +
                             storageServer.getServerIpAddress().toString() + " port: " +
-                            storageServer.getServerTcpPort() + " chunkNumber: " + storageServer.getChunkNumber() +
-                            " writer: " + writerNumber);
+                            storageServer.getServerTcpPort() + " chunkNumber: " + storageServer.getChunkNumber());
 
                         storageServer.setResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR_500);
 
@@ -306,9 +338,12 @@ public class SetupChunkRead implements Operation {
                     if (updater.checkContentMD5(storageServer.getMd5Digest())) {
                         storageServer.setResponseStatus(HttpStatus.OK_200);
                     } else {
+                        /*
+                        ** This is a special case that requires the chunk to be marked offline since it has a bad
+                        **   Md5 digest.
+                         */
                         storageServer.setResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY_422);
                     }
-                    LOG.info("chunk read from Storage Server complete");
                     /*
                      ** Fall through
                      */
@@ -334,17 +369,20 @@ public class SetupChunkRead implements Operation {
                  */
                 if (storageServer.getResponseStatus() == HttpStatus.OK_200) {
                     currState = ExecutionState.WRITE_CHUNK_TO_CLIENT;
+
+                    /*
+                     ** Now call back the ReadObjectChunks Operation that will handle the collection of chunks
+                     */
+                    completeCallback.event();
                 } else {
                     /*
-                    ** There was an error reading in this chunk, so nothing more to do
+                    ** There was an error reading in this chunk so mark a chunk read error and then exit this operation.
+                    ** The marking of the read error actually takes place in the CALLBACK_OPS state to keep it in
+                    **   one place.
                      */
-                    currState = ExecutionState.EMPTY_STATE;
+                    currState = ExecutionState.CALLBACK_OPS;
+                    event();
                 }
-
-                /*
-                 ** Now call back the ReadObjectChunks Operation that will handle the collection of chunks
-                 */
-                completeCallback.event();
                 break;
 
             case WRITE_CHUNK_TO_CLIENT:
@@ -361,17 +399,39 @@ public class SetupChunkRead implements Operation {
                 **
                  */
                 if (storageServer.getClientChunkWriteDone()) {
-                    currState = ExecutionState.EMPTY_STATE;
-
+                    currState = ExecutionState.CALLBACK_OPS;
                     /*
-                     ** Now call back the ReadObjectChunks Operation that will handle the collection of chunks
+                    ** This chunk has been written out to the client. Finish up the operation and call back the
+                    **   ReadObjectChunks operation to let it proceed to the next chunk (if there is one).
+                    **
+                    ** Fall through to the CALLBACK_OPS state.
                      */
-                    completeCallback.event();
+                 } else {
+                    break;
                 }
-                break;
 
             case CALLBACK_OPS:
-                LOG.info("CALLBACK_OPS status: " + storageServer.getResponseStatus());
+                int status = storageServer.getResponseStatus();
+                LOG.info("CALLBACK_OPS status: " + status);
+
+                if (status != HttpStatus.OK_200) {
+                    StorageChunkTableMgr chunkTableMgr = new StorageChunkTableMgr(requestContext.getWebServerFlavor(),
+                            requestContext.getHttpInfo());
+
+                    /*
+                    ** Special case when the Md5 digest from the chunk read up doesn't match what was expected, mark
+                    **   that chunk offline.
+                     */
+                    if (status == HttpStatus.UNPROCESSABLE_ENTITY_422) {
+                        chunkTableMgr.incrementChunkReadFailure(storageServer.getChunkId());
+                    } else {
+                        /*
+                         ** There was an error reading in this chunk so mark a chunk read error and then exit this operation
+                         */
+                        chunkTableMgr.incrementChunkReadFailure(storageServer.getChunkId());
+                    }
+                }
+
                 currState = ExecutionState.EMPTY_STATE;
 
                 /*
@@ -680,7 +740,6 @@ public class SetupChunkRead implements Operation {
              ** TODO: Add a test case for the startInitiator failing to make sure the cleanup
              **   is properly handled.
              */
-            complete();
             return false;
         }
 
