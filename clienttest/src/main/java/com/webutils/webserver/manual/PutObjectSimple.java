@@ -1,6 +1,6 @@
 package com.webutils.webserver.manual;
 
-import com.webutils.webserver.common.GetObjectParams;
+import com.webutils.webserver.common.PutObjectParams;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.DbSetup;
 import com.webutils.webserver.mysql.TestLocalDbInfo;
@@ -12,19 +12,20 @@ import com.webutils.webserver.requestcontext.WebServerFlavor;
 import java.net.InetAddress;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class GetObjectSimple {
+public class PutObjectSimple {
 
     static WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
 
-    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_TEST_GET_OBJECT_SIMPLE;
+    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_TEST_PUT_OBJECT_SIMPLE;
 
     private final ClientContextPool clientContextPool;
     private final NioCliClient cliClient;
 
-    private final ClientGetInterface cli;
+    private final ClientPutInterface cli;
+
     private final int eventThreadId;
 
-    GetObjectSimple(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount) {
+    PutObjectSimple(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount) {
 
         MemoryManager cliMemoryManager = new MemoryManager(flavor);
 
@@ -36,10 +37,10 @@ public class GetObjectSimple {
 
         this.eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
 
-        GetObjectParams params = new GetObjectParams("Namespace-xyz-987", "CreateBucket_Simple",
-                "5e223890-ea13-11e9-851d-234132e0fb02", "testObjectFile");
+        PutObjectParams params = new PutObjectParams("Namespace-xyz-987", "CreateBucket_Simple",
+                "5e223890-ea13-11e9-851d-234132e0fb02", "/Users/notterness/WebServer/webserver/logs/" + "testObjectFile");
 
-        cli = new ClientGetInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
+        cli = new ClientPutInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
                 params, testCount);
     }
 
@@ -50,4 +51,5 @@ public class GetObjectSimple {
 
         clientContextPool.stop(eventThreadId);
     }
+
 }

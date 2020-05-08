@@ -9,6 +9,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class PutObjectParams extends ObjectParams {
 
@@ -20,7 +21,14 @@ public class PutObjectParams extends ObjectParams {
     private String versionId;
 
 
+    /*
+    ** computeMd5 digest is used to determine if the client wants an Md5 digest used for this object.
+    **   If it is set to true, the Md5 digest will be computed for the file and passed to the Object Server.
+    **   If it is set to false, the Md5 digest will not be used for this object.
+     */
     private boolean computeMd5Digest;
+
+    private AtomicBoolean md5DigestSet;
     private String md5Digest;
 
     public PutObjectParams(final String namespace, final String bucket, final String object, final String objectFilePath) {
@@ -28,6 +36,8 @@ public class PutObjectParams extends ObjectParams {
         super(namespace, bucket, object, objectFilePath);
 
         this.computeMd5Digest = true;
+
+        this.md5DigestSet = new AtomicBoolean(false);
         this.md5Digest = null;
     }
 
@@ -63,12 +73,19 @@ public class PutObjectParams extends ObjectParams {
 
     public boolean getComputeMd5Digest() { return computeMd5Digest; }
 
-    public void setMd5Digest(final String objectMd5Digest) { md5Digest = objectMd5Digest; }
+    public void setMd5Digest(final String objectMd5Digest) {
+        md5Digest = objectMd5Digest;
+        md5DigestSet.set(true);
+
+        LOG.info("File: " + objectFilePath + " Md5 Digest: " + objectMd5Digest);
+    }
+
+    public boolean getMd5DigestSet() { return md5DigestSet.get(); }
 
     /*
     ** This validates that the file is present and has a size greater than 0.
      */
-    public boolean setObjectSizeInBytes() {
+    public long setObjectSizeInBytes() {
         objectSizeInBytes = 0;
         File inFile = new File(objectFilePath);
         try {
@@ -85,11 +102,7 @@ public class PutObjectParams extends ObjectParams {
 
         LOG.info("setObjectSizeInBytes() bytesToReadFromFile: " + objectSizeInBytes);
 
-        if (objectSizeInBytes == 0) {
-            return false;
-        }
-
-        return true;
+        return objectSizeInBytes;
     }
 
     public boolean setObjectSizeInBytes(final long sizeInBytes) {

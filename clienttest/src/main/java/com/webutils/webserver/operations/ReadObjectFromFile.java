@@ -37,11 +37,11 @@ public class ReadObjectFromFile implements Operation {
     private boolean onExecutionQueue;
 
     /*
-     ** The readBufferMgr provides the buffers that are used for the following:
+     ** The readFileBufferMgr provides the buffers that are used for the following:
      **   - Buffers to hold the requested files data
      **   - The filled in buffers that are written out the TCP port to the Object Server
      */
-    private final BufferManager readBufferMgr;
+    private final BufferManager readFileBufferMgr;
 
     private final Operation bufferMetering;
     private final BufferManagerPointer meteringPointer;
@@ -91,7 +91,7 @@ public class ReadObjectFromFile implements Operation {
         /*
          ** Since this is data leaving the client system and going to the Object Server, it uses the write buffer manager
          */
-        this.readBufferMgr = requestContext.getClientWriteBufferManager();
+        this.readFileBufferMgr = requestContext.getClientWriteBufferManager();
         this.completeCallback = completeCb;
 
         /*
@@ -126,7 +126,7 @@ public class ReadObjectFromFile implements Operation {
          ** This operation (ReadFromFile) is a producer of ByteBuffer(s) that are then written out the TCP port to the
          **   Object Server
          */
-        fileReadPtr = readBufferMgr.register(this, meteringPointer);
+        fileReadPtr = readFileBufferMgr.register(this, meteringPointer);
 
         /*
          ** savedSrcPosition is used to handle the case where the data may come back from the file in small pieces
@@ -210,7 +210,7 @@ public class ReadObjectFromFile implements Operation {
     public void execute() {
         ByteBuffer readBuffer;
 
-        while ((readBuffer = readBufferMgr.peek(fileReadPtr)) != null) {
+        while ((readBuffer = readFileBufferMgr.peek(fileReadPtr)) != null) {
             /*
             ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
             **  affecting the position() and limit() indexes
@@ -241,7 +241,7 @@ public class ReadObjectFromFile implements Operation {
                         /*
                         ** Done with this buffer, see if there is more data to read from the file
                          */
-                        readBufferMgr.updateProducerWritePointer(fileReadPtr);
+                        readFileBufferMgr.updateProducerWritePointer(fileReadPtr);
                         savedSrcPosition = 0;
 
                         LOG.info("ReadObjectFromFile read buffer full bytesRead: " + fileBytesRead +
@@ -290,7 +290,7 @@ public class ReadObjectFromFile implements Operation {
         }
         readFileChannel = null;
 
-        readBufferMgr.unregister(fileReadPtr);
+        readFileBufferMgr.unregister(fileReadPtr);
         fileReadPtr = null;
     }
 

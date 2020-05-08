@@ -255,5 +255,4 @@ public class ComputeMd5Digest implements Operation {
         LOG.info("");
     }
 
-
 }

@@ -117,11 +117,11 @@ public class ClientObjectGet implements Operation {
      ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
      **   up the calls to obtain the VON information and the meta-data write to the database.
      */
-    public ClientObjectGet(final ClientInterface clientInterface, final ClientRequestContext requestContext,
+    public ClientObjectGet(final ClientInterface clientGetInterface, final ClientRequestContext requestContext,
                            final MemoryManager memoryManager, final ServerIdentifier server,
                            final GetObjectParams getRequestParams) {
 
-        this.clientInterface = clientInterface;
+        this.clientInterface = clientGetInterface;
         this.requestContext = requestContext;
         this.objectServer = server;
         this.requestParams = getRequestParams;

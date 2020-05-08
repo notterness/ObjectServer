@@ -9,20 +9,20 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
-public class BufferReadMetering implements Operation {
+public class FileReadBufferMetering implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(BufferReadMetering.class);
+    private static final Logger LOG = LoggerFactory.getLogger(FileReadBufferMetering.class);
 
     /*
-    ** A unique identifier for this Operation so it can be tracked.
+     ** A unique identifier for this Operation so it can be tracked.
      */
-    private final OperationTypeEnum operationType = OperationTypeEnum.METER_READ_BUFFERS;
+    private final OperationTypeEnum operationType = OperationTypeEnum.METER_FILE_READ_BUFFERS;
 
     private final RequestContext requestContext;
 
     private final MemoryManager memoryManager;
 
-    private final BufferManager clientReadBufferMgr;
+    private final BufferManager fileReadBufferMgr;
     private BufferManagerPointer bufferMeteringPointer;
 
     /*
@@ -33,16 +33,16 @@ public class BufferReadMetering implements Operation {
     private boolean onExecutionQueue;
 
     /*
-    ** The BufferReadMetering operation will populate the clientReadBufferManager with the
-    **   ByteBuffer(s) and will set the allocation BufferManagerPointer back to the start of
-    **   the BufferManager (meaning that no ByteBuffer(s) are available to read data into).
+     ** The BufferReadMetering operation will populate the clientReadBufferManager with the
+     **   ByteBuffer(s) and will set the allocation BufferManagerPointer back to the start of
+     **   the BufferManager (meaning that no ByteBuffer(s) are available to read data into).
      */
-    public BufferReadMetering(final RequestContext requestContext, final MemoryManager memoryManager) {
+    public FileReadBufferMetering(final RequestContext requestContext, final MemoryManager memoryManager) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
 
-        this.clientReadBufferMgr = requestContext.getClientReadBufferManager();
+        this.fileReadBufferMgr = requestContext.getClientWriteBufferManager();
 
         /*
          ** This starts out not being on any queue
@@ -52,20 +52,8 @@ public class BufferReadMetering implements Operation {
         /*
          ** Obtain the pointer used to meter out buffers to the read operation
          */
-        bufferMeteringPointer = this.clientReadBufferMgr.register(this);
+        bufferMeteringPointer = this.fileReadBufferMgr.register(this);
 
-        /*
-         ** If this is the WebServerFlavor.INTEGRATION_TESTS then allocate a limited
-         **   number of ByteBuffer(s) up front and then reset the metering
-         **   pointer.
-         */
-        int buffersToAllocate = memoryManager.getBufferManagerRingSize();
-
-        for (int i = 0; i < buffersToAllocate; i++) {
-            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientReadBufferMgr, operationType);
-
-            clientReadBufferMgr.offer(bufferMeteringPointer, buffer);
-        }
     }
 
     public OperationTypeEnum getOperationType() {
@@ -77,10 +65,21 @@ public class BufferReadMetering implements Operation {
     public BufferManagerPointer initialize() {
 
         /*
+         ** Allocate all the requested buffers
+         */
+        int buffersToAllocate = memoryManager.getBufferManagerRingSize();
+
+        for (int i = 0; i < buffersToAllocate; i++) {
+            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, fileReadBufferMgr, operationType);
+
+            fileReadBufferMgr.offer(bufferMeteringPointer, buffer);
+        }
+
+        /*
          ** Set the pointer back to the beginning of the BufferManager. The BufferReadMetering operation will need
          **   to have its execute() method called to dole out ByteBuffer(s) to perform read operations into.
          */
-        clientReadBufferMgr.reset(bufferMeteringPointer);
+        fileReadBufferMgr.reset(bufferMeteringPointer);
 
         return bufferMeteringPointer;
     }
@@ -94,16 +93,16 @@ public class BufferReadMetering implements Operation {
     }
 
     /*
-    ** For the metering, this is where the pointer for buffers that are available are metered out according to
-    **   customer requirements and limitations. The buffers can be pre-allocated on the BufferManager and only
-    **   passed out as needed or as requested.
+     ** For the metering, this is where the pointer for buffers that are available are metered out according to
+     **   customer requirements and limitations. The buffers can be pre-allocated on the BufferManager and only
+     **   passed out as needed or as requested.
      */
     public void execute() {
 
         /*
-        ** Add a free buffer to the ClientReadBufferManager
+         ** Add a free buffer to the ClientReadBufferManager
          */
-        clientReadBufferMgr.updateProducerWritePointer(bufferMeteringPointer);
+        fileReadBufferMgr.updateProducerWritePointer(bufferMeteringPointer);
     }
 
     public void complete() {
@@ -111,23 +110,23 @@ public class BufferReadMetering implements Operation {
         /*
          ** Set the pointer back to the beginning of the BufferManager to release the allocated memory
          */
-        clientReadBufferMgr.reset(bufferMeteringPointer);
+        fileReadBufferMgr.reset(bufferMeteringPointer);
 
         int buffersAllocated = memoryManager.getBufferManagerRingSize();
 
         for (int i = 0; i < buffersAllocated; i++) {
-            ByteBuffer buffer = clientReadBufferMgr.getAndRemove(bufferMeteringPointer);
+            ByteBuffer buffer = fileReadBufferMgr.getAndRemove(bufferMeteringPointer);
             if (buffer != null) {
-                memoryManager.poolMemFree(buffer, clientReadBufferMgr);
+                memoryManager.poolMemFree(buffer, fileReadBufferMgr);
             } else {
-                LOG.warn("BufferReadMetering[" + requestContext.getRequestId() + "] null buffer i: " + i);
+                LOG.warn("FileReadBufferMetering[" + requestContext.getRequestId() + "] null buffer i: " + i);
             }
         }
 
         /*
-        ** Release the metering pointer
+         ** Release the metering pointer
          */
-        clientReadBufferMgr.unregister(bufferMeteringPointer);
+        fileReadBufferMgr.unregister(bufferMeteringPointer);
         bufferMeteringPointer = null;
     }
 
@@ -147,13 +146,13 @@ public class BufferReadMetering implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("BufferReadMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("FileReadBufferMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("BufferReadMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("FileReadBufferMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("BufferReadMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("FileReadBufferMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
@@ -174,7 +173,7 @@ public class BufferReadMetering implements Operation {
     }
 
     /*
-    ** Display what this has created and any BufferManager(s) and BufferManagerPointer(s)
+     ** Display what this has created and any BufferManager(s) and BufferManagerPointer(s)
      */
     public void dumpCreatedOperations(final int level) {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
@@ -186,4 +185,5 @@ public class BufferReadMetering implements Operation {
         }
         LOG.info("");
     }
+
 }

@@ -241,6 +241,8 @@ public class DecryptBuffer implements Operation {
                                 bytesDecrypted + " bytesToDecrypt: " + bytesToDecrypt);
 
                         buffersAllDecrypted.set(true);
+
+                        completeCallback.event();
                     }
 
                     outOfBuffers = true;
@@ -250,9 +252,7 @@ public class DecryptBuffer implements Operation {
             /*
              ** Now need to inform the higher level Operation that the decryption has completed
              */
-            if (completeCallback != null) {
-                completeCallback.complete();
-            }
+            completeCallback.event();
         }
     }
 

@@ -53,6 +53,8 @@ public class ClientObjectPut implements Operation {
      ** This is to make the execute() function more manageable
      */
     enum ExecutionState {
+        GET_OBJECT_FILE_MD5,
+        WAIT_FOR_FILE_MD5_DIGEST,
         SETUP_OBJECT_READ_OPS,
         WAITING_FOR_CONN_COMP,
         WAITING_FOR_RESPONSE_HEADER,
@@ -139,7 +141,7 @@ public class ClientObjectPut implements Operation {
          */
         requestHandlerOperations = new HashMap<>();
 
-        currState = ExecutionState.SETUP_OBJECT_READ_OPS;
+        currState = ExecutionState.GET_OBJECT_FILE_MD5;
 
         serverConnectionClosedDueToError = false;
 
@@ -174,6 +176,21 @@ public class ClientObjectPut implements Operation {
      */
     public void execute() {
         switch (currState) {
+            case GET_OBJECT_FILE_MD5:
+                currState = ExecutionState.WAIT_FOR_FILE_MD5_DIGEST;
+
+                ObjectFileComputeMd5 computeFileMd5 = new ObjectFileComputeMd5(requestContext, this,
+                        memoryManager, requestParams);
+                computeFileMd5.initialize();
+                break;
+
+            case WAIT_FOR_FILE_MD5_DIGEST:
+                if (requestParams.getMd5DigestSet()) {
+                    break;
+                } else {
+                    break;
+                }
+
             case SETUP_OBJECT_READ_OPS:
                 if (setupReadOps()) {
                     currState = ExecutionState.WAITING_FOR_CONN_COMP;
@@ -504,8 +521,8 @@ public class ClientObjectPut implements Operation {
 
         /*
          ** Allocate ByteBuffer(s) to read in the response from the Storage Server. By using a metering operation, the
-         **   setup for the reading of the Storage Server response header can be be deferred until the TCP connection to the
-         **   Storage Server is successful.
+         **   setup for the reading of the Object Server response header can be be deferred until the TCP connection to the
+         **   Object Server is successful.
          */
         responseBufferMetering = new BufferReadMetering(requestContext, memoryManager);
         BufferManagerPointer respBufferPointer = responseBufferMetering.initialize();
