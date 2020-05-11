@@ -286,7 +286,6 @@ abstract public class HttpInfo {
             httpPort = hpfield.getPort();
 
             LOG.info("addHeaderValue() httpHost: " + httpHost + " httpPort: " + httpPort);
-            return;
         }
     }
 

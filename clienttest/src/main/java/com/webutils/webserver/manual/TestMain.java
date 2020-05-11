@@ -122,8 +122,11 @@ public class TestMain {
         NioServerHandler[] nioStorageServer = new NioServerHandler[NUMBER_TEST_STORAGE_SERVERS];
 
         if (flavor == WebServerFlavor.INTEGRATION_TESTS) {
-            TestEncryptBuffer testEncryptBuffer = new TestEncryptBuffer();
-            testEncryptBuffer.execute();
+            /*
+            ** Test the Encrypt Buffer path that is used during the writing of an Object to the Storage Servers
+             */
+            //TestEncryptBuffer testEncryptBuffer = new TestEncryptBuffer();
+            //testEncryptBuffer.execute();
 
             /*
              ** The HTTP Parser test is currently not working.
@@ -263,9 +266,11 @@ public class TestMain {
 
         waitForTestsToComplete(threadCount);
 */
-
         GetObjectSimple getObjectSimple = new GetObjectSimple(serverIpAddr, serverTcpPort, threadCount);
         getObjectSimple.execute();
+
+        PutObjectSimple putObjectSimple = new PutObjectSimple(serverIpAddr, serverTcpPort, threadCount);
+        putObjectSimple.execute();
 
         /*
         ** Uncomment out the following two lines to let TestMain just act as a server. It can then be used to

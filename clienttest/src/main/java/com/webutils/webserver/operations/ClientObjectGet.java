@@ -300,7 +300,12 @@ public class ClientObjectGet implements Operation {
                 LOG.info("SetupChunkRead CALLBACK_OPS");
 
                 /*
-                 ** Now call back the
+                 ** Display the results
+                 */
+                requestParams.outputResults(httpInfo);
+
+                /*
+                 ** Now call back the client interface to complete the CLI operation
                  */
                 currState = ExecutionState.EMPTY_STATE;
                 clientInterface.clientRequestCompleted(httpInfo.getResponseStatus());

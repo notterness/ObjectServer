@@ -59,8 +59,11 @@ public class ObjectTableMgr extends ObjectStorageDb {
     private final static String UPDATE_LAST_READ_ACCESS = "UPDATE object SET readAccessCount = readAccessCount + 1, lastReadAccessTime = CURRENT_TIMESTAMP() WHERE objectId =";
 
     private final static String GET_HIGHEST_VERSION_OBJECT = "SELECT o1.objectId, o1.objectName, o1.versionId FROM object o1 " +
-            "WHERE o1.versionId = (SELECT MAX(o2.versionId) FROM object o2 WHERE o2.objectName = ? AND " +
-            "o2.bucketId = (SELECT bucketId FROM bucket WHERE bucketUID = UUID_TO_BIN(?)))";
+            "WHERE o1.versionId = ( SELECT MAX(o2.versionId) FROM object o2 WHERE o2.objectName = ? AND " +
+            "o2.bucketId = ( SELECT bucketId FROM bucket WHERE bucketUID = UUID_TO_BIN(?) ) )";
+
+    private final static String GET_NUMBER_OF_OBJECTS = "SELECT COUNT(*) FROM object WHERE objectName = ? AND bucketId " +
+            "= ( SELECT bucketId FROM bucket WHERE bucketUID = UUID_TO_BIN(?) )";
 
     /*
      ** The opcRequestId is used to track the request through the system. It is uniquely generated for each
@@ -144,8 +147,8 @@ public class ObjectTableMgr extends ObjectStorageDb {
         /*
         ** Check if this object already exists and the if-none-match header is set to "*"
          */
-        int objectId = getObjectId(objectName, bucketUID);
-        if (objectId == -1) {
+        int objectCount = getObjectCount(objectName, bucketUID);
+        if (objectCount > 0) {
             boolean ifNoneMatch = objectCreateInfo.getIfNoneMatch();
 
             if (ifNoneMatch) {
@@ -160,7 +163,6 @@ public class ObjectTableMgr extends ObjectStorageDb {
                 return HttpStatus.INTERNAL_SERVER_ERROR_500;
             }
         }
-
 
         String createObjectStr = CREATE_OBJ_1 + CREATE_OBJ_2 + CREATE_OBJ_3;
 
@@ -530,6 +532,9 @@ public class ObjectTableMgr extends ObjectStorageDb {
         executeSqlStatement(updateReadAccessStr);
     }
 
+    /*
+    ** This will return the objectId of the specified (by Object Name and bucketUID) object with the highest versionId
+     */
     private int getHighestVersionObject(final String objectName, final String bucketUID) {
 
         int objectId = -1;
@@ -572,16 +577,16 @@ public class ObjectTableMgr extends ObjectStorageDb {
                         }
 
                         if (count != 1) {
-                            LOG.warn("getSingleStr() too many responses count: " + count);
+                            LOG.warn("getHighestVersionObject() too many responses count: " + count);
                         }
                     } catch (SQLException sqlEx) {
-                        System.out.println("getSingleStr() SQL conn rs.next() SQLException: " + sqlEx.getMessage());
+                        System.out.println("getHighestVersionObject() SQL conn rs.next() SQLException: " + sqlEx.getMessage());
                     }
 
                     try {
                         rs.close();
                     } catch (SQLException sqlEx) {
-                        System.out.println("getSingleStr() SQL conn rs.close() SQLException: " + sqlEx.getMessage());
+                        System.out.println("getHighestVersionObject() SQL conn rs.close() SQLException: " + sqlEx.getMessage());
                     }
                 }
 
@@ -589,7 +594,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
                     try {
                         stmt.close();
                     } catch (SQLException sqlEx) {
-                        LOG.error("createObjectEntry() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        LOG.error("getHighestVersionObject() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                         System.out.println("SQLException: " + sqlEx.getMessage());
                     }
                 }
@@ -603,6 +608,77 @@ public class ObjectTableMgr extends ObjectStorageDb {
 
          return objectId;
     }
+
+    private final int getObjectCount(final String objectName, final String bucketUID) {
+
+        int objectCount = 0;
+
+        Connection conn = getObjectStorageDbConn();
+
+        if (conn != null) {
+            PreparedStatement stmt = null;
+            ResultSet rs = null;
+
+            try {
+                /*
+                 ** Fields for the prepared statement are:
+                 **   1 - objectName (String)
+                 **   2 - bucketUID  (String)
+                 */
+                stmt = conn.prepareStatement(GET_NUMBER_OF_OBJECTS);
+                stmt.setString(1, objectName);
+                stmt.setString(2, bucketUID);
+                rs = stmt.executeQuery();
+
+            } catch (SQLException sqlEx) {
+                LOG.error("getObjectCount() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("Bad SQL command: " + GET_HIGHEST_VERSION_OBJECT);
+                System.out.println("SQLException: " + sqlEx.getMessage());
+            } finally {
+                if (rs != null) {
+                    try {
+                        int count = 0;
+                        while (rs.next()) {
+                            /*
+                             ** The rs.getInt(1) is the objectId
+                             */
+                            objectCount = rs.getInt(1);
+                            count++;
+                        }
+
+                        if (count != 1) {
+                            LOG.warn("getObjectCount() too many responses count: " + count);
+                        }
+                    } catch (SQLException sqlEx) {
+                        System.out.println("getObjectCount() SQL conn rs.next() SQLException: " + sqlEx.getMessage());
+                    }
+
+                    try {
+                        rs.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("getObjectCount() SQL conn rs.close() SQLException: " + sqlEx.getMessage());
+                    }
+                }
+
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("getObjectCount() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQLException: " + sqlEx.getMessage());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database tables.
+             */
+            closeObjectStorageDbConn(conn);
+        }
+
+        return objectCount;
+    }
+
 
     /*
      ** This builds the OK_200 response headers for the Storage Server PUT Object command. This returns the following headers:
