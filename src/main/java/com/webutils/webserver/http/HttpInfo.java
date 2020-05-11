@@ -439,7 +439,7 @@ abstract public class HttpInfo {
     public String getOpcRequestId() {
         List<String> opcRequestId = headers.get(OPC_REQUEST_ID);
 
-        if (opcRequestId.size() != 1) {
+        if ((opcRequestId == null) || (opcRequestId.size() != 1)) {
             return null;
         }
 

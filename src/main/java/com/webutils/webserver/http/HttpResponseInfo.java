@@ -14,15 +14,22 @@ public class HttpResponseInfo extends HttpInfo {
     private static final Logger LOG = LoggerFactory.getLogger(HttpResponseInfo.class);
 
     private static final String OPC_CONTENT_MD5 = "opc-content-md5";
+    private static final String RESPONSE_HEADER_ETAG = "etag";
+    private static final String RESPONSE_LAST_MODIFIED = "last-modified";
+    private static final String RESPONSE_VERSION_ID = "version-id";
 
     private final AtomicBoolean statusSet;
     private int responseStatus;
+
+    private String responseBody;
 
     public HttpResponseInfo(final RequestContext requestContext) {
 
         super(requestContext);
 
         statusSet = new AtomicBoolean(false);
+
+        responseBody = null;
     }
 
     /*
@@ -38,17 +45,64 @@ public class HttpResponseInfo extends HttpInfo {
         return md5;
     }
 
+    /*
+     ** The HTTP response passes back the ETag in the "etag" header
+     */
+    public String getResponseEtag() {
+        String etag = getHeaderString(RESPONSE_HEADER_ETAG);
+        if ((etag != null) && etag.isEmpty()) {
+            etag = null;
+        }
+
+        return etag;
+    }
+
+    /*
+     ** The HTTP response passes back the last modified in the "last-modified" header
+     */
+    public String getResponseLastModified() {
+        String lastModified = getHeaderString(RESPONSE_LAST_MODIFIED);
+        if ((lastModified != null) && lastModified.isEmpty()) {
+            lastModified = null;
+        }
+
+        return lastModified;
+    }
+
+    /*
+     ** The HTTP response passes back the object version Id in the "version-id" header
+     */
+    public String getResponseVersionId() {
+        String versionId = getHeaderString(RESPONSE_VERSION_ID);
+        if ((versionId != null) && versionId.isEmpty()) {
+            versionId = null;
+        }
+
+        return versionId;
+    }
+
+
     public synchronized void setResponseStatus(final int status) {
-        responseStatus = status;
+        LOG.info("setResponseStatus() status: " + status);
+
+        parseFailureCode = status;
         statusSet.set(true);
     }
 
     public synchronized int getResponseStatus() {
         if (statusSet.get()) {
-            return responseStatus;
+            return parseFailureCode;
         }
 
         return -1;
+    }
+
+    public void setResponseBody(final String responseError) {
+        parseFailureReason = responseError;
+    }
+
+    public String getResponseBody() {
+        return parseFailureReason;
     }
 
     /*
@@ -67,38 +121,6 @@ public class HttpResponseInfo extends HttpInfo {
                     parseFailureCode + " reason: " + parseFailureReason);
 
             requestContext.setHttpParsingError();
-        }
-
-        /*
-         ** Verify that there was an Object Name, Bucket Name and Tenant Name passed in
-         */
-        if (httpMethod == HttpMethodEnum.PUT_METHOD) {
-            /* FIXME: Need to handle the differences between Object Server and Storage Server PUT required fields
-            if ((getObject() == null) || (getBucket() == null) || (getNamespace() == null)) {
-                parseFailureCode = HttpStatus.BAD_REQUEST_400;
-                parseFailureReason = HttpStatus.getMessage(parseFailureCode);
-
-                LOG.warn("PUT Missing Critical Object Info [" + requestContext.getRequestId() + "] code: " +
-                        parseFailureCode + " reason: " + parseFailureReason);
-
-                requestContext.setHttpParsingError();
-            }
-
-             */
-        } else if (httpMethod == HttpMethodEnum.POST_METHOD) {
-            if ((getBucket().compareTo("") != 0) || (getNamespace() == null)) {
-
-                LOG.error("bucket: " + getBucket() + " compare: " + getBucket().compareTo(""));
-                LOG.error("namespace: " + getNamespace());
-
-                parseFailureCode = HttpStatus.BAD_REQUEST_400;
-                parseFailureReason = HttpStatus.getMessage(parseFailureCode);
-
-                LOG.warn("POST Missing Critical Object Info [" + requestContext.getRequestId() + "] code: " +
-                        parseFailureCode + " reason: " + parseFailureReason);
-
-                requestContext.setHttpParsingError();
-            }
         }
 
         headerComplete = true;

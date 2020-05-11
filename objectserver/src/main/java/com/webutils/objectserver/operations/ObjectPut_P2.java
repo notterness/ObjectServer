@@ -143,6 +143,8 @@ public class ObjectPut_P2 implements Operation {
                 } else {
                     metering.event();
                 }
+            } else {
+                metering.event();
             }
 
             setupMethodDone = true;
@@ -171,18 +173,23 @@ public class ObjectPut_P2 implements Operation {
             /*
             ** If there was an error, delete the Object record
              */
-            if (requestContext.getHttpParseStatus() != HttpStatus.OK_200) {
+            int status = requestContext.getHttpParseStatus();
+            if (status != HttpStatus.OK_200) {
                 WebServerFlavor flavor = requestContext.getWebServerFlavor();
 
+                int objectId = requestContext.getObjectId();
+                LOG.info("ObjectPut_P2[" + requestContext.getRequestId() + "] deleteObject objectId: "  + objectId +
+                        " status: " + status);
+
                 ObjectTableMgr objectMgr = new ObjectTableMgr(flavor, requestContext);
-                objectMgr.deleteObject(requestContext.getObjectId());
+                objectMgr.deleteObject(objectId);
             }
 
             completeCallback.event();
 
             putHandlerOps.clear();
 
-            LOG.info("ObjectPut_P2[" + requestContext.getRequestId() + "] completed");
+            LOG.info("ObjectPut_P2[" + requestContext.getRequestId() + "] completed status: " + status);
         } else {
             LOG.info("ObjectPut_P2[" + requestContext.getRequestId() + "] not completed digestComplete: " +
                     updater.getMd5DigestComplete() + " all data written: " + requestContext.getAllPutDataWritten());

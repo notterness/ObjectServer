@@ -218,6 +218,9 @@ public class EncryptBuffer implements Operation {
                 } else {
 
                     if (chunkBytesEncrypted < chunkBytesToEncrypt) {
+                        LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] chunkBytesEncrypted: " +
+                                chunkBytesEncrypted + " chunkBytesEncrypted: " + chunkBytesEncrypted);
+
                         readBufferMetering.event();
                     } else if (chunkBytesEncrypted == chunkBytesToEncrypt) {
                         /*

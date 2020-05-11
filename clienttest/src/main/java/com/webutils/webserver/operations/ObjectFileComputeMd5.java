@@ -137,8 +137,7 @@ public class ObjectFileComputeMd5 implements Operation {
         /*
          ** Add this to the execute queue if it is not already on it.
          */
-        //requestContext.addToWorkQueue(this);
-        requestContext.runComputeWork(this);
+        requestContext.addToWorkQueue(this);
     }
 
     /*
@@ -179,6 +178,8 @@ public class ObjectFileComputeMd5 implements Operation {
                     break;
                 }
             }
+        } else {
+            LOG.info("ObjectFileComputeMd5 getMd5DigestSet() true");
         }
     }
 

@@ -112,15 +112,16 @@ public class ComputeMd5Digest implements Operation {
         ByteBuffer readBuffer;
         if ((readBuffer = readBufferManager.peek(md5DigestPointer)) != null) {
             savedSrcPosition = readBuffer.position();
+            LOG.info("ComputeMd5Digest() savedSrcPosition: " + savedSrcPosition + " clientObjectBytes: " + clientObjectBytes);
 
             /*
              ** Add this to the execute queue since there is already data in a buffer to compute the Md5 digest for
              */
             event();
         } else {
+            LOG.info("ComputeMd5Digest(1) savedSrcPosition: 0 clientObjectBytes: " + clientObjectBytes);
             savedSrcPosition = 0;
         }
-        LOG.info("ComputeMd5Digest() savedSrcPosition: " + savedSrcPosition + " clientObjectBytes: " + clientObjectBytes);
 
         return md5DigestPointer;
     }

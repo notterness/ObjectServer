@@ -68,7 +68,7 @@ public class ClientObjectGet implements Operation {
         EMPTY_STATE
     }
 
-    private ClientObjectGet.ExecutionState currState;
+    private ExecutionState currState;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -148,8 +148,7 @@ public class ClientObjectGet implements Operation {
 
         serverConnectionClosedDueToError = false;
 
-        LOG.info("ClientObjectGet[" + requestContext.getRequestId() + "] addr: " +
-                objectServer.getServerIpAddress().toString() + " port: " +
+        LOG.info("ClientObjectGet addr: " + objectServer.getServerIpAddress().toString() + " port: " +
                 objectServer.getServerTcpPort());
     }
 
@@ -208,8 +207,8 @@ public class ClientObjectGet implements Operation {
                      **   received prior to this being scheduled.
                      */
                 } else if ((status = requestContext.getStorageResponseResult(objectServer)) != HttpStatus.OK_200) {
-                    LOG.warn("ClientObjectGet[" + requestContext.getRequestId() + "] failure: " + status + " addr: " +
-                            objectServer.getServerIpAddress().toString() + " port: " + objectServer.getServerTcpPort());
+                    LOG.warn("ClientObjectGet failure: " + status + " addr: " + objectServer.getServerIpAddress().toString() +
+                            " port: " + objectServer.getServerTcpPort());
 
                     objectServer.setResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR_500);
 
@@ -232,9 +231,8 @@ public class ClientObjectGet implements Operation {
                     if (status == HttpStatus.OK_200) {
                         currState = ExecutionState.READ_CONTENT_DATA;
                         /*
-                        ** This code path could fall through instead of running through the scheduler
+                        ** Fall through to the READ_CONTENT_DATA state
                          */
-                        event();
                     } else if (status != -1) {
                         /*
                          ** Some sort of an error response
@@ -242,14 +240,30 @@ public class ClientObjectGet implements Operation {
                         objectServer.setResponseStatus(HttpStatus.OK_200);
                         currState = ExecutionState.CALLBACK_OPS;
                         event();
+                        break;
+                    } else {
+                        /*
+                         ** Should not be here if the getHeaderComplete() is true as a -1 status indicates that a
+                         **   response header has not been received.
+                         */
+                        LOG.warn("WAITING_FOR_RESPONSE_HEADER should not be here status: " + status);
+                        break;
                     }
+                } else {
+                    /*
+                    ** Still waiting for the response header to arrive
+                     */
+                    break;
                 }
-                break;
 
             case READ_CONTENT_DATA:
                 LOG.info("READ_CONTENT_DATA");
-                currState = ExecutionState.CONTENT_PROCESSED;
-                startContentRead();
+                if (startContentRead()) {
+                    currState = ExecutionState.CONTENT_PROCESSED;
+                } else {
+                    currState = ExecutionState.CALLBACK_OPS;
+                    event();
+                }
                 break;
 
             case CONTENT_PROCESSED:
@@ -322,8 +336,7 @@ public class ClientObjectGet implements Operation {
      */
     public void complete() {
 
-        LOG.info("ClientObjectGet[" + requestContext.getRequestId() + "] complete() addr: " +
-                objectServer.getServerIpAddress().toString() + " port: " +
+        LOG.info("[ClientObjectGet complete() addr: " + objectServer.getServerIpAddress().toString() + " port: " +
                 objectServer.getServerTcpPort());
 
         /*
@@ -442,19 +455,19 @@ public class ClientObjectGet implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("ClientObjectGet[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("ClientObjectGet markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("ClientObjectGet[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("ClientObjectGet markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("ClientObjectGet[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("ClientObjectGet markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("ClientObjectGet[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("ClientObjectGet markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -469,8 +482,7 @@ public class ClientObjectGet implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("ClientObjectGet[" + requestContext.getRequestId() +
-                "] hasWaitTimeElapsed() not supposed to be on delayed queue");
+        LOG.warn("ClientObjectGet hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
 
@@ -593,7 +605,11 @@ public class ClientObjectGet implements Operation {
         return true;
     }
 
-    private void startContentRead() {
+    /*
+     ** This is used to read in the content returned with the response headers. If the Content-Length is 0, it will not
+     **   setup anything and will simply return false.
+     */
+    private boolean startContentRead() {
         /*
          ** Tear down the response header reader and handler as they are no longer needed.
          **
@@ -603,22 +619,29 @@ public class ClientObjectGet implements Operation {
         Operation httpRespHandler = requestHandlerOperations.remove(OperationTypeEnum.RESPONSE_HANDLER);
         httpRespHandler.complete();
 
-        /*
-         ** The next Operations are run once the response header has been received. The routines are to
-         **   compute the Md5 digest and decrypt all the data into the chunk buffer.
-         */
-        List<Operation> opsToRun = new LinkedList<>();
-        opsToRun.add(this);
+        if (httpInfo.getContentLength() != 0) {
+            /*
+             ** The next Operations are run once the response header has been received. The routines are to
+             **   compute the Md5 digest and decrypt all the data into the chunk buffer.
+             */
+            List<Operation> opsToRun = new LinkedList<>();
+            opsToRun.add(this);
 
-        updater = new ResponseMd5ResultHandler(requestContext);
-        ComputeMd5Digest md5Digest = new ComputeMd5Digest(requestContext, opsToRun, httpBufferPointer,
-                responseBufferManager, updater, httpInfo.getContentLength());
-        requestHandlerOperations.put(md5Digest.getOperationType(), md5Digest);
-        md5Digest.initialize();
+            updater = new ResponseMd5ResultHandler(requestContext);
+            ComputeMd5Digest md5Digest = new ComputeMd5Digest(requestContext, opsToRun, httpBufferPointer,
+                    responseBufferManager, updater, httpInfo.getContentLength());
+            requestHandlerOperations.put(md5Digest.getOperationType(), md5Digest);
+            md5Digest.initialize();
 
-        WriteObjectToFile writeObjectToFile = new WriteObjectToFile(requestContext, httpBufferPointer,
-                responseBufferMetering, requestParams.getFilePathName(),this);
-        requestHandlerOperations.put(writeObjectToFile.getOperationType(), writeObjectToFile);
-        writeObjectToFile.initialize();
+            WriteObjectToFile writeObjectToFile = new WriteObjectToFile(requestContext, httpBufferPointer,
+                    responseBufferMetering, requestParams.getFilePathName(), this);
+            requestHandlerOperations.put(writeObjectToFile.getOperationType(), writeObjectToFile);
+            writeObjectToFile.initialize();
+
+            return true;
+        }
+
+        LOG.warn("startContentRead() Content-Length is 0");
+        return false;
     }
 }

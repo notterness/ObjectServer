@@ -33,14 +33,12 @@ public class BuildHttpResult {
                 String failureDescription = httpRequestInfo.getParseFailureReason();
 
                 if (failureDescription != null) {
-                    content = "\r\n" +
-                            "{\r\n" +
+                    content = "{\r\n" +
                             "  \"Description\": " +
                             failureDescription +
                             "\r\n}";
                 } else {
-                    content = "\r\n" +
-                            "{\r\n" +
+                    content = "{\r\n" +
                             "  \"Description\":\"" +
                             result.getMessage() +
                             "\"\r\n}";

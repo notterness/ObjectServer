@@ -38,7 +38,7 @@ public class PutObjectSimple {
         this.eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
 
         PutObjectParams params = new PutObjectParams("Namespace-xyz-987", "CreateBucket_Simple",
-                "5e223890-ea13-11e9-851d-234132e0fb02", "/Users/notterness/WebServer/webserver/logs/" + "testObjectFile");
+                "TestObject_1", "/Users/notterness/WebServer/webserver/logs/" + "testObjectFile");
 
         cli = new ClientPutInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
                 params, testCount);
