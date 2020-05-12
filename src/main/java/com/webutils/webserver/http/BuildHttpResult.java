@@ -33,10 +33,7 @@ public class BuildHttpResult {
                 String failureDescription = httpRequestInfo.getParseFailureReason();
 
                 if (failureDescription != null) {
-                    content = "{\r\n" +
-                            "  \"Description\": " +
-                            failureDescription +
-                            "\r\n}";
+                    content = failureDescription;
                 } else {
                     content = "{\r\n" +
                             "  \"Description\":\"" +
@@ -99,9 +96,7 @@ public class BuildHttpResult {
                 tmpStr = "HTTP/1.1 " +
                         result.getCode() +
                         "\r\n" +
-                        "Content-Length: 0\r\n" +
-                        "Connection: close\r\n" +
-                        "\r\n";
+                        "Content-Length: 0\n\n";
             } else {
                 // TODO: This is a problem and need to crash.
                 tmpStr = null;

@@ -266,7 +266,7 @@ public class ReadObjectChunks implements Operation {
                                 if (requestContext.getHttpParseStatus() == HttpStatus.OK_200) {
                                     HttpRequestInfo httpInfo = requestContext.getHttpInfo();
 
-                                    String failureMessage = "{\r\n  \"code\": \"" + requestContext.getHttpParseStatus() + "\"" +
+                                    String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.INTERNAL_SERVER_ERROR_500 + "\"" +
                                             "\r\n  \"message\": \"Unable to obtain read chunk data - failed Storage Server\"" +
                                             "\r\n  \"StorageServer\": \"" + server.getServerName() + "\"\r\n}";
 

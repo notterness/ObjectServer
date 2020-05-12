@@ -269,8 +269,14 @@ public class TestMain {
         GetObjectSimple getObjectSimple = new GetObjectSimple(serverIpAddr, serverTcpPort, threadCount);
         getObjectSimple.execute();
 
-        PutObjectSimple putObjectSimple = new PutObjectSimple(serverIpAddr, serverTcpPort, threadCount);
-        putObjectSimple.execute();
+        PutObjectBadBucket putObjectBadBucket = new PutObjectBadBucket(serverIpAddr, serverTcpPort, threadCount);
+        putObjectBadBucket.execute();
+
+        PutObjectBadNamespace putObjectBadNamespace = new PutObjectBadNamespace(serverIpAddr, serverTcpPort, threadCount);
+        putObjectBadNamespace.execute();
+
+        //PutObjectSimple putObjectSimple = new PutObjectSimple(serverIpAddr, serverTcpPort, threadCount);
+        //putObjectSimple.execute();
 
         /*
         ** Uncomment out the following two lines to let TestMain just act as a server. It can then be used to
