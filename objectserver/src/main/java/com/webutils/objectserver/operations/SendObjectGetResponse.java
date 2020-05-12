@@ -130,14 +130,17 @@ public class SendObjectGetResponse implements Operation {
             if (respBuffer != null) {
 
                 if (requestContext.getHttpParseStatus() == HttpStatus.OK_200) {
+                    LOG.info("SendObjectGetResponse[" + requestContext.getRequestId() + "] resultCode: OK_200");
+
                     buildSuccessHeader(respBuffer);
                 } else {
-                    buildFailureHeader(respBuffer);
+                    LOG.info("SendObjectGetResponse[" + requestContext.getRequestId() + "] resultCode: " +
+                            requestContext.getHttpParseStatus());
+
+                    buildFailureHeaders(respBuffer);
                 }
 
                 respBuffer.flip();
-
-                LOG.info("SendObjectGetResponse[" + requestContext.getRequestId() + "] resultCode: OK_200");
 
                 /*
                  ** Add the ByteBuffer to the clientWriteBufferMgr to kick off the write of the response to the client
@@ -311,7 +314,7 @@ public class SendObjectGetResponse implements Operation {
      **   ETAG
      **   Content-Length - 0
      */
-    private void buildFailureHeader(final ByteBuffer respBuffer) {
+    private void buildFailureHeaders(final ByteBuffer respBuffer) {
         String failureHeader;
 
         HttpRequestInfo httpInfo = requestContext.getHttpInfo();
@@ -331,8 +334,15 @@ public class SendObjectGetResponse implements Operation {
                     "Content-Type: text/html\n";
         }
 
-        failureHeader += SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + etag + "\n" +
-                    SUCCESS_HEADER_8 + 0 + "\n\nConnection: close\r\n";
+        String failureMessage = httpInfo.getParseFailureReason();
+        if (failureMessage != null) {
+            failureHeader += SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + etag + "\n" +
+                    SUCCESS_HEADER_8 + failureMessage.length() + "\r\n";
+            failureHeader += failureMessage;
+        } else {
+            failureHeader += SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + etag + "\n" +
+                    SUCCESS_HEADER_8 + 0 + "\r\n";
+        }
 
         str_to_bb(respBuffer, failureHeader);
     }

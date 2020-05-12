@@ -39,6 +39,8 @@ public class PutObjectSimple {
 
         PutObjectParams params = new PutObjectParams("Namespace-xyz-987", "CreateBucket_Simple",
                 "TestObject_1", "/Users/notterness/WebServer/webserver/logs/" + "testObjectFile");
+        params.setOpcClientRequestId("PutObjectSimple-5-12-2020.01");
+
 
         cli = new ClientPutInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
                 params, testCount);

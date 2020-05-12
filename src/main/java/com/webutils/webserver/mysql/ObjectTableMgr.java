@@ -13,7 +13,7 @@ import java.sql.*;
 
 public class ObjectTableMgr extends ObjectStorageDb {
 
-    private static final Logger LOG = LoggerFactory.getLogger(BucketTableMgr.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ObjectTableMgr.class);
 
     /*
     ** Fields for the prepared statement are:
@@ -27,8 +27,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
     **   8 - namespaceUID (String)
      */
     private final static String CREATE_OBJ_1 = "INSERT INTO object VALUES ( NULL, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(), NULL, 0, CURRENT_TIMESTAMP(), UUID_TO_BIN(UUID()), 0,";
-    private final static String CREATE_OBJ_2 = " (SELECT bucketId FROM bucket WHERE bucketUID = UUID_TO_BIN(?)), ";
-    private final static String CREATE_OBJ_3 = " (SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN(?)) )";
+    private final static String CREATE_OBJ_2 = " ?, (SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN(?)) )";
 
     private final static String GET_OBJECT_UID_1 = "SELECT BIN_TO_UUID(objectUID) objectUID FROM object WHERE objectName = '";
     private final static String GET_OBJECT_UID_2 = "' AND bucketId = ( SELECT bucketId FROM bucket WHERE bucketUID = UUID_TO_BIN('";
@@ -39,6 +38,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
     private final static String GET_OBJECT_ID_1 = "SELECT objectId FROM object WHERE objectName = '";
     private final static String GET_OBJECT_ID_2 = "' AND bucketId = ( SELECT bucketId FROM bucket WHERE bucketUID = UUID_TO_BIN('";
     private final static String GET_OBJECT_ID_3 = "' ) )";
+    private final static String GET_OBJECT_ID_4 = "' AND bucketId = ";
 
     private final static String GET_OBJECT_CREATE_TIME = "SELECT createTime FROM object WHERE objectID = ";
 
@@ -51,19 +51,17 @@ public class ObjectTableMgr extends ObjectStorageDb {
     private final static String SUCCESS_HEADER_5 = "last-modified: ";
     private final static String SUCCESS_HEADER_6 = "version-id: ";
 
-    private final static String RETRIEVE_OBJECT_QUERY_1 = "SELECT * FROM object WHERE objectName = '";
-    private final static String RETRIEVE_OBJECT_QUERY_2 = "' AND bucketId = ";
+    private final static String RETRIEVE_OBJECT_QUERY = "SELECT * FROM object WHERE objectId = ";
 
     private final static String DELETE_OBJECT_USING_ID = "DELETE FROM object WHERE objectId = ";
 
     private final static String UPDATE_LAST_READ_ACCESS = "UPDATE object SET readAccessCount = readAccessCount + 1, lastReadAccessTime = CURRENT_TIMESTAMP() WHERE objectId =";
 
     private final static String GET_HIGHEST_VERSION_OBJECT = "SELECT o1.objectId, o1.objectName, o1.versionId FROM object o1 " +
-            "WHERE o1.versionId = ( SELECT MAX(o2.versionId) FROM object o2 WHERE o2.objectName = ? AND " +
-            "o2.bucketId = ( SELECT bucketId FROM bucket WHERE bucketUID = UUID_TO_BIN(?) ) )";
+            "WHERE o1.versionId = ( SELECT MAX(o2.versionId) FROM object o2 WHERE o2.objectName = ? AND o2.bucketId = ? ) " +
+            "AND o1.objectName = ?";
 
-    private final static String GET_NUMBER_OF_OBJECTS = "SELECT COUNT(*) FROM object WHERE objectName = ? AND bucketId " +
-            "= ( SELECT bucketId FROM bucket WHERE bucketUID = UUID_TO_BIN(?) )";
+    private final static String GET_NUMBER_OF_OBJECTS = "SELECT COUNT(*) FROM object WHERE objectName = ? AND bucketId = ?";
 
     /*
      ** The opcRequestId is used to track the request through the system. It is uniquely generated for each
@@ -125,8 +123,8 @@ public class ObjectTableMgr extends ObjectStorageDb {
          ** Now make sure the Bucket that this Object is stored within actually exists.
          */
         BucketTableMgr bucketMgr = new BucketTableMgr(flavor, opcRequestId, objectCreateInfo);
-        String bucketUID = bucketMgr.getBucketUID(bucketName, namespaceUID);
-        if (bucketUID == null) {
+        int bucketId = bucketMgr.getBucketId(bucketName, namespaceUID);
+        if (bucketId == -1) {
             LOG.warn("Unable to create Object: " + objectName + " - invalid bucket: " + bucketName);
 
             String failureMessage = "\"Bucket not found\",\n  \"bucketName\": \"" + bucketName + "\"";
@@ -134,7 +132,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
             return HttpStatus.PRECONDITION_FAILED_412;
         }
 
-        StorageTierEnum tier = bucketMgr.getBucketStorageTier(bucketUID);
+        StorageTierEnum tier = bucketMgr.getBucketStorageTier(bucketId);
         String contentMd5 = objectCreateInfo.getContentMd5();
         if (!contentMd5.equals("NULL")) {
             byte[] md5DigestBytes = BaseEncoding.base64().decode(contentMd5);
@@ -145,9 +143,10 @@ public class ObjectTableMgr extends ObjectStorageDb {
         }
 
         /*
-        ** Check if this object already exists and the if-none-match header is set to "*"
+        ** Check if this object already exists and the "if-none-match header" is set to "*"
          */
-        int objectCount = getObjectCount(objectName, bucketUID);
+        int versionId = 0;
+        int objectCount = getObjectCount(objectName, bucketId);
         if (objectCount > 0) {
             boolean ifNoneMatch = objectCreateInfo.getIfNoneMatch();
 
@@ -156,17 +155,17 @@ public class ObjectTableMgr extends ObjectStorageDb {
                 return HttpStatus.INTERNAL_SERVER_ERROR_500;
             } else {
                 /*
-                ** Need to update the versionId
+                 ** Need to update the versionId
                  */
-                int id = getHighestVersionObject(objectName, bucketUID);
-                objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "\"Object already present\"");
-                return HttpStatus.INTERNAL_SERVER_ERROR_500;
+                versionId = getHighestVersionObject(objectName, bucketId, false);
             }
         }
 
-        String createObjectStr = CREATE_OBJ_1 + CREATE_OBJ_2 + CREATE_OBJ_3;
+        String createObjectStr = CREATE_OBJ_1 + CREATE_OBJ_2;
 
         Connection conn = getObjectStorageDbConn();
+
+        int objectUniqueId = -1;
 
         if (conn != null) {
             PreparedStatement stmt = null;
@@ -180,12 +179,12 @@ public class ObjectTableMgr extends ObjectStorageDb {
                  **   4 - contentLength (int)
                  **   5 - storageType (int)
                  **   6 - contentMd5  (BINARY)
-                 **   7 - bucketUID (String)
+                 **   7 - bucketId (int)
                  **   8 - namespaceUID (String)
                  */
-                stmt = conn.prepareStatement(createObjectStr);
+                stmt = conn.prepareStatement(createObjectStr, Statement.RETURN_GENERATED_KEYS);
                 stmt.setString(1, objectName);
-                stmt.setString(2, "0");
+                stmt.setString(2, Integer.toString(versionId));
                 LOG.info("createObjectEntry opcClientRequestId: " + opcClientRequestId);
                 if (opcClientRequestId != null) {
                     stmt.setString(3, opcClientRequestId);
@@ -204,9 +203,15 @@ public class ObjectTableMgr extends ObjectStorageDb {
                 }
 
 
-                stmt.setString(7, bucketUID);
+                stmt.setInt(7, bucketId);
                 stmt.setString(8, namespaceUID);
                 stmt.executeUpdate();
+
+                ResultSet rs = stmt.getGeneratedKeys();
+                if (rs.next()){
+                    objectUniqueId = rs.getInt(1);
+                }
+                rs.close();
             } catch (SQLException sqlEx) {
                 LOG.error("createObjectEntry() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                 LOG.error("Bad SQL command: " + createObjectStr);
@@ -239,11 +244,12 @@ public class ObjectTableMgr extends ObjectStorageDb {
              ** Set the objectId in the HttpRequestInfo object so it can easily be accessed when writing out the
              **   chunk information.
              */
-            int id = getObjectId(objectName, bucketUID);
-            if (id != -1) {
-                String objectUID = getObjectUID(id);
-                objectCreateInfo.setObjectId(id, objectUID);
-                objectCreateInfo.setResponseHeaders(buildSuccessHeader(objectCreateInfo, objectName, bucketUID));
+            LOG.info("createObjectEntry() objectId: " + objectUniqueId);
+
+            if (objectUniqueId != -1) {
+                String objectUID = getObjectUID(objectUniqueId);
+                objectCreateInfo.setObjectId(objectUniqueId, objectUID);
+                objectCreateInfo.setResponseHeaders(buildSuccessHeader(objectCreateInfo, objectUniqueId, bucketId));
             } else {
                 objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "\"Unable to obtain objectId\"");
                 status = HttpStatus.INTERNAL_SERVER_ERROR_500;
@@ -303,11 +309,14 @@ public class ObjectTableMgr extends ObjectStorageDb {
 
         LOG.info("retrieveObjectInfo() objectName: " + objectName + " bucketName: " + bucketName);
 
-        int objectId = -1;
+        int objectId = getSpecifiedObject(objectName, bucketId, objectHttpInfo);
+        if (objectId == -1) {
+            return HttpStatus.PRECONDITION_FAILED_412;
+        }
 
         Connection conn = getObjectStorageDbConn();
         if (conn != null) {
-            String queryStr = RETRIEVE_OBJECT_QUERY_1 + objectName + RETRIEVE_OBJECT_QUERY_2 + bucketId;
+            String queryStr = RETRIEVE_OBJECT_QUERY + objectId;
             Statement stmt = null;
             ResultSet rs = null;
 
@@ -317,7 +326,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
                     rs = stmt.getResultSet();
                 }
             } catch (SQLException sqlEx) {
-                LOG.error("getUID() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("retrieveObjectInfo() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                 LOG.error("Bad SQL command: " + queryStr);
                 System.out.println("SQLException: " + sqlEx.getMessage());
             } finally {
@@ -440,20 +449,47 @@ public class ObjectTableMgr extends ObjectStorageDb {
     public String getObjectUID(final String objectName, final String bucketUID) {
         String getObjectUIDStr = GET_OBJECT_UID_1 + objectName + GET_OBJECT_UID_2 + bucketUID + GET_OBJECT_UID_3;
 
-        return getUID(getObjectUIDStr);
+        String uid = getUID(getObjectUIDStr);
+        if (uid == null) {
+            LOG.warn("getObjectUID(1) objectUID is null");
+        }
+
+        return uid;
     }
 
     public String getObjectUID(final int objectId) {
         String getObjectUIDStr = GET_OBJECT_UID_USING_ID + objectId;
 
-        return getUID(getObjectUIDStr);
+        String uid = getUID(getObjectUIDStr);
+        if (uid == null) {
+            LOG.warn("getObjectUID(2) objectUID is null");
+        }
+
+        return uid;
     }
 
     private int getObjectId(final String objectName, final String bucketUID) {
         String getObjectIdStr = GET_OBJECT_ID_1 + objectName + GET_OBJECT_ID_2 + bucketUID + GET_OBJECT_ID_3;
 
-        return getId(getObjectIdStr);
+        int id = getId(getObjectIdStr);
+        if (id == -1) {
+            LOG.warn("getObjectId(1) objectId is -1");
+        }
+
+        return id;
     }
+
+    private int getObjectId(final String objectName, final int bucketId) {
+        String getObjectIdStr = GET_OBJECT_ID_1 + objectName + GET_OBJECT_ID_4 + bucketId;
+
+        int id = getId(getObjectIdStr);
+        if (id == -1) {
+            LOG.warn("getObjectId(2) objectId is -1");
+        }
+
+        return id;
+    }
+
 
     /*
     ** The full way to obtain unique identifier for an Object
@@ -534,10 +570,13 @@ public class ObjectTableMgr extends ObjectStorageDb {
 
     /*
     ** This will return the objectId of the specified (by Object Name and bucketUID) object with the highest versionId
+    **   if the returnObjectId boolean is set to true.
+    ** If the returnObjectId boolean is set to false, it returns the next versionId to use when creating a new object.
      */
-    private int getHighestVersionObject(final String objectName, final String bucketUID) {
+    private int getHighestVersionObject(final String objectName, final int bucketId, final boolean returnObjectId) {
 
         int objectId = -1;
+        int versionId = 0;
 
         Connection conn = getObjectStorageDbConn();
 
@@ -553,7 +592,8 @@ public class ObjectTableMgr extends ObjectStorageDb {
                  */
                 stmt = conn.prepareStatement(GET_HIGHEST_VERSION_OBJECT);
                 stmt.setString(1, objectName);
-                stmt.setString(2, bucketUID);
+                stmt.setInt(2, bucketId);
+                stmt.setString(3, objectName);
                 rs = stmt.executeQuery();
 
             } catch (SQLException sqlEx) {
@@ -570,7 +610,13 @@ public class ObjectTableMgr extends ObjectStorageDb {
                              */
                             objectId = rs.getInt(1);
                             String name = rs.getString(2);
-                            int versionId = rs.getInt(3);
+                            String versionIdStr = rs.getString(3);
+                            try {
+                                versionId = Integer.parseInt(versionIdStr);
+                                versionId++;
+                            } catch (NumberFormatException ex) {
+                                LOG.warn("Invalid versionId: " + versionIdStr + " to convert to int");
+                            }
 
                             LOG.info("getHighestVersionObject() objectId: " + objectId + " objectName: " + name + " versionId: " + versionId);
                             count++;
@@ -606,10 +652,14 @@ public class ObjectTableMgr extends ObjectStorageDb {
             closeObjectStorageDbConn(conn);
         }
 
-         return objectId;
+        if (returnObjectId) {
+            return objectId;
+        } else {
+            return versionId;
+        }
     }
 
-    private final int getObjectCount(final String objectName, final String bucketUID) {
+    private int getObjectCount(final String objectName, final int bucketId) {
 
         int objectCount = 0;
 
@@ -627,7 +677,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
                  */
                 stmt = conn.prepareStatement(GET_NUMBER_OF_OBJECTS);
                 stmt.setString(1, objectName);
-                stmt.setString(2, bucketUID);
+                stmt.setInt(2, bucketId);
                 rs = stmt.executeQuery();
 
             } catch (SQLException sqlEx) {
@@ -690,31 +740,74 @@ public class ObjectTableMgr extends ObjectStorageDb {
      **   last-modified -
      **   version-id - There can be multiple versions of the same object present
      */
-    private String buildSuccessHeader(final HttpRequestInfo objectCreateInfo, final String objectName, final String bucketUID) {
+    private String buildSuccessHeader(final HttpRequestInfo objectCreateInfo, final int objectId, final int bucketId) {
         String successHeader;
 
-        int objectId = getObjectId(objectName, bucketUID);
-        if (objectId != -1) {
-            String createTime = getObjectCreationTime(objectId);
-            String objectUID = getObjectUID(objectId);
-            String opcClientId = objectCreateInfo.getOpcClientRequestId();
-            String contentMD5 = requestContext.getMd5ResultHandler().getComputedMd5Digest();
+        String createTime = getObjectCreationTime(objectId);
+        String objectUID = getObjectUID(objectId);
+        String opcClientId = objectCreateInfo.getOpcClientRequestId();
+        String contentMD5 = requestContext.getMd5ResultHandler().getComputedMd5Digest();
 
-            if (opcClientId != null) {
-                successHeader = SUCCESS_HEADER_1 + opcClientId + "\n" + SUCCESS_HEADER_2 + opcRequestId + "\n" +
-                        SUCCESS_HEADER_3 + contentMD5 + "\n" + SUCCESS_HEADER_4 + objectUID + "\n" +
-                        SUCCESS_HEADER_5 + createTime + "\n";
-            } else {
-                successHeader = SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + contentMD5 + "\n" +
-                        SUCCESS_HEADER_4 + objectUID + "\n" + SUCCESS_HEADER_5 + createTime + "\n";
-            }
-
-            //LOG.info(successHeader);
+        if (opcClientId != null) {
+            successHeader = SUCCESS_HEADER_1 + opcClientId + "\n" + SUCCESS_HEADER_2 + opcRequestId + "\n" +
+                    SUCCESS_HEADER_3 + contentMD5 + "\n" + SUCCESS_HEADER_4 + objectUID + "\n" +
+                    SUCCESS_HEADER_5 + createTime + "\n";
         } else {
-            successHeader = null;
+            successHeader = SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + contentMD5 + "\n" +
+                    SUCCESS_HEADER_4 + objectUID + "\n" + SUCCESS_HEADER_5 + createTime + "\n";
         }
 
         return successHeader;
+    }
+
+    /*
+    ** This is used to pick a specific object version to return. The criteria for picking the object are as follows:
+    **
+    **   1) If the "if-match" header is present, then use the ETag passed in to obtain the requested object
+    **   2) If the "if-match" is missing and the "versionId" header is set, use the versionId to obtain the
+    **      requested object.
+    **   3) If neither the "if-match" and "versionId" headers are present, return the highest version of the object.
+     */
+    private int getSpecifiedObject(final String objectName, final int bucketId, final HttpRequestInfo objectHttpInfo) {
+        String ifMatch = objectHttpInfo.getIfMatchUid();
+        int objectVersionId = objectHttpInfo.getVersionId();
+        int objectId;
+
+        if (ifMatch != null) {
+            String queryStr = "SELECT objectId FROM object WHERE objectUID = UUID_TO_BIN('" + ifMatch + "')";
+            objectId = getId(queryStr);
+
+            if (objectId == -1) {
+                LOG.warn("Unable to find Object: " + objectName + " if-match: " + ifMatch);
+
+                String failureMessage = "\"Object not found\",\n  \"objectName\": \"" + objectName + "\"\n, " +
+                        "\"if-match\": \"" + ifMatch + "\"\n";
+                objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+            }
+        } else if (objectVersionId != -1) {
+            String queryStr = "SELECT objectId FROM object WHERE objectName = '" + objectName + "' AND bucketId = " +
+                    bucketId + " AND versionId = '" + objectVersionId + "'";
+            objectId = getId(queryStr);
+
+            if (objectId == -1) {
+                LOG.warn("Unable to find Object: " + objectName + " versionId: " + objectVersionId);
+
+                String failureMessage = "\"Object not found\",\n  \"objectName\": \"" + objectName + "\"\n, " +
+                        "\"versionId\": \"" + objectVersionId + "\"\n";
+                objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+            }
+        } else {
+            String versionId = "0";
+            objectId = getHighestVersionObject(objectName, bucketId, true);
+            if (objectId == -1) {
+                LOG.warn("Unable to find Object: " + objectName);
+
+                String failureMessage = "\"Object not found\",\n  \"objectName\": \"" + objectName + "\"";
+                objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+            }
+        }
+
+        return objectId;
     }
 
 }

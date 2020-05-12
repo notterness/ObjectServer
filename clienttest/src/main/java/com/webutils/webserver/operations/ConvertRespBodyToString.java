@@ -193,8 +193,8 @@ public class ConvertRespBodyToString implements Operation {
 
                 clientReadBufferMgr.updateConsumerReadPointer(respBodyReadPointer);
             } else {
-                LOG.info("ConvertRespBodyToString out of read buffers bytesWritten: " +
-                        bytesConverted + " bytesToWriteToFile: " + bytesToConvert);
+                LOG.info("ConvertRespBodyToString out of read buffers bytesConverted: " +
+                        bytesConverted + " bytesToConvert: " + bytesToConvert);
 
                 /*
                  ** Check if all the bytes (meaning the amount passed in the content-length in the HTTP header)

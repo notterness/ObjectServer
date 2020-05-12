@@ -196,7 +196,7 @@ public class ObjectStorageDb {
                     rs = stmt.getResultSet();
                 }
             } catch (SQLException sqlEx) {
-                LOG.error("getUID() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("getId() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                 LOG.error("Bad SQL command: " + idQueryStr);
                 System.out.println("SQLException: " + sqlEx.getMessage());
             } finally {
@@ -214,19 +214,19 @@ public class ObjectStorageDb {
                         }
 
                         if (count != 1) {
-                            LOG.warn("getUID() too many responses count: " + count);
+                            LOG.warn("getId() too many responses count: " + count);
                             LOG.warn(idQueryStr);
 
                             id = -1;
                         }
                     } catch (SQLException sqlEx) {
-                        System.out.println("getUID() SQL conn rs.next() SQLException: " + sqlEx.getMessage());
+                        System.out.println("getId() SQL conn rs.next() SQLException: " + sqlEx.getMessage());
                     }
 
                     try {
                         rs.close();
                     } catch (SQLException sqlEx) {
-                        System.out.println("getUID() SQL conn rs.close() SQLException: " + sqlEx.getMessage());
+                        System.out.println("getId() SQL conn rs.close() SQLException: " + sqlEx.getMessage());
                     }
                 }
 
@@ -234,7 +234,7 @@ public class ObjectStorageDb {
                     try {
                         stmt.close();
                     } catch (SQLException sqlEx) {
-                        LOG.error("getUID() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        LOG.error("getId() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                         System.out.println("SQLException: " + sqlEx.getMessage());
                     }
                 }

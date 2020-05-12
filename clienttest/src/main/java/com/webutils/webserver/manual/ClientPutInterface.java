@@ -6,11 +6,9 @@ import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.niosockets.NioCliClient;
-import com.webutils.webserver.operations.ClientObjectGet;
-import com.webutils.webserver.operations.ClientObjectPut;
+import com.webutils.webserver.operations.ClientPutObject;
 import com.webutils.webserver.requestcontext.ClientRequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
-import org.eclipse.jetty.http.HttpStatus;
 
 import java.net.InetAddress;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -63,14 +61,14 @@ public class ClientPutInterface extends ClientInterface {
         }
 
         /*
-         ** Create the ClientObjectGet operation and connect in this object to provide the HTTP header
+         ** Create the ClientGetObject operation and connect in this object to provide the HTTP header
          **   generator
          */
         ServerIdentifier objectServer = new ServerIdentifier("ObjectCLI", serverIpAddr, serverTcpPort, 0);
 
         HttpResponseInfo httpResponseInfo = new HttpResponseInfo(clientContext);
         objectServer.setHttpInfo(httpResponseInfo);
-        ClientObjectPut objectPut = new ClientObjectPut(this, clientContext, memoryManager, objectServer,
+        ClientPutObject objectPut = new ClientPutObject(this, clientContext, memoryManager, objectServer,
                 requestParams);
         objectPut.initialize();
 
@@ -89,22 +87,13 @@ public class ClientPutInterface extends ClientInterface {
         }
 
         /*
-         ** Cleanup out the ClientObjectGet Operation
+         ** Cleanup out the ClientGetObject Operation
          */
         objectPut.complete();
 
         client.releaseContext(clientContext);
 
         memoryManager.verifyMemoryPools(clientName);
-
-        /*
-         ** Write the response status information
-         */
-        if (httpResponseInfo.getResponseStatus() == HttpStatus.OK_200) {
-            System.out.println("Status: OK_200");
-        } else {
-            System.out.println("Status: " + httpResponseInfo.getHttpParseError());
-        }
 
         runningTestCount.decrementAndGet();
     }

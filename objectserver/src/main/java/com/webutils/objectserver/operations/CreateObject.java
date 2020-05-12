@@ -76,7 +76,7 @@ public class CreateObject implements Operation {
 
         ObjectTableMgr objectMgr = new ObjectTableMgr(flavor, requestContext);
         if (objectMgr.createObjectEntry(objectPutInfo, tenancyUID) == HttpStatus.OK_200) {
-            int objectId = objectMgr.getObjectId(objectPutInfo, tenancyUID);
+            int objectId = objectPutInfo.getObjectId();
             if (objectId != -1) {
                 completeCallback.event();
             } else {

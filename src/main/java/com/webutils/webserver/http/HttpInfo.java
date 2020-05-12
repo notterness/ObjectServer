@@ -52,6 +52,7 @@ abstract public class HttpInfo {
     private static final String IF_MATCH = "if-match";
     private static final String IF_NONE_MATCH = "if-none-match";
 
+    private static final String VERSION_ID = "versionId";
 
     /*
      ** The connection this HTTP information is associated with
@@ -560,6 +561,25 @@ abstract public class HttpInfo {
 
         return uid;
     }
+
+    /*
+     ** Return the "versionId". Validate that it is a number
+     */
+    public int getVersionId() {
+        String versionId = getHeaderString(VERSION_ID);
+        int id = -1;
+
+        if (versionId != null) {
+            try {
+                id = Integer.parseInt(versionId);
+            } catch (NumberFormatException ex) {
+                LOG.warn("Invalid versionId: " + versionId);
+            }
+        }
+
+        return id;
+    }
+
 
     /*
      ** Returns if the "if-none-match" is set - If this is present, the only valid value is '*'.

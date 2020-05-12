@@ -40,8 +40,7 @@ public class BucketTableMgr extends ObjectStorageDb {
     private final static String GET_BUCKET_ID_FROM_UID_1 = "SELECT bucketId FROM bucket WHERE bucketUID = UUID_TO_BIN('";
     private final static String GET_BUCKET_ID_FROM_UID_2 = "' )";
 
-    private final static String GET_BUCKET_STORAGE_TIER_1 = "SELECT storageTier FROM bucket WHERE bucketUID = UUID_TO_BIN('";
-    private final static String GET_BUCKET_STORAGE_TIER_2 = "')";
+    private final static String GET_BUCKET_STORAGE_TIER_1 = "SELECT storageTier FROM bucket WHERE bucketID = ";
 
     private final static String GET_BUCKET_CREATE_TIME = "SELECT createTime FROM bucket WHERE bucketID = ";
 
@@ -212,10 +211,10 @@ public class BucketTableMgr extends ObjectStorageDb {
        return getSingleStr(getOpClientId);
     }
 
-    public StorageTierEnum getBucketStorageTier(final String bucketUID) {
+    public StorageTierEnum getBucketStorageTier(final int bucketId) {
         String storageTierStr = null;
 
-        String bucketStorageTierQuery = GET_BUCKET_STORAGE_TIER_1 + bucketUID + GET_BUCKET_STORAGE_TIER_2;
+        String bucketStorageTierQuery = GET_BUCKET_STORAGE_TIER_1 + bucketId;
 
         Connection conn = getObjectStorageDbConn();
 

@@ -59,7 +59,7 @@ public abstract class ClientInterface {
 
     public void clientRequestCompleted(int result) {
 
-        System.out.println("ClientGetInterface[" + clientName + "] clientRequestCompleted() result: " + result);
+        System.out.println("ClientInterface[" + clientName + "] clientRequestCompleted() result: " + result);
 
         synchronized (writeDone) {
             statusSignalSent = true;
@@ -85,7 +85,7 @@ public abstract class ClientInterface {
             }
         }
 
-        System.out.println("ClientGetInterface[" + clientName + "] waitForRequestComplete() done: " + status);
+        System.out.println("ClientInterface[" + clientName + "] waitForRequestComplete() done: " + status);
 
         return status;
     }

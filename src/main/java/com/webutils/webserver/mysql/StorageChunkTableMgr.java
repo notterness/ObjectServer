@@ -62,6 +62,7 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
             /*
             ** Log an error and cause this Object write to fail. In addition, there needs to be some cleanup of
             **   the chunks that are allocated and available.
+            ** TODO: Wire this in correctly
              */
         }
 
@@ -121,13 +122,22 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
     **   storageServerName
     **   serverIp
     **   serverPort
+    **
+    ** This will return true of there is already a chunk that matches the information in the ServerIdentifier
      */
     private boolean checkForDuplicateChunk(final ServerIdentifier server) {
 
         String duplicateCheck = CHECK_FOR_DUPLICATE_1 + server.getOffset() + CHECK_FOR_DUPLICATE_2 + server.getServerName() +
                 CHECK_FOR_DUPLICATE_3 + server.getServerIpAddress() + CHECK_FOR_DUPLICATE_4 + server.getServerTcpPort();
 
-        return (getId(duplicateCheck) == -1);
+        int chunkId = getId(duplicateCheck);
+        if (chunkId == -1) {
+            LOG.warn("checkForDuplicateChunk() failed offset: " + server.getOffset() + " name: " + server.getServerName() +
+                    " IP Addr: " + server.getServerIpAddress() + " port: " + server.getServerTcpPort());
+            return true;
+        }
+
+        return false;
     }
 
     /*
