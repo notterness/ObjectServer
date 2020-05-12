@@ -97,8 +97,12 @@ public class ObjectTableMgr extends ObjectStorageDb {
         int contentLength = objectCreateInfo.getContentLength();
 
         if ((objectName == null) || (bucketName == null) || (namespace == null)) {
-            String failureMessage = "\"PUT Object missing required attributes\",\n  \"objectName\": \"" + objectName +
-                    "\",\n  \"bucketName\": \"" + bucketName + "\",\n \"namespaceName\": \"" + namespace + "\"";
+            String failureMessage = "{\r\n  \"code\":" + HttpStatus.BAD_REQUEST_400 +
+                    "\r\n  \"message\": \"PUT Object missing required attributes\" + " +
+                    "\r\n  \"objectName\": \"" + objectName + "\"" +
+                    "\r\n  \"bucketName\": \"" + bucketName + "\"" +
+                    "\r\n \"namespaceName\": \"" + namespace + "\"" +
+                    "\r\n}";
             LOG.warn(failureMessage);
             objectCreateInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
             return HttpStatus.BAD_REQUEST_400;
@@ -114,7 +118,10 @@ public class ObjectTableMgr extends ObjectStorageDb {
         if (namespaceUID == null) {
             LOG.warn("Unable to create Object: " + objectName + " - invalid namespace: " + namespace);
 
-            String failureMessage = "\"Namespace not found\",\n  \"namespaceName\": \"" + namespace + "\"";
+            String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
+                    "\r\n  \"message\": \"Namespace not found\"" +
+                    "\r\n  \"namespaceName\": \"" + namespace + "\"" +
+                    "\r\n}";
             objectCreateInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
             return HttpStatus.PRECONDITION_FAILED_412;
         }
@@ -127,7 +134,10 @@ public class ObjectTableMgr extends ObjectStorageDb {
         if (bucketId == -1) {
             LOG.warn("Unable to create Object: " + objectName + " - invalid bucket: " + bucketName);
 
-            String failureMessage = "\"Bucket not found\",\n  \"bucketName\": \"" + bucketName + "\"";
+            String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
+                    "\r\n  \"message\": \"Bucket not found\"" +
+                    "\r\n  \"bucketName\": \"" + bucketName + "\"" +
+                    "\r\n}";
             objectCreateInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
             return HttpStatus.PRECONDITION_FAILED_412;
         }
@@ -138,6 +148,13 @@ public class ObjectTableMgr extends ObjectStorageDb {
             byte[] md5DigestBytes = BaseEncoding.base64().decode(contentMd5);
             if (md5DigestBytes.length != 16) {
                 LOG.warn("The value of the digest '" + contentMd5 + "' incorrect length after base-64 decoding");
+
+                String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
+                        "\r\n  \"message\": \"Incorrect Md5 Digest afdter base-64 decoding\"" +
+                        "\r\n  \"Content-MD5\": \"" + contentMd5 + "\"" +
+                        "\r\n}";
+                objectCreateInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+
                 return HttpStatus.PRECONDITION_FAILED_412;
             }
         }
@@ -217,7 +234,11 @@ public class ObjectTableMgr extends ObjectStorageDb {
                 LOG.error("Bad SQL command: " + createObjectStr);
                 System.out.println("SQLException: " + sqlEx.getMessage());
 
-                objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "\"SQL Exception\"");
+                String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.INTERNAL_SERVER_ERROR_500 + "\"" +
+                        "\r\n  \"message\": \"SQL error: unable to create object - " + objectName + "\"" +
+                        "\r\n}";
+                objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
+
                 status = HttpStatus.INTERNAL_SERVER_ERROR_500;
             } finally {
                 if (stmt != null) {
@@ -251,7 +272,11 @@ public class ObjectTableMgr extends ObjectStorageDb {
                 objectCreateInfo.setObjectId(objectUniqueId, objectUID);
                 objectCreateInfo.setResponseHeaders(buildSuccessHeader(objectCreateInfo, objectUniqueId, bucketId));
             } else {
-                objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "\"Unable to obtain objectId\"");
+                String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.INTERNAL_SERVER_ERROR_500 + "\"" +
+                        "\r\n  \"message\": \"SQL error: unable to obtain objectId - " + objectName + "\"" +
+                        "\r\n}";
+                objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
+
                 status = HttpStatus.INTERNAL_SERVER_ERROR_500;
             }
         }
@@ -274,8 +299,13 @@ public class ObjectTableMgr extends ObjectStorageDb {
         String namespace = info.getNamespace();
 
         if ((objectName == null) || (bucketName == null) || (namespace == null)) {
-            String failureMessage = "\"GET Object missing required attributes\",\n  \"objectName\": \"" + objectName +
-                    "\",\n  \"bucketName\": \"" + bucketName + "\",\n \"namespaceName\": \"" + namespace + "\"";
+            String failureMessage = "{\r\n  \"code\":" + HttpStatus.BAD_REQUEST_400 +
+                    "\r\n  \"message\": \"GET Object missing required attributes\" + " +
+                    "\r\n  \"objectName\": \"" + objectName + "\"" +
+                    "\r\n  \"bucketName\": \"" + bucketName + "\"" +
+                    "\r\n \"namespaceName\": \"" + namespace + "\"" +
+                    "\r\n}";
+
             LOG.warn(failureMessage);
             objectHttpInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
             return HttpStatus.BAD_REQUEST_400;
@@ -289,7 +319,10 @@ public class ObjectTableMgr extends ObjectStorageDb {
         if (namespaceUID == null) {
             LOG.warn("Unable to find Object: " + objectName + " - invalid namespace: " + namespace);
 
-            String failureMessage = "\"Namespace not found\",\n  \"namespaceName\": \"" + namespace + "\"";
+            String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
+                    "\r\n  \"message\": \"Namespace not found\"" +
+                    "\r\n  \"namespaceName\": \"" + namespace + "\"" +
+                    "\r\n}";
             objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
             return HttpStatus.PRECONDITION_FAILED_412;
         }
@@ -302,7 +335,10 @@ public class ObjectTableMgr extends ObjectStorageDb {
         if (bucketId == -1) {
             LOG.warn("Unable to find Object: " + objectName + " - invalid bucket: " + bucketName);
 
-            String failureMessage = "\"Bucket not found\",\n  \"bucketName\": \"" + bucketName + "\"";
+            String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
+                    "\r\n  \"message\": \"Bucket not found\"" +
+                    "\r\n  \"bucketName\": \"" + bucketName + "\"" +
+                    "\r\n}";
             objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
             return HttpStatus.PRECONDITION_FAILED_412;
         }
@@ -425,14 +461,20 @@ public class ObjectTableMgr extends ObjectStorageDb {
              **   that needs to be read from a StorageServer).
              */
             if (info.getChunkList().isEmpty()) {
-                LOG.warn("Object has not data associated with it: " + objectName);
-                String failureMessage = "\"Object data not found\",\n  \"objectName\": \"" + objectName + "\"";
+                LOG.warn("Object has no data associated with it: " + objectName);
+
+                String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.PRECONDITION_FAILED_412 + "\"" +
+                        "\r\n  \"message\": \"Object data not found - " + objectName + "\"" +
+                        "\r\n}";
                 objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
                 status = HttpStatus.PRECONDITION_FAILED_412;
             }
         } else {
             LOG.warn("Object not found: " + objectName);
-            String failureMessage = "\"Object not found\",\n  \"objectName\": \"" + objectName + "\"";
+
+            String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.PRECONDITION_FAILED_412 + "\"" +
+                    "\r\n  \"message\": \"Object not found - " + objectName + "\"" +
+                    "\r\n}";
             objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
             status = HttpStatus.PRECONDITION_FAILED_412;
         }
@@ -503,8 +545,12 @@ public class ObjectTableMgr extends ObjectStorageDb {
         String bucketName = objectCreateInfo.getBucket();
 
         if ((objectName == null) || (bucketName == null) || (namespace == null)) {
-            String failureMessage = "\"getObjectId() missing required attributes\",\n  \"objectName\": \"" + objectName +
-                    "\",\n  \"bucketName\": \"" + bucketName + "\",\n \"namespaceName\": \"" + namespace + "\"";
+            String failureMessage = "{\r\n  \"code\":" + HttpStatus.BAD_REQUEST_400 +
+                    "\r\n  \"message\": \"GET Object missing required attributes\" + " +
+                    "\r\n  \"objectName\": \"" + objectName + "\"" +
+                    "\r\n  \"bucketName\": \"" + bucketName + "\"" +
+                    "\r\n \"namespaceName\": \"" + namespace + "\"" +
+                    "\r\n}";
             LOG.warn(failureMessage);
             objectCreateInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
             return HttpStatus.BAD_REQUEST_400;
@@ -520,7 +566,10 @@ public class ObjectTableMgr extends ObjectStorageDb {
         if (namespaceUID == null) {
             LOG.warn("Unable to retrieve Object ID: " + objectName + " - invalid namespace: " + namespace);
 
-            String failureMessage = "\"Namespace not found\",\n  \"namespaceName\": \"" + namespace + "\"";
+            String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
+                    "\r\n  \"message\": \"Namespace not found\"" +
+                    "\r\n  \"namespaceName\": \"" + namespace + "\"" +
+                    "\r\n}";
             objectCreateInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
             return HttpStatus.PRECONDITION_FAILED_412;
         }
@@ -533,7 +582,10 @@ public class ObjectTableMgr extends ObjectStorageDb {
         if (bucketUID == null) {
             LOG.warn("Unable to retrieve Object ID: " + objectName + " - invalid bucket: " + bucketName);
 
-            String failureMessage = "\"Bucket not found\",\n  \"bucketName\": \"" + bucketName + "\"";
+            String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
+                    "\r\n  \"message\": \"Bucket not found\"" +
+                    "\r\n  \"bucketName\": \"" + bucketName + "\"" +
+                    "\r\n}";
             objectCreateInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
             return HttpStatus.PRECONDITION_FAILED_412;
         }
@@ -780,8 +832,10 @@ public class ObjectTableMgr extends ObjectStorageDb {
             if (objectId == -1) {
                 LOG.warn("Unable to find Object: " + objectName + " if-match: " + ifMatch);
 
-                String failureMessage = "\"Object not found\",\n  \"objectName\": \"" + objectName + "\"\n, " +
-                        "\"if-match\": \"" + ifMatch + "\"\n";
+                String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.PRECONDITION_FAILED_412 + "\"" +
+                        "\r\n  \"message\": \"Object not found - " + objectName + "\"" +
+                        "\r\n  \"if-match\": \"" + ifMatch + "\"" +
+                        "\r\n}";
                 objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
             }
         } else if (objectVersionId != -1) {
@@ -792,8 +846,10 @@ public class ObjectTableMgr extends ObjectStorageDb {
             if (objectId == -1) {
                 LOG.warn("Unable to find Object: " + objectName + " versionId: " + objectVersionId);
 
-                String failureMessage = "\"Object not found\",\n  \"objectName\": \"" + objectName + "\"\n, " +
-                        "\"versionId\": \"" + objectVersionId + "\"\n";
+                String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.PRECONDITION_FAILED_412 + "\"" +
+                        "\r\n  \"message\": \"Object not found - " + objectName + "\"" +
+                        "\r\n  \"versionId\": \"" + objectVersionId + "\"" +
+                        "\r\n}";
                 objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
             }
         } else {
@@ -802,7 +858,9 @@ public class ObjectTableMgr extends ObjectStorageDb {
             if (objectId == -1) {
                 LOG.warn("Unable to find Object: " + objectName);
 
-                String failureMessage = "\"Object not found\",\n  \"objectName\": \"" + objectName + "\"";
+                String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.PRECONDITION_FAILED_412 + "\"" +
+                        "\r\n  \"message\": \"Object not found - " + objectName + "\"" +
+                        "\r\n}";
                 objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
             }
         }

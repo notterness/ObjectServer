@@ -266,8 +266,8 @@ public class ReadObjectChunks implements Operation {
                                 if (requestContext.getHttpParseStatus() == HttpStatus.OK_200) {
                                     HttpRequestInfo httpInfo = requestContext.getHttpInfo();
 
-                                    String failureMessage = "{\r\n  \"code\": \"" + requestContext.getHttpParseStatus() + "\"\r\n" +
-                                            "\"message\": \"Unable to obtain read chunk data - failed Storage Server\"" +
+                                    String failureMessage = "{\r\n  \"code\": \"" + requestContext.getHttpParseStatus() + "\"" +
+                                            "\r\n  \"message\": \"Unable to obtain read chunk data - failed Storage Server\"" +
                                             "\r\n  \"StorageServer\": \"" + server.getServerName() + "\"\r\n}";
 
                                     httpInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
@@ -305,7 +305,8 @@ public class ReadObjectChunks implements Operation {
                      */
                     LOG.error("SEND_RESPONSE operation is null");
                     HttpRequestInfo httpInfo = requestContext.getHttpInfo();
-                    String failureMessage = "\"Invalid State - ReadObjectChunks\"";
+                    String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.INTERNAL_SERVER_ERROR_500 + "\"\r\n" +
+                            "  \"message\": \"Invalid State - ReadObjectChunks\"\r\n}";
 
                     httpInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
                     currState = ExecutionState.ALL_CHUNKS_COMPLETED;

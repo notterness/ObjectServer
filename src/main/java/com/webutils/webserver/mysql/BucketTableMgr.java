@@ -65,7 +65,6 @@ public class BucketTableMgr extends ObjectStorageDb {
     public BucketTableMgr(final WebServerFlavor flavor, final int requestId, final HttpRequestInfo requestInfo) {
         super(flavor);
 
-        //LOG.info("BucketTableMgr() flavor: " + flavor + " requestId: " + requestId);
         this.opcRequestId = requestId;
         this.httpRequestInfo = requestInfo;
     }
@@ -88,7 +87,11 @@ public class BucketTableMgr extends ObjectStorageDb {
              */
             LOG.warn("Bucket already exists name: " + bucketName);
 
-            String failureMessage = "\"CreateBucket bucket already exists - " + bucketName + "\",\n   \"ETag\": \"" + bucketUID + "\"";
+            String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.CONFLICT_409 + "\"" +
+                    "\r\n  \"message\": \"CreateBucket bucket already exists - " + bucketName + "\"" +
+                    "\r\n  \"ETag\": \"" + bucketUID + "\"" +
+                    "\r\n}";
+
             httpRequestInfo.setParseFailureCode(HttpStatus.CONFLICT_409, failureMessage);
 
             return HttpStatus.CONFLICT_409;
@@ -101,7 +104,10 @@ public class BucketTableMgr extends ObjectStorageDb {
         if ((bucketName == null) || (compartmentId == null)) {
             LOG.error("createBucketEntry() null required attributes");
 
-            httpRequestInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, "\"CreateBucket missing attributes - " + bucketName + "\"");
+            String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.BAD_REQUEST_400 + "\"" +
+                    "\r\n  \"message\": \"CreateBucket missing attributes - " + bucketName + "\"" +
+                    "\r\n}";
+            httpRequestInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
             return HttpStatus.BAD_REQUEST_400;
         }
 
@@ -123,7 +129,11 @@ public class BucketTableMgr extends ObjectStorageDb {
                 LOG.error("Bad SQL command: " + createBucketStr);
                 System.out.println("SQLException: " + sqlEx.getMessage());
 
-                httpRequestInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "\"SQL error\"");
+                String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.INTERNAL_SERVER_ERROR_500 + "\"" +
+                        "\r\n  \"message\": \"SQL error: unable to create bucket - " + bucketName + "\"" +
+                        "\r\n}";
+
+                httpRequestInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
                 status = HttpStatus.INTERNAL_SERVER_ERROR_500;
             } finally {
                 if (stmt != null) {
@@ -157,7 +167,11 @@ public class BucketTableMgr extends ObjectStorageDb {
                     tagMgr.createBucketTags(bucketConfigData, id);
                 }
             } else {
-                httpRequestInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "\"SQL error - unable to obtain bucket ETag\"");
+                String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.INTERNAL_SERVER_ERROR_500 + "\"" +
+                        "\r\n  \"message\": \"SQL error: unable to obtain bucket ETag - " + bucketName + "\"" +
+                        "\r\n}";
+
+                httpRequestInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
                 status = HttpStatus.INTERNAL_SERVER_ERROR_500;
             }
         }

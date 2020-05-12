@@ -337,11 +337,11 @@ public class SendObjectGetResponse implements Operation {
         String failureMessage = httpInfo.getParseFailureReason();
         if (failureMessage != null) {
             failureHeader += SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + etag + "\n" +
-                    SUCCESS_HEADER_8 + failureMessage.length() + "\r\n";
+                    SUCCESS_HEADER_8 + failureMessage.length() + "\n\n";
             failureHeader += failureMessage;
         } else {
             failureHeader += SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + etag + "\n" +
-                    SUCCESS_HEADER_8 + 0 + "\r\n";
+                    SUCCESS_HEADER_8 + 0 + "\n\n";
         }
 
         str_to_bb(respBuffer, failureHeader);
