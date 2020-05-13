@@ -15,14 +15,13 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
-public class SetupObjectGet implements Operation {
-
-    private static final Logger LOG = LoggerFactory.getLogger(SetupObjectGet.class);
+public class SetupObjectDelete implements Operation {
+    private static final Logger LOG = LoggerFactory.getLogger(SetupObjectDelete.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    private final OperationTypeEnum operationType = OperationTypeEnum.SETUP_OBJECT_GET;
+    private final OperationTypeEnum operationType = OperationTypeEnum.SETUP_OBJECT_DELETE;
 
 
     /*
@@ -31,8 +30,6 @@ public class SetupObjectGet implements Operation {
     private final ObjectServerRequestContext requestContext;
 
     private final MemoryManager memoryManager;
-
-    private final ChunkMemoryPool chunkMemPool;
 
     /*
      ** The completeCallback will cause the final response to be sent out.
@@ -48,7 +45,7 @@ public class SetupObjectGet implements Operation {
     /*
      ** This is used to prevent the Operation setup code from being called multiple times in the execute() method
      */
-    private boolean getOperationSetupDone;
+    private boolean deleteOperationSetupDone;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -61,12 +58,11 @@ public class SetupObjectGet implements Operation {
      ** This is used to setup the initial Operation dependencies required to handle the Storage Server GET
      **   request. This is how chunks of data for an Object are read to the backing storage.
      */
-    public SetupObjectGet(final ObjectServerRequestContext requestContext, final MemoryManager memoryManager,
-                          final ChunkMemoryPool chunkMemPool, final Operation completeCb) {
+    public SetupObjectDelete(final ObjectServerRequestContext requestContext, final MemoryManager memoryManager,
+                          final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
-        this.chunkMemPool = chunkMemPool;
         this.completeCallback = completeCb;
 
         /*
@@ -82,7 +78,7 @@ public class SetupObjectGet implements Operation {
         /*
          **
          */
-        getOperationSetupDone = false;
+        deleteOperationSetupDone = false;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -108,30 +104,24 @@ public class SetupObjectGet implements Operation {
     }
 
     public void execute() {
-        if (!getOperationSetupDone) {
+        if (!deleteOperationSetupDone) {
             HttpRequestInfo objectHttpInfo = requestContext.getHttpInfo();
 
             /*
-            ** The ObjectInfo is used to hold the information required to read the object data from the Storage Servers.
+             ** The ObjectInfo is used to hold the information required to read the object data from the Storage Servers.
              */
             ObjectInfo objectInfo = new ObjectInfo(objectHttpInfo);
 
-            ReadObjectChunks readChunks = new ReadObjectChunks(requestContext, memoryManager, chunkMemPool,
-                    objectInfo, this);
-            objectGetHandlerOps.put(readChunks.getOperationType(), readChunks);
-            readChunks.initialize();
-
             /*
-            ** When all the data is read in from the database (assuming it was successful), then send the HTTP Response
-            **   back to the client.
+             ** When all the data is read in from the database (assuming it was successful), then send the HTTP Response
+             **   back to the client.
              */
-            RetrieveObjectInfo retrieveObjectInfo = new RetrieveObjectInfo(requestContext, memoryManager, objectInfo,
-                    readChunks, this);
-            objectGetHandlerOps.put(retrieveObjectInfo.getOperationType(), retrieveObjectInfo);
-            retrieveObjectInfo.initialize();
-            retrieveObjectInfo.event();
+            DeleteObjectInfo deleteObjectInfo = new DeleteObjectInfo(requestContext, memoryManager, objectInfo,this);
+            objectGetHandlerOps.put(deleteObjectInfo.getOperationType(), deleteObjectInfo);
+            deleteObjectInfo.initialize();
+            deleteObjectInfo.event();
 
-            getOperationSetupDone = true;
+            deleteOperationSetupDone = true;
         } else {
             complete();
         }
@@ -143,7 +133,7 @@ public class SetupObjectGet implements Operation {
      */
     public void complete() {
 
-        LOG.info("SetupObjectGet[" + requestContext.getRequestId() + "] complete()");
+        LOG.info("SetupObjectDelete[" + requestContext.getRequestId() + "] complete()");
 
         /*
          ** Call the complete() method for any operations that this one created.
@@ -174,19 +164,19 @@ public class SetupObjectGet implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("SetupObjectGet[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("SetupObjectDelete[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("SetupObjectGet[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SetupObjectDelete[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("SetupObjectGet[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("SetupObjectDelete[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("SetupObjectGet[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SetupObjectDelete[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -201,8 +191,7 @@ public class SetupObjectGet implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("SetupObjectGet[" + requestContext.getRequestId() +
-                "] hasWaitTimeElapsed() not supposed to be on delayed queue");
+        LOG.warn("SetupObjectDelete[" + requestContext.getRequestId() + "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
 

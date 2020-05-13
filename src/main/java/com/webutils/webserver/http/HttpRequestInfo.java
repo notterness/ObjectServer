@@ -2,13 +2,11 @@ package com.webutils.webserver.http;
 
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.eclipse.jetty.http.BadMessageException;
-import org.eclipse.jetty.http.HostPortHttpField;
 import org.eclipse.jetty.http.HttpField;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 

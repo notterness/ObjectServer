@@ -1,5 +1,7 @@
 package com.webutils.webserver.common;
 
+import com.webutils.webserver.http.HttpResponseInfo;
+
 public abstract class ObjectParams {
 
     /*
@@ -53,6 +55,7 @@ public abstract class ObjectParams {
     }
 
     public abstract String constructRequest();
+    public abstract void outputResults(final HttpResponseInfo httpInfo);
 
     public void setHostName(final String host) { hostName = host; }
 

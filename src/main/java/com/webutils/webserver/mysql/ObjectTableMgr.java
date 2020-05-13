@@ -404,6 +404,36 @@ public class ObjectTableMgr extends ObjectStorageDb {
         return status;
     }
 
+    public void deleteObjectInfo(final HttpRequestInfo objectHttpInfo, final String tenancyUID) {
+        /*
+         ** Obtain the fields required to build the Object table entry. Verify that the required fields are not missing.
+         */
+        String objectName = objectHttpInfo.getObject();
+
+        int bucketId = validateAndGetBucketId(objectHttpInfo, objectName, tenancyUID);
+        if (bucketId == -1) {
+            return;
+        }
+
+        LOG.info("deleteObjectInfo() objectName: " + objectName);
+
+        int objectId = getSpecifiedObject(objectName, bucketId, objectHttpInfo);
+        if (objectId == -1) {
+            return;
+        }
+
+        /*
+        ** Delete all the chunk information associated with this object
+         */
+        StorageChunkTableMgr chunkTableMgr = new StorageChunkTableMgr(flavor, objectHttpInfo);
+        chunkTableMgr.deleteChunksFromObject(objectId);
+
+        /*
+        ** Delete the object
+         */
+        deleteObject(objectId);
+    }
+
     /*
      ** This obtains the Bucket UID. It will return NULL if the Bucket does not exist.
      **

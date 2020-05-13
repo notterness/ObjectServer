@@ -40,6 +40,7 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
     private final static String GET_CHUNK_MD5_DIGEST = "SELECT chunkMd5 FROM storageChunk WHERE chunkId = ";
 
     private final static String DELETE_CHUNK = "DELETE FROM storageChunk WHERE chunkId = ";
+    private final static String DELETE_CHUNKS_FROM_OBJECT = "DELETE FROM storageChunk WHERE ownerObject = ";
 
     private final static String GET_CHUNKS_FOR_OBJECT = "SELECT * FROM storageChunk WHERE ownerObject = ";
 
@@ -298,7 +299,7 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
      */
     public void getChunks(final int objectId, final List<ServerIdentifier> chunkList) {
         String chunkQuery = GET_CHUNKS_FOR_OBJECT + objectId;
-        String md5DigestStr = null;
+        String md5DigestStr;
 
         Connection conn = getObjectStorageDbConn();
 
@@ -399,6 +400,8 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
     public void deleteChunk(final int chunkId) {
         executeSqlStatement(DELETE_CHUNK + chunkId);
     }
+
+    public void deleteChunksFromObject(final int objectId) { executeSqlStatement(DELETE_CHUNKS_FROM_OBJECT + objectId); }
 
     public void incrementChunkReadFailure(final int chunkId) { executeSqlStatement(INCREMENT_READ_FAILURES + chunkId); }
 

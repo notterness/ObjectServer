@@ -54,12 +54,10 @@ public class BuildHttpResult {
                         .append("HTTP/1.1 ")
                         .append(result.getCode())
                         .append(" Method Not Allowed\r\n")
-                        .append("Content-Type: text/html")
-                        .append("\r\n")
-                        .append("Allow: PUT POST")
-                        .append("\r\n")
-                        .append("Connection: close\r\n")
-                        .append("\r\n");
+                        .append("Content-Type: text/html\n")
+                        .append("Allow: DELETE GET PUT POST\n")
+                        .append("Connection: close\n")
+                        .append("Content-Length: 0\n\n");
 
             } else if (resultCode != HttpStatus.CONTINUE_100) {
                 tmpBuiltStr = new StringBuilder()

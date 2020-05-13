@@ -18,6 +18,8 @@ public class HttpResponseInfo extends HttpInfo {
     private static final String RESPONSE_LAST_MODIFIED = "last-modified";
     private static final String RESPONSE_VERSION_ID = "version-id";
 
+    private static final String RESPONSE_ALLOWED_METHODS = "allow";
+
     private final AtomicBoolean statusSet;
     private int responseStatus;
 
@@ -67,6 +69,18 @@ public class HttpResponseInfo extends HttpInfo {
         }
 
         return lastModified;
+    }
+
+    /*
+    **
+     */
+    public String getAllowableMethods() {
+        String allowableMethods = getHeaderString(RESPONSE_ALLOWED_METHODS);
+        if ((allowableMethods != null) && allowableMethods.isEmpty()) {
+            allowableMethods = null;
+        }
+
+        return allowableMethods;
     }
 
     /*

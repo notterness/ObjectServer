@@ -2,7 +2,7 @@ package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.common.PutObjectParams;
+import com.webutils.webserver.common.ObjectParams;
 import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.manual.ClientInterface;
 import com.webutils.webserver.memory.MemoryManager;
@@ -15,18 +15,14 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
-/*
- ** This implements the logic to send the PutObject command to the Object Server. It provides the back end for the
- **   CLI command.
- */
-public class ClientPutObject implements Operation {
+public class ClientCommandSend implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ClientPutObject.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ClientCommandSend.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_OBJECT_PUT;
+    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_SEND_COMMAND;
 
     /*
      ** The overall controlling object that allocated the request context and threads.
@@ -44,7 +40,7 @@ public class ClientPutObject implements Operation {
      */
     private final ServerIdentifier objectServer;
 
-    private final PutObjectParams requestParams;
+    private final ObjectParams requestParams;
 
     private final MemoryManager memoryManager;
 
@@ -52,15 +48,12 @@ public class ClientPutObject implements Operation {
      ** This is to make the execute() function more manageable
      */
     enum ExecutionState {
-        GET_OBJECT_FILE_MD5,
-        WAIT_FOR_FILE_MD5_DIGEST,
-        SETUP_OBJECT_PUT_OPS,
+        SETUP_COMMAND_SEND_OPS,
         WAITING_FOR_CONN_COMP,
         SEND_CONTENT_DATA,
         WAITING_FOR_RESPONSE_HEADER,
         READ_RESPONSE_DATA,
         CONTENT_PROCESSED,
-        DELETE_FILE,
         CALLBACK_OPS,
         EMPTY_STATE
     }
@@ -75,8 +68,8 @@ public class ClientPutObject implements Operation {
     private boolean onExecutionQueue;
 
     /*
-    ** The writeBufferPointer is what is returned from the FileReadBufferMetering operation and is used by the
-    **   BuildObjectPutHeader and ReadObjectFromFile operations to send data to the Object Server.
+     ** The writeBufferPointer is what is returned from the FileReadBufferMetering operation and is used by the
+     **   BuildObjectPutHeader and ReadObjectFromFile operations to send data to the Object Server.
      */
     private BufferManagerPointer writeBufferPointer;
 
@@ -108,14 +101,14 @@ public class ClientPutObject implements Operation {
 
     /*
      */
-    public ClientPutObject(final ClientInterface clientInterface, final ClientRequestContext requestContext,
+    public ClientCommandSend(final ClientInterface clientInterface, final ClientRequestContext requestContext,
                            final MemoryManager memoryManager, final ServerIdentifier server,
-                           final PutObjectParams putParams) {
+                           final ObjectParams commandParams) {
 
         this.clientInterface = clientInterface;
         this.requestContext = requestContext;
         this.objectServer = server;
-        this.requestParams = putParams;
+        this.requestParams = commandParams;
         this.memoryManager = memoryManager;
 
         /*
@@ -135,11 +128,11 @@ public class ClientPutObject implements Operation {
          */
         requestHandlerOps = new HashMap<>();
 
-        currState = ExecutionState.GET_OBJECT_FILE_MD5;
+        currState = ExecutionState.SETUP_COMMAND_SEND_OPS;
 
         serverConnectionClosedDueToError = false;
 
-        LOG.info("ClientPutObject addr: " + objectServer.getServerIpAddress().toString() + " port: " +
+        LOG.info("ClientCommandSend addr: " + objectServer.getServerIpAddress().toString() + " port: " +
                 objectServer.getServerTcpPort());
     }
 
@@ -169,26 +162,8 @@ public class ClientPutObject implements Operation {
      */
     public void execute() {
         switch (currState) {
-            case GET_OBJECT_FILE_MD5:
-                currState = ExecutionState.WAIT_FOR_FILE_MD5_DIGEST;
-
-                ObjectFileComputeMd5 computeFileMd5 = new ObjectFileComputeMd5(requestContext, this,
-                        memoryManager, requestParams);
-                computeFileMd5.initialize();
-                break;
-
-            case WAIT_FOR_FILE_MD5_DIGEST:
-                if (requestParams.getMd5DigestSet()) {
-                    currState = ExecutionState.SETUP_OBJECT_PUT_OPS;
-                    /*
-                    ** Fall through
-                     */
-                } else {
-                    break;
-                }
-
-            case SETUP_OBJECT_PUT_OPS:
-                if (setupPutOps()) {
+            case SETUP_COMMAND_SEND_OPS:
+                if (setupCommandSendOps()) {
                     currState = ExecutionState.WAITING_FOR_CONN_COMP;
                 } else {
                     /*
@@ -216,7 +191,7 @@ public class ClientPutObject implements Operation {
                      **   received prior to this being scheduled.
                      */
                 } else if ((status = requestContext.getStorageResponseResult(objectServer)) != HttpStatus.OK_200) {
-                    LOG.warn("ClientPutObject failure: " + status + " addr: " + objectServer.getServerIpAddress().toString() +
+                    LOG.warn("ClientCommandSend failure: " + status + " addr: " + objectServer.getServerIpAddress().toString() +
                             " port: " + objectServer.getServerTcpPort());
 
                     objectServer.setResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR_500);
@@ -233,6 +208,7 @@ public class ClientPutObject implements Operation {
             case SEND_CONTENT_DATA:
                 currState = ExecutionState.WAITING_FOR_RESPONSE_HEADER;
                 setupFileWrite();
+                event();
                 break;
 
             case WAITING_FOR_RESPONSE_HEADER:
@@ -243,20 +219,20 @@ public class ClientPutObject implements Operation {
 
                     currState = ExecutionState.READ_RESPONSE_DATA;
                     /*
-                    ** Fall through to the READ_RESPONSE_DATA state
+                     ** Fall through to the READ_RESPONSE_DATA state
                      */
 
                     if (status == -1) {
                         /*
-                        ** Should not be here if the getHeaderComplete() is true as a -1 status indicates that a
-                        **   response header has not been received.
+                         ** Should not be here if the getHeaderComplete() is true as a -1 status indicates that a
+                         **   response header has not been received.
                          */
                         LOG.warn("WAITING_FOR_RESPONSE_HEADER should not be here status: " + status);
                         break;
                     }
                 } else {
                     /*
-                    ** Still waiting for the response header to arrive
+                     ** Still waiting for the response header to arrive
                      */
                     break;
                 }
@@ -267,8 +243,8 @@ public class ClientPutObject implements Operation {
                     currState = ExecutionState.CONTENT_PROCESSED;
                 } else {
                     /*
-                    ** Since startContentRead() returned false, that means the Content-Length was set to 0 and there
-                    **   is nothing more to read.
+                     ** Since startContentRead() returned false, that means the Content-Length was set to 0 and there
+                     **   is nothing more to read.
                      */
                     currState = ExecutionState.CALLBACK_OPS;
                     event();
@@ -301,10 +277,10 @@ public class ClientPutObject implements Operation {
                 }
 
             case CALLBACK_OPS:
-                LOG.info("ClientPutObject CALLBACK_OPS");
+                LOG.info("ClientCommandSend CALLBACK_OPS");
 
                 /*
-                ** Display the results
+                 ** Display the results
                  */
                 requestParams.outputResults(httpInfo);
 
@@ -329,7 +305,7 @@ public class ClientPutObject implements Operation {
      */
     public void complete() {
 
-        LOG.info("ClientPutObject complete() addr: " + objectServer.getServerIpAddress().toString() + " port: " +
+        LOG.info("ClientCommandSend complete() addr: " + objectServer.getServerIpAddress().toString() + " port: " +
                 objectServer.getServerTcpPort());
 
         /*
@@ -338,7 +314,9 @@ public class ClientPutObject implements Operation {
          **   headerWriter are dependent upon the pointers in headerBuilder. But, if there was
          */
         Operation headerWriter = requestHandlerOps.remove(OperationTypeEnum.WRITE_TO_CLIENT);
-        headerWriter.complete();
+        if (headerWriter != null) {
+            headerWriter.complete();
+        }
 
         Operation headerBuilder = requestHandlerOps.remove(OperationTypeEnum.BUILD_OBJECT_GET_HEADER);
         if (headerBuilder != null) {
@@ -429,19 +407,19 @@ public class ClientPutObject implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("ClientPutObject markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("ClientCommandSend markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("ClientPutObject markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("ClientCommandSend markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("ClientPutObject markRemovedFromQueue(false) not on a queue");
+            LOG.warn("ClientCommandSend markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("ClientPutObject markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("ClientCommandSend markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -456,7 +434,7 @@ public class ClientPutObject implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("ClientPutObject hasWaitTimeElapsed() not supposed to be on delayed queue");
+        LOG.warn("ClientCommandSend hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
 
@@ -479,7 +457,7 @@ public class ClientPutObject implements Operation {
      **
      ** It will return false if the setup of the connection to the Object Server fails
      */
-    private boolean setupPutOps() {
+    private boolean setupCommandSendOps() {
         /*
          ** Allocate ByteBuffer(s) for the PUT request header that will be sent to the Object Server
          */
@@ -504,7 +482,7 @@ public class ClientPutObject implements Operation {
         requestHandlerOps.put(errorHandler.getOperationType(), errorHandler);
 
         /*
-         ** The PUT Header must be written to the Object Server so that the data can be written following it
+         ** The Command Header must be written to the Object Server so that the data can be written following it
          */
         BuildObjectPutHeader headerBuilder = new BuildObjectPutHeader(requestContext, requestContext.getClientWriteBufferManager(),
                 writeBufferPointer, requestParams);
@@ -567,14 +545,14 @@ public class ClientPutObject implements Operation {
     }
 
     /*
-    ** This is used to setup the write of the clients file to the Object Server
+     ** This is used to setup the write of the clients file to the Object Server
      */
     private void setupFileWrite() {
 
         /*
-        ** First tear down the BuildObjectPutHeader and WriteToClient operations. The WriteToClient needs to be
-        **   removed since it's dependency will change to being on the ReadObjectFromFile operation instead of
-        **   BuildObjectPutHeader.
+         ** First tear down the BuildObjectPutHeader and WriteToClient operations. The WriteToClient needs to be
+         **   removed since it's dependency will change to being on the ReadObjectFromFile operation instead of
+         **   BuildObjectPutHeader.
          */
         Operation writeToClient = requestHandlerOps.remove(OperationTypeEnum.WRITE_TO_CLIENT);
         writeToClient.complete();
@@ -584,6 +562,7 @@ public class ClientPutObject implements Operation {
 
         Operation fileMetering = requestHandlerOps.get(OperationTypeEnum.METER_FILE_READ_BUFFERS);
 
+        /*
         ReadObjectFromFile readFromFile = new ReadObjectFromFile(requestContext, fileMetering, writeBufferPointer,
                 requestParams, this);
         requestHandlerOps.put(readFromFile.getOperationType(), readFromFile);
@@ -594,16 +573,15 @@ public class ClientPutObject implements Operation {
         requestHandlerOps.put(writeDataToObjectServer.getOperationType(), writeDataToObjectServer);
         writeDataToObjectServer.initialize();
 
-        /*
-         ** Start the reading from the file by metering out a buffer to read data into
-         */
         fileMetering.event();
+
+         */
     }
 
 
     /*
-    ** This is used to read in the content returned with the response headers. If the Content-Length is 0, it will not
-    **   setup anything and will simply return false.
+     ** This is used to read in the content returned with the response headers. If the Content-Length is 0, it will not
+     **   setup anything and will simply return false.
      */
     private boolean startContentRead() {
         /*

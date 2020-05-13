@@ -1,5 +1,6 @@
 package com.webutils.objectserver.requestcontext;
 
+import com.webutils.objectserver.operations.SetupObjectDelete;
 import com.webutils.objectserver.operations.SetupObjectGet;
 import com.webutils.objectserver.operations.SetupObjectServerPost;
 import com.webutils.objectserver.operations.SetupObjectPut;
@@ -202,14 +203,17 @@ public class ObjectServerRequestContext extends RequestContext {
          ** NOTE: Although it seems weird to add the supported HTTP requests after the creating of the
          **   DetermineRequest, the method handler have a dependency upon the determine request.
          */
-        SetupObjectPut v2PutHandler = new SetupObjectPut(this, memoryManager, metering, determineRequest);
-        supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, v2PutHandler);
+        SetupObjectPut putHandler = new SetupObjectPut(this, memoryManager, metering, determineRequest);
+        supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, putHandler);
 
         SetupObjectServerPost postHandler = new SetupObjectServerPost(this, metering, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.POST_METHOD, postHandler);
 
         SetupObjectGet getHandler = new SetupObjectGet(this, memoryManager, chunkMemPool, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.GET_METHOD, getHandler);
+
+        SetupObjectDelete deleteHandler = new SetupObjectDelete(this, memoryManager, determineRequest);
+        supportedHttpRequests.put(HttpMethodEnum.DELETE_METHOD, deleteHandler);
 
         /*
          ** Setup the specific part for parsing the buffers as an HTTP Request.

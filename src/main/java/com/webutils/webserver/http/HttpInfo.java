@@ -137,10 +137,11 @@ abstract public class HttpInfo {
         /*
          ** Create a map of the HTTP methods to make the parsing easier
          */
-        httpMethodMap = new HashMap<>(2);
+        httpMethodMap = new HashMap<>(4);
         httpMethodMap.put(HttpMethodEnum.PUT_METHOD, "PUT");
         httpMethodMap.put(HttpMethodEnum.POST_METHOD, "POST");
         httpMethodMap.put(HttpMethodEnum.GET_METHOD, "GET");
+        httpMethodMap.put(HttpMethodEnum.DELETE_METHOD, "DELETE");
 
         objectUriInfoMap = new HashMap<>(3);
 
@@ -208,7 +209,7 @@ abstract public class HttpInfo {
     /*
      ** Determine the HTTP Request handler based upon the URI and some header fields.
      **
-     **  This is where PUT, POST, GET, etc is turned into a more useful enum.
+     **  This is where PUT, POST, GET, DELETE, etc is turned into a more useful enum.
      */
     public void setHttpMethodAndVersion(String methodString, String httpParsedVersion) {
         httpVersion = httpParsedVersion;

@@ -20,12 +20,9 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
-/*
-** This retrieves the information about an Object from the ObjectStorageDb
- */
-public class RetrieveObjectInfo implements Operation {
+public class DeleteObjectInfo implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(RetrieveObjectInfo.class);
+    private static final Logger LOG = LoggerFactory.getLogger(DeleteObjectInfo.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
@@ -39,24 +36,32 @@ public class RetrieveObjectInfo implements Operation {
     private final ObjectInfo objectInfo;
 
     private final Operation completeCallback;
-    private final Operation errorCallback;
 
     /*
      ** The following is a map of all of the created Operations to handle this request.
      */
-    private final Map<OperationTypeEnum, Operation> retrieveObjectInfoOps;
+    private final Map<OperationTypeEnum, Operation> deleteObjectInfoOps;
 
     /*
      ** This is to make the execute() function more manageable
      */
     enum ExecutionState {
-        READ_FROM_DATABASE,
-        DATABASE_READ_ERROR,
+        GET_OBJECT_INFO,
+        DELETE_FROM_DATABASE,
+        SEND_STATUS,
         WAIT_FOR_RESPONSE_SEND,
         EMPTY_STATE
     }
 
     private ExecutionState currState;
+
+    /*
+    ** Information used to obtain the information about an object and to delete it
+     */
+    final HttpRequestInfo objectPutInfo;
+    final WebServerFlavor flavor;
+    String tenancyUID;
+    ObjectTableMgr objectMgr;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -65,19 +70,21 @@ public class RetrieveObjectInfo implements Operation {
      */
     private boolean onExecutionQueue;
 
-    public RetrieveObjectInfo(final ObjectServerRequestContext requestContext, final MemoryManager memoryManager,
-                              final ObjectInfo objectInfo, final Operation completeCb, final Operation errorCb) {
+    public DeleteObjectInfo(final ObjectServerRequestContext requestContext, final MemoryManager memoryManager,
+                            final ObjectInfo objectInfo, final Operation completeCb) {
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
 
         this.objectInfo = objectInfo;
 
         this.completeCallback = completeCb;
-        this.errorCallback = errorCb;
 
-        this.retrieveObjectInfoOps = new HashMap<>();
+        this.deleteObjectInfoOps = new HashMap<>();
 
-        this.currState = ExecutionState.READ_FROM_DATABASE;
+        this.currState = ExecutionState.GET_OBJECT_INFO;
+
+        this.flavor = requestContext.getWebServerFlavor();
+        this.objectPutInfo = requestContext.getHttpInfo();
     }
 
     public OperationTypeEnum getOperationType() {
@@ -89,7 +96,10 @@ public class RetrieveObjectInfo implements Operation {
     }
 
     public BufferManagerPointer initialize() {
+        TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
+        tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
 
+        objectMgr = new ObjectTableMgr(flavor, requestContext);
         return null;
     }
 
@@ -102,52 +112,52 @@ public class RetrieveObjectInfo implements Operation {
     }
 
     /*
-    ** This builds an in-memory representation of the information needed to access the data from an object.
+     ** This builds an in-memory representation of the information needed to access the data from an object.
      */
     public void execute() {
         switch (currState) {
-            case READ_FROM_DATABASE:
+            case GET_OBJECT_INFO:
                 /*
-                 ** Obtain the object information. The critical pieces to access the object information are:
+                ** Need to obtain the following fields from the object before deleting it
+                **   opc-request-id
+                **   last-modified
+                **   version-id
+                 */
+                if (objectMgr.retrieveObjectInfo(objectPutInfo, objectInfo, tenancyUID) == HttpStatus.OK_200) {
+                    currState = ExecutionState.DELETE_FROM_DATABASE;
+                    /*
+                     ** Fall through
+                     */
+                } else {
+                    currState = ExecutionState.SEND_STATUS;
+                    event();
+                    break;
+                }
+
+            case DELETE_FROM_DATABASE:
+                /*
+                 ** Delete the object information. The critical pieces to access the object information are:
                  **    Tenancy -
                  **    Namespace - The "holder" of all of the buckets for a particular user in a region
                  **    Bucket Name - A place to organize objects
                  **    Object Name - The actual object that is wanted.
                  **    Version Id - An object can have multiple versions
                  */
-                HttpRequestInfo objectPutInfo = requestContext.getHttpInfo();
+                objectMgr.deleteObjectInfo(objectPutInfo, tenancyUID);
+                currState = ExecutionState.SEND_STATUS;
+                /*
+                ** Fall through
+                 */
 
-                WebServerFlavor flavor = requestContext.getWebServerFlavor();
-
-                TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
-                String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
-
-                ObjectTableMgr objectMgr = new ObjectTableMgr(flavor, requestContext);
-                if (objectMgr.retrieveObjectInfo(objectPutInfo, objectInfo, tenancyUID) == HttpStatus.OK_200) {
-                    int objectId = objectInfo.getObjectId();
-                    objectInfo.setEtag(objectMgr.getObjectUID(objectId));
-
-                    requestContext.setObjectId(objectId);
-
-                    completeCallback.event();
-                    currState = ExecutionState.EMPTY_STATE;
-                    break;
-                } else {
-                    currState = ExecutionState.DATABASE_READ_ERROR;
-                    /*
-                    ** Fall through
-                     */
-                }
-
-            case DATABASE_READ_ERROR:
+            case SEND_STATUS:
                 currState = ExecutionState.WAIT_FOR_RESPONSE_SEND;
-                SendObjectGetResponse sendResponse = setupErrorResponseSend();
+                SendObjectDeleteResponse sendResponse = setupResponseSend();
                 sendResponse.event();
                 break;
 
             case WAIT_FOR_RESPONSE_SEND:
                 currState = ExecutionState.EMPTY_STATE;
-                errorCallback.event();
+                completeCallback.event();
                 break;
 
             case EMPTY_STATE:
@@ -157,17 +167,17 @@ public class RetrieveObjectInfo implements Operation {
 
     public void complete() {
 
-        LOG.info("RetrieveObjectInfo[" + requestContext.getRequestId() + "] complete");
+        LOG.info("DeleteObjectInfo[" + requestContext.getRequestId() + "] complete");
 
         /*
-        ** The following operations are only setup if there was an error reading from the database
+         ** The following operations are only setup if there was an error reading from the database
          */
-        Operation writeToClient = retrieveObjectInfoOps.remove(OperationTypeEnum.WRITE_TO_CLIENT);
+        Operation writeToClient = deleteObjectInfoOps.remove(OperationTypeEnum.WRITE_TO_CLIENT);
         if (writeToClient != null) {
             writeToClient.complete();
         }
 
-        Operation sendResponse = retrieveObjectInfoOps.remove(OperationTypeEnum.SEND_OBJECT_GET_RESPONSE);
+        Operation sendResponse = deleteObjectInfoOps.remove(OperationTypeEnum.SEND_OBJECT_GET_RESPONSE);
         if (sendResponse != null) {
             sendResponse.complete();
         }
@@ -175,11 +185,11 @@ public class RetrieveObjectInfo implements Operation {
         /*
          ** Call the complete() method for any operations that this one created.
          */
-        Collection<Operation> createdOperations = retrieveObjectInfoOps.values();
+        Collection<Operation> createdOperations = deleteObjectInfoOps.values();
         for (Operation createdOperation : createdOperations) {
             createdOperation.complete();
         }
-        retrieveObjectInfoOps.clear();
+        deleteObjectInfoOps.clear();
     }
 
     /*
@@ -198,19 +208,19 @@ public class RetrieveObjectInfo implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("RetrieveObjectInfo[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("DeleteObjectInfo[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("RetrieveObjectInfo[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("DeleteObjectInfo[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("RetrieveObjectInfo[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("DeleteObjectInfo[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("RetrieveObjectInfo[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("DeleteObjectInfo[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -225,8 +235,7 @@ public class RetrieveObjectInfo implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("RetrieveObjectInfo[" + requestContext.getRequestId() +
-                "] hasWaitTimeElapsed() not supposed to be on delayed queue");
+        LOG.warn("DeleteObjectInfo[" + requestContext.getRequestId() + "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
 
@@ -238,25 +247,26 @@ public class RetrieveObjectInfo implements Operation {
     }
 
     /*
-    ** This sets up the operations required to send the error response back to the client. This is used when the
-    **   read for the objects information from the database fails for some reason.
+     ** This sets up the operations required to send the error response back to the client. This is used when the
+     **   read for the objects information from the database fails for some reason.
      */
-    private SendObjectGetResponse setupErrorResponseSend() {
+    private SendObjectDeleteResponse setupResponseSend() {
 
         /*
          ** In the good path, after the HTTP Response is sent back to the client, then start reading in the chunks
          **   that make up the requested object.
          */
-        SendObjectGetResponse sendResponse = new SendObjectGetResponse(requestContext, memoryManager, objectInfo);
-        retrieveObjectInfoOps.put(sendResponse.getOperationType(), sendResponse);
+        SendObjectDeleteResponse sendResponse = new SendObjectDeleteResponse(requestContext, memoryManager, objectInfo);
+        deleteObjectInfoOps.put(sendResponse.getOperationType(), sendResponse);
         BufferManagerPointer clientWritePtr = sendResponse.initialize();
 
         IoInterface clientConnection = requestContext.getClientConnection();
         WriteToClient writeToClient = new WriteToClient(requestContext, clientConnection, this, clientWritePtr, null);
-        retrieveObjectInfoOps.put(writeToClient.getOperationType(), writeToClient);
+        deleteObjectInfoOps.put(writeToClient.getOperationType(), writeToClient);
         writeToClient.initialize();
 
         return sendResponse;
     }
+
 
 }
