@@ -269,6 +269,12 @@ public class TestMain {
         GetObjectSimple getObjectSimple = new GetObjectSimple(serverIpAddr, serverTcpPort, threadCount);
         getObjectSimple.execute();
 
+        GetObjectBadBucket getObjectBadBucket = new GetObjectBadBucket(serverIpAddr, serverTcpPort, threadCount);
+        getObjectBadBucket.execute();
+
+        GetObjectBadNamespace getObjectBadNamespace = new GetObjectBadNamespace(serverIpAddr, serverTcpPort, threadCount);
+        getObjectBadNamespace.execute();
+
         PutObjectBadBucket putObjectBadBucket = new PutObjectBadBucket(serverIpAddr, serverTcpPort, threadCount);
         putObjectBadBucket.execute();
 

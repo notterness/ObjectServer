@@ -52,7 +52,7 @@ public class ReadObjectChunks implements Operation {
         EMPTY_STATE
     }
 
-    private ReadObjectChunks.ExecutionState currState;
+    private ExecutionState currState;
 
 
     /*
@@ -130,7 +130,7 @@ public class ReadObjectChunks implements Operation {
     }
 
     /*
-    ** THis sets up the writing of the response headers back to the client. Since there may be errors returned,
+    ** This sets up the writing of the response headers back to the client. Since there may be errors returned,
     **   the header cannot be sent until all of the object's chunks have been read up into memory.
      */
     public BufferManagerPointer initialize() {
@@ -305,9 +305,9 @@ public class ReadObjectChunks implements Operation {
                      */
                     LOG.error("SEND_RESPONSE operation is null");
                     HttpRequestInfo httpInfo = requestContext.getHttpInfo();
+
                     String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.INTERNAL_SERVER_ERROR_500 + "\"\r\n" +
                             "  \"message\": \"Invalid State - ReadObjectChunks\"\r\n}";
-
                     httpInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
                     currState = ExecutionState.ALL_CHUNKS_COMPLETED;
                     event();

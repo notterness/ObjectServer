@@ -11,7 +11,7 @@ import com.webutils.webserver.requestcontext.WebServerFlavor;
 import java.net.InetAddress;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class GetObjectSimple {
+public class GetObjectBadBucket {
 
     static WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
 
@@ -21,7 +21,7 @@ public class GetObjectSimple {
     private final ClientGetInterface cli;
     private final int eventThreadId;
 
-    GetObjectSimple(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount) {
+    GetObjectBadBucket(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount) {
 
         MemoryManager cliMemoryManager = new MemoryManager(flavor);
 
@@ -33,9 +33,9 @@ public class GetObjectSimple {
 
         this.eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
 
-        GetObjectParams params = new GetObjectParams("Namespace-xyz-987", "CreateBucket_Simple",
+        GetObjectParams params = new GetObjectParams("Namespace-xyz-987", "BadBucketName",
                 "5e223890-ea13-11e9-851d-234132e0fb02", "testObjectFile");
-        params.setOpcClientRequestId("GetObjectSimple-5-12-2020.01");
+        params.setOpcClientRequestId("GetObjectBadBucket-5-13-2020.01");
 
         cli = new ClientGetInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
                 params, testCount);

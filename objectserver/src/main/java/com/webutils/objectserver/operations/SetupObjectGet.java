@@ -127,7 +127,8 @@ public class SetupObjectGet implements Operation {
             ** When all the data is read in from the database (assuming it was successful), then send the HTTP Response
             **   back to the client.
              */
-            RetrieveObjectInfo retrieveObjectInfo = new RetrieveObjectInfo(requestContext, objectInfo, readChunks, this);
+            RetrieveObjectInfo retrieveObjectInfo = new RetrieveObjectInfo(requestContext, memoryManager, objectInfo,
+                    readChunks, this);
             objectGetHandlerOps.put(retrieveObjectInfo.getOperationType(), retrieveObjectInfo);
             retrieveObjectInfo.initialize();
             retrieveObjectInfo.event();

@@ -36,9 +36,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
     private final static String GET_OBJECT_UID_USING_ID = "SELECT BIN_TO_UUID(objectUID) objectUID FROM object WHERE objectId = ";
 
     private final static String GET_OBJECT_ID_1 = "SELECT objectId FROM object WHERE objectName = '";
-    private final static String GET_OBJECT_ID_2 = "' AND bucketId = ( SELECT bucketId FROM bucket WHERE bucketUID = UUID_TO_BIN('";
-    private final static String GET_OBJECT_ID_3 = "' ) )";
-    private final static String GET_OBJECT_ID_4 = "' AND bucketId = ";
+    private final static String GET_OBJECT_ID_2 = "' AND bucketId = ";
 
     private final static String GET_OBJECT_CREATE_TIME = "SELECT createTime FROM object WHERE objectID = ";
 
@@ -84,66 +82,32 @@ public class ObjectTableMgr extends ObjectStorageDb {
      **
      ** TODO: Handle the "if-match", "if-none-match" headers. Create a function to generate a new object versionId.
      */
-    public int createObjectEntry(final HttpRequestInfo objectCreateInfo, final String tenancyUID) {
+    public int createObjectEntry(final HttpRequestInfo objectHttpInfo, final String tenancyUID) {
         int status = HttpStatus.OK_200;
 
         /*
          ** Obtain the fields required to build the Object table entry. Verify that the required fields are not missing.
          */
-        String objectName = objectCreateInfo.getObject();
-        String namespace = objectCreateInfo.getNamespace();
-        String bucketName = objectCreateInfo.getBucket();
-        String opcClientRequestId = objectCreateInfo.getOpcClientRequestId();
-        int contentLength = objectCreateInfo.getContentLength();
+        String objectName = objectHttpInfo.getObject();
+        String opcClientRequestId = objectHttpInfo.getOpcClientRequestId();
+        int contentLength = objectHttpInfo.getContentLength();
 
-        if ((objectName == null) || (bucketName == null) || (namespace == null)) {
-            String failureMessage = "{\r\n  \"code\":" + HttpStatus.BAD_REQUEST_400 +
-                    "\r\n  \"message\": \"PUT Object missing required attributes\" + " +
-                    "\r\n  \"objectName\": \"" + objectName + "\"" +
-                    "\r\n  \"bucketName\": \"" + bucketName + "\"" +
-                    "\r\n \"namespaceName\": \"" + namespace + "\"" +
-                    "\r\n}";
-            LOG.warn(failureMessage);
-            objectCreateInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
-            return HttpStatus.BAD_REQUEST_400;
+        int bucketId = validateAndGetBucketId(objectHttpInfo, objectName, tenancyUID);
+        if (bucketId == -1) {
+            return HttpStatus.PRECONDITION_FAILED_412;
         }
 
-        LOG.info("createObjectEntry() objectName: " + objectName + " bucketName: " + bucketName);
+        BucketTableMgr bucketMgr = new BucketTableMgr(flavor, opcRequestId, objectHttpInfo);
+        StorageTierEnum tier = bucketMgr.getBucketStorageTier(bucketId);
 
-        /*
-         ** First need to validate that the namespace exists
-         */
+        String namespace = objectHttpInfo.getNamespace();
         NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
         String namespaceUID = namespaceMgr.getNamespaceUID(namespace, tenancyUID);
-        if (namespaceUID == null) {
-            LOG.warn("Unable to create Object: " + objectName + " - invalid namespace: " + namespace);
-
-            String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
-                    "\r\n  \"message\": \"Namespace not found\"" +
-                    "\r\n  \"namespaceName\": \"" + namespace + "\"" +
-                    "\r\n}";
-            objectCreateInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
-            return HttpStatus.PRECONDITION_FAILED_412;
-        }
 
         /*
-         ** Now make sure the Bucket that this Object is stored within actually exists.
+        ** Verify that the content md5 is a valid digest
          */
-        BucketTableMgr bucketMgr = new BucketTableMgr(flavor, opcRequestId, objectCreateInfo);
-        int bucketId = bucketMgr.getBucketId(bucketName, namespaceUID);
-        if (bucketId == -1) {
-            LOG.warn("Unable to create Object: " + objectName + " - invalid bucket: " + bucketName);
-
-            String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
-                    "\r\n  \"message\": \"Bucket not found\"" +
-                    "\r\n  \"bucketName\": \"" + bucketName + "\"" +
-                    "\r\n}";
-            objectCreateInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
-            return HttpStatus.PRECONDITION_FAILED_412;
-        }
-
-        StorageTierEnum tier = bucketMgr.getBucketStorageTier(bucketId);
-        String contentMd5 = objectCreateInfo.getContentMd5();
+        String contentMd5 = objectHttpInfo.getContentMd5();
         if (!contentMd5.equals("NULL")) {
             byte[] md5DigestBytes = BaseEncoding.base64().decode(contentMd5);
             if (md5DigestBytes.length != 16) {
@@ -153,7 +117,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
                         "\r\n  \"message\": \"Incorrect Md5 Digest afdter base-64 decoding\"" +
                         "\r\n  \"Content-MD5\": \"" + contentMd5 + "\"" +
                         "\r\n}";
-                objectCreateInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+                objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
 
                 return HttpStatus.PRECONDITION_FAILED_412;
             }
@@ -165,10 +129,10 @@ public class ObjectTableMgr extends ObjectStorageDb {
         int versionId = 0;
         int objectCount = getObjectCount(objectName, bucketId);
         if (objectCount > 0) {
-            boolean ifNoneMatch = objectCreateInfo.getIfNoneMatch();
+            boolean ifNoneMatch = objectHttpInfo.getIfNoneMatch();
 
             if (ifNoneMatch) {
-                objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "\"Object already present\"");
+                objectHttpInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "\"Object already present\"");
                 return HttpStatus.INTERNAL_SERVER_ERROR_500;
             } else {
                 /*
@@ -237,7 +201,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
                 String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.INTERNAL_SERVER_ERROR_500 + "\"" +
                         "\r\n  \"message\": \"SQL error: unable to create object - " + objectName + "\"" +
                         "\r\n}";
-                objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
+                objectHttpInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
 
                 status = HttpStatus.INTERNAL_SERVER_ERROR_500;
             } finally {
@@ -269,13 +233,13 @@ public class ObjectTableMgr extends ObjectStorageDb {
 
             if (objectUniqueId != -1) {
                 String objectUID = getObjectUID(objectUniqueId);
-                objectCreateInfo.setObjectId(objectUniqueId, objectUID);
-                objectCreateInfo.setResponseHeaders(buildSuccessHeader(objectCreateInfo, objectUniqueId, bucketId));
+                objectHttpInfo.setObjectId(objectUniqueId, objectUID);
+                objectHttpInfo.setResponseHeaders(buildSuccessHeader(objectHttpInfo, objectUniqueId));
             } else {
                 String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.INTERNAL_SERVER_ERROR_500 + "\"" +
                         "\r\n  \"message\": \"SQL error: unable to obtain objectId - " + objectName + "\"" +
                         "\r\n}";
-                objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
+                objectHttpInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
 
                 status = HttpStatus.INTERNAL_SERVER_ERROR_500;
             }
@@ -295,55 +259,13 @@ public class ObjectTableMgr extends ObjectStorageDb {
      */
     public int retrieveObjectInfo(final HttpRequestInfo objectHttpInfo, final ObjectInfo info, final String tenancyUID) {
         String objectName = info.getObjectName();
-        String bucketName = info.getBucketName();
-        String namespace = info.getNamespace();
 
-        if ((objectName == null) || (bucketName == null) || (namespace == null)) {
-            String failureMessage = "{\r\n  \"code\":" + HttpStatus.BAD_REQUEST_400 +
-                    "\r\n  \"message\": \"GET Object missing required attributes\" + " +
-                    "\r\n  \"objectName\": \"" + objectName + "\"" +
-                    "\r\n  \"bucketName\": \"" + bucketName + "\"" +
-                    "\r\n \"namespaceName\": \"" + namespace + "\"" +
-                    "\r\n}";
-
-            LOG.warn(failureMessage);
-            objectHttpInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
-            return HttpStatus.BAD_REQUEST_400;
-        }
-
-        /*
-         ** First need to validate that the namespace exists
-         */
-        NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
-        String namespaceUID = namespaceMgr.getNamespaceUID(namespace, tenancyUID);
-        if (namespaceUID == null) {
-            LOG.warn("Unable to find Object: " + objectName + " - invalid namespace: " + namespace);
-
-            String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
-                    "\r\n  \"message\": \"Namespace not found\"" +
-                    "\r\n  \"namespaceName\": \"" + namespace + "\"" +
-                    "\r\n}";
-            objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
-            return HttpStatus.PRECONDITION_FAILED_412;
-        }
-
-        /*
-         ** Now make sure the Bucket that this Object is stored within actually exists.
-         */
-        BucketTableMgr bucketMgr = new BucketTableMgr(flavor, opcRequestId, objectHttpInfo);
-        int bucketId = bucketMgr.getBucketId(bucketName, namespaceUID);
+        int bucketId = validateAndGetBucketId(objectHttpInfo, objectName, tenancyUID);
         if (bucketId == -1) {
-            LOG.warn("Unable to find Object: " + objectName + " - invalid bucket: " + bucketName);
-
-            String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
-                    "\r\n  \"message\": \"Bucket not found\"" +
-                    "\r\n  \"bucketName\": \"" + bucketName + "\"" +
-                    "\r\n}";
-            objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
             return HttpStatus.PRECONDITION_FAILED_412;
         }
 
-        LOG.info("retrieveObjectInfo() objectName: " + objectName + " bucketName: " + bucketName);
+        LOG.info("retrieveObjectInfo() objectName: " + objectName);
 
         int objectId = getSpecifiedObject(objectName, bucketId, objectHttpInfo);
         if (objectId == -1) {
@@ -488,7 +410,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
      ** NOTE: A Bucket is unique to a region and a namespace (there is one Object Storage namespace per region per
      **   tenancy).
      */
-    public String getObjectUID(final String objectName, final String bucketUID) {
+    private String getObjectUID(final String objectName, final String bucketUID) {
         String getObjectUIDStr = GET_OBJECT_UID_1 + objectName + GET_OBJECT_UID_2 + bucketUID + GET_OBJECT_UID_3;
 
         String uid = getUID(getObjectUIDStr);
@@ -510,19 +432,9 @@ public class ObjectTableMgr extends ObjectStorageDb {
         return uid;
     }
 
-    private int getObjectId(final String objectName, final String bucketUID) {
-        String getObjectIdStr = GET_OBJECT_ID_1 + objectName + GET_OBJECT_ID_2 + bucketUID + GET_OBJECT_ID_3;
-
-        int id = getId(getObjectIdStr);
-        if (id == -1) {
-            LOG.warn("getObjectId(1) objectId is -1");
-        }
-
-        return id;
-    }
 
     private int getObjectId(final String objectName, final int bucketId) {
-        String getObjectIdStr = GET_OBJECT_ID_1 + objectName + GET_OBJECT_ID_4 + bucketId;
+        String getObjectIdStr = GET_OBJECT_ID_1 + objectName + GET_OBJECT_ID_2 + bucketId;
 
         int id = getId(getObjectIdStr);
         if (id == -1) {
@@ -534,63 +446,24 @@ public class ObjectTableMgr extends ObjectStorageDb {
 
 
     /*
-    ** The full way to obtain unique identifier for an Object
+    ** The full way to obtain unique identifier for an Object. This will return -1 is there are multiple object records
+    **   that use the same name (i.e. multiple versions of the same object).
      */
-    public int getObjectId(final HttpRequestInfo objectCreateInfo, final String tenancyUID) {
+    private int getObjectId(final HttpRequestInfo objectHttpInfo, final String tenancyUID) {
         /*
          ** Obtain the fields required to build the Object table entry. Verify that the required fields are not missing.
          */
-        String objectName = objectCreateInfo.getObject();
-        String namespace = objectCreateInfo.getNamespace();
-        String bucketName = objectCreateInfo.getBucket();
+        String objectName = objectHttpInfo.getObject();
 
-        if ((objectName == null) || (bucketName == null) || (namespace == null)) {
-            String failureMessage = "{\r\n  \"code\":" + HttpStatus.BAD_REQUEST_400 +
-                    "\r\n  \"message\": \"GET Object missing required attributes\" + " +
-                    "\r\n  \"objectName\": \"" + objectName + "\"" +
-                    "\r\n  \"bucketName\": \"" + bucketName + "\"" +
-                    "\r\n \"namespaceName\": \"" + namespace + "\"" +
-                    "\r\n}";
-            LOG.warn(failureMessage);
-            objectCreateInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
-            return HttpStatus.BAD_REQUEST_400;
-        }
 
-        LOG.info("getObjectId() objectName: " + objectName + " bucketName: " + bucketName);
-
-        /*
-         ** First need to validate that the namespace exists
-         */
-        NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
-        String namespaceUID = namespaceMgr.getNamespaceUID(namespace, tenancyUID);
-        if (namespaceUID == null) {
-            LOG.warn("Unable to retrieve Object ID: " + objectName + " - invalid namespace: " + namespace);
-
-            String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
-                    "\r\n  \"message\": \"Namespace not found\"" +
-                    "\r\n  \"namespaceName\": \"" + namespace + "\"" +
-                    "\r\n}";
-            objectCreateInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+        int bucketId = validateAndGetBucketId(objectHttpInfo, objectName, tenancyUID);
+        if (bucketId == -1) {
             return HttpStatus.PRECONDITION_FAILED_412;
         }
 
-        /*
-         ** Now make sure the Bucket that this Object is stored within actually exists.
-         */
-        BucketTableMgr bucketMgr = new BucketTableMgr(flavor, opcRequestId, objectCreateInfo);
-        String bucketUID = bucketMgr.getBucketUID(bucketName, namespaceUID);
-        if (bucketUID == null) {
-            LOG.warn("Unable to retrieve Object ID: " + objectName + " - invalid bucket: " + bucketName);
+        LOG.info("getObjectId() objectName: " + objectName);
 
-            String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
-                    "\r\n  \"message\": \"Bucket not found\"" +
-                    "\r\n  \"bucketName\": \"" + bucketName + "\"" +
-                    "\r\n}";
-            objectCreateInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
-            return HttpStatus.PRECONDITION_FAILED_412;
-        }
-
-        String getObjectIdStr = GET_OBJECT_ID_1 + objectName + GET_OBJECT_ID_2 + bucketUID + GET_OBJECT_ID_3;
+        String getObjectIdStr = GET_OBJECT_ID_1 + objectName + GET_OBJECT_ID_2 + bucketId;
 
         return getId(getObjectIdStr);
     }
@@ -792,7 +665,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
      **   last-modified -
      **   version-id - There can be multiple versions of the same object present
      */
-    private String buildSuccessHeader(final HttpRequestInfo objectCreateInfo, final int objectId, final int bucketId) {
+    private String buildSuccessHeader(final HttpRequestInfo objectCreateInfo, final int objectId) {
         String successHeader;
 
         String createTime = getObjectCreationTime(objectId);
@@ -853,7 +726,6 @@ public class ObjectTableMgr extends ObjectStorageDb {
                 objectHttpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
             }
         } else {
-            String versionId = "0";
             objectId = getHighestVersionObject(objectName, bucketId, true);
             if (objectId == -1) {
                 LOG.warn("Unable to find Object: " + objectName);
@@ -868,4 +740,62 @@ public class ObjectTableMgr extends ObjectStorageDb {
         return objectId;
     }
 
+    /*
+    ** This consolidates some basic checking required of parameters:
+    **    tenancyUID - The identifier of the Tenancy that the namespace must reside within.
+    **    namespace - Required to determine that the bucket is valid and it is associated with the namespace
+    **    bucketName - The bucket must reside within the namespace and the object must reside within the bucket.
+     */
+    private int validateAndGetBucketId(final HttpRequestInfo objectInfo, final String objectName, final String tenancyUID) {
+
+        String namespace = objectInfo.getNamespace();
+        String bucketName = objectInfo.getBucket();
+
+        if ((objectName == null) || (bucketName == null) || (namespace == null)) {
+            String failureMessage = "{\r\n  \"code\":" + HttpStatus.BAD_REQUEST_400 +
+                    "\r\n  \"message\": \"Object missing required attributes\" + " +
+                    "\r\n  \"objectName\": \"" + objectName + "\"" +
+                    "\r\n  \"bucketName\": \"" + bucketName + "\"" +
+                    "\r\n \"namespaceName\": \"" + namespace + "\"" +
+                    "\r\n}";
+            LOG.warn(failureMessage);
+            objectInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
+            return -1;
+        }
+
+        LOG.info("createObjectEntry() objectName: " + objectName + " bucketName: " + bucketName);
+
+        /*
+         ** First need to validate that the namespace exists
+         */
+        NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
+        String namespaceUID = namespaceMgr.getNamespaceUID(namespace, tenancyUID);
+        if (namespaceUID == null) {
+            LOG.warn("Unable to create Object: " + objectName + " - invalid namespace: " + namespace);
+
+            String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
+                    "\r\n  \"message\": \"Namespace not found\"" +
+                    "\r\n  \"namespaceName\": \"" + namespace + "\"" +
+                    "\r\n}";
+            objectInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+            return -1;
+        }
+
+        /*
+         ** Now make sure the Bucket that this Object is stored within actually exists.
+         */
+        BucketTableMgr bucketMgr = new BucketTableMgr(flavor, opcRequestId, objectInfo);
+        int bucketId = bucketMgr.getBucketId(bucketName, namespaceUID);
+        if (bucketId == -1) {
+            LOG.warn("Unable to create Object: " + objectName + " - invalid bucket: " + bucketName);
+
+            String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
+                    "\r\n  \"message\": \"Bucket not found\"" +
+                    "\r\n  \"bucketName\": \"" + bucketName + "\"" +
+                    "\r\n}";
+            objectInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+        }
+
+        return bucketId;
+    }
 }
