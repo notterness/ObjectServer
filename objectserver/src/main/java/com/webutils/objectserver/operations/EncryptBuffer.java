@@ -154,10 +154,11 @@ public class EncryptBuffer implements Operation {
         ByteBuffer readBuffer;
         if ((readBuffer = clientReadBufferMgr.peek(encryptInputPointer)) != null) {
             savedSrcPosition = readBuffer.position();
+            event();
         } else {
             savedSrcPosition = 0;
+            readBufferMetering.event();
         }
-
 
         LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] initialize done savedSrcPosition: " + savedSrcPosition);
 
@@ -219,7 +220,7 @@ public class EncryptBuffer implements Operation {
 
                     if (chunkBytesEncrypted < chunkBytesToEncrypt) {
                         LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] chunkBytesEncrypted: " +
-                                chunkBytesEncrypted + " chunkBytesEncrypted: " + chunkBytesEncrypted);
+                                chunkBytesEncrypted + " chunkBytesToEncrypt: " + chunkBytesToEncrypt);
 
                         readBufferMetering.event();
                     } else if (chunkBytesEncrypted == chunkBytesToEncrypt) {
@@ -227,7 +228,7 @@ public class EncryptBuffer implements Operation {
                         ** No more buffers should arrive at this point from the client
                          */
                         LOG.info("EncryptBuffer[" + requestContext.getRequestId() + "] all buffers encrypted chunkBytesEncrypted: " +
-                                chunkBytesEncrypted + " chunkBytesEncrypted: " + chunkBytesEncrypted);
+                                chunkBytesEncrypted + " chunkBytesToEncrypt: " + chunkBytesToEncrypt);
 
                         buffersAllEncrypted = true;
                     }

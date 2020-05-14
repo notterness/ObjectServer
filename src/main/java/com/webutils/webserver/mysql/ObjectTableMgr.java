@@ -10,6 +10,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class ObjectTableMgr extends ObjectStorageDb {
 
@@ -18,15 +21,16 @@ public class ObjectTableMgr extends ObjectStorageDb {
     /*
     ** Fields for the prepared statement are:
     **   1 - objectName (String)
-    **   2 - versionId  (String)
-    **   3 - opcClientRequestId (String, may be NULL)
-    **   4 - contentLength (int)
-    **   5 - storageType (int)
-    **   6 - contentMd5  (String)
-    **   7 - bucketUID (String)
-    **   8 - namespaceUID (String)
+    **   2 - prefix (String, may be NULL)
+    **   3 - versionId  (String)
+    **   4 - opcClientRequestId (String, may be NULL)
+    **   5 - contentLength (int)
+    **   6 - storageType (int)
+    **   7 - contentMd5  (String)
+    **   8 - bucketUID (String)
+    **   9 - namespaceUID (String)
      */
-    private final static String CREATE_OBJ_1 = "INSERT INTO object VALUES ( NULL, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(), NULL, 0, CURRENT_TIMESTAMP(), UUID_TO_BIN(UUID()), 0,";
+    private final static String CREATE_OBJ_1 = "INSERT INTO object VALUES ( NULL, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(), NULL, 0, CURRENT_TIMESTAMP(), UUID_TO_BIN(UUID()), 0,";
     private final static String CREATE_OBJ_2 = " ?, (SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN(?)) )";
 
     private final static String GET_OBJECT_UID_1 = "SELECT BIN_TO_UUID(objectUID) objectUID FROM object WHERE objectName = '";
@@ -90,6 +94,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
          */
         String objectName = objectHttpInfo.getObject();
         String opcClientRequestId = objectHttpInfo.getOpcClientRequestId();
+        String prefix = null;
         int contentLength = objectHttpInfo.getContentLength();
 
         int bucketId = validateAndGetBucketId(objectHttpInfo, objectName, tenancyUID);
@@ -155,37 +160,47 @@ public class ObjectTableMgr extends ObjectStorageDb {
                 /*
                  ** Fields for the prepared statement are:
                  **   1 - objectName (String)
-                 **   2 - versionId  (String)
-                 **   3 - opcClientRequestId (String, may be NULL)
-                 **   4 - contentLength (int)
-                 **   5 - storageType (int)
-                 **   6 - contentMd5  (BINARY)
-                 **   7 - bucketId (int)
-                 **   8 - namespaceUID (String)
+                 **   2 - prefix (String, may be NULL)
+                 **   3 - versionId  (String)
+                 **   4 - opcClientRequestId (String, may be NULL)
+                 **   5 - contentLength (int)
+                 **   6 - storageType (int)
+                 **   7 - contentMd5  (BINARY)
+                 **   8 - bucketId (int)
+                 **   9 - namespaceUID (String)
                  */
                 stmt = conn.prepareStatement(createObjectStr, Statement.RETURN_GENERATED_KEYS);
                 stmt.setString(1, objectName);
-                stmt.setString(2, Integer.toString(versionId));
-                LOG.info("createObjectEntry opcClientRequestId: " + opcClientRequestId);
-                if (opcClientRequestId != null) {
-                    stmt.setString(3, opcClientRequestId);
+
+                LOG.info("createObjectEntry prefix: " + prefix);
+                if (prefix != null) {
+                    stmt.setString(2, prefix);
                 } else {
-                    stmt.setNull(3, Types.VARCHAR);
+                    stmt.setNull(2, Types.VARCHAR);
                 }
 
-                stmt.setInt(4, contentLength);
-                stmt.setInt(5, tier.toInt());
+                stmt.setString(3, Integer.toString(versionId));
+
+                LOG.info("createObjectEntry opcClientRequestId: " + opcClientRequestId);
+                if (opcClientRequestId != null) {
+                    stmt.setString(4, opcClientRequestId);
+                } else {
+                    stmt.setNull(4, Types.VARCHAR);
+                }
+
+                stmt.setInt(5, contentLength);
+                stmt.setInt(6, tier.toInt());
 
                 if (!contentMd5.equals("NULL")) {
                     byte[] md5DigestBytes = BaseEncoding.base64().decode(contentMd5);
-                    stmt.setBytes(6, md5DigestBytes);
+                    stmt.setBytes(7, md5DigestBytes);
                 } else {
-                    stmt.setNull(6, Types.BINARY);
+                    stmt.setNull(7, Types.BINARY);
                 }
 
 
-                stmt.setInt(7, bucketId);
-                stmt.setString(8, namespaceUID);
+                stmt.setInt(8, bucketId);
+                stmt.setString(9, namespaceUID);
                 stmt.executeUpdate();
 
                 ResultSet rs = stmt.getGeneratedKeys();
@@ -295,7 +310,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
                             /*
                             ** Check if any of the records for the objects are in the process of being deleted.
                              */
-                            boolean deleteMarker = rs.getBoolean(13);
+                            boolean deleteMarker = rs.getBoolean("deleteMarker");
                             if (!deleteMarker) {
                                 if (count == 0) {
                                     /*
@@ -305,20 +320,20 @@ public class ObjectTableMgr extends ObjectStorageDb {
                                     info.setObjectId(objectId);
 
                                     /*
-                                     ** versionId - field 3
+                                     ** versionId - field 4
                                      */
-                                    String versionId = rs.getString(3);
+                                    String versionId = rs.getString(4);
                                     info.setVersionId(versionId);
 
                                     /*
-                                     ** Field 5 (INT) - contentLength
+                                     ** Field 6 (INT) - contentLength
                                      */
-                                    info.setContentLength(rs.getInt(5));
+                                    info.setContentLength(rs.getInt(6));
 
                                     /*
-                                     ** Field 6 (BINARY(16)) - contentMd5
+                                     ** Field 7 (BINARY(16)) - contentMd5
                                      */
-                                    byte[] md5Bytes = rs.getBytes(6);
+                                    byte[] md5Bytes = rs.getBytes(8);
                                     if (!rs.wasNull() && (md5Bytes != null)) {
                                         String md5DigestStr = BaseEncoding.base64().encode(md5Bytes);
                                         info.setContentMd5(md5DigestStr);
@@ -327,9 +342,9 @@ public class ObjectTableMgr extends ObjectStorageDb {
                                     }
 
                                     /*
-                                     ** Field 11 - lastUpdateTime
+                                     ** Field 12 - lastUpdateTime
                                      */
-                                    String lastModifiedTime = rs.getString(11);
+                                    String lastModifiedTime = rs.getString(12);
                                     info.setLastModified(lastModifiedTime);
                                 }
                                 count++;
@@ -402,6 +417,123 @@ public class ObjectTableMgr extends ObjectStorageDb {
         }
 
         return status;
+    }
+
+    /*
+     ** This retrieves the information needed to provide the information for the ListObject method.
+     **
+     */
+    public void retrieveMappedObjectInfo(final String queryStr, final List<Map<String, String>> objectList) {
+
+        Connection conn = getObjectStorageDbConn();
+        if (conn != null) {
+            Statement stmt = null;
+            ResultSet rs = null;
+
+            try {
+                stmt = conn.createStatement();
+                if (stmt.execute(queryStr)) {
+                    rs = stmt.getResultSet();
+                }
+            } catch (SQLException sqlEx) {
+                LOG.error("retrieveMappedObjectInfo() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("Bad SQL command: " + queryStr);
+                System.out.println("SQLException: " + sqlEx.getMessage());
+            } finally {
+                if (rs != null) {
+                    try {
+                        int count = 0;
+                        while (rs.next()) {
+                            /*
+                             ** Check if any of the records for the objects are in the process of being deleted.
+                             */
+                            boolean deleteMarker = rs.getBoolean("deleteMarker");
+                            if (!deleteMarker) {
+                                HashMap<String, String> objectDetails = new HashMap<>();
+
+                                /*
+                                ** objectId is the unique identifier for the object
+                                 */
+                                objectDetails.put("unique-id", rs.getString("objectId"));
+
+                                /*
+                                ** objectName
+                                 */
+                                objectDetails.put("name", rs.getString("objectName"));
+
+                                /*
+                                ** versionId - field 3
+                                 */
+                                objectDetails.put("version", rs.getString("versionId"));
+
+                                /*
+                                ** Field 5 (INT) - contentLength
+                                 */
+                                objectDetails.put("size", rs.getString("contentLength"));
+
+                                /*
+                                ** Field 6 (INT) - storageType enum
+                                 */
+                                int storageType = rs.getInt("storageType");
+                                String storageTier = StorageTierEnum.fromInt(storageType).toString();
+                                objectDetails.put("tier", storageTier);
+
+                                /*
+                                ** Field 6 (BINARY(16)) - contentMd5
+                                */
+                                byte[] md5Bytes = rs.getBytes("contentMd5");
+                                if (!rs.wasNull() && (md5Bytes != null)) {
+                                    String md5DigestStr = BaseEncoding.base64().encode(md5Bytes);
+                                    objectDetails.put("md5", md5DigestStr);
+                                }
+
+                                /*
+                                ** Field 7 (TIMESTAMP) - createTime
+                                 */
+                                objectDetails.put("time-created", rs.getString("createTime"));
+
+                                /*
+                                ** Field 11 - lastUpdateTime
+                                 */
+                                objectDetails.put("last-update", rs.getString("lastUpdateTime"));
+
+                                /*
+                                ** Field 12 (BINARY) - objectUID (etag)
+                                 */
+                                objectDetails.put("etag", rs.getString("objectUID"));
+
+                                objectList.add(objectDetails);
+                            }
+                        }
+
+                    } catch (SQLException sqlEx) {
+                        LOG.error("retrieveMappedObjectInfo() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("retrieveObjectInfo() SQL conn rs.next() SQLException: " + sqlEx.getMessage());
+                    }
+
+                    try {
+                        rs.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("retrieveMappedObjectInfo() rs close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("retrieveObjectInfo() SQL conn rs.close() SQLException: " + sqlEx.getMessage());
+                    }
+                }
+
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("retrieveMappedObjectInfo() stmt close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQLException: " + sqlEx.getMessage());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database tables.
+             */
+            closeObjectStorageDbConn(conn);
+        }
     }
 
     public void deleteObjectInfo(final HttpRequestInfo objectHttpInfo, final String tenancyUID) {

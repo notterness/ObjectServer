@@ -78,9 +78,9 @@ public class CreateObject implements Operation {
         if (objectMgr.createObjectEntry(objectPutInfo, tenancyUID) == HttpStatus.OK_200) {
             int objectId = objectPutInfo.getObjectId();
             if (objectId != -1) {
+                requestContext.setObjectId(objectId);
                 completeCallback.event();
             } else {
-                requestContext.setObjectId(objectId);
                 errorCallback.event();
             }
         } else {

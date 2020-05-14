@@ -1,5 +1,6 @@
 package com.webutils.objectserver.operations;
 
+import com.webutils.objectserver.common.ListObjectData;
 import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpRequestInfo;
@@ -16,9 +17,7 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 /*
 ** This retrieves the information about an Object from the ObjectStorageDb
@@ -121,6 +120,11 @@ public class RetrieveObjectInfo implements Operation {
 
                 TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
                 String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
+
+                List<String> requestedFields = new ArrayList<>(List.of("name", "etag", "version", "md5", "size", "time-created", "tier"));
+
+                ListObjectData listData = new ListObjectData(requestContext, objectPutInfo, requestedFields, tenancyUID);
+                listData.execute();
 
                 ObjectTableMgr objectMgr = new ObjectTableMgr(flavor, requestContext);
                 if (objectMgr.retrieveObjectInfo(objectPutInfo, objectInfo, tenancyUID) == HttpStatus.OK_200) {

@@ -80,6 +80,7 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
     private static final String createObjectTable = "CREATE TABLE IF NOT EXISTS object (" +
             " objectId INT AUTO_INCREMENT," +
             " objectName VARCHAR(255) NOT NULL," +
+            " prefix VARCHAR(255), " +
             " versionId VARCHAR(64) NOT NULL," +
             " opcClientRequestId VARCHAR(256)," +
             " contentLength INT NOT NULL," +

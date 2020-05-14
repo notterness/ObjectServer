@@ -131,22 +131,6 @@ public class ObjectPut_P2 implements Operation {
             putHandlerOps.put(computeMd5Digest.getOperationType(), computeMd5Digest);
             computeMd5Digest.initialize();
 
-            /*
-             ** Dole out another buffer to read in the content data if there is not data remaining in
-             **   the buffer from the HTTP Parsing.
-             */
-            BufferManager clientReadBufferManager = requestContext.getClientReadBufferManager();
-            ByteBuffer remainingBuffer = clientReadBufferManager.peek(readBufferPointer);
-            if (remainingBuffer != null) {
-                if (remainingBuffer.remaining() > 0) {
-                    encryptBuffer.event();
-                } else {
-                    metering.event();
-                }
-            } else {
-                metering.event();
-            }
-
             setupMethodDone = true;
         } else {
             /*
