@@ -1,23 +1,21 @@
 package com.webutils.webserver.manual;
 
-import com.webutils.webserver.common.DeleteObjectParams;
-import com.webutils.webserver.common.PutObjectParams;
+import com.webutils.webserver.common.ObjectParams;
 import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.niosockets.NioCliClient;
 import com.webutils.webserver.operations.ClientCommandSend;
-import com.webutils.webserver.operations.ClientPutObject;
 import com.webutils.webserver.requestcontext.ClientRequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 
 import java.net.InetAddress;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ClientDeleteInterface extends ClientInterface {
+public class ClientCommandInterface extends ClientInterface {
 
-    private final DeleteObjectParams requestParams;
+    private final ObjectParams requestParams;
 
     private final NioCliClient client;
     private final EventPollThread eventThread;
@@ -25,8 +23,8 @@ public class ClientDeleteInterface extends ClientInterface {
 
     private static final String clientName = "ObjectCLI/0.0.1";
 
-    ClientDeleteInterface(final NioCliClient cliClient, final MemoryManager memoryManger, final InetAddress serverIpAddr, final int serverTcpPort,
-                          final DeleteObjectParams deleteRequestParams, AtomicInteger testCount) {
+    ClientCommandInterface(final NioCliClient cliClient, final MemoryManager memoryManger, final InetAddress serverIpAddr, final int serverTcpPort,
+                           final ObjectParams deleteRequestParams, AtomicInteger testCount) {
 
         super(cliClient, memoryManger, serverIpAddr, serverTcpPort, testCount);
 

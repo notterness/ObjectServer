@@ -8,6 +8,11 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /*
@@ -30,10 +35,10 @@ abstract public class HttpInfo {
     private static final String CLIENT_OPC_REQUEST_ID = "opc-client-request-id";
     private static final String OPC_REQUEST_ID = "opc-request-id";
 
-    private static final String OBJECT_NAME = "/o/";
-    private static final String NAMESPACE_NAME = "/n/";
-    private static final String BUCKET_NAME = "/b/";
-    private static final String TEST_TYPE = "/t/";
+    private static final String OBJECT_NAME = "/o";
+    private static final String NAMESPACE_NAME = "/n";
+    private static final String BUCKET_NAME = "/b";
+    private static final String TEST_TYPE = "/t";
 
     /*
      ** The following are used by the Storage Server to determine where to write the chunk data
@@ -215,7 +220,8 @@ abstract public class HttpInfo {
         httpVersion = httpParsedVersion;
 
         /*
-         ** Determine the method enum based upon the passed in method string
+         ** Determine the method enum based upon the passed in method string. There is currently a special case for
+         **   the ListObject method which uses the GET method, but excludes a value in the "/o" field.
          */
         for (Map.Entry<HttpMethodEnum, String> entry: httpMethodMap.entrySet()) {
             int result = methodString.indexOf(entry.getValue());
@@ -235,28 +241,60 @@ abstract public class HttpInfo {
     /*
      ** The uri for the request. This is where the object name, tenancy and bucket name come from when they are part of the
      **   the request.
+     **
+     ** The URI fields are:
+     **   /n
+     **   /b
+     **   /o
+     **
+     ** The general format is something like:
+     **   /n/namespace/b/bucket/o/object HTTP/1.1
+     **
+     ** But, there is the odd cse for ListObjects where the format is (missing the trailing '/' and the object name):
+     **   /n/namespace/b/bucket/o HTTP/1.1
      */
     public void setHttpUri(final String uri) {
 
         /*
          ** Find the information about this object from the HTTP URI
          */
+        int lastIndex = uri.length();
+
         for (String uriField : uriFields) {
             String tmp = null;
             int startingIndex = uri.indexOf(uriField);
             if (startingIndex != -1) {
                 startingIndex += uriField.length();
-                int endingIndex = uri.indexOf(' ', startingIndex);
+
+                if (startingIndex == lastIndex) {
+                    /*
+                    ** Nothing to do with this field as it is at the end of the string
+                     */
+                    continue;
+                }
+
+                /*
+                ** Check if this uri field has the trailing "/". If so, move past it as it is not part of the field
+                 */
+                int endingIndex = uri.indexOf('/', startingIndex);
+                if (endingIndex == startingIndex) {
+                    startingIndex++;
+                }
+
+                /*
+                ** Now start the extraction of the uri field value
+                 */
+                endingIndex = uri.indexOf(' ', startingIndex);
                 if (endingIndex == -1) {
                     if ((endingIndex = uri.indexOf('/', startingIndex)) == -1) {
                         endingIndex = uri.length();
                     }
                 }
 
-                if (endingIndex != -1) {
+                if ((endingIndex != -1) && (endingIndex != startingIndex)) {
                     try {
                         tmp = uri.substring(startingIndex, endingIndex);
-                        //LOG.info("setHttpUri() [" + requestContext.getRequestId() + "] name: " + uriField + " name: " + tmp);
+                        LOG.info("setHttpUri() [" + requestContext.getRequestId() + "] name: " + uriField + " name: " + tmp);
                     } catch (IndexOutOfBoundsException ex) {
                         LOG.warn("setHttpUri() [" + requestContext.getRequestId() + "] name:" + uriField + " startingIndex: " + startingIndex + " endingIndex: " + endingIndex);
                     }
@@ -265,7 +303,9 @@ abstract public class HttpInfo {
                 //LOG.warn("setHttpUri() [" + requestContext.getRequestId() + "] name: " + uriField + " is null");
             }
 
-            objectUriInfoMap.put(uriField, tmp);
+            if (tmp != null) {
+                objectUriInfoMap.put(uriField, tmp);
+            }
         }
     }
 
@@ -326,10 +366,13 @@ abstract public class HttpInfo {
      ** This is called when the Jetty HTTP parser calls badMessage() to set the parsing error
      */
     public void httpHeaderError(final BadMessageException failure) {
-        String reason = failure.getReason();
+        String reason = (failure.getReason() == null) ? String.valueOf(failure.getCode()) : failure.getReason();
 
-        parseFailureCode = failure.getCode();
-        parseFailureReason = (reason == null) ? String.valueOf(failure.getCode()) : reason;
+        String failureMessage = "{\r\n  \"code\": " + failure.getCode() +
+                "\r\n  \"message\": \"" + reason + "\"" +
+                "\r\n}";
+        setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
+
         LOG.info("badMessage() [" + requestContext.getRequestId() + "] code: " +
                 parseFailureCode + " reason: " + parseFailureReason);
     }
@@ -625,6 +668,32 @@ abstract public class HttpInfo {
 
             return buffer.toString();
         }
+    }
+
+    /*
+    ** This provides a "standard" way to convert a String's content into a ByteBuffer that can be sent using the NIO
+    **   calls
+     */
+    public static void str_to_bb(ByteBuffer out, String in) {
+        Charset charset = StandardCharsets.UTF_8;
+        CharsetEncoder encoder = charset.newEncoder();
+
+        try {
+            encoder.encode(CharBuffer.wrap(in), out, true);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    /*
+     ** Convert a ByteBuffer to a String
+     */
+    public static String bb_to_str(ByteBuffer buffer) {
+        int position = buffer.position();
+        String tmp = StandardCharsets.UTF_8.decode(buffer).toString();
+
+        buffer.position(position);
+        return tmp;
     }
 
 }

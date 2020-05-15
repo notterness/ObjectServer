@@ -2,6 +2,7 @@ package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.manual.ClientTest;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
@@ -105,7 +106,7 @@ public class ClientHttpRequestWrite implements Operation {
             String Md5_Digest = clientTest.buildBufferAndComputeMd5();
             tmp = clientTest.buildRequestString(Md5_Digest);
 
-            clientTest.str_to_bb(msgHdr, tmp);
+            HttpInfo.str_to_bb(msgHdr, tmp);
 
             /*
             ** Need to flip() the buffer so that the limit() is set to the end of where the HTTP Request is

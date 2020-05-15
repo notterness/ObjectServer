@@ -210,17 +210,6 @@ public abstract class ClientTest {
         return status;
     }
 
-    public void str_to_bb(ByteBuffer out, String in) {
-        Charset charset = StandardCharsets.UTF_8;
-        CharsetEncoder encoder = charset.newEncoder();
-
-        try {
-            encoder.encode(CharBuffer.wrap(in), out, true);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-    }
-
     /*
     **
      */

@@ -46,6 +46,9 @@ public class ByteBufferHttpParser {
         while ((bufferToParse = chunk.getBuffer()) != null) {
             int remaining = bufferToParse.remaining();
 
+            /*
+            ** The following two lines are used for debug purposes to show what is being sent to the HTTP Parser
+             */
             //String tmpStr = chunk.bb_to_str(bufferToParse);
             //LOG.info("parseHttpData() " + tmpStr);
 

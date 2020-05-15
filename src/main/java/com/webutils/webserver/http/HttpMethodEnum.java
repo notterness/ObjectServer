@@ -11,7 +11,8 @@ public enum HttpMethodEnum {
     PUT_METHOD(1, "PUT"),
     POST_METHOD(2, "POST"),
     GET_METHOD(3, "GET"),
-    DELETE_METHOD(4, "DELETE");
+    DELETE_METHOD(4, "DELETE"),
+    LIST_METHOD(5, "LIST");
 
     private final int value;
     private final String methodName;

@@ -2,6 +2,7 @@ package com.webutils.objectserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpMethodEnum;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
@@ -132,7 +133,7 @@ public class BuildHeaderToStorageServer implements Operation {
                 }
 
                 if (tmp != null) {
-                    str_to_bb(msgHdr, tmp);
+                    HttpInfo.str_to_bb(msgHdr, tmp);
 
                     /*
                      ** Need to flip() the buffer so that the limit() is set to the end of where the HTTP Request is
@@ -257,9 +258,9 @@ public class BuildHeaderToStorageServer implements Operation {
         }
 
         if (errorInjectString == null) {
-            return "PUT /o/test HTTP/1.1\n" + commonPieces;
+            return "PUT /o/StorageServer HTTP/1.1\n" + commonPieces;
         } else {
-            return "PUT /t/" + errorInjectString + " HTTP/1.1\n" + commonPieces;
+            return "PUT /o/StorageServer/t/" + errorInjectString + " HTTP/1.1\n" + commonPieces;
         }
     }
 
@@ -297,20 +298,9 @@ public class BuildHeaderToStorageServer implements Operation {
         }
 
         if (errorInjectString == null) {
-            return "GET /o/test HTTP/1.1\n" + commonPieces;
+            return "GET /o/StorageServer HTTP/1.1\n" + commonPieces;
         } else {
-            return "GET /t/" + errorInjectString + " HTTP/1.1\n" + commonPieces;
-        }
-    }
-
-    private void str_to_bb(ByteBuffer out, String in) {
-        Charset charset = StandardCharsets.UTF_8;
-        CharsetEncoder encoder = charset.newEncoder();
-
-        try {
-            encoder.encode(CharBuffer.wrap(in), out, true);
-        } catch (Exception ex) {
-            ex.printStackTrace();
+            return "GET /o/StorageServer/t/" + errorInjectString + " HTTP/1.1\n" + commonPieces;
         }
     }
 

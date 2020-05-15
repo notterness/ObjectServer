@@ -1,26 +1,26 @@
 package com.webutils.objectserver.operations;
 
+import com.webutils.objectserver.common.ListObjectData;
 import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
-import com.webutils.webserver.mysql.ObjectInfo;
+import com.webutils.webserver.mysql.TenancyTableMgr;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
-public class SetupObjectDelete implements Operation {
-    private static final Logger LOG = LoggerFactory.getLogger(SetupObjectDelete.class);
+public class SetupObjectList implements Operation {
+
+    private static final Logger LOG = LoggerFactory.getLogger(SetupObjectList.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    private final OperationTypeEnum operationType = OperationTypeEnum.SETUP_OBJECT_DELETE;
+    private final OperationTypeEnum operationType = OperationTypeEnum.SETUP_OBJECT_LIST;
 
 
     /*
@@ -44,7 +44,7 @@ public class SetupObjectDelete implements Operation {
     /*
      ** This is used to prevent the Operation setup code from being called multiple times in the execute() method
      */
-    private boolean deleteOperationSetupDone;
+    private boolean operationSetupDone;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -54,12 +54,12 @@ public class SetupObjectDelete implements Operation {
     private boolean onExecutionQueue;
 
     /*
-     ** This is used to setup the initial Operation dependencies required to handle the Storage Server DELETE
-     **   request. This is how are deleting from the Object Server and their chunks on the Storage Server are
-     **   freed up.
+     ** This is used to setup the initial Operation dependencies required to handle the Storage Server GET
+     **   request. This uses the GET command, but the "/o" field is empty to indicate the it is a request for all the
+     **   objects that are kept within a bucket.
      */
-    public SetupObjectDelete(final ObjectServerRequestContext requestContext, final MemoryManager memoryManager,
-                          final Operation completeCb) {
+    public SetupObjectList(final ObjectServerRequestContext requestContext, final MemoryManager memoryManager,
+                             final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
@@ -78,7 +78,7 @@ public class SetupObjectDelete implements Operation {
         /*
          **
          */
-        deleteOperationSetupDone = false;
+        operationSetupDone = false;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -104,24 +104,19 @@ public class SetupObjectDelete implements Operation {
     }
 
     public void execute() {
-        if (!deleteOperationSetupDone) {
-            HttpRequestInfo objectHttpInfo = requestContext.getHttpInfo();
+        if (!operationSetupDone) {
+            HttpRequestInfo objectListInfo = requestContext.getHttpInfo();
 
-            /*
-             ** The ObjectInfo is used to hold the information required to read the object data from the Storage Servers.
-             */
-            ObjectInfo objectInfo = new ObjectInfo(objectHttpInfo);
+            TenancyTableMgr tenancyMgr = new TenancyTableMgr(requestContext.getWebServerFlavor());
+            String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
 
-            /*
-             ** When all the data is read in from the database (assuming it was successful), then send the HTTP Response
-             **   back to the client.
-             */
-            DeleteObjectInfo deleteObjectInfo = new DeleteObjectInfo(requestContext, memoryManager, objectInfo,this);
-            objectGetHandlerOps.put(deleteObjectInfo.getOperationType(), deleteObjectInfo);
-            deleteObjectInfo.initialize();
-            deleteObjectInfo.event();
+            List<String> requestedFields = new ArrayList<>(List.of("name", "etag", "version", "md5", "size", "time-created", "tier"));
+            ListObjectData listData = new ListObjectData(requestContext, objectListInfo, requestedFields, tenancyUID);
+            listData.execute();
 
-            deleteOperationSetupDone = true;
+            event();
+
+            operationSetupDone = true;
         } else {
             complete();
         }
@@ -133,7 +128,7 @@ public class SetupObjectDelete implements Operation {
      */
     public void complete() {
 
-        LOG.info("SetupObjectDelete[" + requestContext.getRequestId() + "] complete()");
+        LOG.info("SetupObjectList[" + requestContext.getRequestId() + "] complete()");
 
         /*
          ** Call the complete() method for any operations that this one created.
@@ -164,19 +159,19 @@ public class SetupObjectDelete implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("SetupObjectDelete[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("SetupObjectList[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("SetupObjectDelete[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SetupObjectList[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("SetupObjectDelete[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("SetupObjectList[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("SetupObjectDelete[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SetupObjectList[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -191,7 +186,7 @@ public class SetupObjectDelete implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("SetupObjectDelete[" + requestContext.getRequestId() + "] hasWaitTimeElapsed() not supposed to be on delayed queue");
+        LOG.warn("SetupObjectList[" + requestContext.getRequestId() + "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
 
@@ -209,5 +204,6 @@ public class SetupObjectDelete implements Operation {
         }
         LOG.info("");
     }
+
 
 }

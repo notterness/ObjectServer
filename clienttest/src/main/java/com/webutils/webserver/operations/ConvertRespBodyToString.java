@@ -2,6 +2,7 @@ package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.requestcontext.ClientRequestContext;
 import org.slf4j.Logger;
@@ -182,7 +183,7 @@ public class ConvertRespBodyToString implements Operation {
 
                 bytesConverted += srcBuffer.remaining();
 
-                String tmpStr = bb_to_str(srcBuffer);
+                String tmpStr = HttpInfo.bb_to_str(srcBuffer);
 
                 LOG.info("ConvertRespBodyToStr tmpStr: " + tmpStr);
                 if (respBodyStr == null) {
@@ -289,12 +290,4 @@ public class ConvertRespBodyToString implements Operation {
         LOG.info("");
     }
 
-    private String bb_to_str(ByteBuffer buffer) {
-        int position = buffer.position();
-        String tmp = StandardCharsets.UTF_8.decode(buffer).toString();
-
-        buffer.position(position);
-        return tmp;
-    }
-
-}
+ }

@@ -101,20 +101,7 @@ public class BuildHttpResult {
             }
         }
 
-        str_to_bb(respBuffer, tmpStr);
-    }
-
-    private void str_to_bb(ByteBuffer out, String in) {
-        Charset charset = StandardCharsets.UTF_8;
-        CharsetEncoder encoder = charset.newEncoder();
-
-        try {
-            boolean endOfInput = true;
-
-            encoder.encode(CharBuffer.wrap(in), out, endOfInput);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
+        HttpInfo.str_to_bb(respBuffer, tmpStr);
     }
 
     public void buildPostOkResponse(final ByteBuffer respBuffer) {
@@ -127,7 +114,7 @@ public class BuildHttpResult {
                 respHeader +
                 "Content-Length: 0\n\n";
 
-        str_to_bb(respBuffer, tmpStr);
+        HttpInfo.str_to_bb(respBuffer, tmpStr);
     }
 
     /*
@@ -153,6 +140,6 @@ public class BuildHttpResult {
                 respHeader +
                 "Content-Length: 0\n\n";
 
-        str_to_bb(respBuffer, tmpStr);
+        HttpInfo.str_to_bb(respBuffer, tmpStr);
     }
 }

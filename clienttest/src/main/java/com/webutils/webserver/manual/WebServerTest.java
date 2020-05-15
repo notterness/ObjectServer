@@ -110,23 +110,4 @@ public abstract class WebServerTest {
         return objectDigestString;
     }
 
-    /*
-    ** This copies a String into a ByteBuffer. This is what is used to place the
-    **   generated HTTP Request into a buffer to be sent to the WebServer
-    **   business logic code.
-     */
-    protected void str_to_bb(ByteBuffer out, String in) {
-        Charset charset = StandardCharsets.UTF_8;
-        CharsetEncoder encoder = charset.newEncoder();
-
-        try {
-            encoder.encode(CharBuffer.wrap(in), out, true);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-        out.flip();
-
-        LOG.info("str_to_bb position: " + out.position() + " limit: " + out.limit());
-    }
-
 }

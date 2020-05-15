@@ -4,6 +4,7 @@ package com.webutils.webserver.http.parser;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
+import com.webutils.webserver.http.HttpInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,7 +15,7 @@ public class StringChunk {
     private final ByteBuffer initialBuffer;
 
     private int currentPosition;
-    private int limit;
+    private final int limit;
 
     StringChunk(final ByteBuffer buffer) {
         initialBuffer = buffer;
@@ -72,7 +73,7 @@ public class StringChunk {
         ByteBuffer bb = initialBuffer.slice();
         bb.limit(charCount);
 
-        String str = bb_to_str(bb);
+        String str = HttpInfo.bb_to_str(bb);
 
         /*
         ** Uncomment out the following line to display the string that has been extracted from the
@@ -102,17 +103,6 @@ public class StringChunk {
         //        " remaining: " + bb.remaining());
 
         return true;
-    }
-
-    /*
-    ** Convert a ByteBuffer to a String
-     */
-    public String bb_to_str(ByteBuffer buffer) {
-        int position = buffer.position();
-        String tmp = StandardCharsets.UTF_8.decode(buffer).toString();
-
-        buffer.position(position);
-        return tmp;
     }
 
     private void displayChar(ByteBuffer buffer) {

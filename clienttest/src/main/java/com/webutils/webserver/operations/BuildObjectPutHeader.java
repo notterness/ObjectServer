@@ -3,6 +3,7 @@ package com.webutils.webserver.operations;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.common.ObjectParams;
+import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -106,7 +107,7 @@ public class BuildObjectPutHeader implements Operation {
 
                 String tmp = requestParams.constructRequest();
 
-                str_to_bb(msgHdr, tmp);
+                HttpInfo.str_to_bb(msgHdr, tmp);
 
                 /*
                  ** Need to flip() the buffer so that the limit() is set to the end of where the HTTP Request is
@@ -193,18 +194,5 @@ public class BuildObjectPutHeader implements Operation {
         LOG.info("      No BufferManagerPointers");
         LOG.info("");
     }
-
-
-    private void str_to_bb(ByteBuffer out, String in) {
-        Charset charset = StandardCharsets.UTF_8;
-        CharsetEncoder encoder = charset.newEncoder();
-
-        try {
-            encoder.encode(CharBuffer.wrap(in), out, true);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-    }
-
 
 }

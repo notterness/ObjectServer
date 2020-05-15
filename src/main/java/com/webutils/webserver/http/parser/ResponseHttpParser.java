@@ -48,7 +48,7 @@ public class ResponseHttpParser {
         while ((bufferToParse = chunk.getBuffer()) != null) {
             int remaining = bufferToParse.remaining();
 
-            String tmpStr = chunk.bb_to_str(bufferToParse);
+            String tmpStr = HttpInfo.bb_to_str(bufferToParse);
             //LOG.info("ResponseHttpParser parseHttpData() " + tmpStr);
 
             while (!httpParser.isState(HttpParser.State.END) && (remaining > 0)) {

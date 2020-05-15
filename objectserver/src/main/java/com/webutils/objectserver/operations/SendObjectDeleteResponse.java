@@ -2,6 +2,7 @@ package com.webutils.objectserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ObjectInfo;
@@ -283,7 +284,7 @@ public class SendObjectDeleteResponse implements Operation {
         successHeader += SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_5 + lastModified + "\n" +
                 SUCCESS_HEADER_7 + versionId + "\n" + SUCCESS_HEADER_8 + 0 + "\n\n";
 
-        str_to_bb(respBuffer, successHeader);
+        HttpInfo.str_to_bb(respBuffer, successHeader);
     }
 
     /*
@@ -318,21 +319,7 @@ public class SendObjectDeleteResponse implements Operation {
             failureHeader += SUCCESS_HEADER_8 + 0 + "\n\n";
         }
 
-        str_to_bb(respBuffer, failureHeader);
+        HttpInfo.str_to_bb(respBuffer, failureHeader);
     }
-
-    private void str_to_bb(ByteBuffer out, String in) {
-        Charset charset = StandardCharsets.UTF_8;
-        CharsetEncoder encoder = charset.newEncoder();
-
-        try {
-            boolean endOfInput = true;
-
-            encoder.encode(CharBuffer.wrap(in), out, endOfInput);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-    }
-
 
 }

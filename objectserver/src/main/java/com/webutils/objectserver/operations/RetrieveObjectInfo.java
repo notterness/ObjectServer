@@ -121,11 +121,6 @@ public class RetrieveObjectInfo implements Operation {
                 TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
                 String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
 
-                List<String> requestedFields = new ArrayList<>(List.of("name", "etag", "version", "md5", "size", "time-created", "tier"));
-
-                ListObjectData listData = new ListObjectData(requestContext, objectPutInfo, requestedFields, tenancyUID);
-                listData.execute();
-
                 ObjectTableMgr objectMgr = new ObjectTableMgr(flavor, requestContext);
                 if (objectMgr.retrieveObjectInfo(objectPutInfo, objectInfo, tenancyUID) == HttpStatus.OK_200) {
                     int objectId = objectInfo.getObjectId();

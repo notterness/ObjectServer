@@ -2,6 +2,7 @@ package com.webutils.webserver.manual;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
@@ -135,7 +136,7 @@ public class TestHttpParser extends WebServerTest {
             String md5Digest = buildBufferAndComputeMd5(tempContentBuffer);
 
             String request = buildRequestString(super.testName, md5Digest, tempContentBuffer.limit());
-            str_to_bb(dst, request);
+            HttpInfo.str_to_bb(dst, request);
 
             timesCalled++;
         } else if (timesCalled == 1){

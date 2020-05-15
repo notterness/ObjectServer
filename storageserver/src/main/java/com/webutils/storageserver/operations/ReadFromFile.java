@@ -2,6 +2,7 @@ package com.webutils.storageserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
@@ -418,22 +419,9 @@ public class ReadFromFile implements Operation {
             }
         }
 
-        str_to_bb(respBuffer, tmpStr);
+        HttpInfo.str_to_bb(respBuffer, tmpStr);
 
         return goodResponseSent;
-    }
-
-    private void str_to_bb(ByteBuffer out, String in) {
-        Charset charset = StandardCharsets.UTF_8;
-        CharsetEncoder encoder = charset.newEncoder();
-
-        try {
-            boolean endOfInput = true;
-
-            encoder.encode(CharBuffer.wrap(in), out, endOfInput);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
     }
 
 }
