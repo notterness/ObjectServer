@@ -11,19 +11,19 @@ import java.util.List;
  ** This class is used to access information about resoures that are running in a local Java executable. This is used
  **   for testing purposes within the IntelliJ framework.
  */
-public class TestLocalDbInfo extends DbSetup {
+public class LocalServersMgr extends ServerIdentifierTableMgr {
 
-    private static final Logger LOG = LoggerFactory.getLogger(TestLocalDbInfo.class);
+    private static final Logger LOG = LoggerFactory.getLogger(LocalServersMgr.class);
 
-    private static final String getLocalStorageServers = "SELECT * FROM localServerIdentifier";
-    private static final String getLocalStorageServer = "SELECT * FROM localServerIdentifier WHERE serverName='";
+    private static final String getLocalStorageServers = "SELECT serverName, LocalServerIpAddr, LocalServerPort FROM ServerIdentifier";
+    private static final String getLocalStorageServer = "SELECT serverName, LocalServerIpAddr, LocalServerPort FROM ServerIdentifier WHERE serverName='";
     private static final String getServerQueryEnd = "';";
 
 
-    public TestLocalDbInfo(final WebServerFlavor flavor) {
+    public LocalServersMgr(final WebServerFlavor flavor) {
         super(flavor);
 
-        LOG.info("TestLocalDbInfo() WebServerFlavor: " + flavor.toString());
+        LOG.info("LocalServersMgr() WebServerFlavor: " + flavor.toString());
     }
 
     /*
@@ -34,21 +34,21 @@ public class TestLocalDbInfo extends DbSetup {
      **     "storage-server-3"
      */
     public boolean getServer(final String serverName, final List<ServerIdentifier> serverList) {
-        LOG.info("TestLocalDbInfo getServer() serverName: " + serverName + " dockerImage: " + isDockerImage() +
+        LOG.info("LocalServersMgr getServer() serverName: " + serverName + " dockerImage: " + isDockerImage() +
                 " k8Image: " + isKubernetesImage());
 
         String queryStr = getLocalStorageServer + serverName + getServerQueryEnd;
 
-        return super.getServer(queryStr, serverList);
+        return super.retrieveServers(queryStr, serverList, 0);
     }
 
     /*
      ** This returns a list of Storage Servers and their IP addresses and Ports they are visible on.
      */
     public boolean getStorageServers(final List<ServerIdentifier> servers, final int chunkNumber) {
-        LOG.info("TestLocalDbInfo getStorageServers() dockerImage: " + isDockerImage() + " k8Image: " +
+        LOG.info("LocalServersMgr getStorageServers() dockerImage: " + isDockerImage() + " k8Image: " +
                 isKubernetesImage());
 
-        return retrieveStorageServers(getLocalStorageServers, servers, chunkNumber);
+        return retrieveServers(getLocalStorageServers, servers, chunkNumber);
     }
 }

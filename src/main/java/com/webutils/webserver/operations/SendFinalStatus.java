@@ -124,6 +124,10 @@ public class SendFinalStatus implements Operation {
                             resultBuilder.buildPostOkResponse(respBuffer);
                             break;
 
+                        case LIST_METHOD:
+                            resultBuilder.buildListObjectsOkResponse(respBuffer);
+                            break;
+
                         default:
                             resultBuilder.buildResponse(respBuffer, resultCode, true, true);
                             break;

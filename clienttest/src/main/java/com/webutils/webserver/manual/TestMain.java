@@ -1,7 +1,6 @@
 package com.webutils.webserver.manual;
 
 import com.google.common.io.BaseEncoding;
-import com.webutils.objectserver.manual.TestEncryptBuffer;
 import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
 import com.webutils.storageserver.requestcontext.StorageServerContextPool;
 import com.webutils.webserver.memory.MemoryManager;
@@ -37,14 +36,14 @@ public class TestMain {
             System.out.println("initial " + md5FromHeader + " encode: " + encodeStr + " match: " + match);
         }
 
-            DbSetup dbSetup;
+        ServerIdentifierTableMgr serverTableMgr;
 
         final int serverTcpPort = 5001;
 
         final int NUMBER_TEST_STORAGE_SERVERS = 3;
         final int STORAGE_SERVER_BASE_ID_OFFSET = 100;
 
-        int baseTcpPort = DbSetup.storageServerTcpPort;
+        int baseTcpPort = ServersDb.storageServerTcpPort;
 
         if (args.length >= 1) {
             try {
@@ -67,16 +66,16 @@ public class TestMain {
                 flavor = WebServerFlavor.INTEGRATION_KUBERNETES_TESTS;
             }
 
-            dbSetup = new K8PodDbInfo(flavor);
+            serverTableMgr = new K8PodServersMgr(flavor);
         } else {
             /*
              ** The INTEGRATION_KUBERNETES_TESTS needs access to the database to obtain the IP address and Port for
              **   the Object Server and the StorageServers.
              */
-            dbSetup = new TestLocalDbInfo(flavor);
+            serverTableMgr = new LocalServersMgr(flavor);
         }
 
-        dbSetup.checkAndSetupStorageServers();
+        serverTableMgr.checkAndSetupStorageServers();
 
         CreateObjectStorageTables objectStorageDbSetup = new CreateObjectStorageTables(flavor);
         objectStorageDbSetup.checkAndSetupObjectStorageDb();
@@ -140,7 +139,7 @@ public class TestMain {
             ** The Object Server needs to access the database to obtain the VON information
              */
             MemoryManager objectServerMemoryManager = new MemoryManager(flavor);
-            ObjectServerContextPool objectRequestContextPool = new ObjectServerContextPool(flavor, objectServerMemoryManager, dbSetup);
+            ObjectServerContextPool objectRequestContextPool = new ObjectServerContextPool(flavor, objectServerMemoryManager, serverTableMgr);
 
             nioServer = new NioServerHandler(serverTcpPort, NioServerHandler.OBJECT_SERVER_BASE_ID, objectRequestContextPool);
             nioServer.start();
@@ -198,7 +197,7 @@ public class TestMain {
             /*
             ** First check with a valid Storage Server (this is the baseTcpPort)
              */
-            //TestChunkWrite testChunkWrite = new TestChunkWrite(addr, baseTcpPort, threadCount, dbSetup, null);
+            //TestChunkWrite testChunkWrite = new TestChunkWrite(addr, baseTcpPort, threadCount, serversDb, null);
             //testChunkWrite.execute();
 
             /*
@@ -206,7 +205,7 @@ public class TestMain {
             **   to the Storage Server will fail.
              */
             //TestChunkWrite testChunkWrite_badStorageServer = new TestChunkWrite(addr, baseTcpPort + 20,
-            //        threadCount, dbSetup, null);
+            //        threadCount, serversDb, null);
             //testChunkWrite_badStorageServer.execute();
 
             /*
@@ -214,7 +213,7 @@ public class TestMain {
              **   to the Storage Server will fail.
              */
             //TestChunkWrite testChunkWrite_disconnectAfterHeader = new TestChunkWrite(addr, baseTcpPort,
-            //        threadCount, dbSetup, CLOSE_CONNECTION_AFTER_HEADER);
+            //        threadCount, serversDb, CLOSE_CONNECTION_AFTER_HEADER);
             //testChunkWrite_disconnectAfterHeader.execute();
         } else {
             System.out.println("ERROR: addr for TestChunkWrite() null");
@@ -252,11 +251,11 @@ public class TestMain {
 
         MemoryManager clientTestMemoryManager = new MemoryManager(flavor);
 
-        ClientContextPool clientContextPool = new ClientContextPool(flavor, clientTestMemoryManager, dbSetup);
+        ClientContextPool clientContextPool = new ClientContextPool(flavor, clientTestMemoryManager, serverTableMgr);
         NioTestClient testClient = new NioTestClient(clientContextPool);
         testClient.start();
 
-        /*
+/*
         ClientTest client_CreateBucket_Simple = new ClientTest_CreateBucket_Simple("CreateBucket_Simple", testClient,
                 serverIpAddr, serverTcpPort, threadCount);
         client_CreateBucket_Simple.execute();
@@ -266,9 +265,18 @@ public class TestMain {
 
         waitForTestsToComplete(threadCount);
 */
-        GetObjectSimple getObjectSimple = new GetObjectSimple(serverIpAddr, serverTcpPort, threadCount);
-        getObjectSimple.execute();
 
+
+        //DeleteObjectSimple deleteObject = new DeleteObjectSimple(serverIpAddr, serverTcpPort, threadCount);
+        //deleteObject.execute();
+
+        //GetObjectSimple getObjectSimple = new GetObjectSimple(serverIpAddr, serverTcpPort, threadCount);
+        //getObjectSimple.execute();
+
+        //ListObjectsSimple listObjectsSimple = new ListObjectsSimple(serverIpAddr, serverTcpPort, threadCount);
+        //listObjectsSimple.execute();
+
+        /*
         GetObjectBadBucket getObjectBadBucket = new GetObjectBadBucket(serverIpAddr, serverTcpPort, threadCount);
         getObjectBadBucket.execute();
 
@@ -280,9 +288,9 @@ public class TestMain {
 
         PutObjectBadNamespace putObjectBadNamespace = new PutObjectBadNamespace(serverIpAddr, serverTcpPort, threadCount);
         putObjectBadNamespace.execute();
-
-        //PutObjectSimple putObjectSimple = new PutObjectSimple(serverIpAddr, serverTcpPort, threadCount);
-        //putObjectSimple.execute();
+*/
+        PutObjectSimple putObjectSimple = new PutObjectSimple(serverIpAddr, serverTcpPort, threadCount);
+        putObjectSimple.execute();
 
         /*
         ** Uncomment out the following two lines to let TestMain just act as a server. It can then be used to

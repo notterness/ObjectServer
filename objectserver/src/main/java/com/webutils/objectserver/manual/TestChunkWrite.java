@@ -5,7 +5,8 @@ import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.memory.MemoryManager;
-import com.webutils.webserver.mysql.DbSetup;
+import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
+import com.webutils.webserver.mysql.ServersDb;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.niosockets.NioTestClient;
@@ -13,7 +14,6 @@ import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
-import io.kubernetes.client.util.ConfigPersister;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,8 +56,8 @@ public class TestChunkWrite {
     /*
     ** The addr and storageServerTcpPort are used to identify the Storage Server the ChunkWrite will be directed to.
      */
-    public TestChunkWrite(final InetAddress addr, final int storageServerTcpPort, AtomicInteger testCount, final DbSetup dbSetup,
-                          final String errorInjectString) {
+    public TestChunkWrite(final InetAddress addr, final int storageServerTcpPort, AtomicInteger testCount,
+                          final ServerIdentifierTableMgr serverTableMgr, final String errorInjectString) {
 
         this.storageServerAddr = addr;
         this.storageServerTcpPort = storageServerTcpPort;
@@ -69,7 +69,7 @@ public class TestChunkWrite {
          **   NIO Socket handling.
          */
         this.objServerMemMgr = new MemoryManager(flavor);
-        this.objReqContextPool = new ObjectServerContextPool(flavor, objServerMemMgr, dbSetup);
+        this.objReqContextPool = new ObjectServerContextPool(flavor, objServerMemMgr, serverTableMgr);
 
         this.testClient = new NioTestClient(objReqContextPool);
         this.testClient.start();

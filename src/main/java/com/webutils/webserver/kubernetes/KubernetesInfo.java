@@ -15,6 +15,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 public class KubernetesInfo {
 
@@ -27,6 +28,48 @@ public class KubernetesInfo {
         LOG.info("KubernetesInfo() WebServerFlavor: " + flavor.toString());
         this.flavor = flavor;
     }
+
+    public String waitForInternalK8Ip() {
+        /*
+         ** This simply waits until the IP address can be obtained to insure that the POD is up and running.
+         **
+         ** NOTE: There must be a better way to determine if the POD has been started...
+         */
+        String k8IpAddr = null;
+
+        KubernetesInfo kubeInfo = new KubernetesInfo(flavor);
+        int retryCount = 0;
+        int maxRetryCount;
+        if (flavor == WebServerFlavor.KUBERNETES_OBJECT_SERVER_TEST) {
+            maxRetryCount = 10;
+        } else {
+            maxRetryCount = 3;
+        }
+
+        while ((k8IpAddr == null) && (retryCount < maxRetryCount)) {
+            try {
+                k8IpAddr = kubeInfo.getInternalKubeIp();
+            } catch (IOException io_ex) {
+                System.out.println("IOException: " + io_ex.getMessage());
+                LOG.error("checkAndSetupStorageServers() - IOException: " + io_ex.getMessage());
+                k8IpAddr = null;
+            }
+
+            if (k8IpAddr == null) {
+                try {
+                    TimeUnit.SECONDS.sleep(10);
+                } catch (InterruptedException intEx) {
+                    LOG.error("Trying to obtain internal Kubernetes IP " + intEx.getMessage());
+                    break;
+                }
+
+                retryCount++;
+            }
+        }
+
+        return k8IpAddr;
+    }
+
 
     public String getExternalKubeIp() throws IOException {
 

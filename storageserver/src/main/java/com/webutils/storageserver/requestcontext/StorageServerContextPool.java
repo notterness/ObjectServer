@@ -1,7 +1,7 @@
 package com.webutils.storageserver.requestcontext;
 
 import com.webutils.webserver.memory.MemoryManager;
-import com.webutils.webserver.mysql.DbSetup;
+import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.RequestContextPool;
@@ -15,11 +15,11 @@ public class StorageServerContextPool extends RequestContextPool {
 
     private static final Logger LOG = LoggerFactory.getLogger(StorageServerContextPool.class);
 
-    private final DbSetup dbSetup;
+    private final ServerIdentifierTableMgr serverTableMgr;
 
-    public StorageServerContextPool(final WebServerFlavor flavor, final MemoryManager memoryManager, final DbSetup dbSetup) {
+    public StorageServerContextPool(final WebServerFlavor flavor, final MemoryManager memoryManager, final ServerIdentifierTableMgr serverTableMgr) {
         super(flavor, memoryManager, "StorageServer");
-        this.dbSetup = dbSetup;
+        this.serverTableMgr = serverTableMgr;
     }
 
     /*
@@ -35,7 +35,7 @@ public class StorageServerContextPool extends RequestContextPool {
             LinkedBlockingQueue<RequestContext> contextList = runningContexts.get(threadId);
 
             if (contextList != null) {
-                requestContext = new StorageServerRequestContext(memoryManager, threadThisRequestRunsOn, dbSetup,
+                requestContext = new StorageServerRequestContext(memoryManager, threadThisRequestRunsOn, serverTableMgr,
                         threadId, flavor);
 
                 if (contextList.offer(requestContext)) {

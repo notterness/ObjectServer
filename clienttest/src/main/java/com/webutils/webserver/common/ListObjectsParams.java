@@ -84,7 +84,7 @@ public class ListObjectsParams extends ObjectParams {
             System.out.println("Status: 200");
             String opcClientRequestId = httpInfo.getOpcClientRequestId();
             if (opcClientRequestId != null) {
-                System.out.println("opc-clent-request-id: " + opcClientRequestId);
+                System.out.println("opc-client-request-id: " + opcClientRequestId);
             }
 
             String opcRequestId = httpInfo.getOpcRequestId();

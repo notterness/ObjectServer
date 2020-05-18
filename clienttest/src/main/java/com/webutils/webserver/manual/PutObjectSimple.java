@@ -2,8 +2,8 @@ package com.webutils.webserver.manual;
 
 import com.webutils.webserver.common.PutObjectParams;
 import com.webutils.webserver.memory.MemoryManager;
-import com.webutils.webserver.mysql.DbSetup;
-import com.webutils.webserver.mysql.TestLocalDbInfo;
+import com.webutils.webserver.mysql.LocalServersMgr;
+import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.niosockets.NioCliClient;
 import com.webutils.webserver.requestcontext.ClientContextPool;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
@@ -26,9 +26,9 @@ public class PutObjectSimple {
 
         MemoryManager cliMemoryManager = new MemoryManager(flavor);
 
-        DbSetup dbSetup = new TestLocalDbInfo(flavor);
+        ServerIdentifierTableMgr serverTableMgr = new LocalServersMgr(flavor);
 
-        clientContextPool = new ClientContextPool(flavor, cliMemoryManager, dbSetup);
+        clientContextPool = new ClientContextPool(flavor, cliMemoryManager, serverTableMgr);
         cliClient = new NioCliClient(clientContextPool);
         cliClient.start();
 

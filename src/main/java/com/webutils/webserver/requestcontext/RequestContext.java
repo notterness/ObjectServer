@@ -7,7 +7,7 @@ import com.webutils.webserver.common.Sha256ResultHandler;
 import com.webutils.webserver.http.HttpMethodEnum;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
-import com.webutils.webserver.mysql.DbSetup;
+import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.*;
@@ -37,10 +37,10 @@ public abstract class RequestContext {
      **   the chunk boundary crossing in a simulation environment and the other for production
      **
      **  MemoryManager.XFER_BUFFER_SIZE = 8k
-     **  (MemoryManager.XFER_BUFFER_SIZE * 64) = 524,288
+     **  (MemoryManager.XFER_BUFFER_SIZE * 16) = 131,072
      **  (MemoryManager.XFER_BUFFER_SIZE * 16k) = 134,217,728 (128MB)
      */
-    private static final int TEST_CHUNK_BUFFER_COUNT = 64;
+    private static final int TEST_CHUNK_BUFFER_COUNT = 16;
     private static final int CHUNK_BUFFER_COUNT = 4096;
     public static final int TEST_CHUNK_SIZE_IN_BYTES = MemoryManager.XFER_BUFFER_SIZE * TEST_CHUNK_BUFFER_COUNT;
     public static final int CHUNK_SIZE_IN_BYTES = MemoryManager.XFER_BUFFER_SIZE * CHUNK_BUFFER_COUNT;
@@ -121,7 +121,7 @@ public abstract class RequestContext {
     /*
     ** Used to gain access to the MySql database
      */
-    private final DbSetup dbSetup;
+    private final ServerIdentifierTableMgr serverTableMgr;
 
     /*
     ** The following is a map of all of the created Operations to handle this request.
@@ -173,12 +173,12 @@ public abstract class RequestContext {
     private final BlockingQueue<Operation> timedWaitQueue;
 
 
-    public RequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn, final DbSetup dbSetup,
-                          final int threadId, final WebServerFlavor flavor) {
+    public RequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn,
+                          final ServerIdentifierTableMgr serverTableMgr, final int threadId, final WebServerFlavor flavor) {
 
         this.memoryManager = memoryManager;
         this.threadThisContextRunsOn = threadThisRunsOn;
-        this.dbSetup = dbSetup;
+        this.serverTableMgr = serverTableMgr;
         this.threadId = threadId;
         this.webServerFlavor = flavor;
 
@@ -586,10 +586,10 @@ public abstract class RequestContext {
     public boolean postMethodContentParsed() { return postMethodContentDataParsed; }
 
     /*
-    ** Used to obtain the DbSetup object which is used to access the Storage Server information in the MySql database
+    ** Used to obtain the ServersDb object which is used to access the Storage Server information in the MySql database
      */
-    public DbSetup getDbSetup() {
-        return dbSetup;
+    public ServerIdentifierTableMgr getServerTableMgr() {
+        return serverTableMgr;
     }
 
     /*

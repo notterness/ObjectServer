@@ -1,7 +1,6 @@
-package com.webutils.objectserver;
+package com.webutils.chunkmgr;
 
-
-import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
+import com.webutils.chunkmgr.requestcontext.ChunkAllocContextPool;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.K8ServersMgr;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
@@ -10,10 +9,27 @@ import com.webutils.webserver.niosockets.NioServerHandler;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 
 /*
-** If there is a parameter passed into the WebServerMain class, then it must be an integer
-**   and it will be the port the WebServer (ObjectServer) listens on.
- */
-public class WebServerMain {
+** The DistributedShard client is responsible for managing where data is placed between the avaialble Storage Servers.
+**
+** For placement it uses the following information:
+**   Customer
+**   Object Prefix
+**   Bucket Name
+**   Object Name
+**   StorageType -
+**       Standard
+**       Intelligent-Tiering
+**       Standard-IA (Infrequent Access)
+**       OneZone-IA
+**       Archive
+**       DeepArchive
+**   Object UID - A 64 bit ID that uniquely identified an object being stored
+**
+** The path to the object is made up the following way:
+**     ObjectPrefix/BucketName/ObjectName
+*/
+public class ChunkAllocMain {
+
     public static void main(String[] args) {
         int serverTcpPort;
         ServerIdentifierTableMgr serverTableMgr;
@@ -51,20 +67,15 @@ public class WebServerMain {
             serverTableMgr = new LocalServersMgr(flavor);
         }
 
-        /*
-        ** If this Object Server is running as a Docker Image or within a Kubernetes POD, it will need to access the
-        **   database to obtain IP addresses.
-         */
-        serverTableMgr.checkAndSetupStorageServers();
-
         for (String s: args) {
             System.out.println(s);
         }
 
         MemoryManager memoryManager = new MemoryManager(flavor);
-        ObjectServerContextPool requestContextPool = new ObjectServerContextPool(flavor, memoryManager, serverTableMgr);
+        ChunkAllocContextPool requestContextPool = new ChunkAllocContextPool(flavor, memoryManager, serverTableMgr);
 
         NioServerHandler nioServer = new NioServerHandler(serverTcpPort, NioServerHandler.OBJECT_SERVER_BASE_ID, requestContextPool);
         nioServer.start();
     }
 }
+

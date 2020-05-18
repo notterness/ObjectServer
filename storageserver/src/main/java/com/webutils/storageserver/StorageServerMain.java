@@ -2,16 +2,14 @@ package com.webutils.storageserver;
 
 import com.webutils.storageserver.requestcontext.StorageServerContextPool;
 import com.webutils.webserver.memory.MemoryManager;
-import com.webutils.webserver.mysql.DbSetup;
+import com.webutils.webserver.mysql.ServersDb;
 import com.webutils.webserver.niosockets.NioServerHandler;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
-
-import java.util.concurrent.atomic.AtomicInteger;
 
 // Server class
 public class StorageServerMain {
     public static void main(String[] args) {
-        int baseTcpPort = DbSetup.storageServerTcpPort;
+        int baseTcpPort = ServersDb.storageServerTcpPort;
         WebServerFlavor flavor = WebServerFlavor.INTEGRATION_STORAGE_SERVER_TEST;
 
 

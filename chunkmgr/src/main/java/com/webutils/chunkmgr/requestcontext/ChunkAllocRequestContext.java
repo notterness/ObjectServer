@@ -1,13 +1,9 @@
-package com.webutils.objectserver.requestcontext;
+package com.webutils.chunkmgr.requestcontext;
 
-import com.webutils.objectserver.operations.*;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.buffermgr.ChunkMemoryPool;
-import com.webutils.webserver.http.HttpMethodEnum;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
-import com.webutils.webserver.mysql.ServersDb;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.*;
@@ -21,22 +17,16 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+public class ChunkAllocRequestContext extends RequestContext {
 
-public class ObjectServerRequestContext extends RequestContext {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ObjectServerRequestContext.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ChunkAllocRequestContext.class);
 
     /*
      ** This is the BufferManager used to hold the data being written out the Storage Servers. Since the same data is
      **   being written to all Storage Servers (at this point), there is a one to many relationship.
      */
     protected final BufferManager storageServerWriteBufferManager;
-
-    /*
-    ** This is used for the Storage Server GET operations to alloc a chunks worth of ByteBuffers in a pre-allocated
-    **   BufferManager
-     */
-    private final ChunkMemoryPool chunkMemPool;
 
     /*
      **
@@ -48,7 +38,7 @@ public class ObjectServerRequestContext extends RequestContext {
     private SendFinalStatus sendFinalStatus;
 
     /*
-    ** This is the unique ID to identify an object table entry in the database (ObjectStorageDb, object table)
+     ** This is the unique ID to identify an object table entry in the database (ObjectStorageDb, object table)
      */
     private int objectId;
 
@@ -66,13 +56,11 @@ public class ObjectServerRequestContext extends RequestContext {
     private final Map<ServerIdentifier, Integer> storageServerResponse;
 
 
-    public ObjectServerRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn,
-                                      final ServerIdentifierTableMgr serverTableMgr, final ChunkMemoryPool chunkMemPool,
-                                      final int threadId, final WebServerFlavor flavor) {
+    public ChunkAllocRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn,
+                                    final ServerIdentifierTableMgr serverTableMgr,
+                                    final int threadId, final WebServerFlavor flavor) {
 
         super(memoryManager, threadThisRunsOn, serverTableMgr, threadId, flavor);
-
-        this.chunkMemPool = chunkMemPool;
 
         /*
          ** The BufferManager(s) that are allocated here are populated in the following Operations:
@@ -201,6 +189,7 @@ public class ObjectServerRequestContext extends RequestContext {
          ** NOTE: Although it seems weird to add the supported HTTP requests after the creating of the
          **   DetermineRequest, the method handler have a dependency upon the determine request.
          */
+        /*
         SetupObjectPut putHandler = new SetupObjectPut(this, memoryManager, metering, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, putHandler);
 
@@ -215,6 +204,8 @@ public class ObjectServerRequestContext extends RequestContext {
 
         SetupObjectList listHandler = new SetupObjectList(this, memoryManager, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.LIST_METHOD, listHandler);
+        */
+
         /*
          ** Setup the specific part for parsing the buffers as an HTTP Request.
          */
@@ -286,7 +277,7 @@ public class ObjectServerRequestContext extends RequestContext {
         operation.complete();
 
         /*
-        ** Clear out the supported operations Map<>
+         ** Clear out the supported operations Map<>
          */
         supportedHttpRequests.clear();
 
@@ -382,5 +373,5 @@ public class ObjectServerRequestContext extends RequestContext {
     public void setObjectId(final int id) { objectId = id;}
 
     public int getObjectId() { return objectId; }
-}
 
+}

@@ -109,7 +109,7 @@ public class WriteToStorageServer implements Operation {
          **   buffers are added by the EncryptBuffer producer
          */
         writeToStorageServerPtr = storageServerWriteBufferMgr.register(this, encryptedBufferPtr,
-                requestContext.getChunkSize());
+                RequestContext.getChunkSize());
 
         /*
         ** Register a dependency upon the writeToStorageServerPtr to know when the buffers have actually been

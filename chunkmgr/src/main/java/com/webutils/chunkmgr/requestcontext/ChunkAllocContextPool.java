@@ -1,4 +1,4 @@
-package com.webutils.objectserver.requestcontext;
+package com.webutils.chunkmgr.requestcontext;
 
 import com.webutils.webserver.buffermgr.ChunkMemoryPool;
 import com.webutils.webserver.memory.MemoryManager;
@@ -7,35 +7,30 @@ import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.RequestContextPool;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
+
+import java.util.concurrent.LinkedBlockingQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.LinkedBlockingQueue;
+public class ChunkAllocContextPool extends RequestContextPool {
 
-public class ObjectServerContextPool extends RequestContextPool {
-
-    private static final Logger LOG = LoggerFactory.getLogger(ObjectServerContextPool.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ChunkAllocContextPool.class);
 
     private final ServerIdentifierTableMgr serverTableMgr;
 
-    private final ChunkMemoryPool chunkMemPool;
-    private boolean chunkMemoryReleased;
-
-    public ObjectServerContextPool(final WebServerFlavor flavor, final MemoryManager memoryManager,
-                                   final ServerIdentifierTableMgr serverTableMgr) {
+    public ChunkAllocContextPool(final WebServerFlavor flavor, final MemoryManager memoryManager,
+                                 final ServerIdentifierTableMgr serverTableMgr) {
         super(flavor, memoryManager, "ObjectServer");
         this.serverTableMgr = serverTableMgr;
 
-        this.chunkMemPool = new ChunkMemoryPool(memoryManager, RequestContext.getChunkBufferCount());
-        chunkMemoryReleased = false;
     }
 
     /*
-    ** This will allocate an ObjectServerRequestContext if this pool has been setup for the running thread.
+     ** This will allocate an ObjectServerRequestContext if this pool has been setup for the running thread.
      */
     public RequestContext allocateContext(final int threadId) {
 
-        ObjectServerRequestContext requestContext;
+        ChunkAllocRequestContext requestContext;
 
         EventPollThread threadThisRequestRunsOn = threadRequestRunsOn.get(threadId);
 
@@ -43,8 +38,8 @@ public class ObjectServerContextPool extends RequestContextPool {
             LinkedBlockingQueue<RequestContext> contextList = runningContexts.get(threadId);
 
             if (contextList != null) {
-                requestContext = new ObjectServerRequestContext(memoryManager, threadThisRequestRunsOn, serverTableMgr,
-                        chunkMemPool, threadId, flavor);
+                requestContext = new ChunkAllocRequestContext(memoryManager, threadThisRequestRunsOn, serverTableMgr,
+                        threadId, flavor);
 
                 if (contextList.offer(requestContext)) {
                     LOG.info("allocateContext(ObjectServer) [" + threadId + "] webServerFlavor: " + flavor.toString());
@@ -54,7 +49,7 @@ public class ObjectServerContextPool extends RequestContextPool {
                 }
             } else {
                 LOG.error("allocateContext(ObjectServer) [" + threadId + "] webServerFlavor: " + flavor.toString() + " threadId: " +
-                                threadId + " contextList not found");
+                        threadId + " contextList not found");
 
                 requestContext = null;
             }
@@ -74,9 +69,9 @@ public class ObjectServerContextPool extends RequestContextPool {
      */
     public RequestContext allocateContextNoCheck(final int threadId) {
 
-        ObjectServerRequestContext requestContext;
+        ChunkAllocRequestContext requestContext;
 
-        requestContext = new ObjectServerRequestContext(memoryManager, null, serverTableMgr, chunkMemPool,
+        requestContext = new ChunkAllocRequestContext(memoryManager, null, serverTableMgr,
                 threadId, flavor);
 
         LinkedBlockingQueue<RequestContext> contextList = runningContexts.get(threadId);
@@ -94,8 +89,7 @@ public class ObjectServerContextPool extends RequestContextPool {
     }
 
     public void stop(final int threadId) {
-        chunkMemPool.reset();
-
         super.stop(threadId);
     }
+
 }

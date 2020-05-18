@@ -5,7 +5,7 @@ import com.webutils.webserver.common.ResponseMd5ResultHandler;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.memory.MemoryManager;
-import com.webutils.webserver.mysql.DbSetup;
+import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.mysql.StorageChunkTableMgr;
 import com.webutils.webserver.operations.ComputeMd5Digest;
 import com.webutils.webserver.operations.Operation;
@@ -26,7 +26,7 @@ public class WriteObjectChunk implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.STORAGE_CHUNK_ALLOC_REQUESTOR;
+    public final OperationTypeEnum operationType = OperationTypeEnum.WRITE_OBJECT_CHUNK;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -158,9 +158,9 @@ public class WriteObjectChunk implements Operation {
                 /*
                  ** Call the Storage Chunk Picker - This is a blocking operation and will take time.
                  */
-                DbSetup dbSetup = requestContext.getDbSetup();
-                if (dbSetup != null) {
-                    if (!dbSetup.getStorageServers(serverList, chunkNumber)) {
+                ServerIdentifierTableMgr serverTableMgr = requestContext.getServerTableMgr();
+                if (serverTableMgr != null) {
+                    if (!serverTableMgr.getStorageServers(serverList, chunkNumber)) {
                         LOG.warn("Unable to obtain storageServerInfo chunk: " + chunkNumber);
                         for (ServerIdentifier serverIdentifier : serverList) {
                             LOG.warn("  serverIdentifier " + serverIdentifier.getServerIpAddress().getHostAddress() +

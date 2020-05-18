@@ -46,20 +46,32 @@ public class ListObjectData {
         this.opcRequestId = requestContext.getRequestId();
     }
 
-    public String execute() {
+    public void execute() {
         String queryStr = buildQueryStr();
         if (queryStr != null) {
             ObjectTableMgr objectMgr = new ObjectTableMgr(flavor, requestContext);
 
             List<Map<String, String>> objectList = new LinkedList<>();
             objectMgr.retrieveMappedObjectInfo(queryStr, objectList);
-            String responseStr = buildObjectResponse(objectList);
+            requestContext.getHttpInfo().setResponseContent(buildObjectResponse(objectList));
 
-            System.out.println(responseStr);
-            return responseStr;
+            /*
+            ** Build the response headers. For the ListObjects method the following are returned:
+            **   opc-client-request-id
+            **   opc-request-id
+             */
+            String opcClientRequestId = requestContext.getHttpInfo().getOpcClientRequestId();
+            int opcRequestId = requestContext.getRequestId();
+
+            String successHeaders;
+            if (opcClientRequestId != null) {
+                successHeaders = "opc-client-request-id: " + opcClientRequestId + "\n" +
+                        "opc-request-id: " + opcRequestId + "\n";
+            } else {
+                successHeaders = "opc-request-id: " + opcRequestId + "\n";
+            }
+            requestContext.getHttpInfo().setResponseHeaders(successHeaders);
         }
-
-        return null;
     }
 
     /*

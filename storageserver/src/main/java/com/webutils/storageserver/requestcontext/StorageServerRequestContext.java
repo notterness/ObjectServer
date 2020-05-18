@@ -7,7 +7,7 @@ import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpMethodEnum;
 import com.webutils.webserver.memory.MemoryManager;
-import com.webutils.webserver.mysql.DbSetup;
+import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.*;
@@ -28,9 +28,9 @@ public class StorageServerRequestContext extends RequestContext {
 
 
     StorageServerRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn,
-                                final DbSetup dbSetup, final int threadId, final WebServerFlavor flavor) {
+                                final ServerIdentifierTableMgr serverTableMgr, final int threadId, final WebServerFlavor flavor) {
 
-        super(memoryManager, threadThisRunsOn, dbSetup, threadId, flavor);
+        super(memoryManager, threadThisRunsOn, serverTableMgr, threadId, flavor);
     }
 
     /*

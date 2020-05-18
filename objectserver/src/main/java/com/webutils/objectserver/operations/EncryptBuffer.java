@@ -106,7 +106,7 @@ public class EncryptBuffer implements Operation {
          */
         onExecutionQueue = false;
 
-        chunkSize = this.requestContext.getChunkSize();
+        chunkSize = RequestContext.getChunkSize();
 
         chunkNumber = 0;
         buffersAllEncrypted = false;
