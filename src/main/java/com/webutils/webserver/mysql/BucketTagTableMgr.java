@@ -1,6 +1,6 @@
 package com.webutils.webserver.mysql;
 
-import com.webutils.webserver.http.PostContentData;
+import com.webutils.webserver.http.CreateBucketPostContent;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,13 +29,13 @@ public class BucketTagTableMgr  extends ObjectStorageDb {
         super(flavor);
     }
 
-    public boolean createBucketTags(final PostContentData postContentData, final int bucketId) {
+    public boolean createBucketTags(final CreateBucketPostContent createBucketPostContent, final int bucketId) {
         boolean success = true;
 
         /*
         ** First walk through all of the Free Form Tags and add those
          */
-        Set<Map.Entry<String, String>> freeFormTags = postContentData.getFreeFormTags();
+        Set<Map.Entry<String, String>> freeFormTags = createBucketPostContent.getFreeFormTags();
 
         Iterator<Map.Entry<String, String>> iter = freeFormTags.iterator();
         while (iter.hasNext()) {
@@ -52,12 +52,12 @@ public class BucketTagTableMgr  extends ObjectStorageDb {
         ** See if there are any Defined Tags and if so, add them
          */
         if (success) {
-            Set<String> definedTagsSubTags = postContentData.getDefinedTagsSubTagKeys();
+            Set<String> definedTagsSubTags = createBucketPostContent.getDefinedTagsSubTagKeys();
             Iterator<String> subTagIter = definedTagsSubTags.iterator();
             while (subTagIter.hasNext()) {
                 String subTag = subTagIter.next();
 
-                Set<Map.Entry<String, String>> subTagPairs = postContentData.getDefinedTags(subTag);
+                Set<Map.Entry<String, String>> subTagPairs = createBucketPostContent.getDefinedTags(subTag);
 
                 Iterator<Map.Entry<String, String>> keyValuePairIter = subTagPairs.iterator();
                 while (keyValuePairIter.hasNext()) {

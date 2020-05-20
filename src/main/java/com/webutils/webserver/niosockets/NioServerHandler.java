@@ -22,6 +22,7 @@ public class NioServerHandler implements Runnable {
 
     public static final int OBJECT_SERVER_BASE_ID = 1000;
     public static final int STORAGE_SERVER_BASE_ID = 2000;
+    public static final int CHUNK_ALLOC_BASE_ID = 5000;
 
     private static final int NUM_POLL_THREADS = 2;
 

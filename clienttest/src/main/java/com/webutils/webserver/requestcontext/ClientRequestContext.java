@@ -1,9 +1,9 @@
 package com.webutils.webserver.requestcontext;
 
 import com.webutils.webserver.buffermgr.BufferManager;
+import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
-import com.webutils.webserver.mysql.ServersDb;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.IoInterface;
 import org.slf4j.Logger;
@@ -28,9 +28,10 @@ public class ClientRequestContext extends RequestContext {
 
     private final AtomicBoolean allObjectDataWritten;
 
-    ClientRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn,
+    ClientRequestContext(final MemoryManager memoryManager, final HttpRequestInfo httpInfo, final EventPollThread threadThisRunsOn,
                          final ServerIdentifierTableMgr serverTableMgr, final int threadId, final WebServerFlavor flavor) {
-        super(memoryManager, threadThisRunsOn, serverTableMgr, threadId, flavor);
+
+        super(memoryManager, httpInfo, threadThisRunsOn, serverTableMgr, threadId, flavor);
 
         /*
          ** Setup the map for the HTTP Request Sent

@@ -1,5 +1,6 @@
 package com.webutils.storageserver.requestcontext;
 
+import com.webutils.storageserver.http.StorageServerHttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.niosockets.EventPollThread;
@@ -35,7 +36,8 @@ public class StorageServerContextPool extends RequestContextPool {
             LinkedBlockingQueue<RequestContext> contextList = runningContexts.get(threadId);
 
             if (contextList != null) {
-                requestContext = new StorageServerRequestContext(memoryManager, threadThisRequestRunsOn, serverTableMgr,
+                StorageServerHttpRequestInfo httpInfo = new StorageServerHttpRequestInfo();
+                requestContext = new StorageServerRequestContext(memoryManager, httpInfo, threadThisRequestRunsOn, serverTableMgr,
                         threadId, flavor);
 
                 if (contextList.offer(requestContext)) {

@@ -166,7 +166,7 @@ public class SetupChunkRead implements Operation {
         /*
          ** First setup the HttpResponseInfo for this request.
          */
-        this.httpInfo = new HttpResponseInfo(requestContext);
+        this.httpInfo = new HttpResponseInfo(requestContext.getRequestId());
         this.storageServer.setHttpInfo(httpInfo);
 
         /*

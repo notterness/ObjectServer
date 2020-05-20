@@ -1,7 +1,7 @@
 package com.webutils.objectserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.http.PostContentData;
+import com.webutils.webserver.http.CreateBucketPostContent;
 import com.webutils.webserver.mysql.BucketTableMgr;
 import com.webutils.webserver.mysql.NamespaceTableMgr;
 import com.webutils.webserver.mysql.TenancyTableMgr;
@@ -24,7 +24,7 @@ public class CreateBucket implements Operation {
 
     private final RequestContext requestContext;
 
-    private final PostContentData postContentData;
+    private final CreateBucketPostContent createBucketPostContent;
 
     private final Operation completeCallback;
 
@@ -40,9 +40,9 @@ public class CreateBucket implements Operation {
      */
     private boolean onExecutionQueue;
 
-    public CreateBucket(final RequestContext requestContext, final PostContentData postContentData, final Operation completeCb) {
+    public CreateBucket(final RequestContext requestContext, final CreateBucketPostContent createBucketPostContent, final Operation completeCb) {
         this.requestContext = requestContext;
-        this.postContentData = postContentData;
+        this.createBucketPostContent = createBucketPostContent;
         this.completeCallback = completeCb;
 
         bucketCreated = false;
@@ -85,7 +85,7 @@ public class CreateBucket implements Operation {
             String namespaceUID = namespaceMgr.getNamespaceUID("Namespace-xyz-987", tenancyUID);
 
             BucketTableMgr bucketMgr = new BucketTableMgr(flavor, requestContext.getRequestId(), requestContext.getHttpInfo());
-            int status = bucketMgr.createBucketEntry(postContentData, namespaceUID);
+            int status = bucketMgr.createBucketEntry(createBucketPostContent, namespaceUID);
             if (status != HttpStatus.OK_200) {
                 /*
                 **

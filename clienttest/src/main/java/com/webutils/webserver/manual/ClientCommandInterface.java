@@ -66,7 +66,7 @@ public class ClientCommandInterface extends ClientInterface {
          */
         ServerIdentifier objectServer = new ServerIdentifier("ObjectCLI", serverIpAddr, serverTcpPort, 0);
 
-        HttpResponseInfo httpResponseInfo = new HttpResponseInfo(clientContext);
+        HttpResponseInfo httpResponseInfo = new HttpResponseInfo(clientContext.getRequestId());
         objectServer.setHttpInfo(httpResponseInfo);
         ClientCommandSend objectDelete = new ClientCommandSend(this, clientContext, memoryManager, objectServer,
                 requestParams);

@@ -1,10 +1,10 @@
-package com.webutils.objectserver.operations;
+package com.webutils.webserver.operations;
 
-import com.webutils.webserver.http.PostContentData;
+import com.webutils.webserver.http.CreateBucketPostContent;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.http.PostContent;
 import com.webutils.webserver.http.parser.PostContentParser;
-import com.webutils.webserver.operations.*;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -32,7 +32,7 @@ public class ParsePostContent implements Operation {
 
     private final PostContentParser parser;
 
-    private final PostContentData postContentData;
+    private final PostContent postContent;
 
     private int savedSrcPosition;
 
@@ -44,12 +44,12 @@ public class ParsePostContent implements Operation {
     private boolean onExecutionQueue;
 
     public ParsePostContent(final RequestContext requestContext, final BufferManagerPointer readBufferPtr,
-                            final Operation metering, final PostContentData postContentData, final Operation completeCb) {
+                            final Operation metering, final PostContent postContent, final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.readBufferPointer = readBufferPtr;
         this.meteringOperation = metering;
-        this.postContentData = postContentData;
+        this.postContent = postContent;
         this.completeCallback = completeCb;
 
         this.clientReadBufferMgr = this.requestContext.getClientReadBufferManager();
@@ -57,7 +57,7 @@ public class ParsePostContent implements Operation {
         /*
          ** Setup the parser to pull the content information out of the POST request
          */
-        parser = new PostContentParser(this.requestContext.getRequestContentLength(), postContentData);
+        parser = new PostContentParser(this.requestContext.getRequestContentLength(), postContent);
 
         /*
          ** This starts out not being on any queue
@@ -130,7 +130,6 @@ public class ParsePostContent implements Operation {
             success = parser.parseBuffer(srcBuffer);
             if (!success) {
                 requestContext.getHttpInfo().setParseFailureCode(HttpStatus.BAD_REQUEST_400);
-                requestContext.setHttpParsingError();
             }
 
             /*
@@ -181,15 +180,14 @@ public class ParsePostContent implements Operation {
             **   that the required attributes are all present.
              */
             if (!parser.getParseError()) {
-                if (postContentData.validatePostContentData()) {
-                    postContentData.dumpMaps();
+                if (postContent.validatePostContentData()) {
+                    postContent.dumpMaps();
                 } else {
                     /*
                     ** Some required attributes are missing. A further enhancement would be to return the missing
                     **   attributes in the payload.
                      */
                     requestContext.getHttpInfo().setParseFailureCode(HttpStatus.BAD_REQUEST_400);
-                    requestContext.setHttpParsingError();
                 }
             } else {
                 LOG.warn("ParsePostContent[" + requestContext.getRequestId() + "] content parser error");

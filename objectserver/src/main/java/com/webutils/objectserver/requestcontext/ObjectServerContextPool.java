@@ -1,5 +1,6 @@
 package com.webutils.objectserver.requestcontext;
 
+import com.webutils.objectserver.http.ObjectServerHttpRequestInfo;
 import com.webutils.webserver.buffermgr.ChunkMemoryPool;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
@@ -43,7 +44,8 @@ public class ObjectServerContextPool extends RequestContextPool {
             LinkedBlockingQueue<RequestContext> contextList = runningContexts.get(threadId);
 
             if (contextList != null) {
-                requestContext = new ObjectServerRequestContext(memoryManager, threadThisRequestRunsOn, serverTableMgr,
+                ObjectServerHttpRequestInfo httpInfo = new ObjectServerHttpRequestInfo();
+                requestContext = new ObjectServerRequestContext(memoryManager, httpInfo, threadThisRequestRunsOn, serverTableMgr,
                         chunkMemPool, threadId, flavor);
 
                 if (contextList.offer(requestContext)) {
@@ -74,10 +76,9 @@ public class ObjectServerContextPool extends RequestContextPool {
      */
     public RequestContext allocateContextNoCheck(final int threadId) {
 
-        ObjectServerRequestContext requestContext;
-
-        requestContext = new ObjectServerRequestContext(memoryManager, null, serverTableMgr, chunkMemPool,
-                threadId, flavor);
+        ObjectServerHttpRequestInfo httpInfo = new ObjectServerHttpRequestInfo();
+        ObjectServerRequestContext requestContext = new ObjectServerRequestContext(memoryManager, httpInfo,
+                null, serverTableMgr, chunkMemPool, threadId, flavor);
 
         LinkedBlockingQueue<RequestContext> contextList = runningContexts.get(threadId);
         if (contextList != null) {

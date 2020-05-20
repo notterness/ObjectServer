@@ -13,8 +13,8 @@ public abstract class ServersDb {
 
     private static final Logger LOG = LoggerFactory.getLogger(ServersDb.class);
 
-    public static final int storageServerTcpPort = 5010;
-    private static final int CHUNKS_TO_ALLOCATE = 10;
+    public static final int STORAGE_SERVER_TCP_PORT = 5010;
+    protected static final int CHUNKS_TO_ALLOCATE = 10;
 
 
     private static final String userName = "root";
@@ -59,6 +59,8 @@ public abstract class ServersDb {
             " k8ServerPort INT," +
             " allocatedChunks INT NOT NULL," +
             " storageTier INT NOT NULL," +
+            " createTime TIMESTAMP NOT NULL," +
+            " serverUID BINARY(16) NOT NULL," +
             " PRIMARY KEY (serverId)" +
             ")";
 
@@ -77,6 +79,8 @@ public abstract class ServersDb {
             " startLba INT NOT NULL," +
             " size INT NOT NULL," +
             " state INT NOT NULL," +
+            " lastAllocateTime TIMESTAMP," +
+            " lastDeleteTime TIMESTAMP," +
             " serverId INT NOT NULL," +
             " FOREIGN KEY(serverId)" +
             "   REFERENCES serverIdentifier(serverId)" +
@@ -93,8 +97,9 @@ public abstract class ServersDb {
     /*
     ** The storageTier field is a representation of the StorageTierEnum. The default is STANDARD_TIER (1).
      */
-    private static final String ADD_STORAGE_SERVER = "INSERT INTO serverIdentifier(serverName, localServerIpAddr, localServerPort, allocatedChunks, storageTier) " +
-            "VALUES(?, 'localhost', ?, ?, ?)";
+    protected static final String ADD_STORAGE_SERVER = "INSERT INTO serverIdentifier(serverName, localServerIpAddr, localServerPort," +
+            " allocatedChunks, storageTier, createTime, serverUID) " +
+            "VALUES(?, ?, ?, ?, ?, CURRENT_TIMESTAMP(), UUID_TO_BIN(UUID()) )";
 
     private static final String DROP_SERVER_IDENTIFIER_TABLE = "DROP TABLE IF EXISTS serverIdentifier";
 
@@ -144,6 +149,9 @@ public abstract class ServersDb {
             createServerTable();
             createChunkTable();
             populateStorageServers(10, StorageTierEnum.STANDARD_TIER);
+
+            ServerChunkMgr chunkMgr = new ServerChunkMgr(flavor);
+            chunkMgr.addStoredProcedure();
         }
     }
 
@@ -435,9 +443,10 @@ public abstract class ServersDb {
                 stmt = conn.prepareStatement(ADD_STORAGE_SERVER, Statement.RETURN_GENERATED_KEYS);
                 for (int i = 0; i < 3; i++) {
                     stmt.setString(1, "storage-server-" + i);
-                    stmt.setInt(2, storageServerTcpPort + i);
-                    stmt.setInt(3, chunksPerStorageServer);
-                    stmt.setInt(4, storageTier.toInt());
+                    stmt.setString(2, "localhost");
+                    stmt.setInt(3, STORAGE_SERVER_TCP_PORT + i);
+                    stmt.setInt(4, chunksPerStorageServer);
+                    stmt.setInt(5, storageTier.toInt());
                     stmt.executeUpdate();
 
                     ResultSet rs = stmt.getGeneratedKeys();
@@ -446,7 +455,7 @@ public abstract class ServersDb {
 
                         ServerChunkMgr chunkMgr = new ServerChunkMgr(flavor);
 
-                        chunkMgr.allocateServerChunks(serverId, CHUNKS_TO_ALLOCATE, RequestContext.getChunkSize());
+                        chunkMgr.addServerChunks(serverId, CHUNKS_TO_ALLOCATE, RequestContext.getChunkSize());
                     }
                     rs.close();
                 }
@@ -472,5 +481,74 @@ public abstract class ServersDb {
         }
     }
 
+    /*
+     ** This obtains the UID for a particular table entry. It will return NULL if the entry does not exist.
+     */
+    public String getUID(final String uidQueryStr) {
+        String uid = null;
+
+        Connection conn = getServersDbConn();
+
+        if (conn != null) {
+            Statement stmt = null;
+            ResultSet rs = null;
+
+            try {
+                stmt = conn.createStatement();
+                if (stmt.execute(uidQueryStr)) {
+                    rs = stmt.getResultSet();
+                }
+            } catch (SQLException sqlEx) {
+                LOG.error("getUID() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("Bad SQL command: " + uidQueryStr);
+                System.out.println("SQLException: " + sqlEx.getMessage());
+            } finally {
+                if (rs != null) {
+                    try {
+                        int count = 0;
+                        while (rs.next()) {
+                            /*
+                             ** The rs.getString(1) is the String format of the UID.
+                             */
+                            uid = rs.getString(1);
+                            //LOG.info("Requested UID: " + uid);
+
+                            count++;
+                        }
+
+                        if (count != 1) {
+                            uid = null;
+                            LOG.warn("getUID() incorrect response count: " + count);
+                            LOG.warn(uidQueryStr);
+                        }
+                    } catch (SQLException sqlEx) {
+                        System.out.println("getUID() SQL conn rs.next() SQLException: " + sqlEx.getMessage());
+                    }
+
+                    try {
+                        rs.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("getUID() SQL conn rs.close() SQLException: " + sqlEx.getMessage());
+                    }
+                }
+
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("getUID() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQLException: " + sqlEx.getMessage());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database tables.
+             */
+            closeStorageServerDbConn(conn);
+        }
+
+        return uid;
+    }
 
 }

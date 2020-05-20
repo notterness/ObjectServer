@@ -1,8 +1,8 @@
 package com.webutils.webserver.requestcontext;
 
+import com.webutils.webserver.http.ClientHttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
-import com.webutils.webserver.mysql.ServersDb;
 import com.webutils.webserver.niosockets.EventPollThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,7 +34,8 @@ public class ClientContextPool extends RequestContextPool {
             LinkedBlockingQueue<RequestContext> contextList = runningContexts.get(threadId);
 
             if (contextList != null) {
-                requestContext = new ClientRequestContext(memoryManager, threadThisRequestRunsOn, serverTableMgr,
+                ClientHttpRequestInfo httpInfo = new ClientHttpRequestInfo();
+                requestContext = new ClientRequestContext(memoryManager, httpInfo, threadThisRequestRunsOn, serverTableMgr,
                         threadId, flavor);
 
                 if (contextList.offer(requestContext)) {

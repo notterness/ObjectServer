@@ -6,6 +6,7 @@ import com.webutils.storageserver.operations.StorageServerDetermineRequest;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpMethodEnum;
+import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.niosockets.EventPollThread;
@@ -27,10 +28,10 @@ public class StorageServerRequestContext extends RequestContext {
     private StorageServerDetermineRequest determineRequestType;
 
 
-    StorageServerRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn,
+    StorageServerRequestContext(final MemoryManager memoryManager, final HttpRequestInfo httpInfo, final EventPollThread threadThisRunsOn,
                                 final ServerIdentifierTableMgr serverTableMgr, final int threadId, final WebServerFlavor flavor) {
 
-        super(memoryManager, threadThisRunsOn, serverTableMgr, threadId, flavor);
+        super(memoryManager, httpInfo, threadThisRunsOn, serverTableMgr, threadId, flavor);
     }
 
     /*

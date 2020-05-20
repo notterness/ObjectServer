@@ -9,7 +9,7 @@ import com.webutils.webserver.requestcontext.WebServerFlavor;
 // Server class
 public class StorageServerMain {
     public static void main(String[] args) {
-        int baseTcpPort = ServersDb.storageServerTcpPort;
+        int baseTcpPort = ServersDb.STORAGE_SERVER_TCP_PORT;
         WebServerFlavor flavor = WebServerFlavor.INTEGRATION_STORAGE_SERVER_TEST;
 
 

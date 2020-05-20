@@ -5,6 +5,7 @@ import com.webutils.webserver.common.ResponseMd5ResultHandler;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.memory.MemoryManager;
+import com.webutils.webserver.mysql.ServerChunkMgr;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.mysql.StorageChunkTableMgr;
 import com.webutils.webserver.operations.ComputeMd5Digest;
@@ -16,6 +17,8 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -156,6 +159,19 @@ public class WriteObjectChunk implements Operation {
                 LOG.info("WriteObjectChunk() REQUEST_STORAGE_CHUNK");
 
                 /*
+                **
+                 */
+                try {
+                    InetAddress inetAddress = InetAddress.getByName("localhost");
+                    ServerIdentifier testServer = new ServerIdentifier("test-server", inetAddress, 5020, 0);
+                    testServer.setServerId(2);
+                    ServerChunkMgr chunkMgr = new ServerChunkMgr(requestContext.getWebServerFlavor());
+                    chunkMgr.allocateChunk(testServer);
+                } catch (UnknownHostException ex) {
+
+                }
+
+                /*
                  ** Call the Storage Chunk Picker - This is a blocking operation and will take time.
                  */
                 ServerIdentifierTableMgr serverTableMgr = requestContext.getServerTableMgr();
@@ -215,7 +231,7 @@ public class WriteObjectChunk implements Operation {
                     ** FIXME: The setLength should be a passed in parameter to the allocation call for the obtaining
                     **   the ServerIdentifier
                      */
-                    HttpResponseInfo httpInfo = new HttpResponseInfo(requestContext);
+                    HttpResponseInfo httpInfo = new HttpResponseInfo(requestContext.getRequestId());
                     server.setHttpInfo(httpInfo);
 
                     server.setLength(chunkBytesToWrite);

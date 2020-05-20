@@ -1,35 +1,34 @@
 package com.webutils.webserver.http.parser;
 
 /*
-** This class is used to parse the content passed in through the POST REST method. An example of the content looks like:
+** This class is used to parse the content passed in through the POST REST method. An example of the content looks like
+**  the following for the CreateBucket:
 **
-**  {
-**    "compartmentId": "ocid.compartment.test.exampleuniquecompartmentID",
-**    "namespace": "ansh8lvru1zp",
-**    "objectEventsEnabled": true,
-**    "name": "my-test-1",
-**    "freeformTags": {"Department": "Finance"},
-**    "definedTags":
-**    {
-**      "MyTags":
-**      {
-**        "CostCenter": "42",
-**        "Project": "Stealth",
-**        "CreatedBy": "BillSmith",
-**        "CreatedDate": "9/21/2017T14:00"
-**      },
-**      "Audit":
-**      {
-**        "DataSensitivity": "PII",
-**        "CageSecurity": "High",
-**        "Simplicity": "complex"
-**      }
-**    }
-**  }
+**   {
+**       "compartmentId": "clienttest.compartment.12345.abcde",
+**       "namespace": "testnamespace",
+**       "name": "CreateBucket_Simple",
+**       "objectEventsEnabled": false,
+**       "freeformTags": {"Test_1": "Test_2"},
+**       "definedTags":
+**       {
+**           "MyTags":
+**           {
+**               "TestTag_1": "ABC",
+**               "TestTag_2": "123",
+**           }
+**           "Audit":
+**           {
+**               "DataSensitivity": "PII",
+**               "CageSecurity": "High",
+**               "Simplicity": "complex"
+**           }
+**       }
+**   }
  */
 
 import com.webutils.webserver.http.HttpInfo;
-import com.webutils.webserver.http.PostContentData;
+import com.webutils.webserver.http.PostContent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,16 +40,16 @@ public class PostContentParser {
     private static final Logger LOG = LoggerFactory.getLogger(PostContentParser.class);
 
     private final int contentLength;
-    private final PostContentData postContentData;
+    private final PostContent postContent;
 
     private int contentBytesParsed;
 
     private boolean parseError;
 
-    public PostContentParser(final int contentLength, final PostContentData postContentData) {
+    public PostContentParser(final int contentLength, final PostContent postContent) {
 
         this.contentLength = contentLength;
-        this.postContentData = postContentData;
+        this.postContent = postContent;
 
         this.contentBytesParsed = 0;
         this.parseError = false;
@@ -78,7 +77,7 @@ public class PostContentParser {
                  */
                 //LOG.info(" token: " + str1);
 
-                if (!postContentData.addData(str1)) {
+                if (!postContent.addData(str1)) {
                     parseError = true;
                     return false;
                 }

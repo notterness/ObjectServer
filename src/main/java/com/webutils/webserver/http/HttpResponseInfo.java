@@ -21,17 +21,13 @@ public class HttpResponseInfo extends HttpInfo {
     private static final String RESPONSE_ALLOWED_METHODS = "allow";
 
     private final AtomicBoolean statusSet;
-    private int responseStatus;
 
-    private String responseBody;
+    public HttpResponseInfo(final int requestTrackingId) {
 
-    public HttpResponseInfo(final RequestContext requestContext) {
-
-        super(requestContext);
+        super();
 
         statusSet = new AtomicBoolean(false);
-
-        responseBody = null;
+        requestId = requestTrackingId;
     }
 
     /*
@@ -131,15 +127,11 @@ public class HttpResponseInfo extends HttpInfo {
             parseFailureCode = HttpStatus.NO_CONTENT_204;
             parseFailureReason = HttpStatus.getMessage(parseFailureCode);
 
-            LOG.warn("No Content-Length [" + requestContext.getRequestId() + "] code: " +
+            LOG.warn("No Content-Length [" + requestId + "] code: " +
                     parseFailureCode + " reason: " + parseFailureReason);
-
-            requestContext.setHttpParsingError();
         }
 
         headerComplete = true;
-
-        requestContext.httpHeaderParseComplete(contentLength);
     }
 
     /*
@@ -169,7 +161,7 @@ public class HttpResponseInfo extends HttpInfo {
                     parseFailureCode = HttpStatus.RANGE_NOT_SATISFIABLE_416;
                     parseFailureReason = HttpStatus.getMessage(parseFailureCode);
 
-                    LOG.info("Invalid Content-Length [" + requestContext.getRequestId() + "] code: " +
+                    LOG.info("Invalid Content-Length [" + requestId + "] code: " +
                             parseFailureCode + " reason: " + parseFailureReason);
                 }
             } catch (NumberFormatException num_ex) {
@@ -179,7 +171,7 @@ public class HttpResponseInfo extends HttpInfo {
                 parseFailureCode = HttpStatus.RANGE_NOT_SATISFIABLE_416;
                 parseFailureReason = HttpStatus.getMessage(parseFailureCode);
 
-                LOG.info("Invalid Content-Length [" + requestContext.getRequestId() + "] code: " +
+                LOG.info("Invalid Content-Length [" + requestId + "] code: " +
                         parseFailureCode + " reason: " + parseFailureReason);
             }
         }

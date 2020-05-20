@@ -109,6 +109,9 @@ public class Sha256ResultHandler {
      **   that the contentHasValidSha256Digest and computedSha256Digest values are valid.
      */
     public void setSha256DigestComplete(final String digest) {
+
+        LOG.info("setSha256DigestComplete() " + digest);
+
         computedSha256Digest = digest;
         sha256DigestComplete.set(true);
     }

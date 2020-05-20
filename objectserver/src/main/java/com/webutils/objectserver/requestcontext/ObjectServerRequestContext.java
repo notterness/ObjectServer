@@ -1,13 +1,14 @@
 package com.webutils.objectserver.requestcontext;
 
+import com.webutils.objectserver.http.ObjectServerHttpRequestInfo;
 import com.webutils.objectserver.operations.*;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.buffermgr.ChunkMemoryPool;
 import com.webutils.webserver.http.HttpMethodEnum;
+import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
-import com.webutils.webserver.mysql.ServersDb;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.*;
@@ -66,11 +67,11 @@ public class ObjectServerRequestContext extends RequestContext {
     private final Map<ServerIdentifier, Integer> storageServerResponse;
 
 
-    public ObjectServerRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn,
-                                      final ServerIdentifierTableMgr serverTableMgr, final ChunkMemoryPool chunkMemPool,
-                                      final int threadId, final WebServerFlavor flavor) {
+    public ObjectServerRequestContext(final MemoryManager memoryManager, final HttpRequestInfo httpInfo,
+                                      final EventPollThread threadThisRunsOn, final ServerIdentifierTableMgr serverTableMgr,
+                                      final ChunkMemoryPool chunkMemPool, final int threadId, final WebServerFlavor flavor) {
 
-        super(memoryManager, threadThisRunsOn, serverTableMgr, threadId, flavor);
+        super(memoryManager, httpInfo, threadThisRunsOn, serverTableMgr, threadId, flavor);
 
         this.chunkMemPool = chunkMemPool;
 
@@ -204,7 +205,7 @@ public class ObjectServerRequestContext extends RequestContext {
         SetupObjectPut putHandler = new SetupObjectPut(this, memoryManager, metering, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, putHandler);
 
-        SetupObjectServerPost postHandler = new SetupObjectServerPost(this, metering, determineRequest);
+        SetupCreateBucketPost postHandler = new SetupCreateBucketPost(this, metering, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.POST_METHOD, postHandler);
 
         SetupObjectGet getHandler = new SetupObjectGet(this, memoryManager, chunkMemPool, determineRequest);

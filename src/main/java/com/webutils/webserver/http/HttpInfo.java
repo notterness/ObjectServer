@@ -1,6 +1,5 @@
 package com.webutils.webserver.http;
 
-import com.webutils.webserver.requestcontext.RequestContext;
 import org.eclipse.jetty.http.BadMessageException;
 import org.eclipse.jetty.http.HostPortHttpField;
 import org.eclipse.jetty.http.HttpField;
@@ -62,7 +61,7 @@ abstract public class HttpInfo {
     /*
      ** The connection this HTTP information is associated with
      */
-    protected final RequestContext requestContext;
+    protected int requestId;
 
     /*
      ** HTTP level
@@ -115,9 +114,7 @@ abstract public class HttpInfo {
     protected boolean contentLengthReceived;
     protected int contentLength;
 
-    public HttpInfo(final RequestContext requestContext) {
-
-        this.requestContext = requestContext;
+    public HttpInfo() {
 
         // provide case-insensitive key management for the headers map using get(), containsKey(), and put()
         headers = new HashMap<>() {
@@ -173,7 +170,14 @@ abstract public class HttpInfo {
          */
         contentLengthReceived = false;
         contentLength = 0;
+
+        /*
+        ** The requestId is a unique Id used to track this client request
+         */
+        requestId = -1;
     }
+
+    public void setRequestId(final int requestTrackingId) { requestId = requestTrackingId; }
 
     /*
      ** Clear out all of the String fields and release the memory
@@ -209,6 +213,8 @@ abstract public class HttpInfo {
          */
         contentLengthReceived = false;
         contentLength = 0;
+
+        requestId = -1;
     }
 
     /*
@@ -294,13 +300,13 @@ abstract public class HttpInfo {
                 if ((endingIndex != -1) && (endingIndex != startingIndex)) {
                     try {
                         tmp = uri.substring(startingIndex, endingIndex);
-                        LOG.info("setHttpUri() [" + requestContext.getRequestId() + "] name: " + uriField + " name: " + tmp);
+                        LOG.info("setHttpUri() [" + requestId + "] name: " + uriField + " name: " + tmp);
                     } catch (IndexOutOfBoundsException ex) {
-                        LOG.warn("setHttpUri() [" + requestContext.getRequestId() + "] name:" + uriField + " startingIndex: " + startingIndex + " endingIndex: " + endingIndex);
+                        LOG.warn("setHttpUri() [" + requestId + "] name:" + uriField + " startingIndex: " + startingIndex + " endingIndex: " + endingIndex);
                     }
                 }
             } else {
-                //LOG.warn("setHttpUri() [" + requestContext.getRequestId() + "] name: " + uriField + " is null");
+                //LOG.warn("setHttpUri() [" + requestId + "] name: " + uriField + " is null");
             }
 
             if (tmp != null) {
@@ -373,20 +379,18 @@ abstract public class HttpInfo {
                 "\r\n}";
         setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
 
-        LOG.info("badMessage() [" + requestContext.getRequestId() + "] code: " +
+        LOG.info("badMessage() [" + requestId + "] code: " +
                 parseFailureCode + " reason: " + parseFailureReason);
     }
 
     public void setParseFailureCode(final int errorCode) {
         parseFailureCode = errorCode;
         parseFailureReason = HttpStatus.getMessage(parseFailureCode);
-        requestContext.setHttpParsingError();
     }
 
     public void setParseFailureCode(final int errorCode, final String failureMessage) {
         parseFailureCode = errorCode;
         parseFailureReason = failureMessage;
-        requestContext.setHttpParsingError();
     }
 
     public int getParseFailureCode() {
@@ -474,6 +478,8 @@ abstract public class HttpInfo {
 
         return opcRequestId.get(0);
     }
+
+    public int getRequestId() { return requestId; }
 
     /*
      ** Return the "opc-request-id". This is an required field in the Storage Server PUT Object request.

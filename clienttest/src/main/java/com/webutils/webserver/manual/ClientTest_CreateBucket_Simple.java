@@ -2,7 +2,6 @@ package com.webutils.webserver.manual;
 
 import com.webutils.webserver.common.Sha256Digest;
 import com.webutils.webserver.niosockets.NioTestClient;
-import com.webutils.webserver.operations.OperationTypeEnum;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
@@ -13,8 +12,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
 
 class ClientTest_CreateBucket_Simple extends ClientTest {
-
-    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_TEST_CREATE_BUCKET_SIMPLE;
 
     private String sha256Digest;
 
@@ -68,7 +65,7 @@ class ClientTest_CreateBucket_Simple extends ClientTest {
                         "  \"namespace\": \"testnamespace\",\n" +
                         "  \"name\": \"CreateBucket_Simple\",\n" +
                         "  \"objectEventsEnabled\": false,\n" +
-                        "  \"freeformTags\": {\"Test_1\": \"Test_2\"}\", \n" +
+                        "  \"freeformTags\": {\"Test_1\": \"Test_2\"}, \n" +
                         "  \"definedTags\":\n" +
                         "  {\n" +
                         "    \"MyTags\":\n" +
@@ -102,8 +99,6 @@ class ClientTest_CreateBucket_Simple extends ClientTest {
         System.out.println("start: " + tmpBuffer.position() + " limit: " + tmpBuffer.limit());
         digest.digestByteBuffer(tmpBuffer);
         sha256Digest = digest.getFinalDigest();
-
-        System.out.println("sha256 digest: " + sha256Digest);
 
         return contentString;
     }

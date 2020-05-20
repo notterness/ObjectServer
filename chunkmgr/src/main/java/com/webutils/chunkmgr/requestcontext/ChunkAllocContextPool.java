@@ -1,6 +1,6 @@
 package com.webutils.chunkmgr.requestcontext;
 
-import com.webutils.webserver.buffermgr.ChunkMemoryPool;
+import com.webutils.chunkmgr.http.ChunkMgrHttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.niosockets.EventPollThread;
@@ -22,7 +22,6 @@ public class ChunkAllocContextPool extends RequestContextPool {
                                  final ServerIdentifierTableMgr serverTableMgr) {
         super(flavor, memoryManager, "ObjectServer");
         this.serverTableMgr = serverTableMgr;
-
     }
 
     /*
@@ -38,7 +37,8 @@ public class ChunkAllocContextPool extends RequestContextPool {
             LinkedBlockingQueue<RequestContext> contextList = runningContexts.get(threadId);
 
             if (contextList != null) {
-                requestContext = new ChunkAllocRequestContext(memoryManager, threadThisRequestRunsOn, serverTableMgr,
+                ChunkMgrHttpRequestInfo httpInfo = new ChunkMgrHttpRequestInfo();
+                requestContext = new ChunkAllocRequestContext(memoryManager, httpInfo, threadThisRequestRunsOn, serverTableMgr,
                         threadId, flavor);
 
                 if (contextList.offer(requestContext)) {
@@ -58,32 +58,6 @@ public class ChunkAllocContextPool extends RequestContextPool {
 
             requestContext = null;
         }
-
-        return requestContext;
-    }
-
-    /*
-     ** This will allocate an ObjectServerRequestContext and is used for the test cases where there is not an
-     **   EventPollThread used to run the test case. These test cases are when testing is done on a particular
-     **   operation or sequence of operations.
-     */
-    public RequestContext allocateContextNoCheck(final int threadId) {
-
-        ChunkAllocRequestContext requestContext;
-
-        requestContext = new ChunkAllocRequestContext(memoryManager, null, serverTableMgr,
-                threadId, flavor);
-
-        LinkedBlockingQueue<RequestContext> contextList = runningContexts.get(threadId);
-        if (contextList != null) {
-            LOG.info("allocateContextNoCheck(ObjectServer) [" + threadId + "] webServerFlavor: " + flavor.toString());
-        } else {
-            LOG.info("allocateContextNoCheck(ObjectServer) [" + threadId + "] webServerFlavor: " + flavor.toString() + " contextList not found");
-            contextList = new LinkedBlockingQueue<>();
-            runningContexts.put(threadId, contextList);
-        }
-
-        contextList.add(requestContext);
 
         return requestContext;
     }

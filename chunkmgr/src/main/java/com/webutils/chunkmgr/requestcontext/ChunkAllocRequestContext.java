@@ -1,7 +1,10 @@
 package com.webutils.chunkmgr.requestcontext;
 
+import com.webutils.chunkmgr.operations.SetupCreateServerPost;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.http.HttpMethodEnum;
+import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.niosockets.EventPollThread;
@@ -56,11 +59,11 @@ public class ChunkAllocRequestContext extends RequestContext {
     private final Map<ServerIdentifier, Integer> storageServerResponse;
 
 
-    public ChunkAllocRequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn,
-                                    final ServerIdentifierTableMgr serverTableMgr,
+    public ChunkAllocRequestContext(final MemoryManager memoryManager, final HttpRequestInfo httpInfo,
+                                    final EventPollThread threadThisRunsOn, final ServerIdentifierTableMgr serverTableMgr,
                                     final int threadId, final WebServerFlavor flavor) {
 
-        super(memoryManager, threadThisRunsOn, serverTableMgr, threadId, flavor);
+        super(memoryManager, httpInfo, threadThisRunsOn, serverTableMgr, threadId, flavor);
 
         /*
          ** The BufferManager(s) that are allocated here are populated in the following Operations:
@@ -189,22 +192,8 @@ public class ChunkAllocRequestContext extends RequestContext {
          ** NOTE: Although it seems weird to add the supported HTTP requests after the creating of the
          **   DetermineRequest, the method handler have a dependency upon the determine request.
          */
-        /*
-        SetupObjectPut putHandler = new SetupObjectPut(this, memoryManager, metering, determineRequest);
-        supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, putHandler);
-
-        SetupObjectServerPost postHandler = new SetupObjectServerPost(this, metering, determineRequest);
+        SetupCreateServerPost postHandler = new SetupCreateServerPost(this, metering, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.POST_METHOD, postHandler);
-
-        SetupObjectGet getHandler = new SetupObjectGet(this, memoryManager, chunkMemPool, determineRequest);
-        supportedHttpRequests.put(HttpMethodEnum.GET_METHOD, getHandler);
-
-        SetupObjectDelete deleteHandler = new SetupObjectDelete(this, memoryManager, determineRequest);
-        supportedHttpRequests.put(HttpMethodEnum.DELETE_METHOD, deleteHandler);
-
-        SetupObjectList listHandler = new SetupObjectList(this, memoryManager, determineRequest);
-        supportedHttpRequests.put(HttpMethodEnum.LIST_METHOD, listHandler);
-        */
 
         /*
          ** Setup the specific part for parsing the buffers as an HTTP Request.

@@ -1,44 +1,40 @@
 package com.webutils.webserver.http;
 
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
-public class PostContentData {
-    private static final Logger LOG = LoggerFactory.getLogger(PostContentData.class);
+public abstract class PostContent {
+    private static final Logger LOG = LoggerFactory.getLogger(PostContent.class);
 
     private static final String FREE_FORM_TAG = "freeformTags";
     private static final String DEFINED_TAGS = "definedTags";
 
+    protected static final String COMPARTMENT_ID_ATTRIBUTE = "compartmentId";
+    protected static final String STORAGE_TIER_ATTRIBUTE = "storageTier";
+
     private static final int DEFINED_TAGS_SUB_CATEGORY_DEPTH = 3;
 
-    private static final String NAME_ATTRIBUTE = "name";
-    private static final String COMPARTMENT_ID_ATTRIBUTE = "compartmentId";
-    private static final String EVENTS_ENABLED_ATTRIBUTE = "objectEventsEnabled";
-    private static final String STORAGE_TIER_ATTRIBUTE = "storageTier";
+    protected final Map<String, String> params;
 
-    private final Map<String, String> bucketParams;
+    protected final Map<String, String> freeformTags;
 
-    private final Map<String, String> freeformTags;
+    protected final Map<String, Map<String, String>> definedTags;
 
-    private final Map<String, Map<String, String>> definedTags;
+    protected final Map<String, Map<String, String>> keyValuePairPlacement;
 
-    private final Map<String, Map<String, String>> keyValuePairPlacement;
+    protected final Stack<String> keyStringStack;
 
-    private final Stack<String> keyStringStack;
+    protected final LinkedList<String> requiredAttributes;
 
-    private final LinkedList<String> requiredAttributes;
-
-    private int bracketDepth;
+    protected int bracketDepth;
     private boolean keyStrObtained;
 
     private String keyStr;
 
-    public PostContentData() {
-
-        bucketParams = new HashMap<>(10);
+    PostContent() {
+        params = new HashMap<>(10);
         freeformTags = new HashMap<>(10);
         definedTags = new HashMap<>(10);
 
@@ -48,15 +44,15 @@ public class PostContentData {
         keyStringStack = new Stack<>();
 
         /*
-        ** Fill in the list of required attributes so they are easy to check
+         ** Fill in the list of required attributes so they are easy to check
          */
         requiredAttributes = new LinkedList<>();
-        requiredAttributes.add(NAME_ATTRIBUTE);
-        requiredAttributes.add(COMPARTMENT_ID_ATTRIBUTE);
 
         bracketDepth = 0;
         keyStrObtained = false;
     }
+
+    public abstract boolean validatePostContentData();
 
     public boolean addData(final String str1) {
         boolean parsingError = false;
@@ -144,7 +140,7 @@ public class PostContentData {
                          ** Simple case, just add to the normal bucketParams Map
                          */
                         //LOG.info("empty stack - " + keyStr + " : " + str1);
-                        bucketParams.put(keyStr, str1);
+                        params.put(keyStr, str1);
                     } else {
                         try {
                             String mapSelector = keyStringStack.peek();
@@ -174,7 +170,7 @@ public class PostContentData {
         }
 
         /*
-        ** When a parsing error is hit, clean up the resources
+         ** When a parsing error is hit, clean up the resources
          */
         if (parsingError) {
             LOG.error("Parsing error - clearing all data");
@@ -185,60 +181,12 @@ public class PostContentData {
     }
 
     /*
-    ** This is used to validate that the required fields are present for the Create Bucket operation.
-    **   The required fields are:
-    **     "name" - This is the Bucket name
-    **     "compartmentId" - THe ID of the compartment in which to create the bucket.
-    **
-    **   Optional fields are:
-    **     "metadata" - A String up to 4kB in length
-    **     "publicAccessType" -
-    **     "storageTier" - default is "Standard", allowed values are "Standard" and "Archive"
-    **     "objectEventsEnabled" - boolean
-    **     "freeformTags"
-    **     "definedTags"
-    **     "kmsKeyId" - UID to access the master encryption key.
-    **
-    ** NOTE: At some point it might be worth validating that there are no unexpected attributes passed in. The other
-    **   thing to validate would be the contents of the attributes to make sure garbage data is not provided.
-     */
-    public boolean validatePostContentData() {
-        boolean valid = true;
-
-        /*
-        ** First make sure that the bracketDepth is 0 to insure the brackets are properly paired.
-         */
-        if (bracketDepth == 0) {
-            /*
-            ** Make sure the required information is present
-             */
-            for (String attribute : requiredAttributes) {
-                if (!bucketParams.containsKey(attribute)) {
-                    valid = false;
-
-                    LOG.error("Missing required attribute: " + attribute);
-                    break;
-                }
-            }
-
-        } else {
-            LOG.error("Invalid bracketDepth: " + bracketDepth);
-            valid = false;
-        }
-        if (!valid) {
-            clearAllMaps();
-        }
-
-        return valid;
-    }
-
-    /*
-    ** Debug method to display the information that has been stored in the various maps from the information in the
-    **   Create Bucket POST operation.
+     ** Debug method to display the information that has been stored in the various maps from the information in the
+     **   Create Bucket POST operation.
      */
     public void dumpMaps() {
         LOG.info("bucketParams");
-        for (Map.Entry<String, String> entry : bucketParams.entrySet()) {
+        for (Map.Entry<String, String> entry : params.entrySet()) {
             LOG.info("    " + entry.getKey() + " : " + entry.getValue());
         }
 
@@ -258,85 +206,23 @@ public class PostContentData {
         }
     }
 
-    public String getBucketName() {
-        return bucketParams.get(NAME_ATTRIBUTE);
-    }
-
-    public String getCompartmentId() {
-        return bucketParams.get(COMPARTMENT_ID_ATTRIBUTE);
-    }
-
-    public int getObjectEventsEnabled() {
-        int enabled;
-
-        String eventsEnabled = bucketParams.get(EVENTS_ENABLED_ATTRIBUTE);
-        if (eventsEnabled == null) {
-            enabled = 0;
-        } else if (eventsEnabled.equals("true")) {
-            enabled = 1;
-        } else {
-            enabled = 0;
-        }
-
-        return enabled;
-    }
 
     /*
-    ** The possible Storage Tiers are:
-    **
-    **   Standard - 3 copies of the data within the same data center
-    **   Intelligent-Tiering - Moves data between fast and slow disk depending on access patterns. Always uses 3
-    **     copies of the data.
-    **   Standard-IA (Infrequent Access) - 3 copies on slow disk
-    **   OneZone (Another form of Infrequent Access with less redundacy) - 2 copies of the data on slow disk.
-    **   Archive (slower access than Standard-IA) -
-    **   DeepArchive (slowest access of all, data may be kept on offline storage) -
-    **
-    ** NOTE: If the "storageTier" attribute is not set, then the default is "Standard"
-     */
-    public String getStorageTier() {
-        String storageTier = bucketParams.get(STORAGE_TIER_ATTRIBUTE);
-        if (storageTier == null) {
-            storageTier = "Standard";
-        }
-
-        return storageTier;
-    }
-
-    public Set<Map.Entry<String, String>> getFreeFormTags() {
-        return freeformTags.entrySet();
-    }
-
-    public Set<Map.Entry<String, String>> getDefinedTags(final String subTagName) {
-        Map<String, String> subCategory = definedTags.get(subTagName);
-
-        if (subCategory != null) {
-            return subCategory.entrySet();
-        } else {
-            return null;
-        }
-    }
-
-    public Set<String> getDefinedTagsSubTagKeys() {
-        return definedTags.keySet();
-    }
-
-    /*
-    ** This is used to create (if needed) additional maps to hold sub-category information under the "definedTags"
-    **    category.
+     ** This is used to create (if needed) additional maps to hold sub-category information under the "definedTags"
+     **    category.
      */
     private boolean checkForDefinedTags(final String keyStr) {
         boolean parsingError = false;
 
         /*
-        ** First make sure the depth is set to 3, otherwise there is no point checking.
-        **   The "definedTags" listing must be at level 3. The input data follows the following pattern:
-        **
-        **   {  - Bracket Depth is 1
-        **      "definedTags"
-        **      {  - Bracket Depth is 2, "definedTags is pushed onto the stack
-        **          "MyTags" - keyStrObtained is set to true
-        **          {  - Bracket Depth is 3, "definedTags" is at the top of the stack
+         ** First make sure the depth is set to 3, otherwise there is no point checking.
+         **   The "definedTags" listing must be at level 3. The input data follows the following pattern:
+         **
+         **   {  - Bracket Depth is 1
+         **      "definedTags"
+         **      {  - Bracket Depth is 2, "definedTags is pushed onto the stack
+         **          "MyTags" - keyStrObtained is set to true
+         **          {  - Bracket Depth is 3, "definedTags" is at the top of the stack
          */
         if (bracketDepth == DEFINED_TAGS_SUB_CATEGORY_DEPTH) {
             /*
@@ -346,8 +232,8 @@ public class PostContentData {
                 String topOfStackStr = keyStringStack.peek();
                 if (topOfStackStr.equals(DEFINED_TAGS)) {
                     /*
-                    ** This means a new Map is needed to hold the values for the sub-tags (these are key value pairs
-                    **   that are under a new sub-category within the "definedTags" grouping).
+                     ** This means a new Map is needed to hold the values for the sub-tags (these are key value pairs
+                     **   that are under a new sub-category within the "definedTags" grouping).
                      */
                     if (!definedTags.containsKey(keyStr)) {
                         //LOG.info("Creating new map under definedTags: " + keyStr);
@@ -357,7 +243,7 @@ public class PostContentData {
                         definedTags.put(keyStr, subCategoryMap);
 
                         /*
-                        ** Also add this to the keyValuePairPlacement map so the items can easily be added
+                         ** Also add this to the keyValuePairPlacement map so the items can easily be added
                          */
                         keyValuePairPlacement.put(keyStr, subCategoryMap);
                     }
@@ -372,26 +258,54 @@ public class PostContentData {
     }
 
     /*
-    ** This is called either when there is a parsing error or after the data has all been processed (i.e. used to create
-    **   the Bucket). It is the cleanup step to insure that all resources have been released.
+     ** This is called either when there is a parsing error or after the data has all been processed (i.e. used to create
+     **   the Bucket). It is the cleanup step to insure that all resources have been released.
      */
-    private void clearAllMaps() {
+    protected void clearAllMaps() {
         for (Map.Entry<String, Map<String, String>> entry : definedTags.entrySet()) {
             entry.getValue().clear();
         }
         definedTags.clear();
 
-        bucketParams.clear();
+        params.clear();
         freeformTags.clear();
 
         keyValuePairPlacement.clear();
 
         /*
-        ** Clear out the stack just in case
+         ** Clear out the stack just in case
          */
         keyStringStack.clear();
         bracketDepth = 0;
         keyStr = null;
         keyStrObtained = false;
     }
+
+    /*
+     ** The possible Storage Tiers are:
+     **
+     **   Standard - 3 copies of the data within the same data center
+     **   Intelligent-Tiering - Moves data between fast and slow disk depending on access patterns. Always uses 3
+     **     copies of the data.
+     **   Standard-IA (Infrequent Access) - 3 copies on slow disk
+     **   OneZone (Another form of Infrequent Access with less redundacy) - 2 copies of the data on slow disk.
+     **   Archive (slower access than Standard-IA) -
+     **   DeepArchive (slowest access of all, data may be kept on offline storage) -
+     **
+     ** NOTE: If the "storageTier" attribute is not set, then the default is "Standard"
+     */
+    public StorageTierEnum getStorageTier() {
+        String storageTierStr = params.get(STORAGE_TIER_ATTRIBUTE);
+
+        StorageTierEnum storageTier;
+        if (storageTierStr == null) {
+            storageTier = StorageTierEnum.STANDARD_TIER;
+        } else {
+            storageTier = StorageTierEnum.fromString(storageTierStr);
+        }
+
+        return storageTier;
+    }
+
+
 }

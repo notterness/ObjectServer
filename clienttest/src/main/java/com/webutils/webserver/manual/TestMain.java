@@ -1,6 +1,7 @@
 package com.webutils.webserver.manual;
 
 import com.google.common.io.BaseEncoding;
+import com.webutils.chunkmgr.requestcontext.ChunkAllocContextPool;
 import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
 import com.webutils.storageserver.requestcontext.StorageServerContextPool;
 import com.webutils.webserver.memory.MemoryManager;
@@ -38,12 +39,13 @@ public class TestMain {
 
         ServerIdentifierTableMgr serverTableMgr;
 
-        final int serverTcpPort = 5001;
+        final int OBJECT_SERVER_TCP_PORT = 5001;
+        final int CHUNK_ALLOC_SERVER_TCP_PORT = 5002;
 
         final int NUMBER_TEST_STORAGE_SERVERS = 3;
         final int STORAGE_SERVER_BASE_ID_OFFSET = 100;
 
-        int baseTcpPort = ServersDb.storageServerTcpPort;
+        int baseTcpPort = ServersDb.STORAGE_SERVER_TCP_PORT;
 
         if (args.length >= 1) {
             try {
@@ -70,11 +72,14 @@ public class TestMain {
         } else {
             /*
              ** The INTEGRATION_KUBERNETES_TESTS needs access to the database to obtain the IP address and Port for
-             **   the Object Server and the StorageServers.
+             **   the Object Server, Chunk Alloc Server and the Storage Servers.
              */
             serverTableMgr = new LocalServersMgr(flavor);
         }
 
+        /*
+        ** The following builds a default configuration. It sets up
+         */
         serverTableMgr.checkAndSetupStorageServers();
 
         CreateObjectStorageTables objectStorageDbSetup = new CreateObjectStorageTables(flavor);
@@ -117,7 +122,7 @@ public class TestMain {
         AtomicInteger threadCount = new AtomicInteger(1);
 
         NioServerHandler nioServer;
-
+        NioServerHandler chunkAllocNioServer;
         NioServerHandler[] nioStorageServer = new NioServerHandler[NUMBER_TEST_STORAGE_SERVERS];
 
         if (flavor == WebServerFlavor.INTEGRATION_TESTS) {
@@ -136,13 +141,22 @@ public class TestMain {
             //waitForTestsToComplete(threadCount);
 
             /*
-            ** The Object Server needs to access the database to obtain the VON information
+            ** Setup the Object Server
              */
             MemoryManager objectServerMemoryManager = new MemoryManager(flavor);
             ObjectServerContextPool objectRequestContextPool = new ObjectServerContextPool(flavor, objectServerMemoryManager, serverTableMgr);
 
-            nioServer = new NioServerHandler(serverTcpPort, NioServerHandler.OBJECT_SERVER_BASE_ID, objectRequestContextPool);
+            nioServer = new NioServerHandler(OBJECT_SERVER_TCP_PORT, NioServerHandler.OBJECT_SERVER_BASE_ID, objectRequestContextPool);
             nioServer.start();
+
+            /*
+            ** Setup the Chunk Mgr (this is used to manage the Storage Servers and the Chunk allocation/deallocation.
+             */
+            MemoryManager chunkAllocMemoryManager = new MemoryManager(flavor);
+            ChunkAllocContextPool chunkAllocContextPool = new ChunkAllocContextPool(flavor, chunkAllocMemoryManager, serverTableMgr);
+
+            chunkAllocNioServer = new NioServerHandler(CHUNK_ALLOC_SERVER_TCP_PORT, NioServerHandler.CHUNK_ALLOC_BASE_ID, chunkAllocContextPool);
+            chunkAllocNioServer.start();
 
             /*
             ** Setup the Storage Servers
@@ -156,7 +170,11 @@ public class TestMain {
                 nioStorageServer[i].start();
             }
         } else {
+            /*
+            ** Initialize these to null to make sure they are not accessed in a bad code path.
+             */
             nioServer = null;
+            chunkAllocNioServer = null;
             for (int i = 0; i < NUMBER_TEST_STORAGE_SERVERS; i++) {
                 nioStorageServer[i] = null;
             }
@@ -257,40 +275,42 @@ public class TestMain {
 
 /*
         ClientTest client_CreateBucket_Simple = new ClientTest_CreateBucket_Simple("CreateBucket_Simple", testClient,
-                serverIpAddr, serverTcpPort, threadCount);
+                serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         client_CreateBucket_Simple.execute();
 
-        ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverIpAddr, serverTcpPort, threadCount);
+        ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         checkMd5.execute();
 
         waitForTestsToComplete(threadCount);
 */
 
+        PostCreateServer createServer = new PostCreateServer(serverIpAddr, CHUNK_ALLOC_SERVER_TCP_PORT, threadCount);
+        createServer.execute();
 
-        //DeleteObjectSimple deleteObject = new DeleteObjectSimple(serverIpAddr, serverTcpPort, threadCount);
+        //DeleteObjectSimple deleteObject = new DeleteObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         //deleteObject.execute();
 
-        //GetObjectSimple getObjectSimple = new GetObjectSimple(serverIpAddr, serverTcpPort, threadCount);
+        //GetObjectSimple getObjectSimple = new GetObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         //getObjectSimple.execute();
 
-        //ListObjectsSimple listObjectsSimple = new ListObjectsSimple(serverIpAddr, serverTcpPort, threadCount);
+        //ListObjectsSimple listObjectsSimple = new ListObjectsSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         //listObjectsSimple.execute();
 
         /*
-        GetObjectBadBucket getObjectBadBucket = new GetObjectBadBucket(serverIpAddr, serverTcpPort, threadCount);
+        GetObjectBadBucket getObjectBadBucket = new GetObjectBadBucket(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         getObjectBadBucket.execute();
 
-        GetObjectBadNamespace getObjectBadNamespace = new GetObjectBadNamespace(serverIpAddr, serverTcpPort, threadCount);
+        GetObjectBadNamespace getObjectBadNamespace = new GetObjectBadNamespace(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         getObjectBadNamespace.execute();
 
-        PutObjectBadBucket putObjectBadBucket = new PutObjectBadBucket(serverIpAddr, serverTcpPort, threadCount);
+        PutObjectBadBucket putObjectBadBucket = new PutObjectBadBucket(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         putObjectBadBucket.execute();
 
-        PutObjectBadNamespace putObjectBadNamespace = new PutObjectBadNamespace(serverIpAddr, serverTcpPort, threadCount);
+        PutObjectBadNamespace putObjectBadNamespace = new PutObjectBadNamespace(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         putObjectBadNamespace.execute();
 */
-        PutObjectSimple putObjectSimple = new PutObjectSimple(serverIpAddr, serverTcpPort, threadCount);
-        putObjectSimple.execute();
+        //PutObjectSimple putObjectSimple = new PutObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
+        //putObjectSimple.execute();
 
         /*
         ** Uncomment out the following two lines to let TestMain just act as a server. It can then be used to
@@ -302,10 +322,10 @@ public class TestMain {
         /*
         TestClient client = null;
 
-        ClientTest client_checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverTcpPort, threadCount);
+        ClientTest client_checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, OBJECT_SERVER_TCP_PORT, threadCount);
         client_checkMd5.start();
 
-        ClientTest client_badMd5 = new ClientTest_BadMd5("BadMd5", testClient, serverTcpPort, threadCount);
+        ClientTest client_badMd5 = new ClientTest_BadMd5("BadMd5", testClient, OBJECT_SERVER_TCP_PORT, threadCount);
         client_badMd5.start();
 
         String failedTestName = waitForTestsToComplete(threadCount, testClient);
@@ -376,6 +396,7 @@ public class TestMain {
 
         if (flavor == WebServerFlavor.INTEGRATION_TESTS) {
             nioServer.stop();
+            chunkAllocNioServer.stop();
             for (int i = 0; i < NUMBER_TEST_STORAGE_SERVERS; i++) {
                 nioStorageServer[i].stop();
             }

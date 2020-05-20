@@ -108,7 +108,7 @@ public abstract class ClientTest {
 
         ServerIdentifier serverId = new ServerIdentifier("ClientTest", serverIpAddr, serverTcpPort, 0);
 
-        HttpResponseInfo httpResponseInfo = new HttpResponseInfo(clientContext);
+        HttpResponseInfo httpResponseInfo = new HttpResponseInfo(clientContext.getRequestId());
         serverId.setHttpInfo(httpResponseInfo);
         SetupClientConnection setupClientConnection = new SetupClientConnection(clientContext, memoryManager,
                 this, connection, serverId);

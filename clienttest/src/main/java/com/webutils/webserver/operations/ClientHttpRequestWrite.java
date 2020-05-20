@@ -34,9 +34,7 @@ public class ClientHttpRequestWrite implements Operation {
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
      **   execution queue (onExecutionQueue) is will always go on the execution queue.
      */
-    private boolean onDelayedQueue;
     private boolean onExecutionQueue;
-    private long nextExecuteTime;
 
     /*
      */
@@ -61,9 +59,7 @@ public class ClientHttpRequestWrite implements Operation {
         /*
          ** This starts out not being on any queue
          */
-        onDelayedQueue = false;
         onExecutionQueue = false;
-        nextExecuteTime = 0;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -102,9 +98,8 @@ public class ClientHttpRequestWrite implements Operation {
         ByteBuffer msgHdr = clientWriteBufferMgr.peek(writeInfillPointer);
         if (msgHdr != null) {
 
-            String tmp;
             String Md5_Digest = clientTest.buildBufferAndComputeMd5();
-            tmp = clientTest.buildRequestString(Md5_Digest);
+            String tmp = clientTest.buildRequestString(Md5_Digest);
 
             HttpInfo.str_to_bb(msgHdr, tmp);
 
@@ -153,10 +148,7 @@ public class ClientHttpRequestWrite implements Operation {
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
         //LOG.info("ClientHttpRequestWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
-        if (delayedExecutionQueue) {
-            LOG.warn("ClientHttpRequestWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
-        } else if (onExecutionQueue){
+        if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
             LOG.warn("ClientHttpRequestWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
@@ -165,12 +157,7 @@ public class ClientHttpRequestWrite implements Operation {
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
-        if (delayedExecutionQueue) {
-            LOG.warn("ClientHttpRequestWrite[" + requestContext.getRequestId() + "] markAddToQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
-        } else {
-            onExecutionQueue = true;
-        }
+        onExecutionQueue = true;
     }
 
     public boolean isOnWorkQueue() {

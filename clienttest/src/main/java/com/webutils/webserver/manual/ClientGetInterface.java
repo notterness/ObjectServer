@@ -66,7 +66,7 @@ public class ClientGetInterface extends ClientInterface {
          */
         ServerIdentifier objectServer = new ServerIdentifier("ObjectCLI", serverIpAddr, serverTcpPort, 0);
 
-        HttpResponseInfo httpResponseInfo = new HttpResponseInfo(clientContext);
+        HttpResponseInfo httpResponseInfo = new HttpResponseInfo(clientContext.getRequestId());
         objectServer.setHttpInfo(httpResponseInfo);
         ClientGetObject objectGet = new ClientGetObject(this, clientContext, memoryManager, objectServer,
                 requestParams);

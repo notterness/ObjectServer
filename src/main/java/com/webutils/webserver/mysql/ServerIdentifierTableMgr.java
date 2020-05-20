@@ -1,24 +1,30 @@
 package com.webutils.webserver.mysql;
 
+import com.webutils.webserver.http.StorageTierEnum;
+import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
+import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 import java.util.List;
 
 public abstract class ServerIdentifierTableMgr extends ServersDb {
 
     private static final Logger LOG = LoggerFactory.getLogger(ServerIdentifierTableMgr.class);
 
+    private final static String GET_SERVER_UID_USING_ID = "SELECT BIN_TO_UUID(serverUID) FROM serverIdentifier WHERE serverId = ";
+
+    private int serverId;
+
     public ServerIdentifierTableMgr(final WebServerFlavor flavor) {
         super(flavor);
+
+        serverId = -1;
     }
 
     /*
@@ -109,6 +115,69 @@ public abstract class ServerIdentifierTableMgr extends ServersDb {
         return success;
     }
 
+    public int createServer(final String serverName, final String serverIp, final int port, final int chunksPerStorageServer,
+                            final StorageTierEnum storageTier) {
+        int result = HttpStatus.OK_200;
+        Connection conn = getServersDbConn();
+
+        if (conn != null) {
+            PreparedStatement stmt = null;
+
+            try {
+                stmt = conn.prepareStatement(ADD_STORAGE_SERVER, Statement.RETURN_GENERATED_KEYS);
+                stmt.setString(1, serverName);
+                stmt.setString(2, serverIp);
+                stmt.setInt(3, port);
+                stmt.setInt(4, chunksPerStorageServer);
+                stmt.setInt(5, storageTier.toInt());
+                stmt.executeUpdate();
+
+                ResultSet rs = stmt.getGeneratedKeys();
+                if (rs.next()) {
+                    serverId = rs.getInt(1);
+
+                    ServerChunkMgr chunkMgr = new ServerChunkMgr(flavor);
+                    chunkMgr.addServerChunks(serverId, CHUNKS_TO_ALLOCATE, RequestContext.getChunkSize());
+                }
+                rs.close();
+            } catch (SQLException sqlEx) {
+                LOG.error("createServer() SQLException: " + sqlEx.getMessage());
+                System.out.println("createServer() SQLException: " + sqlEx.getMessage());
+
+                result = HttpStatus.INTERNAL_SERVER_ERROR_500;
+            }
+            finally {
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("createServer() stmt.close() SQLException: " + sqlEx.getMessage());
+                        System.out.println("createServer() stmt.close()  SQLException: " + sqlEx.getMessage());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database tables.
+             */
+            closeStorageServerDbConn(conn);
+        } else {
+            LOG.error("createServer() unable to obtain conn");
+            result = HttpStatus.BAD_GATEWAY_502;
+        }
+
+        return result;
+    }
+
+    public int getLastInsertId() { return serverId; }
+
     public abstract boolean getServer(final String serverName, final List<ServerIdentifier> serverList);
     public abstract boolean getStorageServers(final List<ServerIdentifier> servers, final int chunkNumber);
+
+    public String getServerUID(final int serverId) {
+        String getServerUIDStr = GET_SERVER_UID_USING_ID + serverId;
+
+        return getUID(getServerUIDStr);
+    }
+
 }

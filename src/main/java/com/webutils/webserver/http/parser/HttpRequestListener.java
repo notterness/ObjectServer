@@ -50,6 +50,7 @@ public class HttpRequestListener implements HttpParser.RequestHandler {
 
     @Override
     public boolean startRequest(String method, String uri, HttpVersion version) {
+
         /*
         ** Parse the URI first to obtain any version information
          */

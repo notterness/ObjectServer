@@ -1,10 +1,11 @@
-package com.webutils.objectserver.operations;
+package com.webutils.chunkmgr.operations;
 
-import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
+import com.webutils.chunkmgr.requestcontext.ChunkAllocRequestContext;
+import com.webutils.webserver.http.CreateServerPostContent;
+import com.webutils.webserver.operations.ParsePostContent;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.common.Sha256ResultHandler;
-import com.webutils.webserver.http.PostContentData;
 import com.webutils.webserver.operations.ComputeSha256Digest;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
@@ -14,23 +15,24 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.*;
 
-public class SetupObjectServerPost implements Operation {
-    private static final Logger LOG = LoggerFactory.getLogger(SetupObjectServerPost.class);
+public class SetupCreateServerPost implements Operation {
+
+    private static final Logger LOG = LoggerFactory.getLogger(SetupCreateServerPost.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_OBJECT_SERVER_POST;
+    public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_CREATE_SERVER_POST;
 
-    private final ObjectServerRequestContext requestContext;
+    private final ChunkAllocRequestContext requestContext;
 
     private final Operation metering;
 
     private final Operation completeCallback;
 
-    private final PostContentData postContentData;
+    private final CreateServerPostContent createServerContent;
 
-    private CreateBucket createBucket;
+    private CreateServer createServer;
 
     private final Sha256ResultHandler updator;
 
@@ -53,20 +55,18 @@ public class SetupObjectServerPost implements Operation {
     private boolean waitingOnOperations;
 
     /*
-     ** This is used to setup the initial Operation dependencies required to handle the V2 PUT
-     **   request.
-     ** The completeCb will call the DetermineRequest operation's event() method when the V2 PUT completes.
-     **   Currently, the V2 PUT is marked complete when all the V2 PUT object data is written to the Storage Servers
-     **   and the Md5 Digest is computed and the comparison against the expected result done.
+     ** This is used to setup the initial Operation dependencies required to handle the CreateBucket POST
+     **   method.
+     ** The completeCb will call the DetermineRequest operation's event() method when the POST completes.
      */
-    public SetupObjectServerPost(final ObjectServerRequestContext requestContext, final Operation metering,
-                      final Operation completeCb) {
+    public SetupCreateServerPost(final ChunkAllocRequestContext requestContext, final Operation metering,
+                                 final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.metering = metering;
         this.completeCallback = completeCb;
 
-        this.postContentData = new PostContentData();
+        this.createServerContent = new CreateServerPostContent();
 
         this.updator = requestContext.getSha256ResultHandler();
 
@@ -115,20 +115,20 @@ public class SetupObjectServerPost implements Operation {
             BufferManagerPointer readBufferPointer = requestContext.getReadBufferPointer();
 
             /*
-            ** Once the parsing of the POST content data has taken place and the Sha-256 digest is determined to be valid,
-            **   then the Bucket and its contents need to be created in the databse.
+             ** Once the parsing of the POST content data has taken place and the Sha-256 digest is determined to be valid,
+             **   then the Bucket and its contents need to be created in the database.
              */
-            createBucket = new CreateBucket(requestContext, postContentData, this);
-            PostHandlerOperations.put(createBucket.getOperationType(), createBucket);
-            createBucket.initialize();
+            createServer = new CreateServer(requestContext, createServerContent, this);
+            PostHandlerOperations.put(createServer.getOperationType(), createServer);
+            createServer.initialize();
 
             /*
-            ** Setup the Parser to pull the information out of the POST content. This will put the information into
-            **   a temporary structure and once the Sha-256 digest completes (assuming it is succesful) the setup
-            **   of the Bucket will take place.
+             ** Setup the Parser to pull the information out of the POST content. This will put the information into
+             **   a temporary structure and once the Sha-256 digest completes (assuming it is successful) the setup
+             **   of the Bucket will take place.
              */
             ParsePostContent parseContent = new ParsePostContent(requestContext, readBufferPointer, metering,
-                    postContentData, this);
+                    createServerContent, this);
             PostHandlerOperations.put(parseContent.getOperationType(), parseContent);
             parseContent.initialize();
 
@@ -166,40 +166,40 @@ public class SetupObjectServerPost implements Operation {
              **   parsing is complete and a second time when the ComputeSha256Digest has completed.
              */
             if (updator.getSha256DigestComplete() && requestContext.postMethodContentParsed()) {
-                LOG.info("SetupObjectServerPost[" + requestContext.getRequestId() + "] Sha-256 and Parsing done");
+                LOG.info("SetupCreateServerPost[" + requestContext.getRequestId() + "] Sha-256 and Parsing done");
 
                 /*
-                ** Cleanup the operations
+                 ** Cleanup the operations
                  */
                 Operation contentParser = PostHandlerOperations.get(OperationTypeEnum.PARSE_POST_CONTENT);
                 contentParser.complete();
                 PostHandlerOperations.remove(OperationTypeEnum.PARSE_POST_CONTENT);
 
                 /*
-                ** Since the Sha-256 digest runs on a compute thread, it handles it's own complete() call. For that
-                **   reason, simply remove it from the PostHandlerOperations map.
+                 ** Since the Sha-256 digest runs on a compute thread, it handles it's own complete() call. For that
+                 **   reason, simply remove it from the PostHandlerOperations map.
                  */
                 PostHandlerOperations.remove(OperationTypeEnum.COMPUTE_SHA256_DIGEST);
 
                 if (updator.checkContentSha256()) {
-                    createBucket.event();
+                    createServer.event();
                 } else {
                     /*
-                    ** There was an error with the passed in or computed Sha-256 digest, so an error needs to be
-                    **   returned to the client
+                     ** There was an error with the passed in or computed Sha-256 digest, so an error needs to be
+                     **   returned to the client
                      */
                     complete();
                 }
 
                 waitingOnOperations = false;
             } else {
-                LOG.info("SetupObjectServerPost[" + requestContext.getRequestId() + "] not completed Sha-256 digestComplete: " +
+                LOG.info("SetupCreateServerPost[" + requestContext.getRequestId() + "] not completed Sha-256 digestComplete: " +
                         updator.getSha256DigestComplete() + " POST content parsed: " + requestContext.postMethodContentParsed());
             }
         } else {
             /*
-            ** This execute() method may be called multiple times. This is really just a place holder to show that nothing
-            **   will be done in this case.
+             ** This execute() method may be called multiple times. This is really just a place holder to show that nothing
+             **   will be done in this case.
              */
         }
     }
@@ -221,7 +221,7 @@ public class SetupObjectServerPost implements Operation {
 
         completeCallback.event();
 
-        LOG.info("SetupObjectServerPost[" + requestContext.getRequestId() + "] completed");
+        LOG.info("SetupCreateServerPost[" + requestContext.getRequestId() + "] completed");
     }
 
     /*
@@ -240,19 +240,19 @@ public class SetupObjectServerPost implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("SetupObjectServerPost[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("SetupCreateServerPost[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("SetupObjectServerPost[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SetupCreateServerPost[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("SetupObjectServerPost[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("SetupCreateServerPost[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("SetupObjectServerPost[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SetupCreateServerPost[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -267,7 +267,7 @@ public class SetupObjectServerPost implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("SetupObjectServerPost[" + requestContext.getRequestId() +
+        LOG.warn("SetupCreateServerPost[" + requestContext.getRequestId() +
                 "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
@@ -286,5 +286,6 @@ public class SetupObjectServerPost implements Operation {
         }
         LOG.info("");
     }
+
 
 }

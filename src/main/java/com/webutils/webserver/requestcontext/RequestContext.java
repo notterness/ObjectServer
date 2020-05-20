@@ -135,24 +135,6 @@ public abstract class RequestContext {
      */
     protected Map<HttpMethodEnum, Operation> supportedHttpRequests;
 
-    /*
-    ** The httpParseError is set if there is something the parser does not like or a header
-    **   does not match the expected values.
-     */
-    private boolean httpParseError;
-
-    /*
-    ** The requestContentLength is how many bytes are going to be transferred following the
-    **   HTTP request
-     */
-    private int requestContentLength;
-
-    /*
-    ** This is set when there is either a parsing error or the entire HTTP request has been
-    **   parsed and the HTTP Parser has issued the parsing done callback
-     */
-    private boolean httpRequestParsed;
-
     private boolean putAllDataWritten;
     private boolean postMethodContentDataParsed;
 
@@ -173,7 +155,7 @@ public abstract class RequestContext {
     private final BlockingQueue<Operation> timedWaitQueue;
 
 
-    public RequestContext(final MemoryManager memoryManager, final EventPollThread threadThisRunsOn,
+    public RequestContext(final MemoryManager memoryManager, final HttpRequestInfo httpInfo, final EventPollThread threadThisRunsOn,
                           final ServerIdentifierTableMgr serverTableMgr, final int threadId, final WebServerFlavor flavor) {
 
         this.memoryManager = memoryManager;
@@ -192,7 +174,7 @@ public abstract class RequestContext {
         this.clientReadBufferManager = new BufferManager(bufferMgrRingSize, "ClientRead", 100);
         this.clientWriteBufferManager = new BufferManager(bufferMgrRingSize, "ClientWrite", 200);
 
-        httpInfo = new HttpRequestInfo(this);
+        this.httpInfo = httpInfo;
         md5ResultHandler = new Md5ResultHandler(this, httpInfo);
         sha256ResultHandler = new Sha256ResultHandler(this, httpInfo);
 
@@ -500,9 +482,7 @@ public abstract class RequestContext {
         /*
          **
          */
-        httpParseError = false;
-        httpRequestParsed = false;
-        requestContentLength = 0;
+        httpInfo.setRequestId(connectionRequestId);
     }
 
     /*
@@ -521,38 +501,20 @@ public abstract class RequestContext {
         return clientWriteBufferManager;
     }
 
-    public void setHttpParsingError() {
-        httpParseError = true;
-        httpRequestParsed = true;
-    }
-
     public int getHttpParseStatus() {
-        int parsingStatus = HttpStatus.OK_200;
-        if (httpParseError) {
-            parsingStatus = httpInfo.getParseFailureCode();
-        }
-
-        return parsingStatus;
-    }
-
-
-    public void httpHeaderParseComplete(final int contentLength) {
-        LOG.info("requestId[" + connectionRequestId + "] httpHeaderParseComplete() contentLength: " + contentLength);
-
-        requestContentLength = contentLength;
-        httpRequestParsed = true;
+        return httpInfo.getParseFailureCode();
     }
 
     public boolean isHttpRequestParsed() {
-        return httpRequestParsed;
+        return httpInfo.getHeaderComplete();
     }
 
     public boolean getHttpParseError() {
-        return httpParseError;
+        return (httpInfo.getParseFailureCode() != HttpStatus.OK_200);
     }
 
     public int getRequestContentLength() {
-        return requestContentLength;
+        return httpInfo.getContentLength();
     }
 
     /*

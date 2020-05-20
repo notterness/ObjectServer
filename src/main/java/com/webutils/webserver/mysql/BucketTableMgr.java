@@ -1,7 +1,7 @@
 package com.webutils.webserver.mysql;
 
 import com.webutils.webserver.http.HttpRequestInfo;
-import com.webutils.webserver.http.PostContentData;
+import com.webutils.webserver.http.CreateBucketPostContent;
 import com.webutils.webserver.http.StorageTierEnum;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.eclipse.jetty.http.HttpStatus;
@@ -31,7 +31,7 @@ public class BucketTableMgr extends ObjectStorageDb {
     private final static String GET_BUCKET_UID_2 = "' AND namespaceId = ( SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN('";
     private final static String GET_BUCKET_UID_3 = "' ) )";
 
-    private final static String GET_BUCKET_UID_USING_ID = "SELECT bucketUID FROM bucket WHERE bucketId = ";
+    private final static String GET_BUCKET_UID_USING_ID = "SELECT BIN_TO_UUID(bucketUID) FROM bucket WHERE bucketId = ";
 
     private final static String GET_BUCKET_ID_1 = "SELECT bucketId FROM bucket WHERE bucketName = '";
     private final static String GET_BUCKET_ID_2 = "' AND namespaceId = ( SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN('";
@@ -69,7 +69,7 @@ public class BucketTableMgr extends ObjectStorageDb {
         this.httpRequestInfo = requestInfo;
     }
 
-    public int createBucketEntry(final PostContentData bucketConfigData, final String namespaceUID) {
+    public int createBucketEntry(final CreateBucketPostContent bucketConfigData, final String namespaceUID) {
         int status = HttpStatus.OK_200;
 
         /*
@@ -98,7 +98,7 @@ public class BucketTableMgr extends ObjectStorageDb {
         }
 
         String compartmentId = bucketConfigData.getCompartmentId();
-        String storageTier = bucketConfigData.getStorageTier();
+        StorageTierEnum storageTier = bucketConfigData.getStorageTier();
         int eventsEnabled = bucketConfigData.getObjectEventsEnabled();
 
         if ((bucketName == null) || (compartmentId == null)) {
@@ -114,7 +114,7 @@ public class BucketTableMgr extends ObjectStorageDb {
         LOG.info("createBucket() bucketName: " + bucketName);
 
         String createBucketStr = CREATE_BUCKET_1 + bucketName + CREATE_BUCKET_2 + compartmentId + CREATE_BUCKET_3 +
-                storageTier + CREATE_BUCKET_4 + eventsEnabled + CREATE_BUCKET_5 + namespaceUID + CREATE_BUCKET_6;
+                storageTier.toInt() + CREATE_BUCKET_4 + eventsEnabled + CREATE_BUCKET_5 + namespaceUID + CREATE_BUCKET_6;
 
         Connection conn = getObjectStorageDbConn();
 

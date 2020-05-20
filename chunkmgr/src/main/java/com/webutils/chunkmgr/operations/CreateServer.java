@@ -1,14 +1,12 @@
 package com.webutils.chunkmgr.operations;
 
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.http.PostContentData;
-import com.webutils.webserver.mysql.BucketTableMgr;
-import com.webutils.webserver.mysql.NamespaceTableMgr;
-import com.webutils.webserver.mysql.TenancyTableMgr;
+import com.webutils.webserver.http.CreateServerPostContent;
+import com.webutils.webserver.http.HttpRequestInfo;
+import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
-import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,20 +16,27 @@ public class CreateServer implements Operation {
     private static final Logger LOG = LoggerFactory.getLogger(CreateServer.class);
 
     /*
+    ** THe following are used to build the response header
+     */
+    private final static String SUCCESS_HEADER_1 = "opc-client-request-id: ";
+    private final static String SUCCESS_HEADER_2 = "opc-request-id: ";
+    private final static String SUCCESS_HEADER_3 = "ETag: ";
+
+    /*
      ** A unique identifier for this Operation so it can be tracked.
      */
     public final OperationTypeEnum operationType = OperationTypeEnum.CREATE_BUCKET;
 
     private final RequestContext requestContext;
 
-    private final PostContentData postContentData;
+    private final CreateServerPostContent createServerContent;
 
     private final Operation completeCallback;
 
     /*
      ** Used to insure that the database operations to create the bucket do not get run multiple times.
      */
-    private boolean bucketCreated;
+    private boolean serverCreated;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -40,12 +45,13 @@ public class CreateServer implements Operation {
      */
     private boolean onExecutionQueue;
 
-    public CreateServer(final RequestContext requestContext, final PostContentData postContentData, final Operation completeCb) {
+    public CreateServer(final RequestContext requestContext, final CreateServerPostContent createServerContent,
+                        final Operation completeCb) {
         this.requestContext = requestContext;
-        this.postContentData = postContentData;
+        this.createServerContent = createServerContent;
         this.completeCallback = completeCb;
 
-        bucketCreated = false;
+        serverCreated = false;
 
         /*
          ** This starts out not being on any queue
@@ -75,27 +81,21 @@ public class CreateServer implements Operation {
     /*
      */
     public void execute() {
-        if (!bucketCreated) {
-            WebServerFlavor flavor = requestContext.getWebServerFlavor();
+        if (!serverCreated) {
+            ServerIdentifierTableMgr serverTableMgr = requestContext.getServerTableMgr();
 
-            TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
-            String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
-
-            NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
-            String namespaceUID = namespaceMgr.getNamespaceUID("Namespace-xyz-987", tenancyUID);
-
-            BucketTableMgr bucketMgr = new BucketTableMgr(flavor, requestContext.getRequestId(), requestContext.getHttpInfo());
-            int status = bucketMgr.createBucketEntry(postContentData, namespaceUID);
-            if (status != HttpStatus.OK_200) {
-                /*
-                 **
-                 */
-                LOG.warn("CreateBucket failed status: " + status);
+            int status = serverTableMgr.createServer(createServerContent.getServerName(), createServerContent.getServerIP(),
+                    createServerContent.getServerPort(), createServerContent.getServerNumChunks(), createServerContent.getStorageTier());
+            if (status == HttpStatus.OK_200) {
+                int serverId = serverTableMgr.getLastInsertId();
+                requestContext.getHttpInfo().setResponseHeaders(buildSuccessHeader(serverTableMgr, serverId));
+            } else {
+                LOG.warn("CreateServer failed status: " + status);
             }
 
             completeCallback.complete();
 
-            bucketCreated = true;
+            serverCreated = true;
         }
     }
 
@@ -158,5 +158,38 @@ public class CreateServer implements Operation {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
     }
 
+    /*
+     ** This builds the OK_200 response headers for the POST CreateServer command. This returns the following headers:
+     **
+     **   opc-client-request-id - If the client passed one in, otherwise it it will not be returned
+     **   opc-request-id
+     **   ETag - This is the generated objectUID that is unique to this object
+     */
+    private String buildSuccessHeader(final ServerIdentifierTableMgr serverTableMgr, final int serverId) {
+        String successHeader;
+
+        String serverUID = serverTableMgr.getServerUID(serverId);
+        if (serverUID != null) {
+            HttpRequestInfo requestInfo = requestContext.getHttpInfo();
+            String opcClientRequestId = requestInfo.getOpcClientRequestId();
+            int opcRequestId = requestInfo.getRequestId();
+
+            /*
+             ** FIXME: Need to add in the Location for the full path to the bucket
+             */
+            if (opcClientRequestId != null) {
+                successHeader = SUCCESS_HEADER_1 + opcClientRequestId + "\n" + SUCCESS_HEADER_2 + opcRequestId + "\n" +
+                        SUCCESS_HEADER_3 + serverUID + "\n";
+            } else {
+                successHeader = SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + serverUID + "\n";
+            }
+
+            //LOG.info(successHeader);
+        } else {
+            successHeader = null;
+        }
+
+        return successHeader;
+    }
 
 }

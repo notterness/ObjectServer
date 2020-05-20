@@ -66,7 +66,7 @@ public class ClientPutInterface extends ClientInterface {
          */
         ServerIdentifier objectServer = new ServerIdentifier("ObjectCLI", serverIpAddr, serverTcpPort, 0);
 
-        HttpResponseInfo httpResponseInfo = new HttpResponseInfo(clientContext);
+        HttpResponseInfo httpResponseInfo = new HttpResponseInfo(clientContext.getRequestId());
         objectServer.setHttpInfo(httpResponseInfo);
         ClientPutObject objectPut = new ClientPutObject(this, clientContext, memoryManager, objectServer,
                 requestParams);
