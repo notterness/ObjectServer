@@ -1,5 +1,6 @@
 package com.webutils.webserver.manual;
 
+import com.webutils.webserver.http.ClientHttpRequestInfo;
 import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.common.Md5Digest;
@@ -58,7 +59,7 @@ public abstract class WebServerTest {
         IoInterface connection = testEventThread.allocateConnection(null);
         requestContext.initializeServer(connection, requestId);
 
-        HttpInfo httpRequestInfo = new HttpRequestInfo();
+        HttpInfo httpRequestInfo = new ClientHttpRequestInfo();
         parser = new ByteBufferHttpParser(httpRequestInfo);
     }
 
