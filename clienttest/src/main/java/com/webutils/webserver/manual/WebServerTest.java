@@ -2,7 +2,6 @@ package com.webutils.webserver.manual;
 
 import com.webutils.webserver.http.ClientHttpRequestInfo;
 import com.webutils.webserver.http.HttpInfo;
-import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.common.Md5Digest;
 import com.webutils.webserver.http.parser.ByteBufferHttpParser;
 import com.webutils.webserver.memory.MemoryManager;
@@ -15,10 +14,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.charset.Charset;
-import java.nio.charset.CharsetEncoder;
-import java.nio.charset.StandardCharsets;
 
 public abstract class WebServerTest {
 

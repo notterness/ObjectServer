@@ -5,8 +5,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
-public abstract class PostContent {
-    private static final Logger LOG = LoggerFactory.getLogger(PostContent.class);
+public abstract class ParseRequestContent {
+    private static final Logger LOG = LoggerFactory.getLogger(ParseRequestContent.class);
 
     private static final String FREE_FORM_TAG = "freeformTags";
     private static final String DEFINED_TAGS = "definedTags";
@@ -33,7 +33,7 @@ public abstract class PostContent {
 
     private String keyStr;
 
-    PostContent() {
+    public ParseRequestContent() {
         params = new HashMap<>(10);
         freeformTags = new HashMap<>(10);
         definedTags = new HashMap<>(10);

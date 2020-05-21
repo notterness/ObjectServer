@@ -20,10 +20,10 @@ public abstract class ServersDb {
     private static final String userName = "root";
     private static final String password = "ktm300exc";
 
-    private static final String storageServerDbName = "StorageServers";
+    private static final String SERVICE_SERVERS_DB_NAME = "ServiceServersDb";
 
-    private static final String storageServerUser = "storageserveruser";
-    private static final String storageServerPassword = "rwt25nX1";
+    private static final String SERVICE_SERVER_USER = "serviceserveruser";
+    private static final String SERVICE_SERVER_PASSWORD = "rwt25nX1";
 
     /*
     ** This localServerIpAddr and localServerPort are used when running the test instance within the IntelliJ framework.
@@ -39,6 +39,15 @@ public abstract class ServersDb {
      ** This table is reconfigured every time the Object and Storage Server POD is restarted. This table only holds the
      **   IP Address/Port information for the Storage Servers.
      **
+     ** The serverType is used to differentiate between the different types of service servers this table manages. The
+     **   possible services are:
+     **     OBJECT_SERVER - 1
+     **     STORAGE_SERVER - 2
+     **     CHUNK_MGR_SERVER - 3
+     **
+     ** NOTE: It may make more sense at some point to have different tables for different service servers, but for
+     **   simplicity, it is a single combined table at the moment.
+     **
      ** NOTE: In theory, the Object Server should be able to use localhost to communicate with the mock Storage Servers,
      **   but that did not seem to work. Instead, the IP address for the mock Storage Servers is the endpoint address.
      **   This is the:
@@ -48,18 +57,26 @@ public abstract class ServersDb {
      **      V1EndpointAddress addr = endpointAddrIter.next(); ->
      **      internalPodIp = addr.getIp();
      */
-    private static final String CREATE_SERVER_TABLE = "CREATE TABLE IF NOT EXISTS serverIdentifier (" +
+    protected static final int OBJECT_SERVER = 1;
+    protected static final int STORAGE_SERVER = 2;
+    protected static final int CHUNK_MGR_SERVER = 3;
+
+    private static final String CREATE_SERVER_TABLE = "CREATE TABLE IF NOT EXISTS ServerIdentifier (" +
             " serverId INT AUTO_INCREMENT," +
             " serverName VARCHAR(255) NOT NULL," +
+            " serverType INT NOT NULL," +
             " localServerIpAddr VARCHAR(32) NOT NULL," +
             " localServerPort INT," +
             " k8PodServerIpAddr VARCHAR(32)," +
             " k8PodServerPort INT," +
             " k8ServerIpAddr VARCHAR(32)," +
             " k8ServerPort INT," +
-            " allocatedChunks INT NOT NULL," +
-            " storageTier INT NOT NULL," +
+            " storageTier INT," +
+            " allocatedChunks INT," +
+            " usedChunks INT," +
             " createTime TIMESTAMP NOT NULL," +
+            " lastAllocationTime TIMESTAMP," +
+            " totalAllocations INT," +
             " serverUID BINARY(16) NOT NULL," +
             " PRIMARY KEY (serverId)" +
             ")";
@@ -73,7 +90,7 @@ public abstract class ServersDb {
     **      Available - Once the Storage Server has released the chunk and over written the data so it cannot be read
     **        it is moved to the Available state. This means it can be used by another object to store client data.
      */
-    private static final String CREATE_CHUNK_TABLE = "CREATE TABLE IF NOT EXISTS storageServerChunk (" +
+    private static final String CREATE_CHUNK_TABLE = "CREATE TABLE IF NOT EXISTS StorageServerChunk (" +
             " chunkId INT AUTO_INCREMENT," +
             " chunkNumber INT NOT NULL," +
             " startLba INT NOT NULL," +
@@ -88,23 +105,23 @@ public abstract class ServersDb {
             " PRIMARY KEY(chunkId)" +
             ")";
 
-    private static final String createStorageServerUser = "CREATE USER '" + storageServerUser + "'@'localhost'" +
-            " IDENTIFIED BY '" + storageServerPassword + "'";
+    private static final String CREATE_SERVICE_SERVERS_USER = "CREATE USER '" + SERVICE_SERVER_USER + "'@'localhost'" +
+            " IDENTIFIED BY '" + SERVICE_SERVER_PASSWORD + "'";
 
-    private static final String privilegeStorageServerUser = "GRANT ALL PRIVILEGES ON " + storageServerDbName +
-            ".* TO '" + storageServerUser + "'@'localhost'";
+    private static final String PRIVILEDGE_SERVICE_SERVERS_USER = "GRANT ALL PRIVILEGES ON " + SERVICE_SERVERS_DB_NAME +
+            ".* TO '" + SERVICE_SERVER_USER + "'@'localhost'";
 
     /*
     ** The storageTier field is a representation of the StorageTierEnum. The default is STANDARD_TIER (1).
      */
-    protected static final String ADD_STORAGE_SERVER = "INSERT INTO serverIdentifier(serverName, localServerIpAddr, localServerPort," +
-            " allocatedChunks, storageTier, createTime, serverUID) " +
-            "VALUES(?, ?, ?, ?, ?, CURRENT_TIMESTAMP(), UUID_TO_BIN(UUID()) )";
+    protected static final String ADD_STORAGE_SERVER = "INSERT INTO serverIdentifier(serverName, serverType, localServerIpAddr, localServerPort," +
+            " storageTier, allocatedChunks, usedChunks, createTime, lastAllocationTime, totalAllocations, serverUID) " +
+            "VALUES(?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), 0, UUID_TO_BIN(UUID()) )";
 
     private static final String DROP_SERVER_IDENTIFIER_TABLE = "DROP TABLE IF EXISTS serverIdentifier";
 
-    private static final String kubeJDBCDatabaseConnect = "jdbc:mysql://host.docker.internal/StorageServers?serverTimeZone=US/Mountain";
-    private static final String execJDBCDatabaseConnect = "jdbc:mysql://localhost/StorageServers?serverTimezone=US/Mountain";
+    private static final String kubeJDBCDatabaseConnect = "jdbc:mysql://host.docker.internal/ServiceServersDb?serverTimeZone=US/Mountain";
+    private static final String execJDBCDatabaseConnect = "jdbc:mysql://localhost/ServiceServersDb?serverTimezone=US/Mountain";
     private static final String kubeJDBCConnect = "jdbc:mysql://host.docker.internal/?serverTimeZone=US/Mountain";
     private static final String execJDBCConnect = "jdbc:mysql://localhost/?serverTimezone=US/Mountain";
 
@@ -169,7 +186,7 @@ public abstract class ServersDb {
         }
 
         try {
-            conn = DriverManager.getConnection(jdbcConnect, storageServerUser, storageServerPassword);
+            conn = DriverManager.getConnection(jdbcConnect, SERVICE_SERVER_USER, SERVICE_SERVER_PASSWORD);
         } catch (SQLException ex) {
             // handle any errors
             System.out.println("JDBC connect: " + jdbcConnect);
@@ -276,10 +293,10 @@ public abstract class ServersDb {
 
             try {
                 stmt = conn.createStatement();
-                stmt.execute("CREATE DATABASE StorageServers");
+                stmt.execute("CREATE DATABASE " + SERVICE_SERVERS_DB_NAME);
 
-                stmt.execute(createStorageServerUser);
-                stmt.execute(privilegeStorageServerUser);
+                stmt.execute(CREATE_SERVICE_SERVERS_USER);
+                stmt.execute(PRIVILEDGE_SERVICE_SERVERS_USER);
             } catch (SQLException sqlEx) {
                 System.out.println("createServerDb() - create database - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                 LOG.error("createServerDb() - create database - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
@@ -443,10 +460,11 @@ public abstract class ServersDb {
                 stmt = conn.prepareStatement(ADD_STORAGE_SERVER, Statement.RETURN_GENERATED_KEYS);
                 for (int i = 0; i < 3; i++) {
                     stmt.setString(1, "storage-server-" + i);
-                    stmt.setString(2, "localhost");
-                    stmt.setInt(3, STORAGE_SERVER_TCP_PORT + i);
-                    stmt.setInt(4, chunksPerStorageServer);
+                    stmt.setInt(2, STORAGE_SERVER);
+                    stmt.setString(3, "localhost");
+                    stmt.setInt(4, STORAGE_SERVER_TCP_PORT + i);
                     stmt.setInt(5, storageTier.toInt());
+                    stmt.setInt(6, chunksPerStorageServer);
                     stmt.executeUpdate();
 
                     ResultSet rs = stmt.getGeneratedKeys();

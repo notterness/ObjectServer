@@ -1,7 +1,7 @@
 package com.webutils.chunkmgr.operations;
 
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.http.CreateServerPostContent;
+import com.webutils.chunkmgr.http.CreateServerPostContent;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.operations.Operation;
@@ -16,16 +16,16 @@ public class CreateServer implements Operation {
     private static final Logger LOG = LoggerFactory.getLogger(CreateServer.class);
 
     /*
-    ** THe following are used to build the response header
+     ** A unique identifier for this Operation so it can be tracked.
+     */
+    public final OperationTypeEnum operationType = OperationTypeEnum.CREATE_SERVER;
+
+    /*
+    ** The following are used to build the response header
      */
     private final static String SUCCESS_HEADER_1 = "opc-client-request-id: ";
     private final static String SUCCESS_HEADER_2 = "opc-request-id: ";
     private final static String SUCCESS_HEADER_3 = "ETag: ";
-
-    /*
-     ** A unique identifier for this Operation so it can be tracked.
-     */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CREATE_BUCKET;
 
     private final RequestContext requestContext;
 
@@ -100,7 +100,7 @@ public class CreateServer implements Operation {
     }
 
     public void complete() {
-        LOG.info("CreateBucket complete");
+        LOG.info("CreateServer complete");
     }
 
     /*
@@ -174,9 +174,6 @@ public class CreateServer implements Operation {
             String opcClientRequestId = requestInfo.getOpcClientRequestId();
             int opcRequestId = requestInfo.getRequestId();
 
-            /*
-             ** FIXME: Need to add in the Location for the full path to the bucket
-             */
             if (opcClientRequestId != null) {
                 successHeader = SUCCESS_HEADER_1 + opcClientRequestId + "\n" + SUCCESS_HEADER_2 + opcRequestId + "\n" +
                         SUCCESS_HEADER_3 + serverUID + "\n";

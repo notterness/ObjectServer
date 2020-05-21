@@ -64,7 +64,7 @@ public class HttpRequestListener implements HttpParser.RequestHandler {
                     " version: null");
         }
 
-        httpRequestInfo.setHttpMethodAndVersion(method, _versionOrReason);
+        httpRequestInfo.setHttpMethodAndVersion(method);
         return false;
     }
 

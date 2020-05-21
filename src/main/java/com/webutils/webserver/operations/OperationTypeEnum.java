@@ -115,7 +115,15 @@ public enum OperationTypeEnum {
     CLIENT_TEST_GET_OBJECT_SIMPLE(751),
     CLIENT_TEST_PUT_OBJECT_SIMPLE(752),
 
+    /*
+    ** The following are operations that are run as part of the ChunkMgr service
+     */
     SETUP_CREATE_SERVER_POST(900),
+    CREATE_SERVER(901),
+    SETUP_ALLOCATE_CHUNKS_GET(902),
+    ALLOCATE_CHUNKS(903),
+    CHUNK_MGR_SEND_FINAL_STATUS(904),
+    CHUNK_MGR_DETERMINE_REQUEST(905),
 
     NULL_OPERATION(1000),
     CLIENT_TEST_END(1001);

@@ -32,6 +32,7 @@ public abstract class ServerIdentifierTableMgr extends ServersDb {
      ** It can also return a specific server (if one exists) based upon the passed in serverName. Currently, the only
      **   server names that are valid are:
      **     "object-server"
+     **     "chunk-mgr-server"
      **     "storage-server-1"
      **     "storage-server-2"
      **     "storage-server-3"
@@ -126,10 +127,11 @@ public abstract class ServerIdentifierTableMgr extends ServersDb {
             try {
                 stmt = conn.prepareStatement(ADD_STORAGE_SERVER, Statement.RETURN_GENERATED_KEYS);
                 stmt.setString(1, serverName);
-                stmt.setString(2, serverIp);
-                stmt.setInt(3, port);
-                stmt.setInt(4, chunksPerStorageServer);
+                stmt.setInt(2, STORAGE_SERVER);
+                stmt.setString(3, serverIp);
+                stmt.setInt(4, port);
                 stmt.setInt(5, storageTier.toInt());
+                stmt.setInt(6, chunksPerStorageServer);
                 stmt.executeUpdate();
 
                 ResultSet rs = stmt.getGeneratedKeys();
@@ -171,13 +173,68 @@ public abstract class ServerIdentifierTableMgr extends ServersDb {
 
     public int getLastInsertId() { return serverId; }
 
-    public abstract boolean getServer(final String serverName, final List<ServerIdentifier> serverList);
-    public abstract boolean getStorageServers(final List<ServerIdentifier> servers, final int chunkNumber);
-
     public String getServerUID(final int serverId) {
         String getServerUIDStr = GET_SERVER_UID_USING_ID + serverId;
 
         return getUID(getServerUIDStr);
     }
 
+    public abstract boolean getServer(final String serverName, final List<ServerIdentifier> serverList);
+    public abstract boolean getStorageServers(final List<ServerIdentifier> servers, final int chunkNumber);
+    public abstract int getOrderedStorageServers(final List<ServerIdentifier> servers, final StorageTierEnum storageTier, final int chunkNumber);
+
+
+    protected int executeGetOrderedStorageServers(final PreparedStatement stmt, final List<ServerIdentifier> servers, final int chunkNumber) {
+        int result = HttpStatus.OK_200;
+
+        ResultSet rs = null;
+        try {
+            rs = stmt.executeQuery();
+
+            try {
+                while (rs.next()) {
+                    try {
+                        /*
+                         ** The rs.getString(3) is the String format of the IP Address.
+                         */
+                        int serverId = rs.getInt(1);
+                        String serverName = rs.getString(2);
+                        InetAddress inetAddress = InetAddress.getByName(rs.getString(3));
+                        int port = rs.getInt(4);
+
+                        ServerIdentifier server = new ServerIdentifier(serverName, inetAddress, port, chunkNumber);
+                        server.setServerId(serverId);
+                        servers.add(server);
+
+                        LOG.info("StorageServer host: " + serverName + " " + inetAddress.toString() + " port: " + port);
+                    } catch (UnknownHostException ex) {
+                        LOG.warn("retrieveServers() Unknown host: " + rs.getString(1) + " " + ex.getMessage());
+                        result = HttpStatus.UNPROCESSABLE_ENTITY_422;
+                        break;
+                    }
+                }
+            } catch (SQLException ex) {
+                System.out.println("retrieveServers() rs.next() SQLException: " + ex.getMessage());
+                LOG.warn("retrieveServers() rs.next() SQLException: " + ex.getMessage());
+                result = HttpStatus.INTERNAL_SERVER_ERROR_500;
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("executeGetOrderedStorageServers() SQLException: " + sqlEx.getMessage());
+            System.out.println("executeGetOrderedStorageServers() SQLException: " + sqlEx.getMessage());
+            result = HttpStatus.INTERNAL_SERVER_ERROR_500;
+        }
+
+        finally {
+            if (rs != null) {
+                try {
+                    rs.close();
+                } catch (SQLException sqlEx) {
+                    LOG.error("executeGetOrderedStorageServers() rs.close() SQLException: " + sqlEx.getMessage());
+                    System.out.println("executeGetOrderedStorageServers() rs.close() SQLException: " + sqlEx.getMessage());
+                }
+            }
+        }
+
+        return result;
+    }
 }

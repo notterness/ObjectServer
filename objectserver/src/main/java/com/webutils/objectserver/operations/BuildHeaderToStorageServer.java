@@ -238,7 +238,7 @@ public class BuildHeaderToStorageServer implements Operation {
                     "opc-request-id: " + requestContext.getRequestId() + "\n" +
                     "ETag: " + requestContext.getHttpInfo().getObjectUID() + "\n" +
                     "object-chunk-number: " + storageServer.getChunkNumber() + "\n" +
-                    "chunk-lba: " + storageServer.getOffset() + "\n" +
+                    "chunk-lba: " + storageServer.getChunkLBA() + "\n" +
                     "chunk-location: " + storageServer.getChunkLocation() + "\n" +
                     "Content-Length: " + chunkBytesToEncrypt + "\n\n";
         } else {
@@ -252,7 +252,7 @@ public class BuildHeaderToStorageServer implements Operation {
                     "opc-request-id: " + requestContext.getRequestId() + "\n" +
                     "ETag: " + requestContext.getHttpInfo().getObjectUID() + "\n" +
                     "object-chunk-number: " + storageServer.getChunkNumber() + "\n" +
-                    "chunk-lba: " + storageServer.getOffset() + "\n" +
+                    "chunk-lba: " + storageServer.getChunkLBA() + "\n" +
                     "chunk-location: " + storageServer.getChunkLocation() + "\n" +
                     "Content-Length: " + chunkBytesToEncrypt + "\n\n";
         }
@@ -279,7 +279,7 @@ public class BuildHeaderToStorageServer implements Operation {
                     "opc-client-request-id: " + opcClientRequestId + "\n" +
                     "opc-request-id: " + requestContext.getRequestId() + "\n" +
                     "object-chunk-number: " + storageServer.getChunkNumber() + "\n" +
-                    "chunk-lba: " + storageServer.getOffset() + "\n" +
+                    "chunk-lba: " + storageServer.getChunkLBA() + "\n" +
                     "chunk-location: " + storageServer.getChunkLocation() + "\n" +
                     "Content-Length: 0\n\n";
         } else {
@@ -292,7 +292,7 @@ public class BuildHeaderToStorageServer implements Operation {
                     "Accept-Encoding: gzip, deflate\n" +
                     "opc-request-id: " + requestContext.getRequestId() + "\n" +
                     "object-chunk-number: " + storageServer.getChunkNumber() + "\n" +
-                    "chunk-lba: " + storageServer.getOffset() + "\n" +
+                    "chunk-lba: " + storageServer.getChunkLBA() + "\n" +
                     "chunk-location: " + storageServer.getChunkLocation() + "\n" +
                     "Content-Length: 0\n\n";
         }

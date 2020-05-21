@@ -172,7 +172,7 @@ public class ReadObjectChunks implements Operation {
                             LOG.info("ReadObjectChunks[" + requestContext.getRequestId() + "] addr: " +
                                     server.getServerIpAddress().toString() + " port: " +
                                     server.getServerTcpPort() + " chunkNumber: " + server.getChunkNumber() + " offset: " +
-                                    server.getOffset() + " chunkSize: " + server.getLength());
+                                    server.getChunkLBA() + " chunkSize: " + server.getLength());
 
                             chunkIndexToFind++;
                         }

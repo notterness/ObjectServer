@@ -155,4 +155,19 @@ public class BuildHttpResult {
 
         HttpInfo.str_to_bb(respBuffer, tmpStr);
     }
+
+    public void buildAllocateChunksOkResponse(final ByteBuffer respBuffer) {
+        String respHeader = httpRequestInfo.getResponseHeaders();
+        String respContent = httpRequestInfo.getResponseContent();
+
+        String tmpStr = "HTTP/1.1 200 OK" +
+                "\r\n" +
+                respHeader +
+                "Content-Length: " + respContent.length()  + "\n\n" +
+                respContent;
+
+        HttpInfo.str_to_bb(respBuffer, tmpStr);
+    }
+
+
 }

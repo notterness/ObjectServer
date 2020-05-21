@@ -1,28 +1,28 @@
 package com.webutils.chunkmgr.operations;
 
+import com.webutils.chunkmgr.http.AllocateChunksGetContent;
 import com.webutils.chunkmgr.requestcontext.ChunkAllocRequestContext;
-import com.webutils.chunkmgr.http.CreateServerPostContent;
-import com.webutils.webserver.operations.ParsePostContent;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.common.Sha256ResultHandler;
 import com.webutils.webserver.operations.ComputeSha256Digest;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
+import com.webutils.webserver.operations.ParsePostContent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.*;
 
-public class SetupCreateServerPost implements Operation {
+public class SetupAllocateChunksGet implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(SetupCreateServerPost.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SetupAllocateChunksGet.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_CREATE_SERVER_POST;
+    public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_ALLOCATE_CHUNKS_GET;
 
     private final ChunkAllocRequestContext requestContext;
 
@@ -30,9 +30,9 @@ public class SetupCreateServerPost implements Operation {
 
     private final Operation completeCallback;
 
-    private final CreateServerPostContent createServerContent;
+    private final AllocateChunksGetContent allocChunksContent;
 
-    private CreateServer createServer;
+    private AllocateChunks allocateChunks;
 
     private final Sha256ResultHandler updator;
 
@@ -49,7 +49,7 @@ public class SetupCreateServerPost implements Operation {
      **
      ** The following is a map of all of the created Operations to handle this request.
      */
-    private final Map<OperationTypeEnum, Operation> PostHandlerOperations;
+    private final Map<OperationTypeEnum, Operation> GetHandlerOperations;
 
     private boolean setupMethodDone;
     private boolean waitingOnOperations;
@@ -59,21 +59,21 @@ public class SetupCreateServerPost implements Operation {
      **   method.
      ** The completeCb will call the DetermineRequest operation's event() method when the POST completes.
      */
-    public SetupCreateServerPost(final ChunkAllocRequestContext requestContext, final Operation metering,
+    public SetupAllocateChunksGet(final ChunkAllocRequestContext requestContext, final Operation metering,
                                  final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.metering = metering;
         this.completeCallback = completeCb;
 
-        this.createServerContent = new CreateServerPostContent();
+        this.allocChunksContent = new AllocateChunksGetContent();
 
         this.updator = requestContext.getSha256ResultHandler();
 
         /*
          ** Setup the list of Operations currently used to handle the V2 PUT
          */
-        PostHandlerOperations = new HashMap<>();
+        GetHandlerOperations = new HashMap<>();
 
         /*
          ** This starts out not being on any queue
@@ -115,21 +115,21 @@ public class SetupCreateServerPost implements Operation {
             BufferManagerPointer readBufferPointer = requestContext.getReadBufferPointer();
 
             /*
-             ** Once the parsing of the POST content data has taken place and the Sha-256 digest is determined to be valid,
-             **   then the Server and its contents need to be created in the database.
+             ** Once the parsing of the GET content data has taken place and the Sha-256 digest is determined to be valid,
+             **   then the database request for a list of servers and their chunks needs to take place.
              */
-            createServer = new CreateServer(requestContext, createServerContent, this);
-            PostHandlerOperations.put(createServer.getOperationType(), createServer);
-            createServer.initialize();
+            allocateChunks = new AllocateChunks(requestContext, allocChunksContent, this);
+            GetHandlerOperations.put(allocateChunks.getOperationType(), allocateChunks);
+            allocateChunks.initialize();
 
             /*
-             ** Setup the Parser to pull the information out of the POST content. This will put the information into
-             **   a temporary structure and once the Sha-256 digest completes (assuming it is successful) the setup
-             **   of the Server will take place.
+             ** Setup the Parser to pull the information out of the GET content. This will put the information into
+             **   a temporary structure and once the Sha-256 digest completes (assuming it is successful) the allocation
+             **   of the chunks from a set of Storage Servers will take place.
              */
             ParsePostContent parseContent = new ParsePostContent(requestContext, readBufferPointer, metering,
-                    createServerContent, this);
-            PostHandlerOperations.put(parseContent.getOperationType(), parseContent);
+                    allocChunksContent, this);
+            GetHandlerOperations.put(parseContent.getOperationType(), parseContent);
             parseContent.initialize();
 
             /*
@@ -142,7 +142,7 @@ public class SetupCreateServerPost implements Operation {
             callbackList.add(this);
 
             ComputeSha256Digest computeSha256Digest = new ComputeSha256Digest(requestContext, callbackList, readBufferPointer, updator);
-            PostHandlerOperations.put(computeSha256Digest.getOperationType(), computeSha256Digest);
+            GetHandlerOperations.put(computeSha256Digest.getOperationType(), computeSha256Digest);
             computeSha256Digest.initialize();
 
             /*
@@ -166,23 +166,23 @@ public class SetupCreateServerPost implements Operation {
              **   parsing is complete and a second time when the ComputeSha256Digest has completed.
              */
             if (updator.getSha256DigestComplete() && requestContext.postMethodContentParsed()) {
-                LOG.info("SetupCreateServerPost[" + requestContext.getRequestId() + "] Sha-256 and Parsing done");
+                LOG.info("SetupAllocateChunksGet[" + requestContext.getRequestId() + "] Sha-256 and Parsing done");
 
                 /*
                  ** Cleanup the operations
                  */
-                Operation contentParser = PostHandlerOperations.get(OperationTypeEnum.PARSE_POST_CONTENT);
+                Operation contentParser = GetHandlerOperations.get(OperationTypeEnum.PARSE_POST_CONTENT);
                 contentParser.complete();
-                PostHandlerOperations.remove(OperationTypeEnum.PARSE_POST_CONTENT);
+                GetHandlerOperations.remove(OperationTypeEnum.PARSE_POST_CONTENT);
 
                 /*
                  ** Since the Sha-256 digest runs on a compute thread, it handles it's own complete() call. For that
                  **   reason, simply remove it from the PostHandlerOperations map.
                  */
-                PostHandlerOperations.remove(OperationTypeEnum.COMPUTE_SHA256_DIGEST);
+                GetHandlerOperations.remove(OperationTypeEnum.COMPUTE_SHA256_DIGEST);
 
                 if (updator.checkContentSha256()) {
-                    createServer.event();
+                    allocateChunks.event();
                 } else {
                     /*
                      ** There was an error with the passed in or computed Sha-256 digest, so an error needs to be
@@ -193,7 +193,7 @@ public class SetupCreateServerPost implements Operation {
 
                 waitingOnOperations = false;
             } else {
-                LOG.info("SetupCreateServerPost[" + requestContext.getRequestId() + "] not completed Sha-256 digestComplete: " +
+                LOG.info("SetupAllocateChunksGet[" + requestContext.getRequestId() + "] not completed Sha-256 digestComplete: " +
                         updator.getSha256DigestComplete() + " POST content parsed: " + requestContext.postMethodContentParsed());
             }
         } else {
@@ -213,15 +213,15 @@ public class SetupCreateServerPost implements Operation {
          ** Call the complete() methods for all of the Operations created to handle the POST method that did not have
          **   ordering dependencies due to the registrations with the BufferManager(s).
          */
-        Collection<Operation> createdOperations = PostHandlerOperations.values();
+        Collection<Operation> createdOperations = GetHandlerOperations.values();
         for (Operation createdOperation : createdOperations) {
             createdOperation.complete();
         }
-        PostHandlerOperations.clear();
+        GetHandlerOperations.clear();
 
         completeCallback.event();
 
-        LOG.info("SetupCreateServerPost[" + requestContext.getRequestId() + "] completed");
+        LOG.info("SetupAllocateChunksGet[" + requestContext.getRequestId() + "] completed");
     }
 
     /*
@@ -240,19 +240,19 @@ public class SetupCreateServerPost implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("SetupCreateServerPost[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("SetupAllocateChunksGet[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("SetupCreateServerPost[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SetupAllocateChunksGet[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("SetupCreateServerPost[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("SetupAllocateChunksGet[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("SetupCreateServerPost[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SetupAllocateChunksGet[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -267,8 +267,7 @@ public class SetupCreateServerPost implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("SetupCreateServerPost[" + requestContext.getRequestId() +
-                "] hasWaitTimeElapsed() not supposed to be on delayed queue");
+        LOG.warn("SetupAllocateChunksGet[" + requestContext.getRequestId() + "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
 
@@ -280,12 +279,11 @@ public class SetupCreateServerPost implements Operation {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
         LOG.info("   -> Operations Created By " + operationType);
 
-        Collection<Operation> createdOperations = PostHandlerOperations.values();
+        Collection<Operation> createdOperations = GetHandlerOperations.values();
         for (Operation createdOperation : createdOperations) {
             createdOperation.dumpCreatedOperations(level + 1);
         }
         LOG.info("");
     }
-
 
 }

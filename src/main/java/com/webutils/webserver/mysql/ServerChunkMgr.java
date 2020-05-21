@@ -25,6 +25,7 @@ public class ServerChunkMgr extends ServersDb {
             "     SELECT chunkId, chunkNumber, startLba, size AS chunk_info FROM storageServerChunk " +
             "           WHERE chunkId = chunk_id_tmp; " +
             "     UPDATE storageServerChunk SET state = 1 WHERE chunkId = chunk_id_tmp;" +
+            "     UPDATE ServerIdentifier SET usedChunks = usedChunks + 1, lastAllocationTime = CURRENT_TIME() WHERE serverId = server_id;" +
             "   END IF;" +
             " END";
 
@@ -84,7 +85,7 @@ public class ServerChunkMgr extends ServersDb {
         }
     }
 
-    public int allocateChunk(final ServerIdentifier serverIdentifier) {
+    public int allocateStorageChunk(final ServerIdentifier serverIdentifier) {
         int result = HttpStatus.OK_200;
 
         Connection conn = getServersDbConn();

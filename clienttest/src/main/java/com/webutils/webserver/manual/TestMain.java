@@ -284,8 +284,11 @@ public class TestMain {
         waitForTestsToComplete(threadCount);
 */
 
-        PostCreateServer createServer = new PostCreateServer(serverIpAddr, CHUNK_ALLOC_SERVER_TCP_PORT, threadCount);
-        createServer.execute();
+        //PostCreateServer createServer = new PostCreateServer(serverIpAddr, CHUNK_ALLOC_SERVER_TCP_PORT, threadCount);
+        //createServer.execute();
+
+        AllocateChunksSimple allocateChunks = new AllocateChunksSimple(serverIpAddr, CHUNK_ALLOC_SERVER_TCP_PORT, threadCount);
+        allocateChunks.execute();
 
         //DeleteObjectSimple deleteObject = new DeleteObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         //deleteObject.execute();

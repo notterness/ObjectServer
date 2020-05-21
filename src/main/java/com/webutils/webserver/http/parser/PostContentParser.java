@@ -28,7 +28,7 @@ package com.webutils.webserver.http.parser;
  */
 
 import com.webutils.webserver.http.HttpInfo;
-import com.webutils.webserver.http.PostContent;
+import com.webutils.webserver.http.ParseRequestContent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,16 +40,16 @@ public class PostContentParser {
     private static final Logger LOG = LoggerFactory.getLogger(PostContentParser.class);
 
     private final int contentLength;
-    private final PostContent postContent;
+    private final ParseRequestContent parseRequestContent;
 
     private int contentBytesParsed;
 
     private boolean parseError;
 
-    public PostContentParser(final int contentLength, final PostContent postContent) {
+    public PostContentParser(final int contentLength, final ParseRequestContent parseRequestContent) {
 
         this.contentLength = contentLength;
-        this.postContent = postContent;
+        this.parseRequestContent = parseRequestContent;
 
         this.contentBytesParsed = 0;
         this.parseError = false;
@@ -77,7 +77,7 @@ public class PostContentParser {
                  */
                 //LOG.info(" token: " + str1);
 
-                if (!postContent.addData(str1)) {
+                if (!parseRequestContent.addData(str1)) {
                     parseError = true;
                     return false;
                 }

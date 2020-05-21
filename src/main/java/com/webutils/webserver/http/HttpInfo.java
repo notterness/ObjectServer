@@ -64,12 +64,6 @@ abstract public class HttpInfo {
     protected int requestId;
 
     /*
-     ** HTTP level
-     **   Expected: "HTTP/1.1"
-     */
-    private String httpVersion;
-
-    /*
      ** Method is one of POST, PUT, DELETE, GET, HEAD, TRACE
      */
     protected HttpMethodEnum httpMethod;
@@ -148,9 +142,8 @@ abstract public class HttpInfo {
         objectUriInfoMap = new HashMap<>(3);
 
         /*
-        ** Information about the header - httpVersion is not used, but useful for debug
+        **
          */
-        httpVersion = null;
         httpMethod = HttpMethodEnum.INVALID_METHOD;
 
         /*
@@ -184,7 +177,6 @@ abstract public class HttpInfo {
      */
     void reset() {
 
-        httpVersion = null;
         httpMethod = HttpMethodEnum.INVALID_METHOD;
 
         headerComplete = false;
@@ -222,9 +214,7 @@ abstract public class HttpInfo {
      **
      **  This is where PUT, POST, GET, DELETE, etc is turned into a more useful enum.
      */
-    public void setHttpMethodAndVersion(String methodString, String httpParsedVersion) {
-        httpVersion = httpParsedVersion;
-
+    public void setHttpMethodAndVersion(String methodString) {
         /*
          ** Determine the method enum based upon the passed in method string. There is currently a special case for
          **   the ListObject method which uses the GET method, but excludes a value in the "/o" field.
@@ -297,7 +287,7 @@ abstract public class HttpInfo {
                     }
                 }
 
-                if ((endingIndex != -1) && (endingIndex != startingIndex)) {
+                if (endingIndex != startingIndex) {
                     try {
                         tmp = uri.substring(startingIndex, endingIndex);
                         LOG.info("setHttpUri() [" + requestId + "] name: " + uriField + " name: " + tmp);
@@ -509,7 +499,7 @@ abstract public class HttpInfo {
 
     public String getContentMd5 () {
         String md5 = getHeaderString(CONTENT_MD5);
-        if ((md5 == null) || ((md5 != null) && md5.isEmpty())) {
+        if ((md5 == null) || md5.isEmpty()) {
             md5 = "NULL";
         }
 
@@ -518,11 +508,7 @@ abstract public class HttpInfo {
 
     public boolean getMd5Override() {
         String md5Override = getHeaderString(MD5_OVERRIDE_HEADER);
-        if ((md5Override != null) && md5Override.matches("true")) {
-            return true;
-        }
-
-        return false;
+        return ((md5Override != null) && md5Override.matches("true"));
     }
 
     public String getContentSha256 () {

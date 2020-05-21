@@ -186,7 +186,7 @@ public class SetupChunkRead implements Operation {
         LOG.info("SetupChunkRead[" + requestContext.getRequestId() + "] addr: " +
                 storageServer.getServerIpAddress().toString() + " port: " +
                 storageServer.getServerTcpPort() + " chunkNumber: " + storageServer.getChunkNumber() + " offset: " +
-                storageServer.getOffset() + " writer: " + this.writerNumber);
+                storageServer.getChunkLBA() + " writer: " + this.writerNumber);
     }
 
     public OperationTypeEnum getOperationType() {

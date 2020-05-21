@@ -1,11 +1,13 @@
-package com.webutils.webserver.http;
+package com.webutils.chunkmgr.http;
 
+import com.webutils.webserver.http.ParseRequestContent;
+import com.webutils.webserver.http.StorageTierEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
-public class CreateServerPostContent extends PostContent {
+public class CreateServerPostContent extends ParseRequestContent {
 
     private static final Logger LOG = LoggerFactory.getLogger(CreateServerPostContent.class);
 
@@ -172,24 +174,5 @@ public class CreateServerPostContent extends PostContent {
         }
         return chunks;
     }
-
-    public Set<Map.Entry<String, String>> getFreeFormTags() {
-        return freeformTags.entrySet();
-    }
-
-    public Set<Map.Entry<String, String>> getDefinedTags(final String subTagName) {
-        Map<String, String> subCategory = definedTags.get(subTagName);
-
-        if (subCategory != null) {
-            return subCategory.entrySet();
-        } else {
-            return null;
-        }
-    }
-
-    public Set<String> getDefinedTagsSubTagKeys() {
-        return definedTags.keySet();
-    }
-
 
 }

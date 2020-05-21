@@ -1,8 +1,10 @@
 package com.webutils.webserver.mysql;
 
+import com.webutils.webserver.http.StorageTierEnum;
 import com.webutils.webserver.kubernetes.KubernetesInfo;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
+import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,6 +34,9 @@ public class K8PodServersMgr extends ServerIdentifierTableMgr {
             "VALUES(?, ?)";
     private static final String UPDATE_K8_POD_SERVER = "INSERT INTO k8LocalStorageServerInfo(k8PodServerIpAddr, k8PosServerPort) " +
             "VALUES(?, ?) WHERE serverName = ?";
+
+    private static final String STORAGE_SERVER_REQUEST = "SELECT serverId, serverName, k8PodServerIpAddr, k8PosServerPort FROM ServerIdentifier " +
+            "WHERE serverType = ? storageTier = ? ORDER BY usedChunks ASC, totalAllocations ASC, lastAllocationTime DESC";
 
 
     /*
@@ -211,6 +216,49 @@ public class K8PodServersMgr extends ServerIdentifierTableMgr {
              */
             closeStorageServerDbConn(conn);
         }
+    }
+
+    public int getOrderedStorageServers(final List<ServerIdentifier> servers, final StorageTierEnum storageTier,
+                                        final int chunkNumber) {
+        int result;
+        Connection conn = getServersDbConn();
+
+        if (conn != null) {
+            PreparedStatement stmt = null;
+
+            try {
+                stmt = conn.prepareStatement(STORAGE_SERVER_REQUEST);
+                stmt.setInt(1, STORAGE_SERVER);
+                stmt.setInt(2, storageTier.toInt());
+
+                result = executeGetOrderedStorageServers(stmt, servers, chunkNumber);
+            } catch (SQLException sqlEx) {
+                LOG.error("getOrderedStorageServers() SQLException: " + sqlEx.getMessage());
+                System.out.println("getOrderedStorageServers() SQLException: " + sqlEx.getMessage());
+                result = HttpStatus.INTERNAL_SERVER_ERROR_500;
+            }
+
+            finally {
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("getOrderedStorageServers() stmt.close() SQLException: " + sqlEx.getMessage());
+                        System.out.println("getOrderedStorageServers() stmt.close()  SQLException: " + sqlEx.getMessage());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database tables.
+             */
+            closeStorageServerDbConn(conn);
+        } else {
+            LOG.warn("getOrderedStorageServers() Unable to obtain connection");
+            result = HttpStatus.INTERNAL_SERVER_ERROR_500;
+        }
+
+        return result;
     }
 
 }

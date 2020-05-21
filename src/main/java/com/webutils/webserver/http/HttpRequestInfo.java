@@ -6,8 +6,7 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Objects;
 
 public abstract class HttpRequestInfo extends HttpInfo {
 
@@ -27,19 +26,9 @@ public abstract class HttpRequestInfo extends HttpInfo {
     private String successResponseContent;
     private String successResponseHeaders;
 
-    /*
-    ** This map is used to hold the Object Name, Bucket Name and Tenancy Name for the created objected.
-    ** For Storage Servers, there is also a Test Type that is used to force certain behaviors in the
-    **   Storage Server's responses (i.e. disconnect the connection).
-     */
-    private final Map<String, String> putObjectInfoMap;
-
-
     public HttpRequestInfo() {
 
         super();
-
-        putObjectInfoMap = new HashMap<>(3);
 
         /*
         ** Set the objectId to -1 to indicate that it is not valid.
@@ -82,19 +71,11 @@ public abstract class HttpRequestInfo extends HttpInfo {
     }
 
     public String getResponseHeaders() {
-        if (successResponseHeaders == null) {
-            return "";
-        }
-
-        return successResponseHeaders;
+        return Objects.requireNonNullElse(successResponseHeaders, "");
     }
 
     public String getResponseContent() {
-        if (successResponseContent == null) {
-            return "";
-        }
-
-        return successResponseContent;
+        return Objects.requireNonNullElse(successResponseContent, "");
     }
 
     /*

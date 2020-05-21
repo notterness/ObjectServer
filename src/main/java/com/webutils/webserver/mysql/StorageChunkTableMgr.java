@@ -67,7 +67,7 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
              */
         }
 
-        String createChunkEntry = CREATE_CHUNK_1 + server.getOffset() + CREATE_CHUNK_2 + server.getLength() +
+        String createChunkEntry = CREATE_CHUNK_1 + server.getChunkLBA() + CREATE_CHUNK_2 + server.getLength() +
                 CREATE_CHUNK_3 + server.getChunkNumber() + CREATE_CHUNK_4 + server.getServerName() + CREATE_CHUNK_5 +
                 server.getServerIpAddress() + CREATE_CHUNK_6 + server.getServerTcpPort() + CREATE_CHUNK_7 + "test" +
                 CREATE_CHUCK_8 + objectId + CREATE_CHUNK_9;
@@ -128,12 +128,12 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
      */
     private boolean checkForDuplicateChunk(final ServerIdentifier server) {
 
-        String duplicateCheck = CHECK_FOR_DUPLICATE_1 + server.getOffset() + CHECK_FOR_DUPLICATE_2 + server.getServerName() +
+        String duplicateCheck = CHECK_FOR_DUPLICATE_1 + server.getChunkLBA() + CHECK_FOR_DUPLICATE_2 + server.getServerName() +
                 CHECK_FOR_DUPLICATE_3 + server.getServerIpAddress() + CHECK_FOR_DUPLICATE_4 + server.getServerTcpPort();
 
         int chunkId = getId(duplicateCheck);
         if (chunkId == -1) {
-            LOG.warn("checkForDuplicateChunk() failed offset: " + server.getOffset() + " name: " + server.getServerName() +
+            LOG.warn("checkForDuplicateChunk() failed offset: " + server.getChunkLBA() + " name: " + server.getServerName() +
                     " IP Addr: " + server.getServerIpAddress() + " port: " + server.getServerTcpPort());
             return true;
         }
@@ -151,7 +151,7 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
     **   objectId
      */
     private int getChunkId(final int objectId, final ServerIdentifier server) {
-        String getObjectIdStr = CHECK_FOR_DUPLICATE_1 + server.getOffset() + CHECK_FOR_DUPLICATE_2 + server.getServerName() +
+        String getObjectIdStr = CHECK_FOR_DUPLICATE_1 + server.getChunkLBA() + CHECK_FOR_DUPLICATE_2 + server.getServerName() +
                 CHECK_FOR_DUPLICATE_3 + server.getServerIpAddress() + CHECK_FOR_DUPLICATE_4 + server.getServerTcpPort() +
                 GET_CHUNK_ID + objectId;
 

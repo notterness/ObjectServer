@@ -9,22 +9,24 @@ import java.util.stream.Collectors;
 
 public enum StorageTierEnum {
 
-    INVALID_TIER(0, "invalid"),
-    STANDARD_TIER(1, "Standard"),
-    INTELLIGENT_TIER(2, "Intelligent-Tiering"),
-    STANDARD_INFREQUENT_ACCESS_TIER(3, "Standard-IA"),
-    ONE_ZONE_TIER(4, "OneZone"),
-    ARCHIVE_TIER(5, "Archive"),
-    DEEP_ARCHIVE_TIER(6, "DeepArchive");
+    INVALID_TIER(0, "invalid", 0),
+    STANDARD_TIER(1, "Standard", 3),
+    INTELLIGENT_TIER(2, "Intelligent-Tiering", 3),
+    STANDARD_INFREQUENT_ACCESS_TIER(3, "Standard-IA", 3),
+    ONE_ZONE_TIER(4, "OneZone", 2),
+    ARCHIVE_TIER(5, "Archive", 3),
+    DEEP_ARCHIVE_TIER(6, "DeepArchive", 3);
 
 
     private final int value;
     private final String tierName;
+    private final int redundancy;
 
-    StorageTierEnum(final int value, final String tierName) {
+    StorageTierEnum(final int value, final String tierName, final int redundancy) {
 
         this.value = value;
         this.tierName = tierName;
+        this.redundancy = redundancy;
     }
 
     public int toInt() {
@@ -32,6 +34,8 @@ public enum StorageTierEnum {
     }
 
     public String toString() { return this.tierName; }
+
+    public int getRedundancy() { return this.redundancy; }
 
     /*
     ** The next two static functions setup the Maps that can be used to translate between an integer and the Enum and

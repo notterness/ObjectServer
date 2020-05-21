@@ -43,9 +43,7 @@ public class ServerIdentifier {
      */
     private int storageServerChunkNumber;
 
-    private int chunkOffset;
     private int chunkLength;
-
     private int chunkLBA;
 
     private String md5Digest;
@@ -94,11 +92,9 @@ public class ServerIdentifier {
     }
 
     public String getServerName() { return serverName; }
-
     public InetAddress getServerIpAddress() {
         return serverIpAddress;
     }
-
     public int getServerTcpPort() {
         return serverTcpPort;
     }
@@ -107,16 +103,9 @@ public class ServerIdentifier {
         return objectChunkNumber;
     }
 
-    public void setOffset(final int offset) {
-        chunkOffset = offset;
-    }
-
-    public int getOffset() { return chunkOffset; }
-
     public void setLength(final int length) {
         chunkLength = length;
     }
-
     public int getLength() { return chunkLength; }
 
     /*

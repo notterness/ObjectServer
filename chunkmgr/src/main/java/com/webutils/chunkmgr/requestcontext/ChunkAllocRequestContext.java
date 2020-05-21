@@ -1,5 +1,8 @@
 package com.webutils.chunkmgr.requestcontext;
 
+import com.webutils.chunkmgr.operations.ChunkMgrDetermineRequest;
+import com.webutils.chunkmgr.operations.ChunkMgrSendFinalStatus;
+import com.webutils.chunkmgr.operations.SetupAllocateChunksGet;
 import com.webutils.chunkmgr.operations.SetupCreateServerPost;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
@@ -36,9 +39,9 @@ public class ChunkAllocRequestContext extends RequestContext {
      */
     private CloseOutRequest closeRequest;
 
-    private DetermineRequest determineRequest;
+    private ChunkMgrDetermineRequest determineRequest;
 
-    private SendFinalStatus sendFinalStatus;
+    private ChunkMgrSendFinalStatus sendFinalStatus;
 
     /*
      ** This is the unique ID to identify an object table entry in the database (ObjectStorageDb, object table)
@@ -164,7 +167,7 @@ public class ChunkAllocRequestContext extends RequestContext {
          **   Once the cleanup is performed, then the RequestContext is added back to the free list so
          **   it can be used to handle a new request.
          */
-        sendFinalStatus = new SendFinalStatus(this, memoryManager);
+        sendFinalStatus = new ChunkMgrSendFinalStatus(this, memoryManager);
         requestHandlerOperations.put(sendFinalStatus.getOperationType(), sendFinalStatus);
         BufferManagerPointer clientWritePtr = sendFinalStatus.initialize();
 
@@ -181,7 +184,7 @@ public class ChunkAllocRequestContext extends RequestContext {
          ** The DetermineRequest operation is run after the HTTP Request has been parsed and the method
          **   handler determined via the setHttpMethodAndVersion() method in the CasperHttpInfo object.
          */
-        determineRequest = new DetermineRequest(this, supportedHttpRequests);
+        determineRequest = new ChunkMgrDetermineRequest(this, supportedHttpRequests);
         requestHandlerOperations.put(determineRequest.getOperationType(), determineRequest);
         determineRequest.initialize();
 
@@ -192,8 +195,11 @@ public class ChunkAllocRequestContext extends RequestContext {
          ** NOTE: Although it seems weird to add the supported HTTP requests after the creating of the
          **   DetermineRequest, the method handler have a dependency upon the determine request.
          */
-        SetupCreateServerPost postHandler = new SetupCreateServerPost(this, metering, determineRequest);
-        supportedHttpRequests.put(HttpMethodEnum.POST_METHOD, postHandler);
+        SetupCreateServerPost createServerHandler = new SetupCreateServerPost(this, metering, determineRequest);
+        supportedHttpRequests.put(HttpMethodEnum.POST_METHOD, createServerHandler);
+
+        SetupAllocateChunksGet allocateChunksHandler = new SetupAllocateChunksGet(this, metering, determineRequest);
+        supportedHttpRequests.put(HttpMethodEnum.GET_METHOD, allocateChunksHandler);
 
         /*
          ** Setup the specific part for parsing the buffers as an HTTP Request.
@@ -250,7 +256,7 @@ public class ChunkAllocRequestContext extends RequestContext {
         operation = requestHandlerOperations.remove(OperationTypeEnum.WRITE_TO_CLIENT);
         operation.complete();
 
-        operation = requestHandlerOperations.remove(OperationTypeEnum.SEND_FINAL_STATUS);
+        operation = requestHandlerOperations.remove(OperationTypeEnum.CHUNK_MGR_SEND_FINAL_STATUS);
         operation.complete();
 
         operation = requestHandlerOperations.remove(OperationTypeEnum.CLOSE_OUT_REQUEST);
@@ -262,7 +268,7 @@ public class ChunkAllocRequestContext extends RequestContext {
         operation = requestHandlerOperations.remove(OperationTypeEnum.METER_READ_BUFFERS);
         operation.complete();
 
-        operation = requestHandlerOperations.remove(OperationTypeEnum.DETERMINE_REQUEST);
+        operation = requestHandlerOperations.remove(OperationTypeEnum.CHUNK_MGR_DETERMINE_REQUEST);
         operation.complete();
 
         /*

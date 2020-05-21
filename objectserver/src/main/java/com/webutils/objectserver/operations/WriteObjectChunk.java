@@ -166,7 +166,7 @@ public class WriteObjectChunk implements Operation {
                     ServerIdentifier testServer = new ServerIdentifier("test-server", inetAddress, 5020, 0);
                     testServer.setServerId(2);
                     ServerChunkMgr chunkMgr = new ServerChunkMgr(requestContext.getWebServerFlavor());
-                    chunkMgr.allocateChunk(testServer);
+                    chunkMgr.allocateStorageChunk(testServer);
                 } catch (UnknownHostException ex) {
 
                 }
@@ -277,35 +277,42 @@ public class WriteObjectChunk implements Operation {
                     for (ServerIdentifier server : serverList) {
                         int result = requestContext.getStorageResponseResult(server);
 
-                        /*
-                        ** Verify the Md5 that was computed by the Storage Server
-                         */
-                        HttpResponseInfo httpInfo = server.getHttpInfo();
-
-
-                        /*
-                        ** If the status is OK_200, then update the chunk to mark that the data was written and save
-                        **   the Md5 Digest for the chunk. The Md5 for the chunk is used to validate that data read
-                        **   back from the Storage Server is valid.
-                         */
                         if (result == HttpStatus.OK_200) {
-                            if (chunkMgr.setChunkWritten(server.getChunkId(), chunkMd5Updater.getComputedMd5Digest())) {
-                                LOG.info("ChunkWriteComplete addr: " + server.getServerIpAddress().toString() +
-                                        " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
-                                        " result: OK_200 " + chunkRedundancy);
-
-                                chunkMgr.getChunkMd5Digest(server.getChunkId());
-                                chunkRedundancy++;
-                            } else {
-                                LOG.error("ChunkWriteComplete unable to update dataWritten addr: " + server.getServerIpAddress().toString() +
-                                        " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
-                                        " result: OK_200");
+                            /*
+                            ** Verify the Md5 that was computed by the Storage Server
+                            */
+                            HttpResponseInfo httpInfo = server.getHttpInfo();
+                            if (!chunkMd5Updater.checkContentMD5(httpInfo.getResponseContentMd5())) {
+                                LOG.error("ChunkWriteComplete bad Md5 addr: " + server.getServerIpAddress().toString() +
+                                    " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
+                                    " result: UNPROCESSABLE_ENTITY_422");
+                                result = HttpStatus.UNPROCESSABLE_ENTITY_422;
 
                                 chunkMgr.deleteChunk(server.getChunkId());
+                            } else {
+                                /*
+                                 ** If the status is OK_200, then update the chunk to mark that the data was written and save
+                                 **   the Md5 Digest for the chunk. The Md5 for the chunk is used to validate that data read
+                                 **   back from the Storage Server is valid.
+                                 */
+                                if (chunkMgr.setChunkWritten(server.getChunkId(), chunkMd5Updater.getComputedMd5Digest())) {
+                                    LOG.info("ChunkWriteComplete addr: " + server.getServerIpAddress().toString() +
+                                            " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
+                                            " result: OK_200 " + chunkRedundancy);
+
+                                    chunkMgr.getChunkMd5Digest(server.getChunkId());
+                                    chunkRedundancy++;
+                                } else {
+                                    LOG.error("ChunkWriteComplete unable to update dataWritten addr: " + server.getServerIpAddress().toString() +
+                                            " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
+                                            " result: OK_200");
+
+                                    chunkMgr.deleteChunk(server.getChunkId());
+                                }
                             }
                         } else {
                             /*
-                            ** Delete this chunk, hopefully this is not the lst
+                            ** Delete this chunk, hopefully this does not mean that all the chunks are bad.
                              */
                             LOG.error("ChunkWriteComplete unable to update dataWritten addr: " + server.getServerIpAddress().toString() +
                                     " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
