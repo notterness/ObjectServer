@@ -4,7 +4,6 @@ import com.webutils.objectserver.common.ListObjectData;
 import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpRequestInfo;
-import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.TenancyTableMgr;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
@@ -27,8 +26,6 @@ public class SetupObjectList implements Operation {
      ** The operations are all tied together via the RequestContext
      */
     private final ObjectServerRequestContext requestContext;
-
-    private final MemoryManager memoryManager;
 
     /*
      ** The completeCallback will cause the final response to be sent out.
@@ -58,11 +55,9 @@ public class SetupObjectList implements Operation {
      **   request. This uses the GET command, but the "/o" field is empty to indicate the it is a request for all the
      **   objects that are kept within a bucket.
      */
-    public SetupObjectList(final ObjectServerRequestContext requestContext, final MemoryManager memoryManager,
-                             final Operation completeCb) {
+    public SetupObjectList(final ObjectServerRequestContext requestContext, final Operation completeCb) {
 
         this.requestContext = requestContext;
-        this.memoryManager = memoryManager;
         this.completeCallback = completeCb;
 
         /*
@@ -110,7 +105,11 @@ public class SetupObjectList implements Operation {
             TenancyTableMgr tenancyMgr = new TenancyTableMgr(requestContext.getWebServerFlavor());
             String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
 
-            List<String> requestedFields = new ArrayList<>(List.of("name", "etag", "version", "md5", "size", "time-created", "tier"));
+            /*
+            ** NOTE: The default requestedFields are: name, size, time-created and md5
+             */
+            List<String> requestedFields = new ArrayList<>();
+            requestContext.getHttpInfo().getFields(requestedFields);
             ListObjectData listData = new ListObjectData(requestContext, objectListInfo, requestedFields, tenancyUID);
             listData.execute();
 

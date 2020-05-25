@@ -1,6 +1,5 @@
 package com.webutils.objectserver.requestcontext;
 
-import com.webutils.objectserver.http.ObjectServerHttpRequestInfo;
 import com.webutils.objectserver.operations.*;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
@@ -214,8 +213,9 @@ public class ObjectServerRequestContext extends RequestContext {
         SetupObjectDelete deleteHandler = new SetupObjectDelete(this, memoryManager, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.DELETE_METHOD, deleteHandler);
 
-        SetupObjectList listHandler = new SetupObjectList(this, memoryManager, determineRequest);
+        SetupObjectList listHandler = new SetupObjectList(this, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.LIST_METHOD, listHandler);
+
         /*
          ** Setup the specific part for parsing the buffers as an HTTP Request.
          */

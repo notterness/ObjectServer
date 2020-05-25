@@ -88,12 +88,16 @@ public class ListObjectData {
 
         for (String objectField : objectFields) {
             String lowerCaseItem = objectField.toLowerCase();
+
             if (validFields.contains(lowerCaseItem)) {
                 fieldsToDisplay.add(lowerCaseItem);
             }
         }
     }
 
+    /*
+    ** Build (and validate) the database request to obtain the information about the objects.
+     */
     private String buildQueryStr() {
         String namespace = listHttpInfo.getNamespace();
         String bucketName = listHttpInfo.getBucket();
@@ -143,9 +147,8 @@ public class ListObjectData {
             return null;
         }
 
-        String queryStr = "SELECT objectId, objectName, versionId, contentLength, storageType, contentMd5, createTime, " +
+        return "SELECT objectId, objectName, versionId, contentLength, storageType, contentMd5, createTime, " +
                 "lastUpdateTime, BIN_TO_UUID(objectUID) objectUID, deleteMarker FROM object WHERE bucketId = " + bucketId;
-        return queryStr;
     }
 
     private String buildObjectResponse(final List<Map<String, String>> objectList) {
@@ -161,6 +164,7 @@ public class ListObjectData {
             int count = 0;
             for (String fieldName : fieldsToDisplay) {
                 String objectField = currObject.get(fieldName);
+
                 if (objectField != null) {
                     responseStr.append("      \"").append(fieldName).append("\": \"").append(objectField).append("\"");
                 }

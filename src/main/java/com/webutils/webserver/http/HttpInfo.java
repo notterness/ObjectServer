@@ -59,6 +59,13 @@ abstract public class HttpInfo {
     private static final String VERSION_ID = "versionId";
 
     /*
+    ** The following is used to determine what information should be returned by the ListObjects GET method.
+    **   The default fields to return are:
+    **     name, size, time-created and md5
+     */
+    private static final String FIELDS_LIST = "fields";
+
+    /*
      ** The connection this HTTP information is associated with
      */
     protected int requestId;
@@ -659,6 +666,37 @@ abstract public class HttpInfo {
             }
 
             return buffer.toString();
+        }
+    }
+
+    /*
+    ** Return the list of "fields"
+     */
+    public void getFields(List<String> requestedFields) {
+        List<String> values = headers.get(FIELDS_LIST);
+        if ((values == null) || values.isEmpty()) {
+            requestedFields.add("name");
+            requestedFields.add("size");
+            requestedFields.add("time-created");
+            requestedFields.add("md5");
+        } else {
+            parseOutStrings(values, requestedFields);
+        }
+    }
+
+    /*
+    **
+     */
+    private void parseOutStrings(List<String> values, List<String> output) {
+        for (String tmpStr: values) {
+            /*
+             ** First tokenize the String by ','
+             */
+            StringTokenizer stk = new StringTokenizer(tmpStr, " ,");
+            while (stk.hasMoreTokens()) {
+                String str1 = stk.nextToken();
+                output.add(str1);
+            }
         }
     }
 

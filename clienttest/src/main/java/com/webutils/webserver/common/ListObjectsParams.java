@@ -61,6 +61,8 @@ public class ListObjectsParams extends ObjectParams {
             request += "opc-client-request-id: " + opcClientRequestId + "\n";
         }
 
+        request += "fields: name, etag, version, md5, size, time-created, tier\n";
+
         finalContent += "Content-Length: 0\n\n";
 
         request += finalContent;
