@@ -236,6 +236,7 @@ public class AllocateChunks implements Operation {
             body.append("       \"storage-server-ip\": \"" + server.getServerIpAddress().toString() + "\"\n");
             body.append("       \"storage-server-port\": \"" + server.getServerTcpPort() + "\"\n");
             body.append("       \"chunk-id\": \"" + server.getChunkId() + "\"\n");
+            body.append("       \"chunk-uid\": \"" + server.getChunkUID() + "\"\n");
             body.append("       \"chunk-lba\": \"" + server.getChunkLBA() + "\"\n");
             body.append("       \"chunk-location\": \"" + server.getChunkLocation() + "\"\n");
             body.append("    }\n");

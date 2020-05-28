@@ -12,7 +12,9 @@ public enum HttpMethodEnum {
     POST_METHOD(2, "POST"),
     GET_METHOD(3, "GET"),
     DELETE_METHOD(4, "DELETE"),
-    LIST_METHOD(5, "LIST");
+    LIST_METHOD(5, "LIST"),
+    LIST_SERVERS_METHOD(6, "LIST_SERVERS"),
+    LIST_CHUNKS_METHOD(7, "LIST_CHUNKS");
 
     private final int value;
     private final String methodName;

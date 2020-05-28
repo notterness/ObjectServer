@@ -162,11 +162,20 @@ public class ReadObjectChunks implements Operation {
             case DETERMINE_STORAGE_SERVERS:
                 {
                     /*
-                     ** Find one chunk for each chunkIndex and request the data for that chunk
+                    ** Compute the required chunks
+                     */
+                    int requiredChunks = objectInfo.getContentLength() / requestContext.getChunkSize();
+                    if ((objectInfo.getContentLength() % requestContext.getChunkSize()) != 0) {
+                        requiredChunks++;
+                    }
+
+                    /*
+                     ** Find one chunk for each chunkIndex and request the data for that chunk. Also, make sure that the
+                     **   chunk has not been marked offline.
                      */
                     int chunkIndexToFind = 0;
                     for (ServerIdentifier server : objectInfo.getChunkList()) {
-                        if (server.getChunkNumber() == chunkIndexToFind) {
+                        if ((server.getChunkNumber() == chunkIndexToFind) && (server.getChunkOfflineStatus() == false)) {
                             serversToReadFrom[chunkIndexToFind] = server;
 
                             LOG.info("ReadObjectChunks[" + requestContext.getRequestId() + "] addr: " +
@@ -189,15 +198,22 @@ public class ReadObjectChunks implements Operation {
                         }
                     }
 
-                    LOG.info("ReadObjectChunks totalChunksToProcess: " + totalChunksToProcess);
+                    LOG.info("ReadObjectChunks requiredChunks: " + requiredChunks + " totalChunksToProcess: " +
+                            totalChunksToProcess);
                 }
 
-                if (totalChunksToProcess > 0) {
+                if (totalChunksToProcess == totalChunksToProcess) {
                     currState = ExecutionState.SETUP_CHUNK_READ;
                     /*
                      ** Fall through
                      */
                 } else {
+                    HttpRequestInfo httpInfo = requestContext.getHttpInfo();
+
+                    String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.INTERNAL_SERVER_ERROR_500 + "\"" +
+                            "\r\n  \"message\": \"Unable to obtain read chunk data - missing chunks\"\r\n}";
+                    httpInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
+
                     currState = ExecutionState.ALL_CHUNKS_COMPLETED;
                     event();
                     break;

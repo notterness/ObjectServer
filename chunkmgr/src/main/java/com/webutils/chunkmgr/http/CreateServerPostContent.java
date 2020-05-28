@@ -31,7 +31,7 @@ public class CreateServerPostContent extends ParseRequestContent {
     }
 
     /*
-     ** This is used to validate that the required fields are present for the Create Bucket operation.
+     ** This is used to validate that the required fields are present for the CreateServer method.
      **   The required fields are:
      **     "storage-server-name" - This is the storage server name
      **     "storage-server-ip" - The IP address of the storage server
@@ -42,7 +42,7 @@ public class CreateServerPostContent extends ParseRequestContent {
      ** NOTE: At some point it might be worth validating that there are no unexpected attributes passed in. The other
      **   thing to validate would be the contents of the attributes to make sure garbage data is not provided.
      */
-    public boolean validatePostContentData() {
+    public boolean validateContentData() {
         boolean valid = true;
 
         /*

@@ -111,7 +111,8 @@ public class StorageChunkAllocated implements Operation {
                 LOG.info("StorageChunkAllocated addr: " + server.getServerIpAddress().toString() +
                         " port: " + server.getServerTcpPort() + " chunkNumber: " + server.getChunkNumber());
 
-                status = chunkMgr.createChunkEntry(objectId, server);
+                String chunkLocation = objectCreateInfo.getObjectUID();
+                status = chunkMgr.createChunkEntry(objectId, server, chunkLocation);
                 if (status != HttpStatus.OK_200) {
                     break;
                 }
@@ -125,7 +126,7 @@ public class StorageChunkAllocated implements Operation {
         }
 
         /*
-        ** event() all of the operations that are ready to run once the VON Pick has
+        ** event() all of the operations that are ready to run once the chunk allocation has
         **   succeeded.
          */
         for (Operation operation : callbackOperationsToRun) {

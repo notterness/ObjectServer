@@ -134,7 +134,16 @@ public class ChunkMgrDetermineRequest implements Operation {
             HttpMethodEnum method = httpRequestInfo.getMethod();
             LOG.info("ChunkMgrDetermineRequest[" + requestContext.getRequestId() + "] execute(2) " + method.toString());
 
-            sendFinalStatus.event();
+            /*
+            ** Since the write of the response data is handled within the ListChunks and ListServers methods, there
+            **   is no need to call sendFinalStatus here.
+             */
+            if ((method != HttpMethodEnum.LIST_CHUNKS_METHOD) && (method != HttpMethodEnum.LIST_SERVERS_METHOD)) {
+                sendFinalStatus.event();
+            } else {
+                Operation closeOutRequest = requestContext.getOperation(OperationTypeEnum.CLOSE_OUT_REQUEST);
+                closeOutRequest.event();
+            }
         }
     }
 

@@ -11,14 +11,14 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
-public class ParsePostContent implements Operation {
+public class ParseContent implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ParsePostContent.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ParseContent.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.PARSE_POST_CONTENT;
+    public final OperationTypeEnum operationType = OperationTypeEnum.PARSE_CONTENT;
 
     private final RequestContext requestContext;
 
@@ -42,8 +42,8 @@ public class ParsePostContent implements Operation {
      */
     private boolean onExecutionQueue;
 
-    public ParsePostContent(final RequestContext requestContext, final BufferManagerPointer readBufferPtr,
-                            final Operation metering, final ParseRequestContent parseRequestContent, final Operation completeCb) {
+    public ParseContent(final RequestContext requestContext, final BufferManagerPointer readBufferPtr,
+                        final Operation metering, final ParseRequestContent parseRequestContent, final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.readBufferPointer = readBufferPtr;
@@ -120,7 +120,7 @@ public class ParsePostContent implements Operation {
             srcBuffer.position(savedSrcPosition);
             savedSrcPosition = 0;
 
-            //LOG.info("ParsePostContent[" + requestContext.getRequestId() + "] remaining position: " +
+            //LOG.info("ParseContent[" + requestContext.getRequestId() + "] remaining position: " +
             //        srcBuffer.position() + " limit: " + srcBuffer.limit());
 
             /*
@@ -144,7 +144,7 @@ public class ParsePostContent implements Operation {
             }
         }
 
-        //LOG.info("ParsePostContent[" + requestContext.getRequestId() + "] exit from loop");
+        //LOG.info("ParseContent[" + requestContext.getRequestId() + "] exit from loop");
 
         /*
          ** Check if there needs to be another read to bring in more of the HTTP request
@@ -160,7 +160,7 @@ public class ParsePostContent implements Operation {
                  */
                 meteringOperation.event();
             } else {
-                LOG.warn("ParsePostContent[" + requestContext.getRequestId() + "] parsing error, no allocation");
+                LOG.warn("ParseContent[" + requestContext.getRequestId() + "] parsing error, no allocation");
 
                 /*
                  ** Event the DetermineRequest. This will check if there is an error and then perform the
@@ -179,7 +179,7 @@ public class ParsePostContent implements Operation {
             **   that the required attributes are all present.
              */
             if (!parser.getParseError()) {
-                if (parseRequestContent.validatePostContentData()) {
+                if (parseRequestContent.validateContentData()) {
                     parseRequestContent.dumpMaps();
                 } else {
                     /*
@@ -189,7 +189,7 @@ public class ParsePostContent implements Operation {
                     requestContext.getHttpInfo().setParseFailureCode(HttpStatus.BAD_REQUEST_400);
                 }
             } else {
-                LOG.warn("ParsePostContent[" + requestContext.getRequestId() + "] content parser error");
+                LOG.warn("ParseContent[" + requestContext.getRequestId() + "] content parser error");
             }
 
             /*
@@ -200,7 +200,7 @@ public class ParsePostContent implements Operation {
     }
 
     public void complete() {
-        LOG.info("ParsePostContent[" + requestContext.getRequestId() + "] complete");
+        LOG.info("ParseContent[" + requestContext.getRequestId() + "] complete");
 
         /*
          ** Since the HTTP Request parsing is done for this request, need to remove the dependency on the
@@ -226,19 +226,19 @@ public class ParsePostContent implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("ParsePostContent[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("ParseContent[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("ParsePostContent[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("ParseContent[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("ParsePostContent[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("ParseContent[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("ParsePostContent[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("ParseContent[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -253,7 +253,7 @@ public class ParsePostContent implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("ParsePostContent[" + requestContext.getRequestId() +
+        LOG.warn("ParseContent[" + requestContext.getRequestId() +
                 "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }

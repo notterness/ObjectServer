@@ -58,7 +58,7 @@ public class CreateBucketPostContent extends ParseRequestContent {
     ** NOTE: At some point it might be worth validating that there are no unexpected attributes passed in. The other
     **   thing to validate would be the contents of the attributes to make sure garbage data is not provided.
      */
-    public boolean validatePostContentData() {
+    public boolean validateContentData() {
         boolean valid = true;
 
         /*

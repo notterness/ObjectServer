@@ -1,7 +1,5 @@
 package com.webutils.webserver.http;
 
-import com.webutils.webserver.operations.OperationTypeEnum;
-
 import java.util.Arrays;
 import java.util.Map;
 import java.util.function.Function;
@@ -9,7 +7,19 @@ import java.util.stream.Collectors;
 
 public enum StorageTierEnum {
 
-    INVALID_TIER(0, "invalid", 0),
+    /*
+     ** The possible Storage Tiers are:
+     **
+     **   Invalid - A placeholder for invalid tiers and error conditions.
+     **   Standard - 3 copies of the data within the same data center
+     **   Intelligent-Tiering - Moves data between fast and slow disk depending on access patterns. Always uses 3
+     **     copies of the data.
+     **   Standard-IA (Infrequent Access) - 3 copies on slow disk
+     **   OneZone (Another form of Infrequent Access with less redundacy) - 2 copies of the data on slow disk.
+     **   Archive (slower access than Standard-IA) -
+     **   DeepArchive (slowest access of all, data may be kept on offline storage) -
+     */
+    INVALID_TIER(0, "Invalid", 0),
     STANDARD_TIER(1, "Standard", 3),
     INTELLIGENT_TIER(2, "Intelligent-Tiering", 3),
     STANDARD_INFREQUENT_ACCESS_TIER(3, "Standard-IA", 3),

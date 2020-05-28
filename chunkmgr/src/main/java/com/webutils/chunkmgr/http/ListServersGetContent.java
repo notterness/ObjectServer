@@ -6,20 +6,16 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
-public class AllocateChunksGetContent extends ParseRequestContent {
-    private static final Logger LOG = LoggerFactory.getLogger(AllocateChunksGetContent.class);
+public class ListServersGetContent extends ParseRequestContent {
 
-    private static final String OBJECT_CHUNK_NUMBER = "object-chunk-number";
+    private static final Logger LOG = LoggerFactory.getLogger(ListServersGetContent.class);
 
-
-    public AllocateChunksGetContent() {
+    public ListServersGetContent() {
         super();
 
         /*
          ** Fill in the list of required attributes so they are easy to check
          */
-        requiredAttributes.add(STORAGE_TIER_ATTRIBUTE);
-        requiredAttributes.add(OBJECT_CHUNK_NUMBER);
     }
 
     /*
@@ -86,33 +82,6 @@ public class AllocateChunksGetContent extends ParseRequestContent {
                 LOG.info("        " + subCategoryEntry.getKey() + " : " + subCategoryEntry.getValue());
             }
         }
-    }
-
-    /*
-     ** Pull the "object-chunk-number" out and validate that it is a positive integer
-     */
-    public int getObjectChunkNumber() {
-        String chunkNumberStr = params.get(OBJECT_CHUNK_NUMBER);
-        int chunkNumber = -1;
-
-        if (chunkNumberStr != null) {
-            try {
-                chunkNumber = Integer.parseInt(chunkNumberStr);
-
-                /*
-                 ** TODO: Determine valid range for port numbers
-                 */
-                if (chunkNumber < 0) {
-                    LOG.warn(OBJECT_CHUNK_NUMBER + " must be a positive integer - " + chunkNumber);
-                    chunkNumber = -1;
-                }
-            } catch (NumberFormatException ex) {
-                LOG.warn("Server Port is invalid: " + chunkNumberStr);
-            }
-        } else {
-            LOG.warn(OBJECT_CHUNK_NUMBER + "attribute is missing");
-        }
-        return chunkNumber;
     }
 
 }

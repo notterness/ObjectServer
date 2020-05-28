@@ -6,11 +6,16 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Objects;
 
 public abstract class HttpRequestInfo extends HttpInfo {
 
     private static final Logger LOG = LoggerFactory.getLogger(HttpRequestInfo.class);
+
+    private static final String STORAGE_TIER_HEADER = "storageTier";
+    private static final String SERVER_NAME_HEADER = "storage-server-name";
+    private static final String CHUNK_STATUS_HEADER = "chunk-status";
 
     /*
     ** The objectId is the identifier to access the Object record within the ObjectStorageDd after it has been created. It is
@@ -125,6 +130,90 @@ public abstract class HttpRequestInfo extends HttpInfo {
      */
     public void httpHeaderError(final BadMessageException failure) {
         super.httpHeaderError(failure);
+    }
+
+    /*
+    ** Special parsing for the ListChunks and ListServers methods
+     */
+    public String getServerName() {
+        List<String> serverNames = headers.get(SERVER_NAME_HEADER);
+
+        if ((serverNames == null) || (serverNames.size() != 1)) {
+            return null;
+        }
+
+        /*
+         ** Validate the format of the location to insure it is only valid characters (letter, numbers, '_',
+         **   '-', '/', and '.')
+         */
+        String serverName = serverNames.get(0);
+        if (!serverName.matches("^[a-zA-Z0-9-_./]*$")) {
+            serverName = null;
+        }
+        return serverName;
+    }
+
+    /*
+     ** The possible Storage Tiers are:
+     **
+     **   Invalid - If this header was not passed in or had an invalid tier.
+     **   Standard - 3 copies of the data within the same data center
+     **   Intelligent-Tiering - Moves data between fast and slow disk depending on access patterns. Always uses 3
+     **     copies of the data.
+     **   Standard-IA (Infrequent Access) - 3 copies on slow disk
+     **   OneZone (Another form of Infrequent Access with less redundacy) - 2 copies of the data on slow disk.
+     **   Archive (slower access than Standard-IA) -
+     **   DeepArchive (slowest access of all, data may be kept on offline storage) -
+     **
+     ** NOTE: If the "storageTier" header is not set, then the default is "Invalid"
+     */
+    public StorageTierEnum getStorageTier() {
+        List<String> storageTiers = headers.get(STORAGE_TIER_HEADER);
+
+        if ((storageTiers == null) || (storageTiers.size() != 1)) {
+            return StorageTierEnum.INVALID_TIER;
+        }
+
+        String storageTierStr = storageTiers.get(0);
+        StorageTierEnum storageTier;
+
+        if (storageTierStr == null) {
+            storageTier = StorageTierEnum.INVALID_TIER;
+        } else {
+            storageTier = StorageTierEnum.fromString(storageTierStr);
+        }
+
+        return storageTier;
+    }
+
+    /*
+     ** The possible Chunk Status values are:
+     **
+     **   INVALID - If this header was not passed in or had an invalid status.
+     **   ALLOCATED - The chunk has been allocated and is in use on a Storage Server to hold data
+     **   DELETED - The chunk has been deleted (meaning the object is no longer available to the client), but it has
+     **     not been cleaned up on the Storage Server yet.
+     **   AVAILABLE - The chunk is available to be allocated.
+     **
+     ** NOTE: If the "chunk-status" header is not set, then the default is "INVALID"
+     */
+    public ChunkStatusEnum getChunkStatus() {
+        List<String> chunkStatus = headers.get(CHUNK_STATUS_HEADER);
+
+        if ((chunkStatus == null) || (chunkStatus.size() != 1)) {
+            return ChunkStatusEnum.INVALID_CHUNK_STATUS;
+        }
+
+        String chunkStatusStr = chunkStatus.get(0);
+        ChunkStatusEnum status;
+
+        if (chunkStatusStr == null) {
+            status = ChunkStatusEnum.INVALID_CHUNK_STATUS;
+        } else {
+            status = ChunkStatusEnum.fromString(chunkStatusStr);
+        }
+
+        return status;
     }
 
 }

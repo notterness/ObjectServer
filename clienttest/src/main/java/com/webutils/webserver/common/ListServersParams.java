@@ -6,43 +6,49 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.charset.Charset;
-import java.nio.charset.CharsetEncoder;
-import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
-public class AllocateChunksParams extends ObjectParams {
+/*
+ ** ListServers has the following optional headers:
+ **   storageTier - List the Storage Servers for a particular storage tier
+ **   storage-server-name - This may be a string to match against. For example "server-xyx-*".
+ **   limit - The maximum number of items to return
+ */
+public class ListServersParams extends ObjectParams {
 
-    private static final Logger LOG = LoggerFactory.getLogger(AllocateChunksParams.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ListServersParams.class);
 
     private final StorageTierEnum tier;
 
-    private String sha256Digest;
-    private int objectChunkNumber;
+    private final String serverName;
+    private final int limit;
 
-    public AllocateChunksParams(final StorageTierEnum tier, final int objectChunkNumber) {
+    public ListServersParams(final StorageTierEnum tier, final String serverName, final int limit) {
 
         super(null, null, null, null);
 
-        this.tier = tier;
-        this.objectChunkNumber = objectChunkNumber;
+        this.tier = Objects.requireNonNullElse(tier, StorageTierEnum.INVALID_TIER);
+        this.serverName = serverName;
+        this.limit = limit;
     }
 
     /*
-     ** This builds the AllocateChunks GET method headers. The following headers and if they are required:
+     ** This builds the ListServers GET method headers. The following headers and if they are required:
      **
      **   Host (required) - Who is sending the request.
      **   opc-client-request-id (not required) - A unique identifier for this request provided by the client to allow
      **     then to track their requests.
-     **   x-content-sha256 - A sha256 digest of the content.
-     **   Content-Length (required) - The size of the content that is used to describe the chunks that are being requested.
+     **   Content-Length (required) - Always set to 0
+     **
+     ** The following are optional and are used to narrow the search:
+     **   storageTier - List the servers that provide a particular storage tier. If the tier is set to INVALID_TIER
+     **     do not send this header.
+     **   storage-server-name - This may be a string to match against. For example "server-xyx-*". This will return all
+     **     the servers associated with the matching storage server(s). If it is set to null, do not send this header.
+     **   limit - The maximum number of items to return (if set to 0, do not send the header)
      */
     public String constructRequest() {
-        String initialContent = "GET / HTTP/1.1\n";
-
-        String contentStr = buildContent();
-        int contentSizeInBytes = contentStr.length();
+        String initialContent = "GET /l/servers HTTP/1.1\n";
 
         String finalContent = "Content-Type: application/json\n" +
                 "Connection: keep-alive\n" +
@@ -62,60 +68,34 @@ public class AllocateChunksParams extends ObjectParams {
             request += "opc-client-request-id: " + opcClientRequestId + "\n";
         }
 
-        finalContent += "x-content-sha256: " + sha256Digest + "\n" +
-                "Content-Length: " + contentSizeInBytes + "\n\n" +
-                contentStr;
+        if (tier != StorageTierEnum.INVALID_TIER) {
+            request += "storageTier: " + tier.toString() + "\n";
+        }
+
+        if (serverName != null) {
+            request += "storage-server-name: " + serverName + "\n";
+        }
+
+        if (limit != 0) {
+            request += "limit: " + limit + "\n";
+        }
+
+        finalContent += "Content-Length: 0\n\n";
 
         request += finalContent;
 
         return request;
     }
 
-    private String buildContent() {
-        String contentString = new String(
-                "{\n" +
-                        "  \"object-chunk-number\": \"" + 0 + "\",\n" +
-                        "  \"storageTier\": \"" + tier.toString() + "\",\n" +
-                        "}\n");
-
-        Sha256Digest digest = new Sha256Digest();
-
-        /*
-         ** The Sha-256 digest works on ByteBuffer, so the contentString needs to be pushed into a ByteBuffer and
-         **   then the Sha-256 digest run on it.
-         */
-        ByteBuffer tmpBuffer = ByteBuffer.allocate(contentString.length());
-        Charset charset = StandardCharsets.UTF_8;
-        CharsetEncoder encoder = charset.newEncoder();
-
-        try {
-            encoder.encode(CharBuffer.wrap(contentString), tmpBuffer, true);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-
-        /*
-         ** Now compute the Sha-256 digest
-         */
-        tmpBuffer.flip();
-        System.out.println("start: " + tmpBuffer.position() + " limit: " + tmpBuffer.limit());
-        digest.digestByteBuffer(tmpBuffer);
-        sha256Digest = digest.getFinalDigest();
-
-        return contentString;
-    }
-
-
-
     /*
-     ** This displays the results from the AllocateChunks method.
+     ** This displays the results from the ListServers method.
      **
      ** TODO: Allow the results to be dumped to a file and possibly allow a format that allows for easier parsing by
      **   the client.
      */
     public void outputResults(final HttpResponseInfo httpInfo) {
         /*
-         ** If the status is good (AllocateChunks returns 200 if successful), then display the following:
+         ** If the status is good (ListChunks returns 200 if successful), then display the following:
          **   opc-client-request-id
          **   opc-request-id
          */
@@ -150,5 +130,6 @@ public class AllocateChunksParams extends ObjectParams {
             }
         }
     }
+
 
 }

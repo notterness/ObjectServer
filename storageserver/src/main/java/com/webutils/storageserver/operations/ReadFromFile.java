@@ -140,21 +140,7 @@ public class ReadFromFile implements Operation {
          */
         savedSrcPosition = 0;
 
-        /*
-         ** Build the filename. It is comprised of the chunk number, chunk lba and located at
-         **   ./logs/StorageServer"IoInterfaceIdentifier"/"chunk location"
-         */
-        int chunkNumber = requestContext.getHttpInfo().getObjectChunkNumber();
-        int chunkLba = requestContext.getHttpInfo().getObjectChunkLba();
-        String chunkLocation = requestContext.getHttpInfo().getObjectChunkLocation();
-
-        if ((chunkNumber == -1) || (chunkLba == -1) || (chunkLocation == null)) {
-            LOG.error("ReadFromFile chunkNumber: " + chunkNumber + " chunkLba: " + chunkLba + " chunkLocation: " + chunkLocation);
-            return null;
-        }
-
-        String filePathNameStr = "./logs/StorageServer" + requestContext.getIoInterfaceIdentifier() +
-                "/chunk_" + chunkNumber + "_" + chunkLba + ".dat";
+       String filePathNameStr = buildChunkFileName();
 
         /*
          ** Open up the File for reading
@@ -423,5 +409,28 @@ public class ReadFromFile implements Operation {
 
         return goodResponseSent;
     }
+
+    /*
+     ** This builds the filePath to where the chunk of data will be read from.
+     **
+     ** It is comprised of the chunk location, chunk number, chunk lba and located at
+     **   ./logs/StorageServer"IoInterfaceIdentifier"/"chunk location"
+     *
+     ** FIXME: This method and the one it WriteToFile need to be put into a common place.
+     */
+    public String buildChunkFileName() {
+        int chunkNumber = requestContext.getHttpInfo().getObjectChunkNumber();
+        int chunkLba = requestContext.getHttpInfo().getObjectChunkLba();
+        String chunkLocation = requestContext.getHttpInfo().getObjectChunkLocation();
+
+        if ((chunkNumber == -1) || (chunkLba == -1) || (chunkLocation == null)) {
+            LOG.error("WriteToFile chunkNumber: " + chunkNumber + " chunkLba: " + chunkLba + " chunkLocation: " + chunkLocation);
+            return null;
+        }
+
+        return "./logs/StorageServer" + requestContext.getIoInterfaceIdentifier() + "/" + chunkLocation +
+                "/chunk_" + chunkNumber + "_" + chunkLba + ".dat";
+    }
+
 
 }

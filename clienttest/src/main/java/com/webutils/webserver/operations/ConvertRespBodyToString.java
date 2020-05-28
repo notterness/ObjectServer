@@ -177,15 +177,20 @@ public class ConvertRespBodyToString implements Operation {
                  ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
                  **  affecting the position() and limit() indexes
                  **
+                 ** NOTE: Must reset the savedSrcPosition after reading in the first ByteBuffer is handled otherwise
+                 **   the counts and positions get all screwed up.
                  */
                 ByteBuffer srcBuffer = readBuffer.duplicate();
                 srcBuffer.position(savedSrcPosition);
+                savedSrcPosition = 0;
 
+                LOG.info("ConvertRespBodyToStr bytesToConvert: " + bytesToConvert + " bytesConverted: " + bytesConverted +
+                        " remaining: " + srcBuffer.remaining());
                 bytesConverted += srcBuffer.remaining();
 
                 String tmpStr = HttpInfo.bb_to_str(srcBuffer);
 
-                LOG.info("ConvertRespBodyToStr tmpStr: " + tmpStr);
+                //LOG.info("ConvertRespBodyToStr tmpStr: " + tmpStr);
                 if (respBodyStr == null) {
                     respBodyStr = tmpStr;
                 } else {

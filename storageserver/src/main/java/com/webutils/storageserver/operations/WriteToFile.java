@@ -280,26 +280,6 @@ public class WriteToFile implements Operation {
     }
 
     /*
-    ** This builds the filePath to where the chunk of data will be saved.
-    **
-    ** It is comprised of the chunk number, chunk lba and located at
-    **   ./logs/StorageServer"IoInterfaceIdentifier"/"chunk location"
-     */
-    private String buildChunkFileName() {
-        int chunkNumber = requestContext.getHttpInfo().getObjectChunkNumber();
-        int chunkLba = requestContext.getHttpInfo().getObjectChunkLba();
-        String chunkLocation = requestContext.getHttpInfo().getObjectChunkLocation();
-
-        if ((chunkNumber == -1) || (chunkLba == -1) || (chunkLocation == null)) {
-            LOG.error("WriteToFile chunkNumber: " + chunkNumber + " chunkLba: " + chunkLba + " chunkLocation: " + chunkLocation);
-            return null;
-        }
-
-        return "./logs/StorageServer" + requestContext.getIoInterfaceIdentifier() +
-                "/chunk_" + chunkNumber + "_" + chunkLba + ".dat";
-    }
-
-    /*
      */
     public void complete() {
         LOG.info("WriteToFile[" + requestContext.getRequestId() + "] complete");
@@ -365,5 +345,28 @@ public class WriteToFile implements Operation {
         clientFileWritePtr.dumpPointerInfo();
         LOG.info("");
     }
+
+    /*
+     ** This builds the filePath to where the chunk of data will be saved.
+     **
+     ** It is comprised of the chunk location, chunk number, chunk lba and located at
+     **   ./logs/StorageServer"IoInterfaceIdentifier"/"chunk location"
+     *
+     ** FIXME: This method and the one it ReadFromFile need to be put into a common place.
+     */
+    public String buildChunkFileName() {
+        int chunkNumber = requestContext.getHttpInfo().getObjectChunkNumber();
+        int chunkLba = requestContext.getHttpInfo().getObjectChunkLba();
+        String chunkLocation = requestContext.getHttpInfo().getObjectChunkLocation();
+
+        if ((chunkNumber == -1) || (chunkLba == -1) || (chunkLocation == null)) {
+            LOG.error("WriteToFile chunkNumber: " + chunkNumber + " chunkLba: " + chunkLba + " chunkLocation: " + chunkLocation);
+            return null;
+        }
+
+        return "./logs/StorageServer" + requestContext.getIoInterfaceIdentifier() + "/" + chunkLocation +
+                "/chunk_" + chunkNumber + "_" + chunkLba + ".dat";
+    }
+
 
 }

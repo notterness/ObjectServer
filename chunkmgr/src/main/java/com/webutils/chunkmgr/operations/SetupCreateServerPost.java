@@ -2,7 +2,7 @@ package com.webutils.chunkmgr.operations;
 
 import com.webutils.chunkmgr.requestcontext.ChunkAllocRequestContext;
 import com.webutils.chunkmgr.http.CreateServerPostContent;
-import com.webutils.webserver.operations.ParsePostContent;
+import com.webutils.webserver.operations.ParseContent;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.common.Sha256ResultHandler;
@@ -127,7 +127,7 @@ public class SetupCreateServerPost implements Operation {
              **   a temporary structure and once the Sha-256 digest completes (assuming it is successful) the setup
              **   of the Server will take place.
              */
-            ParsePostContent parseContent = new ParsePostContent(requestContext, readBufferPointer, metering,
+            ParseContent parseContent = new ParseContent(requestContext, readBufferPointer, metering,
                     createServerContent, this);
             PostHandlerOperations.put(parseContent.getOperationType(), parseContent);
             parseContent.initialize();
@@ -162,7 +162,7 @@ public class SetupCreateServerPost implements Operation {
             setupMethodDone = true;
         } else if (waitingOnOperations){
             /*
-             ** This will be placed on the execute queue twice, once by the ParsePostContent operation when the
+             ** This will be placed on the execute queue twice, once by the ParseContent operation when the
              **   parsing is complete and a second time when the ComputeSha256Digest has completed.
              */
             if (updator.getSha256DigestComplete() && requestContext.postMethodContentParsed()) {
@@ -171,9 +171,9 @@ public class SetupCreateServerPost implements Operation {
                 /*
                  ** Cleanup the operations
                  */
-                Operation contentParser = PostHandlerOperations.get(OperationTypeEnum.PARSE_POST_CONTENT);
+                Operation contentParser = PostHandlerOperations.get(OperationTypeEnum.PARSE_CONTENT);
                 contentParser.complete();
-                PostHandlerOperations.remove(OperationTypeEnum.PARSE_POST_CONTENT);
+                PostHandlerOperations.remove(OperationTypeEnum.PARSE_CONTENT);
 
                 /*
                  ** Since the Sha-256 digest runs on a compute thread, it handles it's own complete() call. For that

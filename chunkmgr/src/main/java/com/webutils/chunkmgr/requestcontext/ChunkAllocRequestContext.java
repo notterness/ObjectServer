@@ -1,9 +1,6 @@
 package com.webutils.chunkmgr.requestcontext;
 
-import com.webutils.chunkmgr.operations.ChunkMgrDetermineRequest;
-import com.webutils.chunkmgr.operations.ChunkMgrSendFinalStatus;
-import com.webutils.chunkmgr.operations.SetupAllocateChunksGet;
-import com.webutils.chunkmgr.operations.SetupCreateServerPost;
+import com.webutils.chunkmgr.operations.*;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpMethodEnum;
@@ -200,6 +197,12 @@ public class ChunkAllocRequestContext extends RequestContext {
 
         SetupAllocateChunksGet allocateChunksHandler = new SetupAllocateChunksGet(this, metering, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.GET_METHOD, allocateChunksHandler);
+
+        SetupListChunksGet listChunksHandler = new SetupListChunksGet(this, memoryManager, determineRequest);
+        supportedHttpRequests.put(HttpMethodEnum.LIST_CHUNKS_METHOD, listChunksHandler);
+
+        SetupListServersGet listServersHandler = new SetupListServersGet(this, memoryManager, determineRequest);
+        supportedHttpRequests.put(HttpMethodEnum.LIST_SERVERS_METHOD, listServersHandler);
 
         /*
          ** Setup the specific part for parsing the buffers as an HTTP Request.

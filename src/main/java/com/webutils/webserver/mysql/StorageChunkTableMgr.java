@@ -56,7 +56,7 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
         this.objectCreateInfo = objectCreateInfo;
     }
 
-    public int createChunkEntry(final int objectId, final ServerIdentifier server) {
+    public int createChunkEntry(final int objectId, final ServerIdentifier server, final String chunkLocation) {
         int status = HttpStatus.OK_200;
 
         if (checkForDuplicateChunk(server)) {
@@ -69,7 +69,7 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
 
         String createChunkEntry = CREATE_CHUNK_1 + server.getChunkLBA() + CREATE_CHUNK_2 + server.getLength() +
                 CREATE_CHUNK_3 + server.getChunkNumber() + CREATE_CHUNK_4 + server.getServerName() + CREATE_CHUNK_5 +
-                server.getServerIpAddress() + CREATE_CHUNK_6 + server.getServerTcpPort() + CREATE_CHUNK_7 + "test" +
+                server.getServerIpAddress() + CREATE_CHUNK_6 + server.getServerTcpPort() + CREATE_CHUNK_7 + chunkLocation +
                 CREATE_CHUCK_8 + objectId + CREATE_CHUNK_9;
 
         Connection conn = getObjectStorageDbConn();
@@ -360,6 +360,10 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
                                         server.setLength(length);
                                         server.setMd5Digest(md5DigestStr);
                                         server.setChunkId(chunkId);
+                                        server.setChunkLocation(location);
+
+                                        server.setChunkReadErrorCount(readFailureCount);
+                                        server.setChunkOfflineStatus(chunkOffline);
 
                                         chunkList.add(server);
                                     } catch (UnknownHostException ex) {

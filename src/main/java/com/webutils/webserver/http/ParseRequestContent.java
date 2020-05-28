@@ -52,7 +52,7 @@ public abstract class ParseRequestContent {
         keyStrObtained = false;
     }
 
-    public abstract boolean validatePostContentData();
+    public abstract boolean validateContentData();
 
     public boolean addData(final String str1) {
         boolean parsingError = false;

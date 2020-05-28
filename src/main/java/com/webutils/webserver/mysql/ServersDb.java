@@ -98,6 +98,7 @@ public abstract class ServersDb {
             " state INT NOT NULL," +
             " lastAllocateTime TIMESTAMP," +
             " lastDeleteTime TIMESTAMP," +
+            " chunkUID BINARY(16) NOT NULL," +
             " serverId INT NOT NULL," +
             " FOREIGN KEY(serverId)" +
             "   REFERENCES serverIdentifier(serverId)" +
@@ -168,7 +169,7 @@ public abstract class ServersDb {
             populateStorageServers(10, StorageTierEnum.STANDARD_TIER);
 
             ServerChunkMgr chunkMgr = new ServerChunkMgr(flavor);
-            chunkMgr.addStoredProcedure();
+            chunkMgr.addStoredProcedures();
         }
     }
 

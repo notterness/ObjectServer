@@ -68,9 +68,15 @@ public class ServerIdentifier {
 
     /*
     ** The following is the unique ID that can be used to access a chunk's information that is written into the
-    **   ObjectStorageDb database.
+    **   ObjectStorageDb database. This is an INT.
      */
     private int chunkUniqueId;
+
+    /*
+    ** The chunkUID is a String that represents the UUID() that is generated when the chunk is "created" in the
+    **   ServiceServerDb and associated with a particular Storage Server.
+     */
+    private String chunkUID;
 
     /*
     ** The following is the unique ID for the Storage Server. This comes from the serverIdentifier.serverId in the
@@ -78,17 +84,33 @@ public class ServerIdentifier {
      */
     private int serverId;
 
+    /*
+    ** This is the chunkLocation (using the "etag") to uniquely identify the location and file that is storing the
+    **   chunks worth of data.
+     */
+    private String chunkLocation;
+
+    /*
+    ** Error stats for the chunk
+     */
+    private int readFailureCount;
+    private boolean chunkOffline;
+
     public ServerIdentifier(final String serverName, final InetAddress ipAddress, final int tcpPort, final int objectChunkNumber) {
         this.serverName = serverName;
         this.serverIpAddress = ipAddress;
         this.serverTcpPort = tcpPort;
         this.objectChunkNumber = objectChunkNumber;
 
-        chunkUniqueId = -1;
-        serverId = -1;
+        this.chunkUniqueId = -1;
+        this.serverId = -1;
 
-        statusSet = new AtomicBoolean(false);
-        clientChunkWriteDone = new AtomicBoolean(false);
+        this.statusSet = new AtomicBoolean(false);
+        this.clientChunkWriteDone = new AtomicBoolean(false);
+
+        this.chunkLocation = null;
+        this.readFailureCount = 0;
+        this.chunkOffline = false;
     }
 
     public String getServerName() { return serverName; }
@@ -117,9 +139,17 @@ public class ServerIdentifier {
     public int getChunkId() { return chunkUniqueId; }
 
     /*
+    ** The following is used to save and retrieve the chunkUID (String) that is a unique identifier
+    **   per chunk and is used to create the path to the file that is where the chunk .dat file is saved.
+     */
+    public void setChunkUID(final String uid) { chunkUID = uid; }
+    public String getChunkUID() { return chunkUID; }
+
+    /*
     **
      */
-    public String getChunkLocation() { return "test"; }
+    public void setChunkLocation(final String location) { chunkLocation = location; }
+    public String getChunkLocation() { return chunkLocation; }
 
     /*
     **
@@ -178,8 +208,42 @@ public class ServerIdentifier {
     public int getServerId() { return serverId; }
 
     /*
+    ** Setting the error information for the chunk
+     */
+    public void setChunkOfflineStatus(final boolean offline) { chunkOffline = offline; }
+    public void setChunkReadErrorCount(final int readErrors) { readFailureCount = readErrors; }
+
+    public boolean getChunkOfflineStatus() { return chunkOffline; }
+
+    /*
     **
      */
     public void setStorageServerChunkNumber(final int number) { storageServerChunkNumber = number; }
     public int getStorageServerChunkNumber() { return storageServerChunkNumber; }
+
+    /*
+    ** This is used by the ListServers method to return the information about a specific Server
+     */
+    public String buildServerListResponse(final boolean initialEntry, final boolean lastEntry) {
+        StringBuilder body = new StringBuilder();
+
+        if (initialEntry) {
+            body.append("{\r\n  \"data\": [\r\n");
+        }
+        body.append("  \"storage-server-name" + serverName + "\":\n");
+        body.append("    {\n");
+        body.append("       \"storage-id\": \"" + serverId + "\"\n");
+        //body.append("       \"server-uid\": \"" +  + "\"\n");
+        body.append("       \"storage-server-ip\": \"" + getServerIpAddress().toString() + "\"\n");
+        body.append("       \"storage-server-port\": \"" + getServerTcpPort() + "\"\n");
+        body.append("       \"storage-server-read-errors\": \"" + readFailureCount + "\"\n");
+        if (lastEntry) {
+            body.append("    }\n");
+            body.append("  ]\r\n}");
+        } else {
+            body.append("    },\n");
+        }
+        return body.toString();
+    }
+
 }

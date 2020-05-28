@@ -38,6 +38,7 @@ abstract public class HttpInfo {
     private static final String NAMESPACE_NAME = "/n";
     private static final String BUCKET_NAME = "/b";
     private static final String TEST_TYPE = "/t";
+    private static final String LIST_TYPE = "/l";
 
     /*
      ** The following are used by the Storage Server to determine where to write the chunk data
@@ -78,9 +79,9 @@ abstract public class HttpInfo {
     /*
      ** Used to keep track of the Header fields in a generic manner
      */
-    private final Map<String, List<String>> headers;
+    protected final Map<String, List<String>> headers;
 
-    private final String[] uriFields = {OBJECT_NAME, BUCKET_NAME, NAMESPACE_NAME, TEST_TYPE};
+    private final String[] uriFields = {OBJECT_NAME, BUCKET_NAME, NAMESPACE_NAME, LIST_TYPE, TEST_TYPE};
 
     protected boolean headerComplete;
 
@@ -433,6 +434,25 @@ abstract public class HttpInfo {
     }
 
     /*
+    ** Return the "list type" (LIST_TYPE, "/l") that was parsed from the HTTP uri. This is only used by the
+    **   ChunkMgr service to differentiate between the ListChunks and ListServers GET methods.
+    **     ListChunks wil have "/l/chunks"
+    **     ListServers will have "/l/servers"
+     */
+    public String getListType() {
+        /*
+        ** Validate that the string is one of the expected ones
+         */
+        String listType = objectUriInfoMap.get(LIST_TYPE);
+
+        if ( (listType != null) && (listType.equals("chunks") || listType.equals("servers")) ) {
+            return listType;
+        }
+
+        return null;
+    }
+
+    /*
      ** Return the "Test Type" (TEST_TYPE) that was parsed from the HTTP uri (This is prefixed with the "/t/").
      **
      ** Currently, TestType is only used by Storage Servers
@@ -704,7 +724,7 @@ abstract public class HttpInfo {
     ** This provides a "standard" way to convert a String's content into a ByteBuffer that can be sent using the NIO
     **   calls
      */
-    public static void str_to_bb(ByteBuffer out, String in) {
+    public static void str_to_bb(ByteBuffer out, final String in) {
         Charset charset = StandardCharsets.UTF_8;
         CharsetEncoder encoder = charset.newEncoder();
 

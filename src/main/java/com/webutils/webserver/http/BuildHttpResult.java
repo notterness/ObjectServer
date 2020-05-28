@@ -169,5 +169,4 @@ public class BuildHttpResult {
         HttpInfo.str_to_bb(respBuffer, tmpStr);
     }
 
-
 }

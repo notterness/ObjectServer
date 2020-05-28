@@ -117,7 +117,7 @@ public class WriteToClient implements Operation {
             **   and from this server's perspective it is done IF all of the buffers have been filled.
             ** Done with this client connection as well since this is only being used to write the HTTP Response
              */
-            LOG.info("WriteToClient allClientBffersFilled: " + requestContext.getAllClientBuffersFilled());
+            LOG.info("WriteToClient allClientBuffersFilled: " + requestContext.getAllClientBuffersFilled());
             if (requestContext.getAllClientBuffersFilled()) {
                 /*
                 **
@@ -129,7 +129,6 @@ public class WriteToClient implements Operation {
                 finalOperationToRun.event();
             }
         }
-
     }
 
     /*
