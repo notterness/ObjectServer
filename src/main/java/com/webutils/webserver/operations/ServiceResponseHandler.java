@@ -2,9 +2,9 @@ package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.common.ServiceResponseCallback;
 import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.http.parser.ResponseHttpParser;
-import com.webutils.webserver.manual.HttpResponseCompleted;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
@@ -12,19 +12,20 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
-public class ResponseHandler implements Operation {
-
-    private static final Logger LOG = LoggerFactory.getLogger(ResponseHandler.class);
+public class ServiceResponseHandler implements Operation {
+    private static final Logger LOG = LoggerFactory.getLogger(ServiceResponseHandler.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    private final OperationTypeEnum operationType = OperationTypeEnum.RESPONSE_HANDLER;
+    private final OperationTypeEnum operationType = OperationTypeEnum.SERVICE_RESPONSE_HANDLER;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
     private final RequestContext requestContext;
+
+    private final ServerIdentifier service;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -44,7 +45,7 @@ public class ResponseHandler implements Operation {
     /*
      ** The metering operation to hand out buffers to read in the response header and the data
      */
-    private final BufferReadMetering metering;
+    private final ServiceResponseBufferMetering metering;
 
     /*
      ** The HTTP Parser is used to extract the status from the Storage Server response
@@ -53,16 +54,16 @@ public class ResponseHandler implements Operation {
     private boolean initialHttpBuffer;
 
     /*
-     ** The completionCallback is what is used to call back into the SetupChunkWrite to indicate that the
-     **   response has been received (good or bad) from the Storage Server
+     ** The completionCallback is what is used to call back into the SendRequestToService to indicate that the
+     **   response has been received (good or bad) from the remote service
      */
     private final Operation completionCallback;
 
     private final HttpResponseInfo httpInfo;
 
-    public ResponseHandler(final RequestContext requestContext, final BufferManager responseBufferMgr,
-                           final BufferManagerPointer readBufferPtr, final BufferReadMetering metering,
-                           final Operation completionCb, final ServerIdentifier objectServer) {
+    public ServiceResponseHandler(final RequestContext requestContext, final BufferManager responseBufferMgr,
+                           final BufferManagerPointer readBufferPtr, final ServiceResponseBufferMetering metering,
+                           final Operation completionCb, final ServerIdentifier service) {
 
         this.requestContext = requestContext;
 
@@ -73,7 +74,8 @@ public class ResponseHandler implements Operation {
 
         this.completionCallback = completionCb;
 
-        this.httpInfo = objectServer.getHttpInfo();
+        this.service = service;
+        this.httpInfo = service.getHttpInfo();
 
         /*
          ** This starts out not being on any queue
@@ -96,9 +98,10 @@ public class ResponseHandler implements Operation {
          */
         httpResponseBufferPointer = responseBufferManager.register(this, readBufferPointer);
 
-        HttpResponseCompleted httpResponseCompleted = new HttpResponseCompleted(null);
+        ServiceResponseCallback httpRespCompCb = new ServiceResponseCallback(requestContext,
+                completionCallback, service);
 
-        parser = new ResponseHttpParser(httpInfo, httpResponseCompleted);
+        parser = new ResponseHttpParser(httpInfo, httpRespCompCb);
         initialHttpBuffer = true;
 
         return httpResponseBufferPointer;
@@ -126,14 +129,14 @@ public class ResponseHandler implements Operation {
                 /*
                  ** Leave the pointer in the same place since there is data remaining in the buffer
                  */
-                LOG.info("ResponseHandler[" + requestContext.getRequestId() + "] remaining position: " +
+                LOG.info("ServiceResponseHandler[" + requestContext.getRequestId() + "] remaining position: " +
                         httpBuffer.position() + " limit: " + httpBuffer.limit());
 
             } else {
                 /*
                  ** Only update the pointer if the data in the buffer was all consumed.
                  */
-                LOG.info("ResponseHandler[" + requestContext.getRequestId() + "]  position: " +
+                LOG.info("ServiceResponseHandler[" + requestContext.getRequestId() + "]  position: " +
                         httpBuffer.position() + " limit: " + httpBuffer.limit());
 
                 responseBufferManager.updateConsumerReadPointer(httpResponseBufferPointer);
@@ -164,12 +167,12 @@ public class ResponseHandler implements Operation {
                  */
                 metering.event();
             } else {
-                LOG.info("ResponseHandler[" + requestContext.getRequestId() + "] parsing error, no allocation");
+                LOG.info("ServiceResponseHandler[" + requestContext.getRequestId() + "] parsing error, no allocation");
 
                 completionCallback.event();
             }
         } else {
-            LOG.info("ResponseHandler[" + requestContext.getRequestId() + "] header was parsed");
+            LOG.info("ServiceResponseHandler[" + requestContext.getRequestId() + "] header was parsed");
 
             /*
              ** Create a book mark for the next set of readers to register against.
@@ -213,19 +216,19 @@ public class ResponseHandler implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("ResponseHandler[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("ServiceResponseHandler[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("ResponseHandler[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("ServiceResponseHandler[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("ResponseHandler[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("ServiceResponseHandler[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("ResponseHandler[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("ServiceResponseHandler[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -240,7 +243,7 @@ public class ResponseHandler implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("ResponseHandler[" + requestContext.getRequestId() +
+        LOG.warn("ServiceResponseHandler[" + requestContext.getRequestId() +
                 "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
@@ -253,5 +256,6 @@ public class ResponseHandler implements Operation {
         LOG.info("      No BufferManagerPointers");
         LOG.info("");
     }
+
 
 }

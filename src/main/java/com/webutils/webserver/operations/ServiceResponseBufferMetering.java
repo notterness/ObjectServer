@@ -10,26 +10,26 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 
 /*
-** The StorageServerResponseBufferMetering operation is used to hand out buffers that are used to read in the response
+** The ServiceResponseBufferMetering operation is used to hand out buffers that are used to read in the response
 **   header from the Storage Server. This is required to add a dependency between the TCP connection to the Storage Server
 **   being made and setting up the Read Response Header operation. Without the dependency, there is a case where the
 **   connection to the Storage Server could not be made, but an attempt to setup the read was made and that would
 **   result in a bad selection key (this is in the NioSocket updateInterestOps() method).
  */
-public class StorageServerResponseBufferMetering implements Operation {
+public class ServiceResponseBufferMetering implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(StorageServerResponseBufferMetering.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ServiceResponseBufferMetering.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.STORAGE_SERVER_RESPONSE_BUFFER_METERING;
+    public final OperationTypeEnum operationType = OperationTypeEnum.SERVICE_RESPONSE_BUFFER_METERING;
 
     private final RequestContext requestContext;
 
     private final MemoryManager memoryManager;
 
-    private final BufferManager storageServerResponseBufferMgr;
+    private final BufferManager serviceResponseBufferMgr;
 
     private final int buffersToAllocate;
 
@@ -47,12 +47,12 @@ public class StorageServerResponseBufferMetering implements Operation {
      **   ByteBuffer(s) and will set the allocation BufferManagerPointer back to the start of
      **   the BufferManager (meaning that no ByteBuffer(s) are available to read data into).
      */
-    public StorageServerResponseBufferMetering(final RequestContext requestContext, final MemoryManager memoryManager,
-                                               final BufferManager responseBufferManager, final int buffersToAllocate) {
+    public ServiceResponseBufferMetering(final RequestContext requestContext, final MemoryManager memoryManager,
+                                         final BufferManager responseBufferManager, final int buffersToAllocate) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
-        this.storageServerResponseBufferMgr = responseBufferManager;
+        this.serviceResponseBufferMgr = responseBufferManager;
         this.buffersToAllocate = buffersToAllocate;
 
         /*
@@ -70,22 +70,22 @@ public class StorageServerResponseBufferMetering implements Operation {
     public BufferManagerPointer initialize() {
 
         /*
-         ** Obtain the pointer used to meter out buffers to the read Storage Server HTTP Response operation
+         ** Obtain the pointer used to meter out buffers to the read remote services HTTP Response operation
          */
-        respBufferMeteringPointer = storageServerResponseBufferMgr.register(this);
+        respBufferMeteringPointer = serviceResponseBufferMgr.register(this);
 
         for (int i = 0; i < buffersToAllocate; i++) {
-            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, storageServerResponseBufferMgr,
+            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, serviceResponseBufferMgr,
                     operationType);
 
-            storageServerResponseBufferMgr.offer(respBufferMeteringPointer, buffer);
+            serviceResponseBufferMgr.offer(respBufferMeteringPointer, buffer);
         }
 
         /*
          ** Set the pointer back to the beginning of the BufferManager. The BufferReadMetering operation will need
          **   to have its execute() method called to dole out ByteBuffer(s) to perform read operations into.
          */
-        storageServerResponseBufferMgr.reset(respBufferMeteringPointer);
+        serviceResponseBufferMgr.reset(respBufferMeteringPointer);
 
         return respBufferMeteringPointer;
     }
@@ -100,7 +100,7 @@ public class StorageServerResponseBufferMetering implements Operation {
 
     /*
      ** For the metering, this is where the pointer for buffers that are available are metered out according to
-     **   customer requirements and limitations. The buffers can be preallocated on the BufferManager and only
+     **   customer requirements and limitations. The buffers are preallocated to the BufferManager and only
      **   passed out as needed or as requested.
      */
     public void execute() {
@@ -108,31 +108,31 @@ public class StorageServerResponseBufferMetering implements Operation {
         /*
          ** Add a free buffer to the ClientReadBufferManager
          */
-        storageServerResponseBufferMgr.updateProducerWritePointer(respBufferMeteringPointer);
+        serviceResponseBufferMgr.updateProducerWritePointer(respBufferMeteringPointer);
     }
 
     public void complete() {
-        LOG.info("StorageServerResponseBufferMetering complete()");
+        LOG.info("ServiceResponseBufferMetering complete()");
 
         /*
          ** Set the pointer back to the beginning of the BufferManager to release the allocated memory
          */
-        storageServerResponseBufferMgr.reset(respBufferMeteringPointer);
+        serviceResponseBufferMgr.reset(respBufferMeteringPointer);
 
         for (int i = 0; i < buffersToAllocate; i++) {
-            ByteBuffer buffer = storageServerResponseBufferMgr.getAndRemove(respBufferMeteringPointer);
+            ByteBuffer buffer = serviceResponseBufferMgr.getAndRemove(respBufferMeteringPointer);
             if (buffer != null) {
-                memoryManager.poolMemFree(buffer, storageServerResponseBufferMgr);
+                memoryManager.poolMemFree(buffer, serviceResponseBufferMgr);
             } else {
-                LOG.warn("BufferReadMetering[" + requestContext.getRequestId() + "] null buffer i: " + i);
+                LOG.warn("ServiceResponseBufferMetering[" + requestContext.getRequestId() + "] null buffer i: " + i);
             }
         }
 
         /*
          ** Release the metering pointer
          */
-        storageServerResponseBufferMgr.unregister(respBufferMeteringPointer);
-        storageServerResponseBufferMgr.reset();
+        serviceResponseBufferMgr.unregister(respBufferMeteringPointer);
+        serviceResponseBufferMgr.reset();
         respBufferMeteringPointer = null;
     }
 
@@ -152,13 +152,13 @@ public class StorageServerResponseBufferMetering implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("BufferReadMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("ServiceResponseBufferMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("BufferReadMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("ServiceResponseBufferMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("BufferReadMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
+            LOG.warn("ServiceResponseBufferMetering[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
         }
     }
 

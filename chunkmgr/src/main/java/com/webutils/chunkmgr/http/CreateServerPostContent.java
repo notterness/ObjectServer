@@ -1,13 +1,13 @@
 package com.webutils.chunkmgr.http;
 
-import com.webutils.webserver.http.ParseRequestContent;
+import com.webutils.webserver.http.ContentParser;
 import com.webutils.webserver.http.StorageTierEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
-public class CreateServerPostContent extends ParseRequestContent {
+public class CreateServerPostContent extends ContentParser {
 
     private static final Logger LOG = LoggerFactory.getLogger(CreateServerPostContent.class);
 

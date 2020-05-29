@@ -2,7 +2,7 @@ package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.http.ParseRequestContent;
+import com.webutils.webserver.http.ContentParser;
 import com.webutils.webserver.http.parser.PostContentParser;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.eclipse.jetty.http.HttpStatus;
@@ -11,9 +11,9 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
-public class ParseContent implements Operation {
+public class ParseContentBuffers implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ParseContent.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ParseContentBuffers.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
@@ -22,7 +22,7 @@ public class ParseContent implements Operation {
 
     private final RequestContext requestContext;
 
-    private final BufferManager clientReadBufferMgr;
+    private final BufferManager readBufferManager;
     private final BufferManagerPointer readBufferPointer;
     private BufferManagerPointer postContentPointer;
 
@@ -31,7 +31,7 @@ public class ParseContent implements Operation {
 
     private final PostContentParser parser;
 
-    private final ParseRequestContent parseRequestContent;
+    private final ContentParser contentParser;
 
     private int savedSrcPosition;
 
@@ -42,26 +42,35 @@ public class ParseContent implements Operation {
      */
     private boolean onExecutionQueue;
 
-    public ParseContent(final RequestContext requestContext, final BufferManagerPointer readBufferPtr,
-                        final Operation metering, final ParseRequestContent parseRequestContent, final Operation completeCb) {
+    public ParseContentBuffers(final RequestContext requestContext, final BufferManager readBufferMgr,
+                               final BufferManagerPointer readBufferPtr, final Operation metering,
+                               final ContentParser contentParser, final int contentLength,
+                               final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.readBufferPointer = readBufferPtr;
         this.meteringOperation = metering;
-        this.parseRequestContent = parseRequestContent;
+        this.contentParser = contentParser;
         this.completeCallback = completeCb;
 
-        this.clientReadBufferMgr = this.requestContext.getClientReadBufferManager();
+        this.readBufferManager = readBufferMgr;
 
         /*
-         ** Setup the parser to pull the content information out of the POST request
+         ** Setup the parser to pull the content information out of the request
          */
-        parser = new PostContentParser(this.requestContext.getRequestContentLength(), parseRequestContent);
+        parser = new PostContentParser(contentLength, contentParser);
 
         /*
          ** This starts out not being on any queue
          */
         onExecutionQueue = false;
+    }
+
+    public ParseContentBuffers(final RequestContext requestContext, final BufferManagerPointer readBufferPtr,
+                               final Operation metering, final ContentParser contentParser, final Operation completeCb) {
+
+        this(requestContext, requestContext.getClientReadBufferManager(), readBufferPtr, metering, contentParser,
+                requestContext.getRequestContentLength(), completeCb);
     }
 
     public OperationTypeEnum getOperationType() {
@@ -76,18 +85,20 @@ public class ParseContent implements Operation {
          ** Register this with the Buffer Manager to allow it to be event(ed) when
          **   buffers are added by the read producer
          */
-        postContentPointer = clientReadBufferMgr.register(this, readBufferPointer);
+        postContentPointer = readBufferManager.register(this, readBufferPointer);
 
         /*
          ** savedSrcPosition is used to handle the case where there are no buffers available to place
-         **   encrypted data into, so this operation will need to wait until buffers are available.
+         **   response data into, so this operation will need to wait until buffers are available.
          */
         ByteBuffer readBuffer;
-        if ((readBuffer = clientReadBufferMgr.peek(postContentPointer)) != null) {
+        if ((readBuffer = readBufferManager.peek(postContentPointer)) != null) {
             savedSrcPosition = readBuffer.position();
         } else {
             savedSrcPosition = 0;
         }
+
+        LOG.info("ParseContentBuffers savedSrcPosition: " + savedSrcPosition);
 
         return postContentPointer;
     }
@@ -110,7 +121,7 @@ public class ParseContent implements Operation {
         ByteBuffer contentBuffer;
         boolean success;
 
-        while ((contentBuffer = clientReadBufferMgr.peek(postContentPointer)) != null) {
+        while ((contentBuffer = readBufferManager.peek(postContentPointer)) != null) {
 
             /*
              ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
@@ -120,7 +131,7 @@ public class ParseContent implements Operation {
             srcBuffer.position(savedSrcPosition);
             savedSrcPosition = 0;
 
-            //LOG.info("ParseContent[" + requestContext.getRequestId() + "] remaining position: " +
+            //LOG.info("ParseContentBuffers[" + requestContext.getRequestId() + "] remaining position: " +
             //        srcBuffer.position() + " limit: " + srcBuffer.limit());
 
             /*
@@ -134,7 +145,7 @@ public class ParseContent implements Operation {
             /*
             ** Update the pointer since all the data in the buffer had to have been parsed
             */
-            clientReadBufferMgr.updateConsumerReadPointer(postContentPointer);
+            readBufferManager.updateConsumerReadPointer(postContentPointer);
 
             /*
              ** Need to break out of the loop if the parsing is complete.
@@ -144,7 +155,7 @@ public class ParseContent implements Operation {
             }
         }
 
-        //LOG.info("ParseContent[" + requestContext.getRequestId() + "] exit from loop");
+        //LOG.info("ParseContentBuffers[" + requestContext.getRequestId() + "] exit from loop");
 
         /*
          ** Check if there needs to be another read to bring in more of the HTTP request
@@ -160,7 +171,7 @@ public class ParseContent implements Operation {
                  */
                 meteringOperation.event();
             } else {
-                LOG.warn("ParseContent[" + requestContext.getRequestId() + "] parsing error, no allocation");
+                LOG.warn("ParseContentBuffers[" + requestContext.getRequestId() + "] parsing error, no allocation");
 
                 /*
                  ** Event the DetermineRequest. This will check if there is an error and then perform the
@@ -179,8 +190,8 @@ public class ParseContent implements Operation {
             **   that the required attributes are all present.
              */
             if (!parser.getParseError()) {
-                if (parseRequestContent.validateContentData()) {
-                    parseRequestContent.dumpMaps();
+                if (contentParser.validateContentData()) {
+                    contentParser.dumpMaps();
                 } else {
                     /*
                     ** Some required attributes are missing. A further enhancement would be to return the missing
@@ -189,7 +200,7 @@ public class ParseContent implements Operation {
                     requestContext.getHttpInfo().setParseFailureCode(HttpStatus.BAD_REQUEST_400);
                 }
             } else {
-                LOG.warn("ParseContent[" + requestContext.getRequestId() + "] content parser error");
+                LOG.warn("ParseContentBuffers[" + requestContext.getRequestId() + "] content parser error");
             }
 
             /*
@@ -200,13 +211,13 @@ public class ParseContent implements Operation {
     }
 
     public void complete() {
-        LOG.info("ParseContent[" + requestContext.getRequestId() + "] complete");
+        LOG.info("ParseContentBuffers[" + requestContext.getRequestId() + "] complete");
 
         /*
          ** Since the HTTP Request parsing is done for this request, need to remove the dependency on the
          **   read buffer BufferManager pointer to stop events from being generated.
          */
-        clientReadBufferMgr.unregister(postContentPointer);
+        readBufferManager.unregister(postContentPointer);
         postContentPointer = null;
     }
 
@@ -226,19 +237,19 @@ public class ParseContent implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("ParseContent[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("ParseContentBuffers[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("ParseContent[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("ParseContentBuffers[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("ParseContent[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("ParseContentBuffers[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("ParseContent[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("ParseContentBuffers[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -253,7 +264,7 @@ public class ParseContent implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("ParseContent[" + requestContext.getRequestId() +
+        LOG.warn("ParseContentBuffers[" + requestContext.getRequestId() +
                 "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }

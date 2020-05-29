@@ -17,7 +17,7 @@ public class BufferWriteMetering implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.METER_WRITE_BUFFERS;
+    public final OperationTypeEnum operationType = OperationTypeEnum.BUFFER_WRITE_METERING;
 
     private final RequestContext requestContext;
 
@@ -108,6 +108,8 @@ public class BufferWriteMetering implements Operation {
     }
 
     public void complete() {
+
+        LOG.info("BufferWriteMetering complete()");
 
         /*
          ** Set the pointer back to the beginning of the BufferManager to release the allocated memory

@@ -67,7 +67,7 @@ public class SetupChunkWrite implements Operation {
 
     private BufferManagerPointer addBufferPointer;
 
-    private StorageServerResponseBufferMetering responseBufferMetering;
+    private ServiceResponseBufferMetering responseBufferMetering;
 
     /*
      ** The following is a map of all of the created Operations to handle this request.
@@ -188,7 +188,7 @@ public class SetupChunkWrite implements Operation {
              **   setup for the reading of the Storage Server response header can be be deferred until the TCP connection to the
              **   Storage Server is successful.
              */
-            responseBufferMetering = new StorageServerResponseBufferMetering(requestContext, memoryManager, storageServerResponseBufferManager,
+            responseBufferMetering = new ServiceResponseBufferMetering(requestContext, memoryManager, storageServerResponseBufferManager,
                     STORAGE_SERVER_HEADER_BUFFER_COUNT);
             respBufferPointer = responseBufferMetering.initialize();
 

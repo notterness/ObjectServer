@@ -22,7 +22,7 @@ public class ClientCommandSend implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_SEND_COMMAND;
+    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_COMMAND_SEND;
 
     /*
      ** The overall controlling object that allocated the request context and threads.
@@ -66,12 +66,6 @@ public class ClientCommandSend implements Operation {
      **   execution queue (onExecutionQueue) is will always go on the execution queue.
      */
     private boolean onExecutionQueue;
-
-    /*
-     ** The writeBufferPointer is what is returned from the FileReadBufferMetering operation and is used by the
-     **   BuildObjectPutHeader and ReadObjectFromFile operations to send data to the Object Server.
-     */
-    private BufferManagerPointer writeBufferPointer;
 
     /*
      ** The response buffer metering is used by the WritObjectToFile operation
@@ -463,7 +457,7 @@ public class ClientCommandSend implements Operation {
          */
         FileReadBufferMetering bufferMetering = new FileReadBufferMetering(requestContext, memoryManager);
         requestHandlerOps.put(bufferMetering.getOperationType(), bufferMetering);
-        writeBufferPointer = bufferMetering.initialize();
+        BufferManagerPointer writeBufferPointer = bufferMetering.initialize();
 
 
         /*
@@ -484,7 +478,7 @@ public class ClientCommandSend implements Operation {
         /*
          ** The Command Header must be written to the Object Server so that the data can be written following it
          */
-        BuildObjectPutHeader headerBuilder = new BuildObjectPutHeader(requestContext, requestContext.getClientWriteBufferManager(),
+        BuildRequestHeader headerBuilder = new BuildRequestHeader(requestContext, requestContext.getClientWriteBufferManager(),
                 writeBufferPointer, requestParams);
         requestHandlerOps.put(headerBuilder.getOperationType(), headerBuilder);
         BufferManagerPointer writePointer = headerBuilder.initialize();
@@ -550,32 +544,15 @@ public class ClientCommandSend implements Operation {
     private void setupFileWrite() {
 
         /*
-         ** First tear down the BuildObjectPutHeader and WriteToClient operations. The WriteToClient needs to be
+         ** First tear down the BuildRequestHeader and WriteToClient operations. The WriteToClient needs to be
          **   removed since it's dependency will change to being on the ReadObjectFromFile operation instead of
-         **   BuildObjectPutHeader.
+         **   BuildRequestHeader.
          */
         Operation writeToClient = requestHandlerOps.remove(OperationTypeEnum.WRITE_TO_CLIENT);
         writeToClient.complete();
 
-        Operation buildPutHeader = requestHandlerOps.remove(OperationTypeEnum.BUILD_OBJECT_PUT_HEADER);
+        Operation buildPutHeader = requestHandlerOps.remove(OperationTypeEnum.BUILD_REQUEST_HEADER);
         buildPutHeader.complete();
-
-        Operation fileMetering = requestHandlerOps.get(OperationTypeEnum.METER_FILE_READ_BUFFERS);
-
-        /*
-        ReadObjectFromFile readFromFile = new ReadObjectFromFile(requestContext, fileMetering, writeBufferPointer,
-                requestParams, this);
-        requestHandlerOps.put(readFromFile.getOperationType(), readFromFile);
-        BufferManagerPointer fileReadPointer = readFromFile.initialize();
-
-        WriteToClient writeDataToObjectServer = new WriteToClient(requestContext, objectServerConn, this,
-                fileReadPointer, objectServer);
-        requestHandlerOps.put(writeDataToObjectServer.getOperationType(), writeDataToObjectServer);
-        writeDataToObjectServer.initialize();
-
-        fileMetering.event();
-
-         */
     }
 
 

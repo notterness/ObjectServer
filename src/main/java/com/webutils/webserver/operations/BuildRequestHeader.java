@@ -9,19 +9,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.charset.Charset;
-import java.nio.charset.CharsetEncoder;
-import java.nio.charset.StandardCharsets;
 
-public class BuildObjectPutHeader implements Operation {
+public class BuildRequestHeader implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(BuildObjectPutHeader.class);
+    private static final Logger LOG = LoggerFactory.getLogger(BuildRequestHeader.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    private final OperationTypeEnum operationType = OperationTypeEnum.BUILD_OBJECT_PUT_HEADER;
+    private final OperationTypeEnum operationType = OperationTypeEnum.BUILD_REQUEST_HEADER;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -43,8 +39,8 @@ public class BuildObjectPutHeader implements Operation {
 
     private boolean headerNotBuilt;
 
-    public BuildObjectPutHeader(final RequestContext requestContext, final BufferManager requestBufferManager,
-                                final BufferManagerPointer addBufferPtr, final ObjectParams requestParams) {
+    public BuildRequestHeader(final RequestContext requestContext, final BufferManager requestBufferManager,
+                              final BufferManagerPointer addBufferPtr, final ObjectParams requestParams) {
 
         this.requestContext = requestContext;
 

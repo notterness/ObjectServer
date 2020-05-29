@@ -1,19 +1,22 @@
 package com.webutils.webserver.manual;
 
 import com.webutils.webserver.common.ObjectParams;
+import com.webutils.webserver.http.AllocateChunksResponseContent;
 import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.niosockets.NioCliClient;
+import com.webutils.webserver.operations.ClientCallbackOperation;
 import com.webutils.webserver.operations.ClientCommandSend;
+import com.webutils.webserver.operations.SendRequestToService;
 import com.webutils.webserver.requestcontext.ClientRequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 
 import java.net.InetAddress;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ClientCommandInterface extends ClientInterface {
+public class ClientServiceRequest extends ClientInterface {
 
     private final ObjectParams requestParams;
 
@@ -23,8 +26,8 @@ public class ClientCommandInterface extends ClientInterface {
 
     private static final String clientName = "ObjectCLI/0.0.1";
 
-    ClientCommandInterface(final NioCliClient cliClient, final MemoryManager memoryManger, final InetAddress serverIpAddr, final int serverTcpPort,
-                           final ObjectParams deleteRequestParams, AtomicInteger testCount) {
+    ClientServiceRequest(final NioCliClient cliClient, final MemoryManager memoryManger, final InetAddress serverIpAddr, final int serverTcpPort,
+                         final ObjectParams deleteRequestParams, AtomicInteger testCount) {
 
         super(cliClient, memoryManger, serverIpAddr, serverTcpPort, testCount);
 
@@ -64,12 +67,15 @@ public class ClientCommandInterface extends ClientInterface {
          ** Create the ClientGetObject operation and connect in this object to provide the HTTP header
          **   generator
          */
-        ServerIdentifier objectServer = new ServerIdentifier("ObjectCLI", serverIpAddr, serverTcpPort, 0);
+        ServerIdentifier service = new ServerIdentifier("ObjectCLI", serverIpAddr, serverTcpPort, 0);
+        HttpResponseInfo httpInfo = new HttpResponseInfo(clientContext.getRequestId());
+        service.setHttpInfo(httpInfo);
 
-        HttpResponseInfo httpResponseInfo = new HttpResponseInfo(clientContext.getRequestId());
-        objectServer.setHttpInfo(httpResponseInfo);
-        ClientCommandSend cmdSend = new ClientCommandSend(this, clientContext, memoryManager, objectServer,
-                requestParams);
+        ClientCallbackOperation callbackOp = new ClientCallbackOperation(clientContext, this, httpInfo);
+
+        AllocateChunksResponseContent responseParser = new AllocateChunksResponseContent();
+        SendRequestToService cmdSend = new SendRequestToService(clientContext, memoryManager, service, requestParams,
+                responseParser, callbackOp);
         cmdSend.initialize();
 
         /*
@@ -97,6 +103,5 @@ public class ClientCommandInterface extends ClientInterface {
 
         runningTestCount.decrementAndGet();
     }
-
 
 }

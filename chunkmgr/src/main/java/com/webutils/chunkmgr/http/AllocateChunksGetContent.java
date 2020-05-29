@@ -1,12 +1,12 @@
 package com.webutils.chunkmgr.http;
 
-import com.webutils.webserver.http.ParseRequestContent;
+import com.webutils.webserver.http.ContentParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
-public class AllocateChunksGetContent extends ParseRequestContent {
+public class AllocateChunksGetContent extends ContentParser {
     private static final Logger LOG = LoggerFactory.getLogger(AllocateChunksGetContent.class);
 
     private static final String OBJECT_CHUNK_NUMBER = "object-chunk-number";

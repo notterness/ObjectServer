@@ -107,7 +107,7 @@ public class SetupChunkRead implements Operation {
     /*
     ** The response buffer metering is used by the DecryptBuffer operation
      */
-    private StorageServerResponseBufferMetering responseBufferMetering;
+    private ServiceResponseBufferMetering responseBufferMetering;
 
     private BufferManagerPointer httpBufferPointer;
 
@@ -672,7 +672,7 @@ public class SetupChunkRead implements Operation {
          **   setup for the reading of the Storage Server response header can be be deferred until the TCP connection to the
          **   Storage Server is successful.
          */
-        responseBufferMetering = new StorageServerResponseBufferMetering(requestContext, memoryManager, responseBufferManager,
+        responseBufferMetering = new ServiceResponseBufferMetering(requestContext, memoryManager, responseBufferManager,
                 STORAGE_SERVER_GET_BUFFER_COUNT);
         BufferManagerPointer respBufferPointer = responseBufferMetering.initialize();
 

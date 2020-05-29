@@ -204,7 +204,7 @@ public class ObjectFileComputeMd5 implements Operation {
         Operation readFromFile = computeFileMd5Ops.remove(OperationTypeEnum.READ_OBJECT_FROM_FILE);
         readFromFile.complete();
 
-        Operation meterBuffers = computeFileMd5Ops.remove(OperationTypeEnum.METER_FILE_READ_BUFFERS);
+        Operation meterBuffers = computeFileMd5Ops.remove(OperationTypeEnum.FILE_READ_BUFFER_METERING);
         meterBuffers.complete();
 
         Collection<Operation> createdOperations = computeFileMd5Ops.values();

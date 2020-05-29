@@ -16,7 +16,7 @@ public class FileReadBufferMetering implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    private final OperationTypeEnum operationType = OperationTypeEnum.METER_FILE_READ_BUFFERS;
+    private final OperationTypeEnum operationType = OperationTypeEnum.FILE_READ_BUFFER_METERING;
 
     private final RequestContext requestContext;
 

@@ -33,7 +33,7 @@ public class ClientGetObject implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_OBJECT_GET;
+    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_GET_OBJECT;
 
 
     private final int OBJECT_SERVER_HEADER_BUFFER_COUNT = 4;

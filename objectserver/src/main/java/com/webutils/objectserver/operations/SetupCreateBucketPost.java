@@ -8,7 +8,7 @@ import com.webutils.webserver.http.CreateBucketPostContent;
 import com.webutils.webserver.operations.ComputeSha256Digest;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
-import com.webutils.webserver.operations.ParseContent;
+import com.webutils.webserver.operations.ParseContentBuffers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -126,10 +126,10 @@ public class SetupCreateBucketPost implements Operation {
             **   a temporary structure and once the Sha-256 digest completes (assuming it is successful) the setup
             **   of the Bucket will take place.
              */
-            ParseContent parseContent = new ParseContent(requestContext, readBufferPointer, metering,
-                    createBucketPostContent, this);
-            PostHandlerOperations.put(parseContent.getOperationType(), parseContent);
-            parseContent.initialize();
+            ParseContentBuffers parseContentBuffers = new ParseContentBuffers(requestContext, readBufferPointer,
+                    metering, createBucketPostContent, this);
+            PostHandlerOperations.put(parseContentBuffers.getOperationType(), parseContentBuffers);
+            parseContentBuffers.initialize();
 
             /*
              ** The ComputeSha256Digest needs to be completed before the SendFinalStatus operation can be woken up
@@ -152,7 +152,7 @@ public class SetupCreateBucketPost implements Operation {
             ByteBuffer remainingBuffer = clientReadBufferManager.peek(readBufferPointer);
             if (remainingBuffer != null) {
                 if (remainingBuffer.remaining() > 0) {
-                    parseContent.event();
+                    parseContentBuffers.event();
                 } else {
                     metering.event();
                 }
@@ -161,7 +161,7 @@ public class SetupCreateBucketPost implements Operation {
             setupMethodDone = true;
         } else if (waitingOnOperations){
             /*
-             ** This will be placed on the execute queue twice, once by the ParseContent operation when the
+             ** This will be placed on the execute queue twice, once by the ParseContentBuffers operation when the
              **   parsing is complete and a second time when the ComputeSha256Digest has completed.
              */
             if (updator.getSha256DigestComplete() && requestContext.postMethodContentParsed()) {

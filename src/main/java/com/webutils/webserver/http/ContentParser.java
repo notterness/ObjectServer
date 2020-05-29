@@ -5,22 +5,27 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
-public abstract class ParseRequestContent {
-    private static final Logger LOG = LoggerFactory.getLogger(ParseRequestContent.class);
+public abstract class ContentParser {
+    private static final Logger LOG = LoggerFactory.getLogger(ContentParser.class);
 
     private static final String FREE_FORM_TAG = "freeformTags";
     private static final String DEFINED_TAGS = "definedTags";
+
+    private static final String CHUNK_ALLOC_RESPONSE = "chunk-";
 
     protected static final String COMPARTMENT_ID_ATTRIBUTE = "compartmentId";
     protected static final String STORAGE_TIER_ATTRIBUTE = "storageTier";
 
     private static final int DEFINED_TAGS_SUB_CATEGORY_DEPTH = 3;
+    private static final int CHUNK_ALLOCATION_CATEGORY_DEPTH = 2;
 
     protected final Map<String, String> params;
 
     protected final Map<String, String> freeformTags;
 
     protected final Map<String, Map<String, String>> definedTags;
+
+    protected final Map<String, Map<String, String>> chunkAllocations;
 
     protected final Map<String, Map<String, String>> keyValuePairPlacement;
 
@@ -33,10 +38,11 @@ public abstract class ParseRequestContent {
 
     private String keyStr;
 
-    public ParseRequestContent() {
+    public ContentParser() {
         params = new HashMap<>(10);
         freeformTags = new HashMap<>(10);
         definedTags = new HashMap<>(10);
+        chunkAllocations = new HashMap<>(5);
 
         keyValuePairPlacement = new HashMap<>(10);
         keyValuePairPlacement.put(FREE_FORM_TAG, freeformTags);
@@ -71,7 +77,7 @@ public abstract class ParseRequestContent {
                     //LOG.info("Open bracket " + bracketDepth + " - " + keyStr);
 
                     /*
-                     ** Special case checking for "definedTags". This must take place prior to pushing the
+                     ** Special case checking for "definedTags" and "chunk-". This must take place prior to pushing the
                      **   new keyStr onto the stack since it looks at the value at the top of the stack.
                      */
                     if (checkForDefinedTags(keyStr)) {
@@ -109,7 +115,7 @@ public abstract class ParseRequestContent {
                         parsingError = true;
                     }
                 } else {
-                    LOG.info("Closing bracket " + bracketDepth);
+                    //LOG.info("Closing bracket " + bracketDepth);
                 }
                 break;
             case ":":
@@ -249,8 +255,28 @@ public abstract class ParseRequestContent {
                     }
                 }
             } catch (EmptyStackException ex) {
-                LOG.error("bracketDepth == 2, but stack is empty");
+                LOG.error("bracketDepth == " + bracketDepth + ", but stack is empty");
                 parsingError = true;
+            }
+        } else if (bracketDepth == CHUNK_ALLOCATION_CATEGORY_DEPTH) {
+            /*
+             ** First check if the top of the stack contains "chunk-"
+             */
+            if (keyStr.contains(CHUNK_ALLOC_RESPONSE)) {
+                /*
+                ** This means a new Map is needed to hold the values for the chunk results (these are key value pairs
+                **   that are under a new sub-category within the "chunkAllocations" grouping).
+                 */
+                if (!chunkAllocations.containsKey(keyStr)) {
+                    LOG.info("Creating new map under chunkAllocations: " + keyStr);
+                    Map<String, String> subCategoryMap = new HashMap<>(5);
+                    chunkAllocations.put(keyStr, subCategoryMap);
+
+                    /*
+                    ** Also add this to the keyValuePairPlacement map so the items can easily be added
+                    */
+                    keyValuePairPlacement.put(keyStr, subCategoryMap);
+                }
             }
         }
 

@@ -1,12 +1,12 @@
 package com.webutils.chunkmgr.http;
 
-import com.webutils.webserver.http.ParseRequestContent;
+import com.webutils.webserver.http.ContentParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
-public class ListChunksGetContent extends ParseRequestContent {
+public class ListChunksGetContent extends ContentParser {
 
     private static final Logger LOG = LoggerFactory.getLogger(ListChunksGetContent.class);
 

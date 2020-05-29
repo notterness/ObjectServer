@@ -126,7 +126,6 @@ public class ServerChunkMgr extends ServersDb {
         if (conn != null) {
             PreparedStatement stmt = null;
             ResultSet rs = null;
-            int lba = 0;
 
             try {
                 stmt = conn.prepareStatement(EXECUTE_ALLOCATE_CHUNK);
@@ -153,6 +152,7 @@ public class ServerChunkMgr extends ServersDb {
                     }
                 } else {
                     LOG.warn("No chunks available on server");
+                    result = HttpStatus.NO_CONTENT_204;
                 }
             } catch (SQLException sqlEx) {
                 LOG.error("allocateServerChunks() SQLException: " + sqlEx.getMessage());

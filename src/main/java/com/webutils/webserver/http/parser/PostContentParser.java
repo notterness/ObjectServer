@@ -28,7 +28,7 @@ package com.webutils.webserver.http.parser;
  */
 
 import com.webutils.webserver.http.HttpInfo;
-import com.webutils.webserver.http.ParseRequestContent;
+import com.webutils.webserver.http.ContentParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,16 +40,16 @@ public class PostContentParser {
     private static final Logger LOG = LoggerFactory.getLogger(PostContentParser.class);
 
     private final int contentLength;
-    private final ParseRequestContent parseRequestContent;
+    private final ContentParser contentParser;
 
     private int contentBytesParsed;
 
     private boolean parseError;
 
-    public PostContentParser(final int contentLength, final ParseRequestContent parseRequestContent) {
+    public PostContentParser(final int contentLength, final ContentParser contentParser) {
 
         this.contentLength = contentLength;
-        this.parseRequestContent = parseRequestContent;
+        this.contentParser = contentParser;
 
         this.contentBytesParsed = 0;
         this.parseError = false;
@@ -63,6 +63,7 @@ public class PostContentParser {
         while ((bufferToParse = chunk.getBuffer()) != null) {
             contentBytesParsed += bufferToParse.remaining();
 
+            //LOG.info("parseBuffer() contentLength: " + contentLength + " contentBytesParsed: " + contentBytesParsed);
             /*
             ** Convert to a string. Then tokenize if using space, tab, NewLine, CR, \f and Double Quote.
             */
@@ -77,7 +78,7 @@ public class PostContentParser {
                  */
                 //LOG.info(" token: " + str1);
 
-                if (!parseRequestContent.addData(str1)) {
+                if (!contentParser.addData(str1)) {
                     parseError = true;
                     return false;
                 }

@@ -7,7 +7,7 @@ import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.http.parser.ResponseHttpParser;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
-import com.webutils.webserver.operations.StorageServerResponseBufferMetering;
+import com.webutils.webserver.operations.ServiceResponseBufferMetering;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
@@ -48,7 +48,7 @@ public class StorageServerResponseHandler implements Operation {
     /*
     ** The metering operation to hand out buffers to read in the response header and the data
      */
-    private final StorageServerResponseBufferMetering metering;
+    private final ServiceResponseBufferMetering metering;
 
     /*
     ** The HTTP Parser is used to extract the status from the Storage Server response
@@ -65,7 +65,7 @@ public class StorageServerResponseHandler implements Operation {
     private final HttpResponseInfo httpInfo;
 
     public StorageServerResponseHandler(final RequestContext requestContext, final BufferManager storageServerResponseBufferMgr,
-                                        final BufferManagerPointer readBufferPtr, final StorageServerResponseBufferMetering metering,
+                                        final BufferManagerPointer readBufferPtr, final ServiceResponseBufferMetering metering,
                                         final Operation completionCb, final ServerIdentifier serverIdentifier) {
 
         this.requestContext = requestContext;

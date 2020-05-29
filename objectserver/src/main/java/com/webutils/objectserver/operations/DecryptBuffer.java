@@ -5,7 +5,7 @@ import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
-import com.webutils.webserver.operations.StorageServerResponseBufferMetering;
+import com.webutils.webserver.operations.ServiceResponseBufferMetering;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -443,7 +443,7 @@ public class DecryptBuffer implements Operation {
         /*
          ** Setup the BufferReadMetering to populate the clientReadBufferManager with ByteBuffer(s)
          */
-        StorageServerResponseBufferMetering metering = new StorageServerResponseBufferMetering(requestContext,
+        ServiceResponseBufferMetering metering = new ServiceResponseBufferMetering(requestContext,
                 memoryManager, inputBufferManager, BUFFERS_TO_ALLOCATE);
         BufferManagerPointer meteringPtr = metering.initialize();
 

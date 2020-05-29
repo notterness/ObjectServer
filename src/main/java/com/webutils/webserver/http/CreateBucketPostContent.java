@@ -24,7 +24,7 @@ import java.util.*;
 **  }
 **
  */
-public class CreateBucketPostContent extends ParseRequestContent {
+public class CreateBucketPostContent extends ContentParser {
     private static final Logger LOG = LoggerFactory.getLogger(CreateBucketPostContent.class);
 
     private static final String NAME_ATTRIBUTE = "name";

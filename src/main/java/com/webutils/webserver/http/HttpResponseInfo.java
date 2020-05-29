@@ -150,7 +150,6 @@ public class HttpResponseInfo extends HttpInfo {
         int result = fieldName.indexOf(CONTENT_LENGTH.toLowerCase());
         if (result != -1) {
             try {
-                contentLengthReceived = true;
                 contentLength = Integer.parseInt(field.getValue());
 
                 /*
@@ -158,12 +157,17 @@ public class HttpResponseInfo extends HttpInfo {
                  */
                 if ((contentLength < 0) || (contentLength > RequestContext.getChunkSize())) {
                     contentLength = 0;
+                    contentLengthReceived = false;
                     parseFailureCode = HttpStatus.RANGE_NOT_SATISFIABLE_416;
                     parseFailureReason = HttpStatus.getMessage(parseFailureCode);
 
                     LOG.info("Invalid Content-Length [" + requestId + "] code: " +
                             parseFailureCode + " reason: " + parseFailureReason);
+                } else {
+                    contentLengthReceived = true;
+                    LOG.info("HttpResponseInfo added Content-Length: " + contentLength);
                 }
+
             } catch (NumberFormatException num_ex) {
                 LOG.info("addHeaderValue() " + field.getName() + " " + num_ex.getMessage());
 
