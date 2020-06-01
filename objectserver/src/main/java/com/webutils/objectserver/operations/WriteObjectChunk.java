@@ -96,6 +96,11 @@ public class WriteObjectChunk implements Operation {
     private final ResponseMd5ResultHandler chunkMd5Updater;
 
     /*
+    ** The following is used to send the request for chunk allocations to the Chunk Mgr Service
+     */
+    private SendRequestToService cmdSend;
+
+    /*
     ** This Operation does two things, first it makes the call to allocate the chunks of storage on the various
     **   Storage Servers (this is based upon the storage class for the Object being written). Once the Storage chunk
     **   information has been obtained, then the StorageChunkAllocated operation will be run. The
@@ -205,8 +210,7 @@ public class WriteObjectChunk implements Operation {
                 AllocateChunksParams params = new AllocateChunksParams(StorageTierEnum.STANDARD_TIER, chunkNumber);
                 params.setOpcClientRequestId(requestContext.getHttpInfo().getOpcClientRequestId());
 
-                SendRequestToService cmdSend = new SendRequestToService(requestContext, memoryManager, chunkMgrService,
-                        params, contentParser, this);
+                cmdSend = new SendRequestToService(requestContext, memoryManager, chunkMgrService, params, contentParser, this);
                 cmdSend.initialize();
 
                 /*
@@ -220,6 +224,11 @@ public class WriteObjectChunk implements Operation {
                 LOG.info("WriteObjectChunk() STORAGE_CHUNKS_ALLOCATED allocated chunks: " + serverList.size());
 
                 /*
+                ** Clean up from the request to allocate the chunks
+                 */
+                cmdSend.complete();
+
+                /*
                  ** Now write the chunk information to the database - This is a blocking operation and will take time.
                  */
                 contentParser.extractAllocations(serverList, chunkNumber);
@@ -227,6 +236,7 @@ public class WriteObjectChunk implements Operation {
                     LOG.info("  serverIdentifier " + serverIdentifier.getServerIpAddress().getHostAddress() +
                             " port: " + serverIdentifier.getServerTcpPort());
                 }
+
 
                 if (!serverList.isEmpty()) {
                     /*

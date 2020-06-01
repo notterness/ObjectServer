@@ -94,6 +94,7 @@ public class ParseContentBuffers implements Operation {
         ByteBuffer readBuffer;
         if ((readBuffer = readBufferManager.peek(postContentPointer)) != null) {
             savedSrcPosition = readBuffer.position();
+            event();
         } else {
             savedSrcPosition = 0;
         }

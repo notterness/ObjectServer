@@ -198,7 +198,7 @@ public class WriteObjectToFile implements Operation {
                  ** Create a temporary ByteBuffer to hold the readBuffer so that it is not
                  **  affecting the position() and limit() indexes
                  **
-                 ** NOTE: savedSrcPosition is modifed within the writeFileChannel.write() handling as the write may
+                 ** NOTE: savedSrcPosition is modified within the writeFileChannel.write() handling as the write may
                  **   only consume a portion of the buffer and it will take multiple passes through using the same
                  **   buffer to actually write all the data to the file.
                  */
@@ -219,7 +219,7 @@ public class WriteObjectToFile implements Operation {
                             /*
                              ** Queue this up to try again later and force the exit from the while loop
                              */
-                            this.event();
+                            event();
                             outOfBuffers = true;
                         } else {
                             /*

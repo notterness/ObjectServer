@@ -135,12 +135,11 @@ public class BufferManagerPointer {
             this.bufferIndex = new AtomicInteger(dependsOnBookmark);
 
             /*
-             ** Since this registration has a dependency, check if the event() for the operation should be
-             **   called.
+            ** Since this registration has a dependency, check if the event() for the operation should be called.
+            ** NOTE: (6/1/2020) Removing this since it causes a race condition when the registration is being performed
+            **   on one thread and the operation that is dependent upon the registration is running in a different
+            **   compute thread.
              */
-            if ((dependsOnBookmark != this.ptrThisDependsOn.getCurrIndex()) && (operation != null)) {
-                operation.event();
-            }
         }
     }
 

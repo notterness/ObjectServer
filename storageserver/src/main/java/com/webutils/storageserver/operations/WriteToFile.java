@@ -128,6 +128,7 @@ public class WriteToFile implements Operation {
         ByteBuffer readBuffer;
         if ((readBuffer = clientReadBufferMgr.peek(clientFileWritePtr)) != null) {
             savedSrcPosition = readBuffer.position();
+            event();
         } else {
             savedSrcPosition = 0;
         }
@@ -206,7 +207,7 @@ public class WriteToFile implements Operation {
                             /*
                             ** Queue this up to try again later and force the exit from the while loop
                              */
-                            this.event();
+                            event();
                             outOfBuffers = true;
                         } else {
                             /*

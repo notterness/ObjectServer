@@ -105,6 +105,7 @@ public class ComputeSha256Digest implements Operation {
         ByteBuffer readBuffer;
         if ((readBuffer = clientReadBufferMgr.peek(sha256DigestPointer)) != null) {
             savedSrcPosition = readBuffer.position();
+            event();
         } else {
             savedSrcPosition = 0;
         }

@@ -53,6 +53,7 @@ public class NioServerHandler implements Runnable {
         /*
         ** First start the client NIO event poll threads
          */
+        LOG.info("NioServerHandler[" + serverThreadBaseId + "] start() threads: " + NUM_POLL_THREADS);
         eventPollBalancer = new NioEventPollBalancer(NUM_POLL_THREADS, serverThreadBaseId + 10, requestContextPool);
         eventPollBalancer.start();
 
@@ -84,6 +85,8 @@ public class NioServerHandler implements Runnable {
     }
 
     public void run() {
+
+        LOG.info("NioServerHandler[" + serverThreadBaseId + "] run()");
 
         serverSelector = setupSelector();
         if (serverSelector == null) {
