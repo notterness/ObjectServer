@@ -239,7 +239,8 @@ public class BuildHeaderToStorageServer implements Operation {
                     "ETag: " + requestContext.getHttpInfo().getObjectUID() + "\n" +
                     "object-chunk-number: " + storageServer.getChunkNumber() + "\n" +
                     "chunk-lba: " + storageServer.getChunkLBA() + "\n" +
-                    "chunk-location: " + storageServer.getChunkLocation() + "\n" +
+                    //"chunk-location: " + storageServer.getChunkLocation() + "\n" +
+                    "chunk-location: " + storageServer.getChunkUID() + "\n" +
                     "Content-Length: " + chunkBytesToEncrypt + "\n\n";
         } else {
             commonPieces = "Host: ObjectServerWrite\n" +
@@ -253,7 +254,8 @@ public class BuildHeaderToStorageServer implements Operation {
                     "ETag: " + requestContext.getHttpInfo().getObjectUID() + "\n" +
                     "object-chunk-number: " + storageServer.getChunkNumber() + "\n" +
                     "chunk-lba: " + storageServer.getChunkLBA() + "\n" +
-                    "chunk-location: " + storageServer.getChunkLocation() + "\n" +
+                    //"chunk-location: " + storageServer.getChunkLocation() + "\n" +
+                    "chunk-location: " + storageServer.getChunkUID() + "\n" +
                     "Content-Length: " + chunkBytesToEncrypt + "\n\n";
         }
 
@@ -280,7 +282,7 @@ public class BuildHeaderToStorageServer implements Operation {
                     "opc-request-id: " + requestContext.getRequestId() + "\n" +
                     "object-chunk-number: " + storageServer.getChunkNumber() + "\n" +
                     "chunk-lba: " + storageServer.getChunkLBA() + "\n" +
-                    "chunk-location: " + storageServer.getChunkLocation() + "\n" +
+                    "chunk-location: " + storageServer.getChunkUID() + "\n" +
                     "Content-Length: 0\n\n";
         } else {
             commonPieces = "Host: ObjectServerRead\n" +
@@ -293,7 +295,7 @@ public class BuildHeaderToStorageServer implements Operation {
                     "opc-request-id: " + requestContext.getRequestId() + "\n" +
                     "object-chunk-number: " + storageServer.getChunkNumber() + "\n" +
                     "chunk-lba: " + storageServer.getChunkLBA() + "\n" +
-                    "chunk-location: " + storageServer.getChunkLocation() + "\n" +
+                    "chunk-location: " + storageServer.getChunkUID() + "\n" +
                     "Content-Length: 0\n\n";
         }
 

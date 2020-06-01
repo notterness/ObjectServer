@@ -38,6 +38,11 @@ public abstract class ContentParser {
 
     private String keyStr;
 
+    /*
+    ** This is set in the validateContentData() method
+     */
+    protected boolean contentValid;
+
     public ContentParser() {
         params = new HashMap<>(10);
         freeformTags = new HashMap<>(10);
@@ -56,6 +61,15 @@ public abstract class ContentParser {
 
         bracketDepth = 0;
         keyStrObtained = false;
+
+        contentValid = false;
+    }
+
+    public boolean isValid() {
+        if (!contentValid) {
+            LOG.warn("content data failed validation");
+        }
+        return contentValid;
     }
 
     public abstract boolean validateContentData();
@@ -297,6 +311,12 @@ public abstract class ContentParser {
         freeformTags.clear();
 
         keyValuePairPlacement.clear();
+
+        for (Map.Entry<String, Map<String, String>> entry : chunkAllocations.entrySet()) {
+            Map<String, String> subCategory = entry.getValue();
+            subCategory.clear();
+        }
+        chunkAllocations.clear();
 
         /*
          ** Clear out the stack just in case

@@ -24,7 +24,9 @@ public class SendRequestToService implements Operation {
      */
     private final static OperationTypeEnum operationType = OperationTypeEnum.SEND_SERVICE_REQUEST;
 
-    private final static int REMOTE_SERVICE_RESPONSE_BUFFERS = 10;
+    private final static int REMOTE_READ_BUFFER_MANAGER = 4000;
+    private final static int REMOTE_WRITE_BUFFER_MANAGER = 4100;
+    public final static int REMOTE_SERVICE_RESPONSE_BUFFERS = 10;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -72,6 +74,8 @@ public class SendRequestToService implements Operation {
 
     private BufferManagerPointer httpBufferPointer;
 
+    private BufferManager serviceWriteBufferMgr;
+
     /*
      ** The HttpResponseInfo is unique to this read chunk operation as the response coming back is only for one chunk
      **   worth of data.
@@ -117,7 +121,7 @@ public class SendRequestToService implements Operation {
          */
         this.httpInfo = service.getHttpInfo();
 
-        this.objectServerConn = requestContext.getClientConnection();
+        this.objectServerConn = requestContext.allocateConnection(this);
 
         /*
          ** This starts out not being on any queue
@@ -446,7 +450,10 @@ public class SendRequestToService implements Operation {
         /*
          ** Allocate ByteBuffer(s) for the request header that will be sent to the remote service
          */
-        BufferWriteMetering bufferMetering = new BufferWriteMetering(requestContext, memoryManager);
+        serviceWriteBufferMgr = new BufferManager(REMOTE_SERVICE_RESPONSE_BUFFERS, "ServiceWriteBufferMgr",
+                REMOTE_WRITE_BUFFER_MANAGER);
+
+        BufferWriteMetering bufferMetering = new BufferWriteMetering(requestContext, memoryManager, serviceWriteBufferMgr);
         requestHandlerOps.put(bufferMetering.getOperationType(), bufferMetering);
         BufferManagerPointer writeBufferPointer = bufferMetering.initialize();
 
@@ -456,7 +463,8 @@ public class SendRequestToService implements Operation {
          **   as a placeholder for buffers while they are processed.
          **
          */
-        responseBufferManager = new BufferManager(REMOTE_SERVICE_RESPONSE_BUFFERS, "StorageServerResponse", 4000);
+        responseBufferManager = new BufferManager(REMOTE_SERVICE_RESPONSE_BUFFERS, "ServiceReadBufferMgr",
+                REMOTE_READ_BUFFER_MANAGER);
 
         /*
          ** Allocate ByteBuffer(s) to read in the response from the remote service. By using a metering operation, the
@@ -477,13 +485,13 @@ public class SendRequestToService implements Operation {
         /*
          ** The Command Header must be written to the remote service so that the data can be written following it
          */
-        BuildRequestHeader headerBuilder = new BuildRequestHeader(requestContext, requestContext.getClientWriteBufferManager(),
+        BuildRequestHeader headerBuilder = new BuildRequestHeader(requestContext, serviceWriteBufferMgr,
                 writeBufferPointer, requestParams);
         requestHandlerOps.put(headerBuilder.getOperationType(), headerBuilder);
         BufferManagerPointer writePointer = headerBuilder.initialize();
 
         WriteToClient headerWriter = new WriteToClient(requestContext, objectServerConn, this,
-                writePointer, service);
+                serviceWriteBufferMgr, writePointer, service);
         requestHandlerOps.put(headerWriter.getOperationType(), headerWriter);
         headerWriter.initialize();
 

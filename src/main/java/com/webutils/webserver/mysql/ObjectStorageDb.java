@@ -214,9 +214,6 @@ public class ObjectStorageDb {
                         }
 
                         if (count != 1) {
-                            LOG.warn("getId() too many responses count: " + count);
-                            LOG.warn(idQueryStr);
-
                             id = -1;
                         }
                     } catch (SQLException sqlEx) {

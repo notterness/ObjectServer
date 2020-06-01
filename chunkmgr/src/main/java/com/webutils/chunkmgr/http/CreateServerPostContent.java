@@ -43,7 +43,7 @@ public class CreateServerPostContent extends ContentParser {
      **   thing to validate would be the contents of the attributes to make sure garbage data is not provided.
      */
     public boolean validateContentData() {
-        boolean valid = true;
+        contentValid = true;
 
         /*
          ** First make sure that the bracketDepth is 0 to insure the brackets are properly paired.
@@ -54,7 +54,7 @@ public class CreateServerPostContent extends ContentParser {
              */
             for (String attribute : requiredAttributes) {
                 if (!params.containsKey(attribute)) {
-                    valid = false;
+                    contentValid = false;
 
                     LOG.error("Missing required attribute: " + attribute);
                     break;
@@ -65,25 +65,38 @@ public class CreateServerPostContent extends ContentParser {
             ** Validate that the Port, Number of Chunks are integers
              */
             if (getServerPort() == -1) {
-                valid = false;
+                contentValid = false;
             }
 
-            if (getServerNumChunks() == -1) {
-                valid = false;
-            }
+            /*
+            ** For Storage Servers, validate that the "allocated-chunks" is a positive value and that the
+            **   "storageTier" is not set to INVALID_TIER.
+            **
+            ** NOTE: For the purposes of this implementation, all Storage Server names must start with
+            **   "storage-server-". This makes it easier to validate certain attributes and to provide some level
+            **   of consistency.
+             */
+            if (getServerName().contains("storage-server-")) {
+                if (getServerNumChunks() == 0) {
+                    LOG.warn("There must be at least one chunk per Storage Server chunks: 0");
 
-            if (getStorageTier() == StorageTierEnum.INVALID_TIER) {
-                valid = false;
+                    contentValid = false;
+                }
+
+                if (getStorageTier() == StorageTierEnum.INVALID_TIER) {
+                    contentValid = false;
+                }
             }
         } else {
             LOG.error("Invalid bracketDepth: " + bracketDepth);
-            valid = false;
+            contentValid = false;
         }
-        if (!valid) {
+
+        if (!contentValid) {
             clearAllMaps();
         }
 
-        return valid;
+        return contentValid;
     }
 
     /*
@@ -151,9 +164,13 @@ public class CreateServerPostContent extends ContentParser {
         return port;
     }
 
+    /*
+    ** This will return 0 if the "allocated-chunks" attribute is missing or it is set to a negative
+    **   number.
+     */
     public int getServerNumChunks() {
         String numberOfChunksStr = params.get(STORAGE_SERVER_NUM_CHUNKS);
-        int chunks = -1;
+        int chunks = 0;
 
         if (numberOfChunksStr != null) {
             try {
@@ -163,8 +180,7 @@ public class CreateServerPostContent extends ContentParser {
                 ** Must be at least 1 chunk for a Storage Server
                  */
                 if (chunks < 1) {
-                    LOG.warn("There must be at least one chunk per Storage Server chunks: " + chunks);
-                    chunks = -1;
+                    chunks = 0;
                 }
             } catch (NumberFormatException ex) {
                 LOG.warn("Number of chunks is invalid: " + numberOfChunksStr);

@@ -364,8 +364,8 @@ public class WriteToFile implements Operation {
             return null;
         }
 
-        return "./logs/StorageServer" + requestContext.getIoInterfaceIdentifier() + "/" + chunkLocation +
-                "/chunk_" + chunkNumber + "_" + chunkLba + ".dat";
+        return "./logs/StorageServer" + requestContext.getIoInterfaceIdentifier() + "/" + "/chunk_" + chunkLocation +
+                "_" + chunkNumber + "_" + chunkLba + ".dat";
     }
 
 

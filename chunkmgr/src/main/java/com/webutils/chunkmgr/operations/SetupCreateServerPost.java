@@ -182,7 +182,14 @@ public class SetupCreateServerPost implements Operation {
                 PostHandlerOperations.remove(OperationTypeEnum.COMPUTE_SHA256_DIGEST);
 
                 if (updator.checkContentSha256()) {
-                    createServer.event();
+                    /*
+                    ** Make sure that the content was valid prior to trying to create the server
+                     */
+                    if (createServerContent.isValid()) {
+                        createServer.event();
+                    } else {
+                        complete();
+                    }
                 } else {
                     /*
                      ** There was an error with the passed in or computed Sha-256 digest, so an error needs to be

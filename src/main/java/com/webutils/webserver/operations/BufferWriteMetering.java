@@ -23,7 +23,7 @@ public class BufferWriteMetering implements Operation {
 
     private final MemoryManager memoryManager;
 
-    private final BufferManager clientWriteBufferMgr;
+    private final BufferManager serviceWriteBufferMgr;
     private BufferManagerPointer bufferMeteringPointer;
 
     /*
@@ -38,35 +38,18 @@ public class BufferWriteMetering implements Operation {
      **   ByteBuffer(s) and will set the allocation BufferManagerPointer back to the start of
      **   the BufferManager (meaning that no ByteBuffer(s) are available to write data into).
      */
-    public BufferWriteMetering(final RequestContext requestContext, final MemoryManager memoryManager) {
+    public BufferWriteMetering(final RequestContext requestContext, final MemoryManager memoryManager,
+                               final BufferManager serviceWriteBufferMgr) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
 
-        this.clientWriteBufferMgr = requestContext.getClientWriteBufferManager();
+        this.serviceWriteBufferMgr = serviceWriteBufferMgr;
 
         /*
          ** This starts out not being on any queue
          */
         onExecutionQueue = false;
-
-        /*
-         ** Obtain the pointer used to meter out buffers to the read operation
-         */
-        bufferMeteringPointer = this.clientWriteBufferMgr.register(this);
-
-        /*
-         ** If this is the WebServerFlavor.INTEGRATION_TESTS then allocate a limited
-         **   number of ByteBuffer(s) up front and then reset the metering
-         **   pointer.
-         */
-        int buffersToAllocate = memoryManager.getBufferManagerRingSize();
-
-        for (int i = 0; i < buffersToAllocate; i++) {
-            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, clientWriteBufferMgr, operationType);
-
-            clientWriteBufferMgr.offer(bufferMeteringPointer, buffer);
-        }
     }
 
     public OperationTypeEnum getOperationType() {
@@ -78,10 +61,24 @@ public class BufferWriteMetering implements Operation {
     public BufferManagerPointer initialize() {
 
         /*
+         ** Obtain the pointer used to meter out buffers to the read operation
+         */
+        bufferMeteringPointer = serviceWriteBufferMgr.register(this);
+
+        /*
+         ** Allocate a the ByteBuffer(s) up front and then reset the metering pointer.
+         */
+        for (int i = 0; i < SendRequestToService.REMOTE_SERVICE_RESPONSE_BUFFERS; i++) {
+            ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, serviceWriteBufferMgr, operationType);
+
+            serviceWriteBufferMgr.offer(bufferMeteringPointer, buffer);
+        }
+
+        /*
          ** Set the pointer back to the beginning of the BufferManager. The BufferReadMetering operation will need
          **   to have its execute() method called to dole out ByteBuffer(s) to perform read operations into.
          */
-        clientWriteBufferMgr.reset(bufferMeteringPointer);
+        serviceWriteBufferMgr.reset(bufferMeteringPointer);
 
         return bufferMeteringPointer;
     }
@@ -96,7 +93,7 @@ public class BufferWriteMetering implements Operation {
 
     /*
      ** For the metering, this is where the pointer for buffers that are available are metered out according to
-     **   customer requirements and limitations. The buffers can be preallocated on the BufferManager and only
+     **   customer requirements and limitations. The buffers are preallocated on the BufferManager and only
      **   passed out as needed or as requested.
      */
     public void execute() {
@@ -104,7 +101,7 @@ public class BufferWriteMetering implements Operation {
         /*
          ** Add a free buffer to the ClientReadBufferManager
          */
-        clientWriteBufferMgr.updateProducerWritePointer(bufferMeteringPointer);
+        serviceWriteBufferMgr.updateProducerWritePointer(bufferMeteringPointer);
     }
 
     public void complete() {
@@ -114,14 +111,14 @@ public class BufferWriteMetering implements Operation {
         /*
          ** Set the pointer back to the beginning of the BufferManager to release the allocated memory
          */
-        clientWriteBufferMgr.reset(bufferMeteringPointer);
+        serviceWriteBufferMgr.reset(bufferMeteringPointer);
 
         int buffersAllocated = memoryManager.getBufferManagerRingSize();
 
-        for (int i = 0; i < buffersAllocated; i++) {
-            ByteBuffer buffer = clientWriteBufferMgr.getAndRemove(bufferMeteringPointer);
+        for (int i = 0; i < SendRequestToService.REMOTE_SERVICE_RESPONSE_BUFFERS; i++) {
+            ByteBuffer buffer = serviceWriteBufferMgr.getAndRemove(bufferMeteringPointer);
             if (buffer != null) {
-                memoryManager.poolMemFree(buffer, clientWriteBufferMgr);
+                memoryManager.poolMemFree(buffer, serviceWriteBufferMgr);
             } else {
                 LOG.warn("BufferWriteMetering[" + requestContext.getRequestId() + "] null buffer i: " + i);
             }
@@ -130,7 +127,7 @@ public class BufferWriteMetering implements Operation {
         /*
          ** Release the metering pointer
          */
-        clientWriteBufferMgr.unregister(bufferMeteringPointer);
+        serviceWriteBufferMgr.unregister(bufferMeteringPointer);
         bufferMeteringPointer = null;
     }
 

@@ -40,7 +40,7 @@ public class TestMain {
         ServerIdentifierTableMgr serverTableMgr;
 
         final int OBJECT_SERVER_TCP_PORT = 5001;
-        final int CHUNK_ALLOC_SERVER_TCP_PORT = 5002;
+        final int CHUNK_MGR_SERVICE_TCP_PORT = 5002;
 
         final int NUMBER_TEST_STORAGE_SERVERS = 3;
         final int STORAGE_SERVER_BASE_ID_OFFSET = 100;
@@ -155,7 +155,7 @@ public class TestMain {
             MemoryManager chunkAllocMemoryManager = new MemoryManager(flavor);
             ChunkAllocContextPool chunkAllocContextPool = new ChunkAllocContextPool(flavor, chunkAllocMemoryManager, serverTableMgr);
 
-            chunkAllocNioServer = new NioServerHandler(CHUNK_ALLOC_SERVER_TCP_PORT, NioServerHandler.CHUNK_ALLOC_BASE_ID, chunkAllocContextPool);
+            chunkAllocNioServer = new NioServerHandler(CHUNK_MGR_SERVICE_TCP_PORT, NioServerHandler.CHUNK_ALLOC_BASE_ID, chunkAllocContextPool);
             chunkAllocNioServer.start();
 
             /*
@@ -277,18 +277,23 @@ public class TestMain {
         ClientTest client_CreateBucket_Simple = new ClientTest_CreateBucket_Simple("CreateBucket_Simple", testClient,
                 serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         client_CreateBucket_Simple.execute();
-
+ */
         ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         checkMd5.execute();
 
         waitForTestsToComplete(threadCount);
-*/
 
-        //PostCreateServer createServer = new PostCreateServer(serverIpAddr, CHUNK_ALLOC_SERVER_TCP_PORT, threadCount);
+
+        //PostCreateServer createServer = new PostCreateServer(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
         //createServer.execute();
 
-        AllocateChunksSimple allocateChunks = new AllocateChunksSimple(serverIpAddr, CHUNK_ALLOC_SERVER_TCP_PORT, threadCount);
-        allocateChunks.execute();
+        //CreateChunkMgrService createChunkMgrService = new CreateChunkMgrService(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
+        //createChunkMgrService.execute();
+
+        //AllocateChunksSimple allocateChunks = new AllocateChunksSimple(serverIpAddr, CHUNK_ALLOC_SERVER_TCP_PORT, threadCount);
+        //allocateChunks.execute();
+        //AllocateChunksSimple2 allocateChunks = new AllocateChunksSimple2(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
+        //allocateChunks.execute();
 
         //DeleteObjectSimple deleteObject = new DeleteObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         //deleteObject.execute();
@@ -298,6 +303,12 @@ public class TestMain {
 
         //ListObjectsSimple listObjectsSimple = new ListObjectsSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         //listObjectsSimple.execute();
+
+        //ListChunksAll listChunksAll = new ListChunksAll(serverIpAddr, CHUNK_ALLOC_SERVER_TCP_PORT, threadCount);
+        //listChunksAll.execute();
+
+        //ListServersAll listServersAll = new ListServersAll(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
+        //listServersAll.execute();
 
         /*
         GetObjectBadBucket getObjectBadBucket = new GetObjectBadBucket(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);

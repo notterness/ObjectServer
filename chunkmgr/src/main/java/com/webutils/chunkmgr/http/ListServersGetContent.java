@@ -29,7 +29,7 @@ public class ListServersGetContent extends ContentParser {
      **   thing to validate would be the contents of the attributes to make sure garbage data is not provided.
      */
     public boolean validateContentData() {
-        boolean valid = true;
+        contentValid = true;
 
         /*
          ** First make sure that the bracketDepth is 0 to insure the brackets are properly paired.
@@ -40,7 +40,7 @@ public class ListServersGetContent extends ContentParser {
              */
             for (String attribute : requiredAttributes) {
                 if (!params.containsKey(attribute)) {
-                    valid = false;
+                    contentValid = false;
 
                     LOG.error("Missing required attribute: " + attribute);
                     break;
@@ -49,13 +49,13 @@ public class ListServersGetContent extends ContentParser {
 
         } else {
             LOG.error("Invalid bracketDepth: " + bracketDepth);
-            valid = false;
+            contentValid = false;
         }
-        if (!valid) {
+        if (!contentValid) {
             clearAllMaps();
         }
 
-        return valid;
+        return contentValid;
     }
 
     /*

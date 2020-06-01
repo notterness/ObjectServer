@@ -1,24 +1,25 @@
 package com.webutils.objectserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.common.AllocateChunksParams;
 import com.webutils.webserver.common.ResponseMd5ResultHandler;
+import com.webutils.webserver.http.AllocateChunksResponseContent;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.http.HttpResponseInfo;
+import com.webutils.webserver.http.StorageTierEnum;
 import com.webutils.webserver.memory.MemoryManager;
-import com.webutils.webserver.mysql.ServerChunkMgr;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.mysql.StorageChunkTableMgr;
 import com.webutils.webserver.operations.ComputeMd5Digest;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
+import com.webutils.webserver.operations.SendRequestToService;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -51,9 +52,11 @@ public class WriteObjectChunk implements Operation {
     private final BufferManagerPointer storageServerWritePointer;
 
     enum ExecutionState {
-        REQUEST_STORAGE_CHUNK,
+        REQUEST_STORAGE_CHUNKS,
+        STORAGE_CHUNKS_ALLOCATED,
         STORAGE_CHUNK_INFO_SAVED,
-        WRITE_STORAGE_CHUNK_COMPLETE,
+        WRITE_STORAGE_CHUNK_FINALIZE,
+        WRITE_STORAGE_CHUNK_CALLBACK,
         WRITE_STORAGE_CHUNK_DONE
     }
 
@@ -77,6 +80,12 @@ public class WriteObjectChunk implements Operation {
      */
     private final List<Operation> storageChunkAllocatedCb;
     private StorageChunkAllocated storageChunkAllocated;
+
+    /*
+    ** The following are used to obtain the chunk information from the ChunkMgr remote service
+     */
+    private final AllocateChunksResponseContent contentParser;
+    private final HttpResponseInfo httpInfo;
 
     /*
     ** The following are used to Parse the Http responses coming back from the Storage Servers
@@ -121,7 +130,10 @@ public class WriteObjectChunk implements Operation {
 
         this.storageChunkAllocatedCb = new LinkedList<>();
 
-        currState = ExecutionState.REQUEST_STORAGE_CHUNK;
+        this.contentParser = new AllocateChunksResponseContent();
+        this.httpInfo = new HttpResponseInfo(requestContext.getRequestId());
+
+        currState = ExecutionState.REQUEST_STORAGE_CHUNKS;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -155,54 +167,85 @@ public class WriteObjectChunk implements Operation {
     public void execute() {
         switch (currState) {
 
-            case REQUEST_STORAGE_CHUNK:
-                LOG.info("WriteObjectChunk() REQUEST_STORAGE_CHUNK");
+            case REQUEST_STORAGE_CHUNKS:
+                LOG.info("WriteObjectChunk() REQUEST_STORAGE_CHUNKS");
 
                 /*
                 **
                  */
-                try {
-                    InetAddress inetAddress = InetAddress.getByName("localhost");
-                    ServerIdentifier testServer = new ServerIdentifier("test-server", inetAddress, 5020, 0);
-                    testServer.setServerId(2);
-                    ServerChunkMgr chunkMgr = new ServerChunkMgr(requestContext.getWebServerFlavor());
-                    chunkMgr.allocateStorageChunk(testServer);
-                } catch (UnknownHostException ex) {
-
-                }
-
-                /*
-                 ** Call the Storage Chunk Picker - This is a blocking operation and will take time.
-                 */
+                ServerIdentifier chunkMgrService;
                 ServerIdentifierTableMgr serverTableMgr = requestContext.getServerTableMgr();
                 if (serverTableMgr != null) {
-                    if (!serverTableMgr.getStorageServers(serverList, chunkNumber)) {
-                        LOG.warn("Unable to obtain storageServerInfo chunk: " + chunkNumber);
-                        for (ServerIdentifier serverIdentifier : serverList) {
-                            LOG.warn("  serverIdentifier " + serverIdentifier.getServerIpAddress().getHostAddress() +
-                                    " port: " + serverIdentifier.getServerTcpPort());
-                        }
-                    }
-
-                    if (!serverList.isEmpty()) {
-                        /*
-                        ** Kick off the StorageChunkAllocated operation to save the information about the chunks that
-                        **   are going to be written to the Storage Servers.
-                         */
-                        storageChunkAllocated.event();
-                        currState = ExecutionState.STORAGE_CHUNK_INFO_SAVED;
+                    List<ServerIdentifier> servers = new LinkedList<>();
+                    boolean found = serverTableMgr.getServer("chunk-mgr-service", servers);
+                    if (found) {
+                        chunkMgrService = servers.get(0);
+                        chunkMgrService.setHttpInfo(httpInfo);
                     } else {
                         /*
-                        ** Need to set an error condition
+                         ** Nothing more can be done, might as well return an error
                          */
-                        currState = ExecutionState.WRITE_STORAGE_CHUNK_COMPLETE;
+                        LOG.warn("Unable to obtain address for chunkMgrService");
+                        currState = ExecutionState.WRITE_STORAGE_CHUNK_FINALIZE;
                         event();
+                        break;
                     }
                 } else {
+                    HttpRequestInfo objectCreateInfo = requestContext.getHttpInfo();
+
+                    LOG.warn("Unable to obtain serverTableMgr");
+                    String failureMessage = "\"Unable to obtain ServerIdentifierTableMgr\"";
+                    objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
+
+                    currState = ExecutionState.WRITE_STORAGE_CHUNK_FINALIZE;
+                    event();
+                    break;
+                }
+
+                AllocateChunksParams params = new AllocateChunksParams(StorageTierEnum.STANDARD_TIER, chunkNumber);
+                params.setOpcClientRequestId(requestContext.getHttpInfo().getOpcClientRequestId());
+
+                SendRequestToService cmdSend = new SendRequestToService(requestContext, memoryManager, chunkMgrService,
+                        params, contentParser, this);
+                cmdSend.initialize();
+
+                /*
+                 ** Start the process of sending the HTTP Request and the request object to the ChunkMgr service
+                 */
+                currState = ExecutionState.STORAGE_CHUNKS_ALLOCATED;
+                cmdSend.event();
+                break;
+
+            case STORAGE_CHUNKS_ALLOCATED:
+                LOG.info("WriteObjectChunk() STORAGE_CHUNKS_ALLOCATED allocated chunks: " + serverList.size());
+
+                /*
+                 ** Now write the chunk information to the database - This is a blocking operation and will take time.
+                 */
+                contentParser.extractAllocations(serverList, chunkNumber);
+                for (ServerIdentifier serverIdentifier : serverList) {
+                    LOG.info("  serverIdentifier " + serverIdentifier.getServerIpAddress().getHostAddress() +
+                            " port: " + serverIdentifier.getServerTcpPort());
+                }
+
+                if (!serverList.isEmpty()) {
                     /*
-                    ** Nothing more can be done, might as well return an error
+                    ** Kick off the StorageChunkAllocated operation to save the information about the chunks that
+                    **   are going to be written to the Storage Servers.
                      */
-                    currState = ExecutionState.WRITE_STORAGE_CHUNK_COMPLETE;
+                    storageChunkAllocated.event();
+                    currState = ExecutionState.STORAGE_CHUNK_INFO_SAVED;
+                } else {
+                    /*
+                    ** Need to set an error condition
+                     */
+                    HttpRequestInfo objectCreateInfo = requestContext.getHttpInfo();
+
+                    LOG.warn("Unable to obtain allocate any chunks on Storage Servers");
+                    String failureMessage = "\"Unable to allocate any chunks on Storage Servers\"";
+                    objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
+
+                    currState = ExecutionState.WRITE_STORAGE_CHUNK_CALLBACK;
                     event();
                 }
                 break;
@@ -244,10 +287,10 @@ public class WriteObjectChunk implements Operation {
                     i++;
                 }
 
-                currState = ExecutionState.WRITE_STORAGE_CHUNK_COMPLETE;
+                currState = ExecutionState.WRITE_STORAGE_CHUNK_FINALIZE;
                 break;
 
-            case WRITE_STORAGE_CHUNK_COMPLETE:
+            case WRITE_STORAGE_CHUNK_FINALIZE:
                 /*
                 ** Verify that the Md5 computation has been completed.
                 ** Check if all of the Storage Servers have responded or have had an error (either a bad
@@ -271,7 +314,7 @@ public class WriteObjectChunk implements Operation {
                     StorageChunkTableMgr chunkMgr = new StorageChunkTableMgr(requestContext.getWebServerFlavor(), objectCreateInfo);
 
                     /*
-                    ** There needs to be at least 1 chunk written to a Storage Server to continue
+                     ** There needs to be at least 1 chunk written to a Storage Server to continue
                      */
                     int chunkRedundancy = 0;
                     for (ServerIdentifier server : serverList) {
@@ -279,13 +322,13 @@ public class WriteObjectChunk implements Operation {
 
                         if (result == HttpStatus.OK_200) {
                             /*
-                            ** Verify the Md5 that was computed by the Storage Server
-                            */
+                             ** Verify the Md5 that was computed by the Storage Server
+                             */
                             HttpResponseInfo httpInfo = server.getHttpInfo();
                             if (!chunkMd5Updater.checkContentMD5(httpInfo.getResponseContentMd5())) {
                                 LOG.error("ChunkWriteComplete bad Md5 addr: " + server.getServerIpAddress().toString() +
-                                    " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
-                                    " result: UNPROCESSABLE_ENTITY_422");
+                                        " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
+                                        " result: UNPROCESSABLE_ENTITY_422");
                                 result = HttpStatus.UNPROCESSABLE_ENTITY_422;
 
                                 chunkMgr.deleteChunk(server.getChunkId());
@@ -305,14 +348,15 @@ public class WriteObjectChunk implements Operation {
                                 } else {
                                     LOG.error("ChunkWriteComplete unable to update dataWritten addr: " + server.getServerIpAddress().toString() +
                                             " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
-                                            " result: OK_200");
+                                            " result: UNPROCESSABLE_ENTITY_422");
 
+                                    result = HttpStatus.UNPROCESSABLE_ENTITY_422;
                                     chunkMgr.deleteChunk(server.getChunkId());
                                 }
                             }
                         } else {
                             /*
-                            ** Delete this chunk, hopefully this does not mean that all the chunks are bad.
+                             ** Delete this chunk, hopefully this does not mean that all the chunks are bad.
                              */
                             LOG.error("ChunkWriteComplete unable to update dataWritten addr: " + server.getServerIpAddress().toString() +
                                     " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
@@ -332,7 +376,7 @@ public class WriteObjectChunk implements Operation {
                     }
 
                     /*
-                    ** Make sure that there was at least 1 valid chunk written
+                     ** Make sure that there was at least 1 valid chunk written
                      */
                     if (chunkRedundancy == 0) {
                         StringBuilder failureMessage = new StringBuilder("\"Unable to obtain write chunk data - failed Storage Servers\"");
@@ -343,21 +387,29 @@ public class WriteObjectChunk implements Operation {
                     }
 
                     /*
-                     ** Done so cleanup the active list of Storage Servers
+                    ** Fall through
                      */
-                    serverList.clear();
-
-                    /*
-                     ** event() all of the operations that are ready to run once the VON Pick has
-                     **   succeeded.
-                     */
-                    for (Operation operation : callbackOperationsToRun) {
-                        operation.event();
-                    }
-                    callbackOperationsToRun.clear();
-
-                    currState = ExecutionState.WRITE_STORAGE_CHUNK_DONE;
+                    currState = ExecutionState.WRITE_STORAGE_CHUNK_CALLBACK;
                 }
+                else {
+                    break;
+                }
+
+            case WRITE_STORAGE_CHUNK_CALLBACK:
+                /*
+                ** Done so cleanup the active list of Storage Servers
+                 */
+                serverList.clear();
+
+                /*
+                ** event() all of the operations that are ready to run once the chunk writes have succeeded.
+                 */
+                for (Operation operation : callbackOperationsToRun) {
+                    operation.event();
+                }
+                callbackOperationsToRun.clear();
+
+                currState = ExecutionState.WRITE_STORAGE_CHUNK_DONE;
                 break;
 
             case WRITE_STORAGE_CHUNK_DONE:

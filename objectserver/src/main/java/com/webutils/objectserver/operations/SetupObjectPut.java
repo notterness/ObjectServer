@@ -132,10 +132,10 @@ public class SetupObjectPut implements Operation {
     ** This is called from the ObjectPut_P2 operation when it has completed its work or an error occurred.
      */
     public void complete() {
+        LOG.info("SetupObjectPut[" + requestContext.getRequestId() + "] completed");
         completeCallback.event();
 
         putHandlerOperations.clear();
-        LOG.info("SetupObjectPut[" + requestContext.getRequestId() + "] completed");
     }
 
     /*

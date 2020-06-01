@@ -122,7 +122,8 @@ public class BufferManager {
         **   array location does not have one already assigned.
          */
         if (bufferArray[writeIndex] != null) {
-            LOG.warn("BufferManager(" + bufferManagerName + ") offer() writeIndex in use writeIndex: " + writeIndex);
+            LOG.warn("BufferManager(" + bufferManagerName + ") offer(" + pointer.getIdentifier() + ":" +
+                    pointer.getOperationType() + ") writeIndex in use writeIndex: " + writeIndex);
         }
 
         bufferArray[writeIndex] = buffer;

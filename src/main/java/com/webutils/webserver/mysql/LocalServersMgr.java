@@ -23,7 +23,7 @@ public class LocalServersMgr extends ServerIdentifierTableMgr {
 
     private static final String getLocalStorageServers = "SELECT serverName, LocalServerIpAddr, LocalServerPort FROM ServerIdentifier";
     private static final String getLocalStorageServer = "SELECT serverName, LocalServerIpAddr, LocalServerPort FROM ServerIdentifier WHERE serverName='";
-    private static final String getServerQueryEnd = "';";
+    private static final String getServerQueryEnd = "'";
 
     private static final String STORAGE_SERVER_REQUEST = "SELECT serverId, serverName, localServerIpAddr, localServerPort FROM ServerIdentifier " +
             "WHERE serverType = ? AND storageTier = ? ORDER BY usedChunks ASC, totalAllocations ASC, lastAllocationTime ASC";

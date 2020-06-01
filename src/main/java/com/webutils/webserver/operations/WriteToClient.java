@@ -48,6 +48,14 @@ public class WriteToClient implements Operation {
                          final Operation operationToRun, final BufferManagerPointer bufferInfillPtr,
                          final ServerIdentifier server) {
 
+        this(requestContext, connection, operationToRun, requestContext.getClientWriteBufferManager(), bufferInfillPtr,
+                server);
+    }
+
+    public WriteToClient(final RequestContext requestContext, final IoInterface connection,
+                         final Operation operationToRun, final BufferManager clientWriteBufferMgr,
+                         final BufferManagerPointer bufferInfillPtr, final ServerIdentifier server) {
+
         this.requestContext = requestContext;
         this.clientConnection = connection;
         this.finalOperationToRun = operationToRun;
@@ -55,7 +63,7 @@ public class WriteToClient implements Operation {
 
         this.server = server;
 
-        this.clientWriteBufferManager = requestContext.getClientWriteBufferManager();
+        this.clientWriteBufferManager = clientWriteBufferMgr;
 
         /*
          ** This starts out not being on any queue

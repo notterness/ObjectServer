@@ -7,9 +7,13 @@ import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
+import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.LinkedList;
+import java.util.List;
 
 public class CreateServer implements Operation {
 
@@ -84,13 +88,34 @@ public class CreateServer implements Operation {
         if (!serverCreated) {
             ServerIdentifierTableMgr serverTableMgr = requestContext.getServerTableMgr();
 
-            int status = serverTableMgr.createServer(createServerContent.getServerName(), createServerContent.getServerIP(),
-                    createServerContent.getServerPort(), createServerContent.getServerNumChunks(), createServerContent.getStorageTier());
-            if (status == HttpStatus.OK_200) {
-                int serverId = serverTableMgr.getLastInsertId();
-                requestContext.getHttpInfo().setResponseHeaders(buildSuccessHeader(serverTableMgr, serverId));
+            /*
+            ** First make sure this server does not already exist
+             */
+            String serverName = createServerContent.getServerName();
+            List<ServerIdentifier> servers = new LinkedList<>();
+            serverTableMgr.getServer(serverName, servers);
+
+            if (servers.size() == 0) {
+                int status = serverTableMgr.createServer(serverName, createServerContent.getServerIP(),
+                        createServerContent.getServerPort(), createServerContent.getServerNumChunks(), createServerContent.getStorageTier());
+                if (status == HttpStatus.OK_200) {
+                    int serverId = serverTableMgr.getLastInsertId();
+                    requestContext.getHttpInfo().setResponseHeaders(buildSuccessHeader(serverTableMgr, serverId));
+                } else {
+                    String failureMessage = "{\r\n  \"code\":" + status +
+                            "\r\n  \"message\": \"Database error creating server: " + serverName + "\"" +
+                            "\r\n}";
+                    requestContext.getHttpInfo().setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
+
+                    LOG.warn("CreateServer failed status: " + status);
+                }
             } else {
-                LOG.warn("CreateServer failed status: " + status);
+                String failureMessage = "{\r\n  \"code\":" + HttpStatus.INTERNAL_SERVER_ERROR_500 +
+                        "\r\n  \"message\": \"Server already present: " + serverName + "\"" +
+                        "\r\n}";
+                requestContext.getHttpInfo().setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
+
+                servers.clear();
             }
 
             completeCallback.complete();

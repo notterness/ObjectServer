@@ -127,19 +127,38 @@ public abstract class ServerIdentifierTableMgr extends ServersDb {
             try {
                 stmt = conn.prepareStatement(ADD_STORAGE_SERVER, Statement.RETURN_GENERATED_KEYS);
                 stmt.setString(1, serverName);
-                stmt.setInt(2, STORAGE_SERVER);
+
+                /*
+                ** There are three different types of Services
+                 */
+                if ((chunksPerStorageServer == 0) && (serverName.contains("chunk-mgr-service"))) {
+                    stmt.setInt(2, CHUNK_MGR_SERVER);
+                } else if (chunksPerStorageServer > 0) {
+                    stmt.setInt(2, STORAGE_SERVER);
+                } else {
+                    stmt.setInt(2, OBJECT_SERVER);
+                }
                 stmt.setString(3, serverIp);
                 stmt.setInt(4, port);
                 stmt.setInt(5, storageTier.toInt());
                 stmt.setInt(6, chunksPerStorageServer);
                 stmt.executeUpdate();
 
+                /*
+                ** NOTE: The call to getGeneratedKeys() needs to be made to obtain the serverId that was generated
+                **   when the ServerIdentifier table entry was made.
+                 */
                 ResultSet rs = stmt.getGeneratedKeys();
                 if (rs.next()) {
                     serverId = rs.getInt(1);
 
-                    ServerChunkMgr chunkMgr = new ServerChunkMgr(flavor);
-                    chunkMgr.addServerChunks(serverId, CHUNKS_TO_ALLOCATE, RequestContext.getChunkSize());
+                    /*
+                    ** Only "storage-server-" need to have chunks added.
+                     */
+                    if (chunksPerStorageServer > 0) {
+                        ServerChunkMgr chunkMgr = new ServerChunkMgr(flavor);
+                        chunkMgr.addServerChunks(serverId, chunksPerStorageServer, RequestContext.getChunkSize());
+                    }
                 }
                 rs.close();
             } catch (SQLException sqlEx) {

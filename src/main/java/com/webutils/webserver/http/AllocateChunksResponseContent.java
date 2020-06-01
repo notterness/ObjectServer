@@ -1,10 +1,15 @@
 package com.webutils.webserver.http;
 
+import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
+import java.util.StringTokenizer;
 
 public class AllocateChunksResponseContent extends ContentParser {
 
@@ -64,7 +69,7 @@ public class AllocateChunksResponseContent extends ContentParser {
      **   thing to validate would be the contents of the attributes to make sure garbage data is not provided.
      */
     public boolean validateContentData() {
-        boolean valid = true;
+        contentValid = true;
 
         /*
          ** First make sure that the bracketDepth is 0 to insure the brackets are properly paired after the parsing
@@ -76,7 +81,7 @@ public class AllocateChunksResponseContent extends ContentParser {
              */
             for (String attribute : requiredAttributes) {
                 if (!params.containsKey(attribute)) {
-                    valid = false;
+                    contentValid = false;
 
                     LOG.error("Missing required attribute: " + attribute);
                     break;
@@ -85,13 +90,25 @@ public class AllocateChunksResponseContent extends ContentParser {
 
         } else {
             LOG.error("Invalid bracketDepth: " + bracketDepth);
-            valid = false;
+            contentValid = false;
         }
-        if (!valid) {
+
+        for (Map.Entry<String, Map<String, String>> entry : chunkAllocations.entrySet()) {
+            Map<String, String> subCategory = entry.getValue();
+
+            for (String subAttribute: requiredSubAttributes) {
+                if (subCategory.get(subAttribute) == null) {
+                    LOG.warn("AllocateChunks missing required sub-attribute: " + subAttribute);
+                    contentValid = false;
+                }
+            }
+        }
+
+        if (!contentValid) {
             clearAllMaps();
         }
 
-        return valid;
+        return contentValid;
     }
 
     /*
@@ -115,33 +132,166 @@ public class AllocateChunksResponseContent extends ContentParser {
         }
     }
 
-    /*
-     ** Pull the "chunk-id" out and validate that it is a positive integer. This is the value that uniquely represents
-     **   the chunk in the ServiceServersDb.StorageServerChunk table.
-     */
-    public int getChunkId() {
-        String chunkNumberStr = params.get(CHUNK_ID);
-        int chunkNumber = -1;
+    public void extractAllocations(final List<ServerIdentifier> servers, final int chunkNumber) {
+        for (Map.Entry<String, Map<String, String>> entry : chunkAllocations.entrySet()) {
 
-        if (chunkNumberStr != null) {
+            Map<String, String> subCategory = entry.getValue();
+
+            String serverName = getStr(subCategory, SERVER_NAME);
+            InetAddress inetAddress = getServerIp(subCategory);
+            if (inetAddress != null) {
+                int port = getChunkServerPort(subCategory);
+                ServerIdentifier server = new ServerIdentifier(serverName, inetAddress, port, chunkNumber);
+
+                /*
+                 ** Need to add the rest of the fields
+                 */
+                server.setChunkId(getId(subCategory, CHUNK_ID));
+                server.setChunkLBA(getChunkLba(subCategory));
+                server.setChunkUID(getStr(subCategory, CHUNK_UID));
+                server.setChunkLocation(getStr(subCategory, CHUNK_LOCATION));
+                server.setServerId(getId(subCategory, STORAGE_ID));
+
+                servers.add(server);
+            }
+        }
+
+        /*
+        ** Done with the data, clear all the places it is held
+         */
+        clearAllMaps();
+    }
+
+    /*
+    ** This is used to obtain the "storage-id" and "chunk-id". This converts the String into an integer and validates
+    **   that it is a positive integer.
+    ** The "chunk-id" is the value that uniquely represents the chunk in the ServiceServersDb.StorageServerChunk table.
+     */
+    private int getId(final Map<String, String> subCategory, final String requestedId) {
+        String idStr = subCategory.get(requestedId);
+        int id = -1;
+
+        if (idStr != null) {
             try {
-                chunkNumber = Integer.parseInt(chunkNumberStr);
+                id = Integer.parseInt(idStr);
 
                 /*
                  ** Make sure it is a positive integer
                  */
-                if (chunkNumber < 0) {
-                    LOG.warn(CHUNK_ID + " must be a positive integer - " + chunkNumber);
-                    chunkNumber = -1;
+                if (id < 0) {
+                    LOG.warn(requestedId + " must be a positive integer - " + id);
+                    id = -1;
                 }
             } catch (NumberFormatException ex) {
-                LOG.warn("Chunk ID is invalid: " + chunkNumberStr);
+                LOG.warn("Chunk ID is invalid: " + idStr);
             }
         } else {
-            LOG.warn(CHUNK_ID + "attribute is missing");
+            LOG.warn(requestedId + " attribute is missing");
         }
-        return chunkNumber;
+        return id;
     }
 
+    /*
+    ** The following is used to obtain the "chunk-lba" for the allocated chunk
+     */
+    private int getChunkLba(final Map<String, String> subCategory) {
+        String lbaStr = subCategory.get(CHUNK_LBA);
+        int lba = -1;
+
+        if (lbaStr != null) {
+            try {
+                lba = Integer.parseInt(lbaStr);
+
+                /*
+                 ** Make sure it is a positive integer
+                 */
+                if (lba < 0) {
+                    LOG.warn("chunk-lba must be a positive integer - " + lba);
+                    lba = -1;
+                }
+            } catch (NumberFormatException ex) {
+                LOG.warn("chunk-lba is invalid: " + lbaStr);
+            }
+        } else {
+            LOG.warn("chunk-lba attribute is missing");
+        }
+        return lba;
+    }
+
+    /*
+     ** The following is used to obtain the "storage-server-port" for the allocated chunk
+     */
+    private int getChunkServerPort(final Map<String, String> subCategory) {
+        String portStr = subCategory.get(SERVER_PORT);
+        int port = -1;
+
+        if (portStr != null) {
+            try {
+                port = Integer.parseInt(portStr);
+
+                /*
+                 ** Make sure it is a positive integer
+                 */
+                if (port < 0) {
+                    LOG.warn("storage-server-port must be a positive integer - " + port);
+                    port = -1;
+                }
+            } catch (NumberFormatException ex) {
+                LOG.warn("storage-server-port is invalid: " + portStr);
+            }
+        } else {
+            LOG.warn("storage-server-port attribute is missing");
+        }
+        return port;
+    }
+
+    /*
+    ** The following is used to extract the following Strings from the response:
+    **   storage-server-name
+    **   chunk-uid
+    **   chunk-location
+     */
+    private String getStr(final Map<String, String> subCategory, final String requestedStr) {
+        String str = subCategory.get(requestedStr);
+
+        if (str == null) {
+            LOG.warn(requestedStr + " attribute is missing");
+        }
+        return str;
+    }
+
+    /*
+    ** The following is used to pull out the "storage-server-ip". This needs to handle the case where the hostname
+    **   string is something like:
+    **     "localhost/127.0.0.1"
+    **    This is the purpose of the StringTokenizer() used below.
+     */
+    private InetAddress getServerIp(final Map<String, String> subCategory) {
+        String str = subCategory.get(SERVER_IP);
+
+        LOG.info("serverIp: " + str);
+
+        InetAddress inetAddress = null;
+        if (str != null) {
+            String hostName;
+
+            StringTokenizer stk = new StringTokenizer(str, " /");
+            if (stk.hasMoreTokens()) {
+                hostName = stk.nextToken();
+            } else {
+                hostName = str;
+            }
+
+            try {
+                inetAddress = InetAddress.getByName(hostName);
+            } catch (UnknownHostException ex) {
+                LOG.warn("IP address results in unknown host: " + str + " ex: " + ex.getMessage());
+            }
+        } else {
+            LOG.warn(SERVER_IP + " attribute is missing");
+        }
+
+        return inetAddress;
+    }
 
 }

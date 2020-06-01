@@ -81,6 +81,8 @@ public class TestEventThread implements EventPollThread {
      **   available and add a test for this
      */
     public IoInterface allocateConnection(final Operation waitingOperation) {
+        LOG.info("TestEventThread allocateConnection()");
+
         IoInterface connection =  freeConnections.poll();
         if (connection == null) {
             waitingForConnections.add(waitingOperation);
@@ -90,6 +92,8 @@ public class TestEventThread implements EventPollThread {
     }
 
     public void releaseConnection(final IoInterface connection) {
+        LOG.info("TestEventThread releaseConnection()");
+
         freeConnections.add(connection);
 
         Operation waitingOperation = waitingForConnections.poll();

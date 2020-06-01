@@ -18,15 +18,7 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
 
     private static final Logger LOG = LoggerFactory.getLogger(StorageChunkTableMgr.class);
 
-    private final static String CREATE_CHUNK_1 = "INSERT INTO storageChunk VALUES ( NULL, ";   // offset
-    private final static String CREATE_CHUNK_2 = ", ";                                         // length
-    private final static String CREATE_CHUNK_3 = ", ";                                         // chunkIndex
-    private final static String CREATE_CHUNK_4 = ", '";                                        // storageServerName
-    private final static String CREATE_CHUNK_5 = "', '";                                       // serverIp
-    private final static String CREATE_CHUNK_6 = "', ";                                        // serverPort
-    private final static String CREATE_CHUNK_7 = ", '";                                        // storageLocation
-    private final static String CREATE_CHUCK_8 = "', 0, 0, 0, NULL, ";    // dataWritten, readFailureCount, chunkOffline, chunkMd5, ownerObject
-    private final static String CREATE_CHUNK_9 = " )";
+    private final static String CREATE_CHUNK = "INSERT INTO storageChunk VALUES ( NULL, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, NULL, ?)";   // offset
 
     private final static String CHECK_FOR_DUPLICATE_1 = "SELECT chunkId FROM storageChunk WHERE offset = ";
     private final static String CHECK_FOR_DUPLICATE_2 = " AND storageServerName = '";
@@ -67,22 +59,35 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
              */
         }
 
-        String createChunkEntry = CREATE_CHUNK_1 + server.getChunkLBA() + CREATE_CHUNK_2 + server.getLength() +
-                CREATE_CHUNK_3 + server.getChunkNumber() + CREATE_CHUNK_4 + server.getServerName() + CREATE_CHUNK_5 +
-                server.getServerIpAddress() + CREATE_CHUNK_6 + server.getServerTcpPort() + CREATE_CHUNK_7 + chunkLocation +
-                CREATE_CHUCK_8 + objectId + CREATE_CHUNK_9;
-
         Connection conn = getObjectStorageDbConn();
 
         if (conn != null) {
-            Statement stmt = null;
+            PreparedStatement stmt = null;
 
             try {
-                stmt = conn.createStatement();
-                stmt.execute(createChunkEntry);
+                stmt = conn.prepareStatement(CREATE_CHUNK, Statement.RETURN_GENERATED_KEYS );
+                stmt.setInt(1, server.getChunkLBA());
+                stmt.setInt(2, server.getLength());
+                stmt.setInt(3, server.getChunkNumber());
+                stmt.setString(4, server.getServerName());
+                stmt.setString(5, server.getServerIpAddress().toString());
+                stmt.setInt(6, server.getServerTcpPort());
+                stmt.setString(7,chunkLocation);
+                stmt.setInt(8, objectId);
+
+                stmt.executeUpdate();
+
+                ResultSet rs = stmt.getGeneratedKeys();
+                if (rs.next()) {
+                    server.setChunkId(rs.getInt(1));
+                } else {
+                    objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "\"Unable to obtain chunkId\"");
+                    status = HttpStatus.INTERNAL_SERVER_ERROR_500;
+                }
+                rs.close();
             } catch (SQLException sqlEx) {
                 LOG.error("createObjectEntry() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
-                LOG.error("Bad SQL command: " + createChunkEntry);
+                LOG.error("Bad SQL command: " + CREATE_CHUNK);
                 System.out.println("SQLException: " + sqlEx.getMessage());
 
                 objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "\"SQL Exception\"");
@@ -104,16 +109,6 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
             closeObjectStorageDbConn(conn);
         }
 
-        if (status == HttpStatus.OK_200) {
-            int chunkId = getChunkId(objectId, server);
-            if (chunkId != -1) {
-                server.setChunkId(chunkId);
-            } else {
-                objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, "\"Unable to obtain chunkId\"");
-                status = HttpStatus.INTERNAL_SERVER_ERROR_500;
-            }
-        }
-
         return status;
     }
 
@@ -132,7 +127,7 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
                 CHECK_FOR_DUPLICATE_3 + server.getServerIpAddress() + CHECK_FOR_DUPLICATE_4 + server.getServerTcpPort();
 
         int chunkId = getId(duplicateCheck);
-        if (chunkId == -1) {
+        if (chunkId != -1) {
             LOG.warn("checkForDuplicateChunk() failed offset: " + server.getChunkLBA() + " name: " + server.getServerName() +
                     " IP Addr: " + server.getServerIpAddress() + " port: " + server.getServerTcpPort());
             return true;

@@ -77,9 +77,9 @@ public class MemoryManager {
         /*
         ** Release all the memory in the unused Buffer Pool
          */
-        memoryPool.releaseBuffers(caller);
+        int inUseCount = memoryPool.releaseBuffers(caller);
 
-        if (memoryPool.getBufferCount() != unusedBufferCount) {
+        if (inUseCount != 0) {
             LOG.warn(caller + " BufferPool error COUNT: " + memoryPool.getBufferCount() +
                     " unused: " + unusedBufferCount);
 

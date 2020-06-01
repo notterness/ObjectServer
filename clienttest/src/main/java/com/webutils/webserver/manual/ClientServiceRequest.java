@@ -2,7 +2,9 @@ package com.webutils.webserver.manual;
 
 import com.webutils.webserver.common.ObjectParams;
 import com.webutils.webserver.http.AllocateChunksResponseContent;
+import com.webutils.webserver.http.ContentParser;
 import com.webutils.webserver.http.HttpResponseInfo;
+import com.webutils.webserver.http.parser.ResponseHttpParser;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.IoInterface;
@@ -20,6 +22,8 @@ public class ClientServiceRequest extends ClientInterface {
 
     private final ObjectParams requestParams;
 
+    private final ContentParser contentParser;
+
     private final NioCliClient client;
     private final EventPollThread eventThread;
     private final int eventThreadId;
@@ -27,11 +31,12 @@ public class ClientServiceRequest extends ClientInterface {
     private static final String clientName = "ObjectCLI/0.0.1";
 
     ClientServiceRequest(final NioCliClient cliClient, final MemoryManager memoryManger, final InetAddress serverIpAddr, final int serverTcpPort,
-                         final ObjectParams deleteRequestParams, AtomicInteger testCount) {
+                         final ObjectParams serviceRequestParams, final ContentParser contentParser, AtomicInteger testCount) {
 
         super(cliClient, memoryManger, serverIpAddr, serverTcpPort, testCount);
 
-        this.requestParams = deleteRequestParams;
+        this.requestParams = serviceRequestParams;
+        this.contentParser = contentParser;
 
         /*
          ** The testClient is responsible for providing the threads the Operation(s) will run on and the
@@ -52,18 +57,6 @@ public class ClientServiceRequest extends ClientInterface {
         ClientRequestContext clientContext = client.allocateContext(eventThreadId);
 
         /*
-         ** Allocate an IoInterface to use and assign it to the ClientRequestContext
-         */
-        IoInterface connection = eventThread.allocateConnection(null);
-        clientContext.initializeServer(connection, 1);
-
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException int_ex) {
-            int_ex.printStackTrace();
-        }
-
-        /*
          ** Create the ClientGetObject operation and connect in this object to provide the HTTP header
          **   generator
          */
@@ -73,9 +66,8 @@ public class ClientServiceRequest extends ClientInterface {
 
         ClientCallbackOperation callbackOp = new ClientCallbackOperation(clientContext, this, httpInfo);
 
-        AllocateChunksResponseContent responseParser = new AllocateChunksResponseContent();
         SendRequestToService cmdSend = new SendRequestToService(clientContext, memoryManager, service, requestParams,
-                responseParser, callbackOp);
+                contentParser, callbackOp);
         cmdSend.initialize();
 
         /*
