@@ -1,7 +1,6 @@
 package com.webutils.webserver.testio;
 
 import com.webutils.webserver.manual.WebServerTest;
-import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.Operation;
@@ -25,8 +24,6 @@ public class TestEventThread implements EventPollThread {
     private final LinkedList<IoInterface> freeConnections;
     private final LinkedList<Operation> waitingForConnections;
 
-    private volatile boolean threadRunning;
-
     public TestEventThread(final int threadBaseId, final WebServerTest webServerTest) {
 
         this.eventPollThreadBaseId = threadBaseId;
@@ -34,8 +31,6 @@ public class TestEventThread implements EventPollThread {
 
         this.freeConnections = new LinkedList<>();
         this.waitingForConnections = new LinkedList<>();
-
-        this.threadRunning = true;
     }
 
 
@@ -67,9 +62,6 @@ public class TestEventThread implements EventPollThread {
                     TEST_IO_GENERATORS);
         }
         freeConnections.clear();
-
-        threadRunning = false;
-
     }
 
     public int getEventPollThreadBaseId() {
