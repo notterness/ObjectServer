@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN" shutdownHook="disable" monitorInterval="30" packages="com.webutils">
+    <Appenders>
+        <RollingRandomAccessFile name="clienttest_log" fileName="logs/clienttest.log"
+                                 filePattern="logs/clienttest-%d{yyyy-MM-dd'T'HH:mm':00Z'}.%i.log.gz">
+            <PatternLayout>
+                <Pattern>%d %-5p %c{1} [%t] [%X{opc-request-id}] %replace{%m}{[\n\r]+}{} %ex{full}{separator( | )}%n</Pattern>
+            </PatternLayout>
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="10" modulate="true"/>
+                <SizeBasedTriggeringPolicy size="250 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="20">
+                <Delete basePath="logs/" followLinks="True">
+                    <IfFileName glob="clienttest-*.log.gz">
+                        <IfAny>
+                            <IfLastModified age="7d"/>
+                            <IfAccumulatedFileSize exceeds="3 GB"/>
+                        </IfAny>
+                    </IfFileName>
+                </Delete>
+            </DefaultRolloverStrategy>
+        </RollingRandomAccessFile>
+
+    </Appenders>
+    <Loggers>
+        <Root level="INFO">
+            <AppenderRef ref="clienttest_log" level="DEBUG"/>
+        </Root>
+
+    </Loggers>
+</Configuration>
