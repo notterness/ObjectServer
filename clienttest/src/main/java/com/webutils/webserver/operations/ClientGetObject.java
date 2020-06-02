@@ -27,7 +27,6 @@ import java.util.*;
  */
 public class ClientGetObject implements Operation {
 
-
     private static final Logger LOG = LoggerFactory.getLogger(ClientGetObject.class);
 
     /*
@@ -460,7 +459,6 @@ public class ClientGetObject implements Operation {
          ** remove the HttpResponseInfo association from the ServerIdentifier
          */
         objectServer.setHttpInfo(null);
-
     }
 
     public void connectionCloseDueToError() {

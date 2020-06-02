@@ -19,7 +19,7 @@ public class ClientResponseHandler implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_RESPONSE_HANDLER;
+    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_RESPONSE_HANDLER;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -146,20 +146,17 @@ public class ClientResponseHandler implements Operation {
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
         //LOG.info("ClientResponseHandler[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("ClientResponseHandler[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("ClientResponseHandler[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("ClientResponseHandler[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not on a queue");
+            LOG.warn("ClientResponseHandler[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("ClientResponseHandler[" + requestContext.getRequestId() + "] markAddToQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("ClientResponseHandler[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }

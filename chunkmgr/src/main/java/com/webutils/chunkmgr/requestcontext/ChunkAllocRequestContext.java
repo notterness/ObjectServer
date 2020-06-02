@@ -41,11 +41,6 @@ public class ChunkAllocRequestContext extends RequestContext {
     private ChunkMgrSendFinalStatus sendFinalStatus;
 
     /*
-     ** This is the unique ID to identify an object table entry in the database (ObjectStorageDb, object table)
-     */
-    private int objectId;
-
-    /*
      ** The following Map is used to keep track of when the HTTP Request is sent to the
      **   Storage Server from the Web Server and it is used by the test code to know that
      **   the HTTP Request has been sent by the client to the Web Server.
@@ -82,8 +77,6 @@ public class ChunkAllocRequestContext extends RequestContext {
          ** Setup the map for the HTTP Request Sent
          */
         this.httpRequestSent = new HashMap<>();
-
-        this.objectId = -1;
     }
 
     /*
@@ -108,8 +101,6 @@ public class ChunkAllocRequestContext extends RequestContext {
          */
         storageServerResponse.clear();
         httpRequestSent.clear();
-
-        objectId = -1;
     }
 
     /*
@@ -367,9 +358,5 @@ public class ChunkAllocRequestContext extends RequestContext {
     public BufferManager getStorageServerWriteBufferManager() {
         return storageServerWriteBufferManager;
     }
-
-    public void setObjectId(final int id) { objectId = id;}
-
-    public int getObjectId() { return objectId; }
 
 }

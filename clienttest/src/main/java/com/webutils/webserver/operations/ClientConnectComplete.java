@@ -6,7 +6,6 @@ import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Iterator;
 import java.util.List;
 
 public class ClientConnectComplete implements Operation {
@@ -15,7 +14,7 @@ public class ClientConnectComplete implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_CONNECT_COMPLETE;
+    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_CONNECT_COMPLETE;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -25,7 +24,7 @@ public class ClientConnectComplete implements Operation {
     /*
      ** The following is the operation to run (if any) when the ConnectComplete is executed.
      */
-    private List<Operation> operationsToRun;
+    private final List<Operation> operationsToRun;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -87,9 +86,8 @@ public class ClientConnectComplete implements Operation {
         ** event() all of the operations that are ready to run once the connect() has
         **   succeeded.
          */
-        Iterator<Operation> iter = operationsToRun.iterator();
-        while (iter.hasNext()) {
-            iter.next().event();
+        for (Operation operation : operationsToRun) {
+            operation.event();
         }
         operationsToRun.clear();
     }
@@ -121,20 +119,17 @@ public class ClientConnectComplete implements Operation {
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
         //LOG.info("ClientConnectComplete[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("ClientConnectComplete[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("ClientConnectComplete[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("ClientConnectComplete[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not on a queue");
+            LOG.warn("ClientConnectComplete[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("ClientConnectComplete[" + requestContext.getRequestId() + "] markAddToQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("ClientConnectComplete[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }

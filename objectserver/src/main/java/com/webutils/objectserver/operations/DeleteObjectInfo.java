@@ -27,7 +27,7 @@ public class DeleteObjectInfo implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.RETRIEVE_OBJECT_INFO;
+    private final OperationTypeEnum operationType = OperationTypeEnum.RETRIEVE_OBJECT_INFO;
 
     private final ObjectServerRequestContext requestContext;
 

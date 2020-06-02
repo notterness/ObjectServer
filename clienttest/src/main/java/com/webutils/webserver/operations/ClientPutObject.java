@@ -19,6 +19,7 @@ import java.util.*;
  ** This implements the logic to send the PutObject command to the Object Server. It provides the back end for the
  **   CLI command.
  */
+@SuppressWarnings("SpellCheckingInspection")
 public class ClientPutObject implements Operation {
 
     private static final Logger LOG = LoggerFactory.getLogger(ClientPutObject.class);
@@ -60,7 +61,6 @@ public class ClientPutObject implements Operation {
         WAITING_FOR_RESPONSE_HEADER,
         READ_RESPONSE_DATA,
         CONTENT_PROCESSED,
-        DELETE_FILE,
         CALLBACK_OPS,
         EMPTY_STATE
     }

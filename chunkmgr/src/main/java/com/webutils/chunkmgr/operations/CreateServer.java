@@ -22,7 +22,7 @@ public class CreateServer implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CREATE_SERVER;
+    private final OperationTypeEnum operationType = OperationTypeEnum.CREATE_SERVER;
 
     /*
     ** The following are used to build the response header

@@ -17,7 +17,7 @@ public class ComputeSha256Digest implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.COMPUTE_SHA256_DIGEST;
+    private final OperationTypeEnum operationType = OperationTypeEnum.COMPUTE_SHA256_DIGEST;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.

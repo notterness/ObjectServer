@@ -9,7 +9,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /*
-** This thread pool is used for pipelines that have operations that access off box resources and
+** This thread pool is used for methods that have operations that access off box resources and
 **   potentially would block the primary worker thread that is handling a connection.
  */
 public class BlockingThreadPool {

@@ -25,7 +25,7 @@ public class StorageChunkAllocated implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.STORAGE_CHUNK_ALLOCATED;
+    private final OperationTypeEnum operationType = OperationTypeEnum.STORAGE_CHUNK_ALLOCATED;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.

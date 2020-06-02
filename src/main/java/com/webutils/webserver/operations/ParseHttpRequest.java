@@ -29,7 +29,7 @@ public class ParseHttpRequest implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.PARSE_HTTP_BUFFER;
+    private final OperationTypeEnum operationType = OperationTypeEnum.PARSE_HTTP_BUFFER;
 
     /*
      ** There is an ByteBufferHttpParser per Connection since each parser keeps its own state.

@@ -105,6 +105,14 @@ abstract public class HttpInfo {
     protected String parseFailureReason;
 
     /*
+    ** The following are metrics that need to be emitted.
+    **
+    ** TODO: Implement the output of metrics and the handling of multiple metrics for method handlers.
+     */
+    private int metricCode;
+    private String metricMessage;
+
+    /*
      ** The httpHost and httpPort can be used to validate the connection and to limit traffic
      */
     private String httpHost;
@@ -397,6 +405,15 @@ abstract public class HttpInfo {
 
     public String getParseFailureReason() { return parseFailureReason; }
 
+    /*
+    ** The following is used to handle metrics for this method handler.
+    **
+    ** TODO: Implement the actual code to send this metric to a local handler
+     */
+    public void emitMetric(final int code, final String message) {
+        metricCode = code;
+        metricMessage = message;
+    }
 
     /*
     ** The following are used to pull specific fields from the parsed URI (PathParams)

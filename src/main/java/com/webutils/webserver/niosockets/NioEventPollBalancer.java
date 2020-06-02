@@ -37,7 +37,7 @@ public class NioEventPollBalancer {
     private final AtomicInteger uniqueRequestId;
 
 
-    private NioEventPollThread[] eventPollThreadPool;
+    private final NioEventPollThread[] eventPollThreadPool;
 
     private final RequestContextPool requestContextPool;
 

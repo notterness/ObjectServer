@@ -17,7 +17,7 @@ public class SetupObjectPut implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_OBJECT_PUT;
+    private final OperationTypeEnum operationType = OperationTypeEnum.SETUP_OBJECT_PUT;
 
     private final ObjectServerRequestContext requestContext;
 
@@ -104,7 +104,7 @@ public class SetupObjectPut implements Operation {
             **   the information about the object to be saved. It provides the gate where the wait for the Md5 digest
             **   calculation and waiting for all the data to be written to the Storage Servers takes place.
              */
-            ObjectPut_P2 objectPutHandler = new ObjectPut_P2(requestContext, memoryManager, metering, this);
+            ObjectPut_P2 objectPutHandler = new ObjectPut_P2(requestContext, memoryManager, this);
             objectPutHandler.initialize();
 
             /*

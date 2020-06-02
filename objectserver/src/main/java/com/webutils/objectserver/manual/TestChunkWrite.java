@@ -28,7 +28,7 @@ public class TestChunkWrite {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.TEST_CHUNK_WRITE;
+    private final OperationTypeEnum operationType = OperationTypeEnum.TEST_CHUNK_WRITE;
 
     private static final WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
 

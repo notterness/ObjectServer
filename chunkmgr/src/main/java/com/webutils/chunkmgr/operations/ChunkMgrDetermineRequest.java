@@ -19,7 +19,7 @@ public class ChunkMgrDetermineRequest implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CHUNK_MGR_DETERMINE_REQUEST;
+    private final OperationTypeEnum operationType = OperationTypeEnum.CHUNK_MGR_DETERMINE_REQUEST;
 
     private final RequestContext requestContext;
 

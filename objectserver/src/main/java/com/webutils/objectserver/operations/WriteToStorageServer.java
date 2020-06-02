@@ -18,11 +18,8 @@ public class WriteToStorageServer implements Operation {
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
-     **
-     ** TODO: This is going to need to be something more elaborate since there will be multiple
-     **   writes to Storage Servers going on at the same time.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.WRITE_TO_STORAGE_SERVER;
+    private final OperationTypeEnum operationType = OperationTypeEnum.WRITE_TO_STORAGE_SERVER;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.

@@ -20,7 +20,7 @@ public class SetupListServersGet implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_LIST_SERVERS_GET;
+    private final OperationTypeEnum operationType = OperationTypeEnum.SETUP_LIST_SERVERS_GET;
 
     private final ChunkAllocRequestContext requestContext;
 

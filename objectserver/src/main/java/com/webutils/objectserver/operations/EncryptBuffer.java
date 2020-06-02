@@ -21,7 +21,7 @@ public class EncryptBuffer implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.ENCRYPT_BUFFER;
+    private final OperationTypeEnum operationType = OperationTypeEnum.ENCRYPT_BUFFER;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.

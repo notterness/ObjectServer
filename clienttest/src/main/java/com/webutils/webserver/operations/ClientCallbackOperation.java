@@ -1,14 +1,11 @@
 package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.http.ContentParser;
 import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.manual.ClientInterface;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.net.http.HttpResponse;
 
 public class ClientCallbackOperation implements Operation {
 

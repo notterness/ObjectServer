@@ -22,7 +22,7 @@ public class SetupAllocateChunksGet implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_ALLOCATE_CHUNKS_GET;
+    private final OperationTypeEnum operationType = OperationTypeEnum.SETUP_ALLOCATE_CHUNKS_GET;
 
     private final ChunkAllocRequestContext requestContext;
 

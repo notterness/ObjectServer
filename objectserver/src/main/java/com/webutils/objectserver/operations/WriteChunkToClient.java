@@ -5,7 +5,6 @@ import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
-import com.webutils.webserver.operations.WriteToClient;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,7 +16,7 @@ public class WriteChunkToClient implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.WRITE_CHUNK_TO_CLIENT;
+    private final OperationTypeEnum operationType = OperationTypeEnum.WRITE_CHUNK_TO_CLIENT;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -154,20 +153,17 @@ public class WriteChunkToClient implements Operation {
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
         //LOG.info("WriteChunkToClient[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("WriteChunkToClient[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("WriteChunkToClient[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("WriteChunkToClient[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not on a queue");
+            LOG.warn("WriteChunkToClient[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("WriteChunkToClient[" + requestContext.getRequestId() + "] markAddToQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("WriteChunkToClient[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -182,8 +178,7 @@ public class WriteChunkToClient implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("WriteToClient[" + requestContext.getRequestId() +
-                "] hasWaitTimeElapsed() not supposed to be on delayed queue");
+        LOG.warn("WriteToClient[" + requestContext.getRequestId() + "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
 

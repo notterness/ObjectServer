@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 **   (i.e. something around 4). In addition, these threads perform work for multiple
 **   connections. Currently, the ComputeThread(s) are used for:
 **      - Md5 Digest
+**      - Sha256 Digest
 **      - Encryption
  */
 class ComputeThread implements Runnable {

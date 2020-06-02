@@ -19,7 +19,7 @@ public class SetupStorageServerPut implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_STORAGE_SERVER_PUT;
+    private final OperationTypeEnum operationType = OperationTypeEnum.SETUP_STORAGE_SERVER_PUT;
 
     /*
     ** The following are the Error Types that this Mock Storage Server can inject into the

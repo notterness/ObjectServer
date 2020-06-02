@@ -20,7 +20,7 @@ public class SetupClientConnection implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.SETUP_CLIENT_CONNECTION;
+    private final OperationTypeEnum operationType = OperationTypeEnum.SETUP_CLIENT_CONNECTION;
 
     private final int WRITE_BUFFERS_TO_ALLOCATE = 10;
 

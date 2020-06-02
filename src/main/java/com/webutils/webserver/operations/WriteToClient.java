@@ -16,7 +16,7 @@ public class WriteToClient implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.WRITE_TO_CLIENT;
+    private final OperationTypeEnum operationType = OperationTypeEnum.WRITE_TO_CLIENT;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.

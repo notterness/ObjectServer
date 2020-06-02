@@ -17,7 +17,7 @@ public class ChunkMetering implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CHUNK_METER_BUFFERS;
+    private final OperationTypeEnum operationType = OperationTypeEnum.CHUNK_METER_BUFFERS;
 
     private final RequestContext requestContext;
 

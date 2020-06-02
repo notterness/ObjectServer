@@ -1,7 +1,6 @@
 package com.webutils.objectserver.operations;
 
 import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
-import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.common.Md5ResultHandler;
 import com.webutils.webserver.memory.MemoryManager;
@@ -14,7 +13,6 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.ByteBuffer;
 import java.util.*;
 
 public class ObjectPut_P2 implements Operation {
@@ -24,13 +22,11 @@ public class ObjectPut_P2 implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.OBJECT_PUT_P2;
+    private final OperationTypeEnum operationType = OperationTypeEnum.OBJECT_PUT_P2;
 
     private final ObjectServerRequestContext requestContext;
 
     private final MemoryManager memoryManager;
-
-    private final Operation metering;
 
     private final Operation completeCallback;
 
@@ -60,12 +56,11 @@ public class ObjectPut_P2 implements Operation {
      **   Currently, the V2 PUT is marked complete when all the V2 PUT object data is written to the Storage Servers
      **   and the Md5 Digest is computed and the comparison against the expected result done.
      */
-    public ObjectPut_P2(final ObjectServerRequestContext requestContext, final MemoryManager memoryManager, final Operation metering,
+    public ObjectPut_P2(final ObjectServerRequestContext requestContext, final MemoryManager memoryManager,
                       final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
-        this.metering = metering;
         this.completeCallback = completeCb;
 
         this.updater = requestContext.getMd5ResultHandler();
@@ -134,7 +129,7 @@ public class ObjectPut_P2 implements Operation {
             setupMethodDone = true;
         } else {
             /*
-             ** Do nothing. The problem is this has a dependency upon the clientReadPtr
+             ** Do nothing.
              */
         }
     }

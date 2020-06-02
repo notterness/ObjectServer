@@ -14,7 +14,7 @@ public class ReadBuffer implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.READ_BUFFER;
+    private final OperationTypeEnum operationType = OperationTypeEnum.READ_BUFFER;
 
 
     private final RequestContext requestContext;

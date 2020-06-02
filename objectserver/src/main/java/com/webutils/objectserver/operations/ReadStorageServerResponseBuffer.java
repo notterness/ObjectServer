@@ -15,7 +15,7 @@ public class ReadStorageServerResponseBuffer implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.READ_STORAGE_SERVER_RESPONSE_BUFFER;
+    private final OperationTypeEnum operationType = OperationTypeEnum.READ_STORAGE_SERVER_RESPONSE_BUFFER;
 
 
     private final RequestContext requestContext;

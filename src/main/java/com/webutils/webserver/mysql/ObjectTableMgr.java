@@ -118,6 +118,9 @@ public class ObjectTableMgr extends ObjectStorageDb {
             if (md5DigestBytes.length != 16) {
                 LOG.warn("The value of the digest '" + contentMd5 + "' incorrect length after base-64 decoding");
 
+                /*
+                ** This should be an event
+                 */
                 String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
                         "\r\n  \"message\": \"Incorrect Md5 Digest afdter base-64 decoding\"" +
                         "\r\n  \"Content-MD5\": \"" + contentMd5 + "\"" +

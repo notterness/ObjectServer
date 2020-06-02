@@ -17,7 +17,7 @@ public class ClientHttpRequestWrite implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_WRITE_HTTP_HEADER;
+    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_WRITE_HTTP_HEADER;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.

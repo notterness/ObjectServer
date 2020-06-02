@@ -20,7 +20,6 @@ public class ObjectServerContextPool extends RequestContextPool {
     private final ServerIdentifierTableMgr serverTableMgr;
 
     private final ChunkMemoryPool chunkMemPool;
-    private boolean chunkMemoryReleased;
 
     public ObjectServerContextPool(final WebServerFlavor flavor, final MemoryManager memoryManager,
                                    final ServerIdentifierTableMgr serverTableMgr) {
@@ -28,7 +27,6 @@ public class ObjectServerContextPool extends RequestContextPool {
         this.serverTableMgr = serverTableMgr;
 
         this.chunkMemPool = new ChunkMemoryPool(memoryManager, RequestContext.getChunkBufferCount());
-        chunkMemoryReleased = false;
     }
 
     /*

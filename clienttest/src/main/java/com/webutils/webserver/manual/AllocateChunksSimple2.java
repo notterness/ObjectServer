@@ -10,7 +10,6 @@ import com.webutils.webserver.niosockets.NioCliClient;
 import com.webutils.webserver.requestcontext.ClientContextPool;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
-import org.apache.logging.log4j.core.jmx.Server;
 
 import java.net.InetAddress;
 import java.util.LinkedList;
@@ -18,7 +17,6 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class AllocateChunksSimple2 {
-
 
     static WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
 

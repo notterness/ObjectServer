@@ -18,7 +18,7 @@ public class ParseContentBuffers implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.PARSE_CONTENT;
+    private final OperationTypeEnum operationType = OperationTypeEnum.PARSE_CONTENT;
 
     private final RequestContext requestContext;
 

@@ -1,16 +1,12 @@
 package com.webutils.webserver.manual;
 
 import com.webutils.webserver.common.ObjectParams;
-import com.webutils.webserver.http.AllocateChunksResponseContent;
 import com.webutils.webserver.http.ContentParser;
 import com.webutils.webserver.http.HttpResponseInfo;
-import com.webutils.webserver.http.parser.ResponseHttpParser;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.EventPollThread;
-import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.niosockets.NioCliClient;
 import com.webutils.webserver.operations.ClientCallbackOperation;
-import com.webutils.webserver.operations.ClientCommandSend;
 import com.webutils.webserver.operations.SendRequestToService;
 import com.webutils.webserver.requestcontext.ClientRequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
@@ -25,7 +21,6 @@ public class ClientServiceRequest extends ClientInterface {
     private final ContentParser contentParser;
 
     private final NioCliClient client;
-    private final EventPollThread eventThread;
     private final int eventThreadId;
 
     private static final String clientName = "ObjectCLI/0.0.1";
@@ -43,8 +38,8 @@ public class ClientServiceRequest extends ClientInterface {
          **   NIO Socket handling.
          */
         this.client = cliClient;
-        this.eventThread = cliClient.getEventThread();
-        this.eventThreadId = this.eventThread.getEventPollThreadBaseId();
+        EventPollThread eventThread = cliClient.getEventThread();
+        this.eventThreadId = eventThread.getEventPollThreadBaseId();
     }
 
     /*
@@ -82,6 +77,7 @@ public class ClientServiceRequest extends ClientInterface {
             /*
              ** Delete the file and send out an error
              */
+            System.out.println("waitForRequestComplete() timed out");
         }
 
         /*

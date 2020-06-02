@@ -18,7 +18,7 @@ public class BufferObjectGetMetering implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.BUFFER_OBJECT_GET_METERING;
+    private final OperationTypeEnum operationType = OperationTypeEnum.BUFFER_OBJECT_GET_METERING;
 
     private final RequestContext requestContext;
 

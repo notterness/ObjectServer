@@ -1,7 +1,6 @@
 package com.webutils.webserver.threadpools;
 
 import com.webutils.webserver.operations.Operation;
-import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -9,7 +8,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 /*
-** These are threads used to run Pipelines that are accessing off box resources that would block the
+** These are threads used to run Operations that are accessing off box resources that would block the
 **   ServerWorkerThreads.
  */
 class BlockingWorkerThread implements Runnable {
@@ -22,7 +21,6 @@ class BlockingWorkerThread implements Runnable {
     private Thread blockingThread;
 
     private final BlockingQueue<Operation> blockingWorkQ;
-
 
     BlockingWorkerThread(final BlockingQueue<Operation> workQueue, final int blockingThreadId) {
 

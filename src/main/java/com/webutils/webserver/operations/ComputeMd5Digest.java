@@ -55,7 +55,14 @@ public class ComputeMd5Digest implements Operation {
      */
     private boolean onExecutionQueue;
 
-
+    /*
+    ** The simple constructor assumes that the BufferManager being used to compute the Md5 Digest is the incoming
+    **   read buffer manager (the one that is created in the RequestContext). This constructor is used by:
+    **      SetupStorageServerPut - This is used by the Storage Server to write chunks. It computes the Md5 on the
+    **        chunk of data that is to be written.
+    **      ObjectPut_P2 - The is part of the ObjectPut handler and is used to compute the Md5 checksum on the object
+    **        data that is passed in by the client.
+     */
     public ComputeMd5Digest(final RequestContext requestContext, final List<Operation> operationsToRun,
                             final BufferManagerPointer readBufferPtr, final Md5ResultHandler updater,
                             final int bytesToDigest) {
@@ -63,6 +70,17 @@ public class ComputeMd5Digest implements Operation {
         this(requestContext, operationsToRun, readBufferPtr, requestContext.getClientReadBufferManager(), updater, bytesToDigest);
     }
 
+    /*
+    ** This constructor is used when the user wants to specify the BufferManager to use for buffers to compute the Md5
+    **   digest on. This constructor is used by:
+    **     SetupChunkRead - This is how the Object Server reads in chunks of data from the Storage Server. It computes
+    **       the Md5 checksum on the data as it comes in and then compares it to the Md5 for the chunk that is saved in
+    **       the objectStorageDb.storageChunk database table for the chunk being read in.
+    **     WriteObjectChunk - This is what computes the Md5 digest on chunks as they are being sent to the Storage
+    **       Servers.
+    **     ClientGetObject - This computes the Md5 digest on the collection of chunks that make up a full object
+    **       prior to them being sent to the client. This is part of the GetObject method handler.
+     */
     public ComputeMd5Digest(final RequestContext requestContext, final List<Operation> operationsToRun,
                             final BufferManagerPointer readBufferPtr, final BufferManager readBufferMgr,
                             final Md5ResultHandler updater, final int bytesToDigest) {

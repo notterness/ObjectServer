@@ -15,7 +15,7 @@ public class HandleClientError implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.HANDLE_CLIENT_ERROR;
+    private final OperationTypeEnum operationType = OperationTypeEnum.HANDLE_CLIENT_ERROR;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -96,19 +96,19 @@ public class HandleClientError implements Operation {
         //LOG.info("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (onDelayedQueue) {
             if (!delayedExecutionQueue) {
-                LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on delayed queue");
+                LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
             }
 
             onDelayedQueue = false;
             nextExecuteTime = 0;
         } else if (onExecutionQueue){
             if (delayedExecutionQueue) {
-                LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not supposed to be on workQueue");
+                LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on workQueue");
             }
 
             onExecutionQueue = false;
         } else {
-            LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ") not on a queue");
+            LOG.warn("requestId[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 

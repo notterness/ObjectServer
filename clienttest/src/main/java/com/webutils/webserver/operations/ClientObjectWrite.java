@@ -17,7 +17,7 @@ public class ClientObjectWrite implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_OBJECT_WRITE;
+    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_OBJECT_WRITE;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -83,7 +83,7 @@ public class ClientObjectWrite implements Operation {
         /*
          ** Add this to the execute queue if the HTTP Request has been sent.
          */
-        if (requestContext.hasHttpRequestBeenSent(serverIdentifier) == true) {
+        if (requestContext.hasHttpRequestBeenSent(serverIdentifier)) {
             requestContext.addToWorkQueue(this);
         }
     }
@@ -137,20 +137,17 @@ public class ClientObjectWrite implements Operation {
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
         //LOG.info("ClientObjectWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("ClientObjectWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("ClientObjectWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("ClientObjectWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(" +
-                    delayedExecutionQueue + ") not on a queue");
+            LOG.warn("ClientObjectWrite[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("ClientObjectWrite[" + requestContext.getRequestId() + "] markAddToQueue(" +
-                    delayedExecutionQueue + ") not supposed to be on delayed queue");
+            LOG.warn("ClientObjectWrite[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }

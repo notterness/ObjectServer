@@ -20,7 +20,7 @@ public class CreateBucket implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CREATE_BUCKET;
+    private final OperationTypeEnum operationType = OperationTypeEnum.CREATE_BUCKET;
 
     private final RequestContext requestContext;
 

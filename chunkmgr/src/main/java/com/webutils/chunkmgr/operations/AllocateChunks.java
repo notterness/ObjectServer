@@ -2,7 +2,6 @@ package com.webutils.chunkmgr.operations;
 
 import com.webutils.chunkmgr.http.AllocateChunksGetContent;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.chunkmgr.http.CreateServerPostContent;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.http.StorageTierEnum;
 import com.webutils.webserver.mysql.ServerChunkMgr;
@@ -17,7 +16,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.LinkedList;
 import java.util.List;
-import java.util.ListIterator;
 
 public class AllocateChunks implements Operation {
 
@@ -26,7 +24,7 @@ public class AllocateChunks implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.ALLOCATE_CHUNKS;
+    private final OperationTypeEnum operationType = OperationTypeEnum.ALLOCATE_CHUNKS;
 
     /*
      ** The following are used to build the response header
@@ -110,6 +108,8 @@ public class AllocateChunks implements Operation {
             } else {
                 LOG.warn("AllocateChunks failed status: " + status);
             }
+
+            chunksAllocated = true;
 
             completeCallback.complete();
         }

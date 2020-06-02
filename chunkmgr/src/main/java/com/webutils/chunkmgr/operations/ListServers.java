@@ -30,7 +30,7 @@ public class ListServers implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.LIST_SERVERS;
+    private final OperationTypeEnum operationType = OperationTypeEnum.LIST_SERVERS;
 
     /*
      ** The following are used to build the response header

@@ -38,14 +38,14 @@ public class BufferManagerPointer {
     /*
     ** Buffer index is either the readIndex for consumers or the writeIndex for producers.
      */
-    private AtomicInteger bufferIndex;
+    private final AtomicInteger bufferIndex;
 
     /*
     ** The computeNextIndex is used in the computing of the bufferIndex and handling the wrap condition
     **   in the ring buffer. This is used in the AtomicInteger.accumulateAndGet() and
     **   AtomicInteger.getAndAccumulate() methods.
      */
-    private IntBinaryOperator computeNextIndex = (curr, maxSize) -> (((curr + 1) == maxSize) ? 0 : (curr + 1));
+    private final IntBinaryOperator computeNextIndex = (curr, maxSize) -> (((curr + 1) == maxSize) ? 0 : (curr + 1));
 
     private int bookmark;
 

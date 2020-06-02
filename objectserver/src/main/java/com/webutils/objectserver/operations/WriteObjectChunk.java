@@ -30,7 +30,7 @@ public class WriteObjectChunk implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.WRITE_OBJECT_CHUNK;
+    private final OperationTypeEnum operationType = OperationTypeEnum.WRITE_OBJECT_CHUNK;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -252,7 +252,9 @@ public class WriteObjectChunk implements Operation {
                     HttpRequestInfo objectCreateInfo = requestContext.getHttpInfo();
 
                     LOG.warn("Unable to obtain allocate any chunks on Storage Servers");
-                    String failureMessage = "\"Unable to allocate any chunks on Storage Servers\"";
+                    String failureMessage = "{\r\n  \"code\":" + HttpStatus.INTERNAL_SERVER_ERROR_500 +
+                            "\r\n  \"message\": \"Unable to allocate any chunks on Storage Servers\"" +
+                            "\r\n}";
                     objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
 
                     currState = ExecutionState.WRITE_STORAGE_CHUNK_CALLBACK;
@@ -339,7 +341,11 @@ public class WriteObjectChunk implements Operation {
                                 LOG.error("ChunkWriteComplete bad Md5 addr: " + server.getServerIpAddress().toString() +
                                         " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
                                         " result: UNPROCESSABLE_ENTITY_422");
-                                result = HttpStatus.UNPROCESSABLE_ENTITY_422;
+                                String message = "{\r\n  \"code\":" + HttpStatus.UNPROCESSABLE_ENTITY_422 +
+                                        "\r\n  \"message\": \"ChunkWriteComplete bad Md5 addr: " + server.getServerIpAddress().toString() +
+                                        " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber + "\"" +
+                                        "\r\n}";
+                                objectCreateInfo.emitMetric(HttpStatus.UNPROCESSABLE_ENTITY_422, message);
 
                                 chunkMgr.deleteChunk(server.getChunkId());
                             } else {
@@ -353,14 +359,18 @@ public class WriteObjectChunk implements Operation {
                                             " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
                                             " result: OK_200 " + chunkRedundancy);
 
-                                    chunkMgr.getChunkMd5Digest(server.getChunkId());
                                     chunkRedundancy++;
                                 } else {
                                     LOG.error("ChunkWriteComplete unable to update dataWritten addr: " + server.getServerIpAddress().toString() +
                                             " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
                                             " result: UNPROCESSABLE_ENTITY_422");
 
-                                    result = HttpStatus.UNPROCESSABLE_ENTITY_422;
+                                    String message = "{\r\n  \"code\":" + HttpStatus.UNPROCESSABLE_ENTITY_422 +
+                                            "\r\n  \"message\": \"ChunkWriteComplete unable to update dataWritten addr: " +
+                                            server.getServerIpAddress().toString() + " port: " + server.getServerTcpPort() +
+                                            " chunkNumber: " + chunkNumber + "\"" +
+                                            "\r\n}";
+                                    objectCreateInfo.emitMetric(HttpStatus.UNPROCESSABLE_ENTITY_422, message);
                                     chunkMgr.deleteChunk(server.getChunkId());
                                 }
                             }
@@ -371,6 +381,12 @@ public class WriteObjectChunk implements Operation {
                             LOG.error("ChunkWriteComplete unable to update dataWritten addr: " + server.getServerIpAddress().toString() +
                                     " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber +
                                     " result: " + result);
+
+                            String message = "{\r\n  \"code\":" + HttpStatus.INTERNAL_SERVER_ERROR_500 +
+                                    "\r\n  \"message\": \"ChunkWrite failed addr: " + server.getServerIpAddress().toString() +
+                                    " port: " + server.getServerTcpPort() + " chunkNumber: " + chunkNumber + "\"" +
+                                    "\r\n}";
+                            objectCreateInfo.emitMetric(HttpStatus.INTERNAL_SERVER_ERROR_500, message);
 
                             chunkMgr.deleteChunk(server.getChunkId());
                         }

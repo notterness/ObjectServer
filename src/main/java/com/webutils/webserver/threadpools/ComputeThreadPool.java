@@ -16,7 +16,7 @@ public class ComputeThreadPool {
 
     private static final Logger LOG = LoggerFactory.getLogger(ComputeThreadPool.class);
 
-    // TODO: Fix the based upon the number of connections
+    // TODO: Fix this so it is based upon the number of connections
     private final static int COMPUTE_MAX_QUEUE_SIZE = 2;
 
     private final static int MAX_EXEC_WORK_LOOP_COUNT = 1;
@@ -75,8 +75,7 @@ public class ComputeThreadPool {
                  ** Only log if it is not on the work queue already
                  */
                 LOG.info("requestId[] addComputeWorkToThread() operation(" +
-                        computeOperation.getOperationType() + ") onExecutionQueue: " +
-                        isOnWorkQueue);
+                        computeOperation.getOperationType() + ") added to workQueue");
 
                 if (!workQueue.offer(computeOperation)) {
                     LOG.error("requestId[] addComputeWorkToThread() unable to add");

@@ -19,7 +19,7 @@ public class CreateObject implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    public final OperationTypeEnum operationType = OperationTypeEnum.CREATE_OBJECT;
+    private final OperationTypeEnum operationType = OperationTypeEnum.CREATE_OBJECT;
 
     private final ObjectServerRequestContext requestContext;
 

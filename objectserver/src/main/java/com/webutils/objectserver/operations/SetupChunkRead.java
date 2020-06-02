@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.*;
 
+@SuppressWarnings("SpellCheckingInspection")
 public class SetupChunkRead implements Operation {
 
     private static final Logger LOG = LoggerFactory.getLogger(SetupChunkRead.class);
@@ -42,7 +43,7 @@ public class SetupChunkRead implements Operation {
     private final RequestContext requestContext;
 
     /*
-     ** The StorageServerIdentifer is this chunk write's unique identifier. It is determined through the VON
+     ** The StorageServerIdentifier is this chunk write's unique identifier. It is determined through the VON
      **   checker. It identifies the chunk and the Storage Server through the  IP address, Port number and
      **   the chunk number.
      */
@@ -419,16 +420,16 @@ public class SetupChunkRead implements Operation {
                             requestContext.getHttpInfo());
 
                     /*
+                     ** There was an error reading in this chunk so mark a chunk read error and then exit this operation
+                     */
+                    chunkTableMgr.incrementChunkReadFailure(storageServer.getChunkId());
+
+                    /*
                     ** Special case when the Md5 digest from the chunk read up doesn't match what was expected, mark
                     **   that chunk offline.
                      */
                     if (status == HttpStatus.UNPROCESSABLE_ENTITY_422) {
-                        chunkTableMgr.incrementChunkReadFailure(storageServer.getChunkId());
-                    } else {
-                        /*
-                         ** There was an error reading in this chunk so mark a chunk read error and then exit this operation
-                         */
-                        chunkTableMgr.incrementChunkReadFailure(storageServer.getChunkId());
+                        chunkTableMgr.setChunkOffline(storageServer.getChunkId());
                     }
                 }
 

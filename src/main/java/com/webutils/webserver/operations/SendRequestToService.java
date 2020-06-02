@@ -15,6 +15,23 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
+/*
+** This is the entry operation to send a request to a remote service. The critical pieces of information needed to send
+**   and process the request are:
+**
+**   ServiceIdentifier - This provides the IP address and TCP Port for the remote service the request is being sent to.
+**     This has an HttpResponseInfo class that is used to parse and hold the response header(s) that are returned by
+**     the remote service.
+**   ObjectParams - This is the information needed to build the request to send to the remote service. The ObjectParams
+**     provides a method to build the actual HTTP request to the remote service.
+**   ContentParser - This is the parser to handle the response data from the remote service. This will hold all the
+**     information extracted from the returned content. It provides a method to convert the content data into a Java
+**     class that can be used in other places.
+**
+** NOTE: The operation that uses the SendRequestToService class must call the SendRequestToService.complete() method
+**   when it has extracted all of the needed information. In general, the information extracted is all contained in the
+**   HttpResponseInfo class (associated with the ServiceIdentifier) and the ContentParser.
+ */
 public class SendRequestToService implements Operation {
 
     private static final Logger LOG = LoggerFactory.getLogger(SendRequestToService.class);
@@ -163,7 +180,21 @@ public class SendRequestToService implements Operation {
     }
 
     /*
-     **
+    ** The execute() method consists of a state machine to perform the following:
+    **
+    **   SETUP_COMMAND_SEND_OPS - This sets up the operations needed to send the request to the remote service and the
+    **     operations needed to read back in the response headers and content. Once the operations are all setup it
+    **     attempts to make the connection to the remote service.
+    **   WAITING_FOR_CONN_COMP - This is the waiting state for the request to be sent to the remote service.
+    **   SEND_CONTENT_DATA - This cleans up some of the operations that were used to send the request to the remote
+    **     service. It is a placeholder for sending content data, but currently that is not supported.
+    **   WAITING_FOR_RESPONSE_HEADER - This is where the state machine waits for the response header(s) from the
+    **     remote service. When this state completes, all of the response header(s) will have been read in and added
+    **     to the HTTP information structure and the next step is to read in the content data (if the "Content-Length"
+    **     is not set to 0).
+    **   READ_RESPONSE_DATA - Read the content data and parse it.
+    **   CONTENT_PROCESSED - All the data from the remote service has been read in and this request is completed.
+    **   CALLBACK_OPS - Callback the initiating operation.
      */
     public void execute() {
         switch (currState) {
@@ -280,7 +311,7 @@ public class SendRequestToService implements Operation {
                 requestParams.outputResults(httpInfo);
 
                 /*
-                 ** Now call back the ReadObjectChunks Operation that will handle the collection of chunks
+                 ** Now call back the operation that made the request to the remote service
                  */
                 completeCallback.event();
 
