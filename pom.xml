@@ -27,6 +27,7 @@
         <module>storageserver</module>
         <module>objectserver</module>
         <module>clienttest</module>
+        <module>chunkmgr</module>
     </modules>
 
     <dependencies>
