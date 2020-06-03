@@ -40,6 +40,13 @@ abstract public class HttpInfo {
     private static final String TEST_TYPE = "/t";
     private static final String LIST_TYPE = "/l";
 
+    public static final String TENANCY_NAME = "tenancy-name";
+    public static final String CUSTOMER_NAME = "customer-name";
+    private static final String CONNECTION_KEY = "connection-key";
+
+    public static final String USER_NAME = "user-name";
+    public static final String USER_PASSWORD = "user-password";
+
     /*
      ** The following are used by the Storage Server to determine where to write the chunk data
      */
@@ -426,7 +433,23 @@ abstract public class HttpInfo {
     ** Return "tenancy" from the PathParam
      */
     public String getTenancy() {
-        return null;
+        List<String> tenancyNames = headers.get(TENANCY_NAME);
+
+        if ((tenancyNames == null) || (tenancyNames.size() != 1)) {
+            return null;
+        }
+
+        return tenancyNames.get(0);
+    }
+
+    public String getCustomerName() {
+        List<String> customerNames = headers.get(CUSTOMER_NAME);
+
+        if ((customerNames == null) || (customerNames.size() != 1)) {
+            return null;
+        }
+
+        return customerNames.get(0);
     }
 
     /*
@@ -481,6 +504,39 @@ abstract public class HttpInfo {
 
 
     /*
+    ** Return the "connection-key" that is used to validate the connection
+     */
+    public String getConnectionKey() {
+        List<String> connectionKey = headers.get(CONNECTION_KEY);
+
+        if ((connectionKey == null) || (connectionKey.size() != 1)) {
+            return null;
+        }
+
+        return connectionKey.get(0);
+    }
+
+    public String getUserName() {
+        List<String> userNames = headers.get(USER_NAME);
+
+        if ((userNames == null) || (userNames.size() != 1)) {
+            return null;
+        }
+
+        return userNames.get(0);
+    }
+
+    public String getUserPassword() {
+        List<String> userPasswords = headers.get(USER_PASSWORD);
+
+        if ((userPasswords == null) || (userPasswords.size() != 1)) {
+            return null;
+        }
+
+        return userPasswords.get(0);
+    }
+
+    /*
     ** The following are used to pull specific fields from the headers that are part of the HTTP request or response
     **
     **     getOpcClientRequestId() - "opc-client-request-id"
@@ -502,11 +558,7 @@ abstract public class HttpInfo {
     public String getOpcClientRequestId() {
         List<String> opcRequestId = headers.get(CLIENT_OPC_REQUEST_ID);
 
-        if (opcRequestId == null) {
-            return null;
-        }
-
-        if (opcRequestId.size() != 1) {
+        if ((opcRequestId == null) || (opcRequestId.size() != 1)) {
             return null;
         }
 

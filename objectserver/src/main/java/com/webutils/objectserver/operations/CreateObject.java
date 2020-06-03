@@ -72,10 +72,10 @@ public class CreateObject implements Operation {
         WebServerFlavor flavor = requestContext.getWebServerFlavor();
 
         TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
-        String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
+        int tenancyId = tenancyMgr.getTenancyId("testCustomer", "Tenancy-12345-abcde");
 
         ObjectTableMgr objectMgr = new ObjectTableMgr(flavor, requestContext);
-        if (objectMgr.createObjectEntry(objectPutInfo, tenancyUID) == HttpStatus.OK_200) {
+        if (objectMgr.createObjectEntry(objectPutInfo, tenancyId) == HttpStatus.OK_200) {
             int objectId = objectPutInfo.getObjectId();
             if (objectId != -1) {
                 requestContext.setObjectId(objectId);

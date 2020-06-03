@@ -4,6 +4,9 @@ import com.google.common.io.BaseEncoding;
 import com.webutils.chunkmgr.requestcontext.ChunkAllocContextPool;
 import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
 import com.webutils.storageserver.requestcontext.StorageServerContextPool;
+import com.webutils.webserver.http.HttpInfo;
+import com.webutils.webserver.http.HttpRequestInfo;
+import com.webutils.webserver.http.TenancyUserHttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.*;
 import com.webutils.webserver.niosockets.NioTestClient;
@@ -11,6 +14,7 @@ import com.webutils.webserver.kubernetes.KubernetesInfo;
 import com.webutils.webserver.niosockets.NioServerHandler;
 import com.webutils.webserver.requestcontext.ClientContextPool;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
+import org.eclipse.jetty.http.HttpField;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -85,13 +89,44 @@ public class TestMain {
         CreateObjectStorageTables objectStorageDbSetup = new CreateObjectStorageTables(flavor);
         objectStorageDbSetup.checkAndSetupObjectStorageDb();
 
+        AccessControlDb accessControlDb = new AccessControlDb(flavor);
+        accessControlDb.checkAndSetupAccessControls();
+
+        String customerName = "testCustomer";
+        String tenancyName = "Tenancy-12345-abcde";
+
         TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
-        tenancyMgr.createTenancyEntry("testCustomer", "Tenancy-12345-abcde");
-        String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
+        tenancyMgr.createTenancyEntry(customerName, tenancyName, "test-passphrase");
+        int tenancyId = tenancyMgr.getTenancyId(customerName, tenancyName);
+
+        /*
+        ** Create a test user
+         */
+        HttpRequestInfo httpInfo = new TenancyUserHttpRequestInfo();
+        HttpField tenancyField = new HttpField(HttpInfo.TENANCY_NAME, tenancyName);
+        httpInfo.addHeaderValue(tenancyField);
+        HttpField customerField = new HttpField(HttpInfo.CUSTOMER_NAME, customerName);
+        httpInfo.addHeaderValue(customerField);
+
+        String userName = "test_user@test.com";
+        String userPassword = "test_password";
+        HttpField userField = new HttpField(HttpInfo.USER_NAME, userName);
+        httpInfo.addHeaderValue(userField);
+        HttpField passwordField = new HttpField(HttpInfo.USER_PASSWORD, userPassword);
+        httpInfo.addHeaderValue(passwordField);
+
+        UserTableMgr userMgr = new UserTableMgr(flavor);
+        userMgr.createTenancyUser(httpInfo);
+
+        String accessKey = userMgr.getAccessKey(httpInfo);
+        System.out.println("accessKey: " + accessKey);
+
+        int id = userMgr.getTenancyFromAccessKey(accessKey);
+        System.out.println("tenancyId: " + tenancyId + " retrieved id: " + id);
 
         NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
-        namespaceMgr.createNamespaceEntry("Namespace-xyz-987", tenancyUID, "Noel-MAC");
-        String namespaceUID = namespaceMgr.getNamespaceUID("Namespace-xyz-987", tenancyUID);
+        namespaceMgr.createNamespaceEntry("Namespace-xyz-987", tenancyId, "Noel-MAC");
+        String namespaceUID = namespaceMgr.getNamespaceUID("Namespace-xyz-987", tenancyId);
 
         /*
         ** Debug stuff to look at Kubernetes Pod information

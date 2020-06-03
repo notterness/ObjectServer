@@ -10,6 +10,7 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.LinkedList;
+import java.util.List;
 
 /*
 ** This class is responsible for creating the tables used to store information about the Objects
@@ -19,21 +20,8 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
     private static final Logger LOG = LoggerFactory.getLogger(CreateObjectStorageTables.class);
 
     /*
-    ** This is the Tenancy table. A tenancy is unique per customer, but the tenancyName does not have to be unique
-    **   across all customers.
-     */
-    private static final String createTenancyTable = "CREATE TABLE IF NOT EXISTS customerTenancy (" +
-            " tenancyId INT AUTO_INCREMENT, " +
-            " tenancyName VARCHAR(255) NOT NULL, " +
-            " customerName VARCHAR(255) NOT NULL, " +
-            " tenancyUID BINARY(16) NOT NULL, " +
-            " PRIMARY KEY (tenancyName)," +
-            " KEY (tenancyId)" +
-            ")";
-
-    /*
-    ** There is one namespace per tenancy per region. The namespace spans all of the Compartments within a particular
-    **    region.
+    ** There is one namespace per tenancy per region. The information about the Tenancy resides in the
+    **   AccessControlDb. For that reason, the tenancyId is not managed as a FOREIGN KEY.
      */
     private static final String createNamespaceTable = "CREATE TABLE IF NOT EXISTS customerNamespace (" +
             " namespaceId INT AUTO_INCREMENT, " +
@@ -41,9 +29,6 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             " region VARCHAR(128) NOT NULL," +
             " namespaceUID BINARY(16) NOT NULL," +
             " tenancyId INT NOT NULL, " +
-            " FOREIGN KEY (tenancyId)" +
-            "   REFERENCES customerTenancy(tenancyId)" +
-            "   ON DELETE CASCADE," +
             " PRIMARY KEY (namespaceId)" +
             ")";
 
@@ -135,18 +120,9 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             ".* TO '" + objectStorageUser + "'@'localhost'";
 
 
-    private final LinkedList<String> tableCreates;
-
     public CreateObjectStorageTables(final WebServerFlavor flavor) {
         super(flavor);
 
-        tableCreates = new LinkedList<>();
-        tableCreates.add(createTenancyTable);
-        tableCreates.add(createNamespaceTable);
-        tableCreates.add(createBucketTable);
-        tableCreates.add(createBucketTagTable);
-        tableCreates.add(createObjectTable);
-        tableCreates.add(createChunkTable);
     }
 
     /*
@@ -164,6 +140,13 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
      */
     private void createObjectStorageTables() {
         LOG.info("createObjectStorageTables() WebServerFlavor: " + flavor.toString());
+
+        List<String> tableCreates = new LinkedList<>();
+        tableCreates.add(createNamespaceTable);
+        tableCreates.add(createBucketTable);
+        tableCreates.add(createBucketTagTable);
+        tableCreates.add(createObjectTable);
+        tableCreates.add(createChunkTable);
 
         Connection conn = getObjectStorageDbConn();
 
@@ -198,6 +181,8 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
              */
             closeObjectStorageDbConn(conn);
         }
+
+        tableCreates.clear();
     }
 
 

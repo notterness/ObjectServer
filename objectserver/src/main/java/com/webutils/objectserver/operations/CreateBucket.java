@@ -79,10 +79,10 @@ public class CreateBucket implements Operation {
             WebServerFlavor flavor = requestContext.getWebServerFlavor();
 
             TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
-            String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
+            int tenancyId = tenancyMgr.getTenancyId("testCustomer", "Tenancy-12345-abcde");
 
             NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
-            String namespaceUID = namespaceMgr.getNamespaceUID("Namespace-xyz-987", tenancyUID);
+            String namespaceUID = namespaceMgr.getNamespaceUID("Namespace-xyz-987", tenancyId);
 
             BucketTableMgr bucketMgr = new BucketTableMgr(flavor, requestContext.getRequestId(), requestContext.getHttpInfo());
             int status = bucketMgr.createBucketEntry(createBucketPostContent, namespaceUID);

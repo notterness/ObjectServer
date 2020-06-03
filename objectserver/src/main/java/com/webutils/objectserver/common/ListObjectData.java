@@ -26,13 +26,13 @@ public class ListObjectData {
     private final HttpRequestInfo listHttpInfo;
     private final List<String> fieldsToDisplay;
 
-    private final String tenancyUID;
+    private final int tenancyId;
     private final int opcRequestId;
 
     private final WebServerFlavor flavor;
 
     public ListObjectData(final RequestContext requestContext, final HttpRequestInfo listHttpInfo,
-                          final List<String> objectFields, final String tenancyUID) {
+                          final List<String> objectFields, final int tenancyId) {
 
         this.requestContext = requestContext;
         this.listHttpInfo = listHttpInfo;
@@ -40,7 +40,7 @@ public class ListObjectData {
         this.fieldsToDisplay = new LinkedList<>();
         validateFields(objectFields);
 
-        this.tenancyUID = tenancyUID;
+        this.tenancyId = tenancyId;
 
         this.flavor = requestContext.getWebServerFlavor();
         this.opcRequestId = requestContext.getRequestId();
@@ -119,7 +119,7 @@ public class ListObjectData {
          ** First need to validate that the namespace exists
          */
         NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
-        String namespaceUID = namespaceMgr.getNamespaceUID(namespace, tenancyUID);
+        String namespaceUID = namespaceMgr.getNamespaceUID(namespace, tenancyId);
         if (namespaceUID == null) {
             LOG.warn("Unable to execute ListObject method - invalid namespace: " + namespace);
 

@@ -119,10 +119,10 @@ public class RetrieveObjectInfo implements Operation {
                 WebServerFlavor flavor = requestContext.getWebServerFlavor();
 
                 TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
-                String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
+                int tenancyId = tenancyMgr.getTenancyId("testCustomer", "Tenancy-12345-abcde");
 
                 ObjectTableMgr objectMgr = new ObjectTableMgr(flavor, requestContext);
-                if (objectMgr.retrieveObjectInfo(objectPutInfo, objectInfo, tenancyUID) == HttpStatus.OK_200) {
+                if (objectMgr.retrieveObjectInfo(objectPutInfo, objectInfo, tenancyId) == HttpStatus.OK_200) {
                     int objectId = objectInfo.getObjectId();
                     objectInfo.setEtag(objectMgr.getObjectUID(objectId));
 

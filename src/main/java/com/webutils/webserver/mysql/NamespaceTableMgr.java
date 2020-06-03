@@ -14,12 +14,11 @@ public class NamespaceTableMgr extends ObjectStorageDb {
 
     private final static String CREATE_NAMESPACE_1 = "INSERT INTO customerNamespace VALUES ( NULL, '";
     private final static String CREATE_NAMESPACE_2 = "', '";
-    private final static String CREATE_NAMESPACE_3 = "', UUID_TO_BIN(UUID()), (SELECT tenancyId FROM customerTenancy WHERE tenancyUID = UUID_TO_BIN('";
-    private final static String CREATE_NAMESPACE_4 = "') ) )";
+    private final static String CREATE_NAMESPACE_3 = "', UUID_TO_BIN(UUID()), ";
+    private final static String CREATE_NAMESPACE_4 = " )";
 
     private final static String GET_NAMESPACE_UID_1 = "SELECT BIN_TO_UUID(namespaceUID) namespaceUID FROM customerNamespace WHERE name = '";
-    private final static String GET_NAMESPACE_UID_2 = "' AND tenancyId = ( SELECT tenancyId FROM customerTenancy WHERE tenancyUID = UUID_TO_BIN('";
-    private final static String GET_NAMESPACE_UID_3 = "') )";
+    private final static String GET_NAMESPACE_UID_2 = "' AND tenancyId = ";
 
     public NamespaceTableMgr(final WebServerFlavor flavor) {
         super(flavor);
@@ -40,20 +39,20 @@ public class NamespaceTableMgr extends ObjectStorageDb {
      **   Compartments within a region. Just as an FYI, the Compartments are used to provide access controls to
      **   resources.
      */
-    public boolean createNamespaceEntry(final String namespace, final String tenancyUID, final String region) {
+    public boolean createNamespaceEntry(final String namespace, final int tenancyId, final String region) {
         boolean success = true;
 
         /*
         ** First check if there is already a namespace entry. If it exists, simply return true indicating it is present.
          */
-        String namespaceUID = getNamespaceUID(namespace, tenancyUID);
+        String namespaceUID = getNamespaceUID(namespace, tenancyId);
         if (namespaceUID != null) {
-            LOG.warn("This namespace already exists. namespace: " + namespace + " tenancyUID: " + tenancyUID);
+            LOG.warn("This namespace already exists. namespace: " + namespace + " tenancyId: " + tenancyId);
             return true;
         }
 
         String createNamespaceStr = CREATE_NAMESPACE_1 + namespace + CREATE_NAMESPACE_2 + region + CREATE_NAMESPACE_3 +
-                tenancyUID + CREATE_NAMESPACE_4;
+                tenancyId + CREATE_NAMESPACE_4;
 
         Connection conn = getObjectStorageDbConn();
 
@@ -95,12 +94,12 @@ public class NamespaceTableMgr extends ObjectStorageDb {
     **
     ** NOTE: This check is not using the region table field at this point. For completeness, the search for the
     **   namespace should use the following:
-    **     tenancyUID - This is how resources are owned by a customer and provides the top level of organization.
+    **     tenancyId - This is how resources are owned by a customer and provides the top level of organization.
     **     region - The namespace is per region within a tenancy.
     **     namespaceName - The name of the namespace the Object Storage items are contained within.
      */
-    public String getNamespaceUID(final String namespaceName, final String tenancyUID) {
-        String getNamespaceUIDStr = GET_NAMESPACE_UID_1 + namespaceName + GET_NAMESPACE_UID_2 + tenancyUID + GET_NAMESPACE_UID_3;
+    public String getNamespaceUID(final String namespaceName, final int tenancyId) {
+        String getNamespaceUIDStr = GET_NAMESPACE_UID_1 + namespaceName + GET_NAMESPACE_UID_2 + tenancyId;
 
         return getUID(getNamespaceUIDStr);
     }

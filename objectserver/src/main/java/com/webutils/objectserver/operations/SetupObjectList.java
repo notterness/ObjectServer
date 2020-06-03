@@ -103,14 +103,14 @@ public class SetupObjectList implements Operation {
             HttpRequestInfo objectListInfo = requestContext.getHttpInfo();
 
             TenancyTableMgr tenancyMgr = new TenancyTableMgr(requestContext.getWebServerFlavor());
-            String tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
+            int tenancyId = tenancyMgr.getTenancyId("testCustomer", "Tenancy-12345-abcde");
 
             /*
             ** NOTE: The default requestedFields are: name, size, time-created and md5
              */
             List<String> requestedFields = new ArrayList<>();
             requestContext.getHttpInfo().getFields(requestedFields);
-            ListObjectData listData = new ListObjectData(requestContext, objectListInfo, requestedFields, tenancyUID);
+            ListObjectData listData = new ListObjectData(requestContext, objectListInfo, requestedFields, tenancyId);
             listData.execute();
 
             event();

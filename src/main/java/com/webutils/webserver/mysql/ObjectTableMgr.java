@@ -86,7 +86,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
      **
      ** TODO: Handle the "if-match", "if-none-match" headers. Create a function to generate a new object versionId.
      */
-    public int createObjectEntry(final HttpRequestInfo objectHttpInfo, final String tenancyUID) {
+    public int createObjectEntry(final HttpRequestInfo objectHttpInfo, final int tenancyId) {
         int status = HttpStatus.OK_200;
 
         /*
@@ -97,7 +97,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
         String prefix = null;
         int contentLength = objectHttpInfo.getContentLength();
 
-        int bucketId = validateAndGetBucketId(objectHttpInfo, objectName, tenancyUID);
+        int bucketId = validateAndGetBucketId(objectHttpInfo, objectName, tenancyId);
         if (bucketId == -1) {
             return HttpStatus.PRECONDITION_FAILED_412;
         }
@@ -107,7 +107,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
 
         String namespace = objectHttpInfo.getNamespace();
         NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
-        String namespaceUID = namespaceMgr.getNamespaceUID(namespace, tenancyUID);
+        String namespaceUID = namespaceMgr.getNamespaceUID(namespace, tenancyId);
 
         /*
         ** Verify that the content md5 is a valid digest
@@ -275,10 +275,10 @@ public class ObjectTableMgr extends ObjectStorageDb {
     **   ListObjects
     **   ListObjectVersions
      */
-    public int retrieveObjectInfo(final HttpRequestInfo objectHttpInfo, final ObjectInfo info, final String tenancyUID) {
+    public int retrieveObjectInfo(final HttpRequestInfo objectHttpInfo, final ObjectInfo info, final int tenancyId) {
         String objectName = info.getObjectName();
 
-        int bucketId = validateAndGetBucketId(objectHttpInfo, objectName, tenancyUID);
+        int bucketId = validateAndGetBucketId(objectHttpInfo, objectName, tenancyId);
         if (bucketId == -1) {
             return HttpStatus.PRECONDITION_FAILED_412;
         }
@@ -445,7 +445,6 @@ public class ObjectTableMgr extends ObjectStorageDb {
             } finally {
                 if (rs != null) {
                     try {
-                        int count = 0;
                         while (rs.next()) {
                             /*
                              ** Check if any of the records for the objects are in the process of being deleted.
@@ -539,13 +538,13 @@ public class ObjectTableMgr extends ObjectStorageDb {
         }
     }
 
-    public void deleteObjectInfo(final HttpRequestInfo objectHttpInfo, final String tenancyUID) {
+    public void deleteObjectInfo(final HttpRequestInfo objectHttpInfo, final int tenancyId) {
         /*
          ** Obtain the fields required to build the Object table entry. Verify that the required fields are not missing.
          */
         String objectName = objectHttpInfo.getObject();
 
-        int bucketId = validateAndGetBucketId(objectHttpInfo, objectName, tenancyUID);
+        int bucketId = validateAndGetBucketId(objectHttpInfo, objectName, tenancyId);
         if (bucketId == -1) {
             return;
         }
@@ -614,14 +613,14 @@ public class ObjectTableMgr extends ObjectStorageDb {
     ** The full way to obtain unique identifier for an Object. This will return -1 is there are multiple object records
     **   that use the same name (i.e. multiple versions of the same object).
      */
-    private int getObjectId(final HttpRequestInfo objectHttpInfo, final String tenancyUID) {
+    private int getObjectId(final HttpRequestInfo objectHttpInfo, final int tenancyId) {
         /*
          ** Obtain the fields required to build the Object table entry. Verify that the required fields are not missing.
          */
         String objectName = objectHttpInfo.getObject();
 
 
-        int bucketId = validateAndGetBucketId(objectHttpInfo, objectName, tenancyUID);
+        int bucketId = validateAndGetBucketId(objectHttpInfo, objectName, tenancyId);
         if (bucketId == -1) {
             return HttpStatus.PRECONDITION_FAILED_412;
         }
@@ -911,7 +910,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
     **    namespace - Required to determine that the bucket is valid and it is associated with the namespace
     **    bucketName - The bucket must reside within the namespace and the object must reside within the bucket.
      */
-    private int validateAndGetBucketId(final HttpRequestInfo objectInfo, final String objectName, final String tenancyUID) {
+    private int validateAndGetBucketId(final HttpRequestInfo objectInfo, final String objectName, final int tenancyId) {
 
         String namespace = objectInfo.getNamespace();
         String bucketName = objectInfo.getBucket();
@@ -934,7 +933,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
          ** First need to validate that the namespace exists
          */
         NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
-        String namespaceUID = namespaceMgr.getNamespaceUID(namespace, tenancyUID);
+        String namespaceUID = namespaceMgr.getNamespaceUID(namespace, tenancyId);
         if (namespaceUID == null) {
             LOG.warn("Unable to create Object: " + objectName + " - invalid namespace: " + namespace);
 

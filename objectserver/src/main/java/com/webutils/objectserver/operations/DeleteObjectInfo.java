@@ -58,10 +58,10 @@ public class DeleteObjectInfo implements Operation {
     /*
     ** Information used to obtain the information about an object and to delete it
      */
-    final HttpRequestInfo objectPutInfo;
-    final WebServerFlavor flavor;
-    String tenancyUID;
-    ObjectTableMgr objectMgr;
+    private final HttpRequestInfo objectPutInfo;
+    private final WebServerFlavor flavor;
+    private int tenancyId;
+    private final ObjectTableMgr objectMgr;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -85,6 +85,8 @@ public class DeleteObjectInfo implements Operation {
 
         this.flavor = requestContext.getWebServerFlavor();
         this.objectPutInfo = requestContext.getHttpInfo();
+
+        this.objectMgr = new ObjectTableMgr(flavor, requestContext);
     }
 
     public OperationTypeEnum getOperationType() {
@@ -97,9 +99,8 @@ public class DeleteObjectInfo implements Operation {
 
     public BufferManagerPointer initialize() {
         TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
-        tenancyUID = tenancyMgr.getTenancyUID("testCustomer", "Tenancy-12345-abcde");
+        tenancyId = tenancyMgr.getTenancyId("testCustomer", "Tenancy-12345-abcde");
 
-        objectMgr = new ObjectTableMgr(flavor, requestContext);
         return null;
     }
 
@@ -123,7 +124,7 @@ public class DeleteObjectInfo implements Operation {
                 **   last-modified
                 **   version-id
                  */
-                if (objectMgr.retrieveObjectInfo(objectPutInfo, objectInfo, tenancyUID) == HttpStatus.OK_200) {
+                if (objectMgr.retrieveObjectInfo(objectPutInfo, objectInfo, tenancyId) == HttpStatus.OK_200) {
                     currState = ExecutionState.DELETE_FROM_DATABASE;
                     /*
                      ** Fall through
@@ -143,7 +144,7 @@ public class DeleteObjectInfo implements Operation {
                  **    Object Name - The actual object that is wanted.
                  **    Version Id - An object can have multiple versions
                  */
-                objectMgr.deleteObjectInfo(objectPutInfo, tenancyUID);
+                objectMgr.deleteObjectInfo(objectPutInfo, tenancyId);
                 currState = ExecutionState.SEND_STATUS;
                 /*
                 ** Fall through
