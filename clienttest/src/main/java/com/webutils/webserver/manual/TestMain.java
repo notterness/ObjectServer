@@ -338,20 +338,20 @@ public class TestMain {
 
         //AllocateChunksSimple allocateChunks = new AllocateChunksSimple(serverIpAddr, CHUNK_ALLOC_SERVER_TCP_PORT, threadCount);
         //allocateChunks.execute();
-        //AllocateChunksSimple2 allocateChunks = new AllocateChunksSimple2(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
-        //allocateChunks.execute();
+        AllocateChunksSimple2 allocateChunks = new AllocateChunksSimple2(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
+        allocateChunks.execute();
 
         //DeleteObjectSimple deleteObject = new DeleteObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         //deleteObject.execute();
 
-        //GetObjectSimple getObjectSimple = new GetObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
-        //getObjectSimple.execute();
+        GetObjectSimple getObjectSimple = new GetObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
+        getObjectSimple.execute();
 
         ListObjectsSimple listObjectsSimple = new ListObjectsSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         listObjectsSimple.execute();
 
-        //ListChunksAll listChunksAll = new ListChunksAll(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
-        //listChunksAll.execute();
+        ListChunksAll listChunksAll = new ListChunksAll(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
+        listChunksAll.execute();
 
         ListServersAll listServersAll = new ListServersAll(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
         listServersAll.execute();

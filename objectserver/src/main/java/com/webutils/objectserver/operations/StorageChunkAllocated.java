@@ -111,8 +111,7 @@ public class StorageChunkAllocated implements Operation {
                 LOG.info("StorageChunkAllocated addr: " + server.getServerIpAddress().toString() +
                         " port: " + server.getServerTcpPort() + " chunkNumber: " + server.getChunkNumber());
 
-                String chunkLocation = objectCreateInfo.getObjectUID();
-                status = chunkMgr.createChunkEntry(objectId, server, chunkLocation);
+                status = chunkMgr.createChunkEntry(objectId, server, server.getChunkLocation());
                 if (status != HttpStatus.OK_200) {
                     break;
                 }

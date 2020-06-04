@@ -37,7 +37,7 @@ public class ListChunksAll {
         this.eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
 
         ListChunksParams params = new ListChunksParams(StorageTierEnum.INVALID_TIER, null,
-                ChunkStatusEnum.INVALID_CHUNK_STATUS, 0);
+                ChunkStatusEnum.CHUNK_ALLOCATED, 0);
         params.setOpcClientRequestId("ListChunksAll-5-26-2020.01");
 
         cli = new ClientCommandInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,

@@ -34,7 +34,7 @@ public class GetObjectSimple {
         this.eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
 
         GetObjectParams params = new GetObjectParams("Namespace-xyz-987", "CreateBucket_Simple",
-                "5e223890-ea13-11e9-851d-234132e0fb02", "testObjectFile");
+                "TestObject-1234-abcd", "testObjectFile");
         params.setOpcClientRequestId("GetObjectSimple-5-12-2020.01");
 
         cli = new ClientGetInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,

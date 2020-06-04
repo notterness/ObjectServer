@@ -222,6 +222,9 @@ public class AllocateChunks implements Operation {
 
     /*
     ** The response body has the following format for each chunk that is allocated
+    **
+    ** NOTE: The chunkUID is used for the chunk location to guarantee that it is unique and to make it easier to find
+    **   when the delete chunk method is implemented.
      */
     private String buildResponseBody(final List<ServerIdentifier> allocatedServers) {
         StringBuilder body = new StringBuilder();
@@ -238,7 +241,7 @@ public class AllocateChunks implements Operation {
             body.append("       \"chunk-id\": \"" + server.getChunkId() + "\"\n");
             body.append("       \"chunk-uid\": \"" + server.getChunkUID() + "\"\n");
             body.append("       \"chunk-lba\": \"" + server.getChunkLBA() + "\"\n");
-            body.append("       \"chunk-location\": \"" + server.getChunkLocation() + "\"\n");
+            body.append("       \"chunk-location\": \"" + server.getChunkUID() + "\"\n");
             body.append("    }\n");
 
             chunkIndex++;
