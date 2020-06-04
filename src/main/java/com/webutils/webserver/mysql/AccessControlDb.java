@@ -75,6 +75,8 @@ public class AccessControlDb {
     private static final String PRIVILEGE_SERVICE_SERVERS_USER = "GRANT ALL PRIVILEGES ON " + ACCESS_CONTROL_DB_NAME +
             ".* TO '" + ACCESS_DB_USER + "'@'localhost'";
 
+    private static final String DROP_ACCESS_CONTROL_USER = "DROP USER '" + ACCESS_DB_USER + "'@'localhost'";
+    private static final String DROP_ACCESS_CONTROL_DB = "DROP DATABASE " + ACCESS_CONTROL_DB_NAME;
 
     private static final String kubeJDBCDatabaseConnect = "jdbc:mysql://host.docker.internal/AccessControlDb?serverTimeZone=US/Mountain";
     private static final String execJDBCDatabaseConnect = "jdbc:mysql://localhost/AccessControlDb?serverTimezone=US/Mountain";
@@ -116,6 +118,68 @@ public class AccessControlDb {
             createAccessControlTables();
         }
     }
+
+    /*
+     ** This is used to delete the AccessControlDb and its users
+     */
+    public void dropDatabase() {
+        Connection conn = null;
+        int vendorError;
+        String jdbcConnect;
+
+        if (isDockerImage() || isKubernetesImage()) {
+            jdbcConnect = kubeJDBCConnect;
+        } else {
+            jdbcConnect = execJDBCConnect;
+        }
+
+        try {
+            conn = DriverManager.getConnection(jdbcConnect, userName, password);
+        } catch (SQLException ex) {
+            vendorError = ex.getErrorCode();
+            System.out.println("dropDatabase(2) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState() +
+                    " " + vendorError);
+            LOG.error("dropDatabase(2) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState() + " " + vendorError);
+        }
+
+        if (conn != null) {
+            Statement stmt = null;
+
+            try {
+                stmt = conn.createStatement();
+                stmt.execute(DROP_ACCESS_CONTROL_USER);
+
+                stmt.execute(DROP_ACCESS_CONTROL_DB);
+            } catch (SQLException sqlEx) {
+                System.out.println("dropDatabase() - SQLException: " + sqlEx.getMessage() + " vendorError: " + sqlEx.getErrorCode());
+                LOG.error("dropDatabase() - SQLException: " + sqlEx.getMessage() + " vendorError: " + sqlEx.getErrorCode());
+            }
+            finally {
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("dropDatabase() - close - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        LOG.error("dropDatabase() - close - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database.
+             */
+            try {
+                conn.close();
+            } catch (SQLException sqlEx) {
+                // handle any errors
+                System.out.println("SQL conn close(2) SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("SQL conn close(2) SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+            }
+        }
+
+        LOG.info("dropDatabase() AccessControlDb database dropped");
+    }
+
 
     /*
      ** This obtains a connection to communicate with the MySQL Access Control database.
@@ -179,7 +243,6 @@ public class AccessControlDb {
         }
 
         try {
-            System.out.println("Trying to connect to MySql");
             conn = DriverManager.getConnection(jdbcConnect, userName, password);
 
             /*
@@ -201,19 +264,19 @@ public class AccessControlDb {
             // handle any errors
 
             vendorError = ex.getErrorCode();
-            System.out.println("createAccessControlDb(1) - JDBC connect: " + jdbcConnect);
-            System.out.println("createAccessControlDb(1) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState());
-            LOG.error("createAccessControlDb(1) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState());
-
             if (vendorError != MysqlErrorNumbers.ER_BAD_DB_ERROR) {
+                System.out.println("createAccessControlDb(1) - JDBC connect: " + jdbcConnect);
+                System.out.println("createAccessControlDb(1) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState());
+                LOG.error("createAccessControlDb(1) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState());
+
                 return false;
             }
         }
 
         /*
-         ** If the code reaches here, the database needs to be created
+         ** If the code reaches here, the AccessControlDb database needs to be created
          */
-        System.out.println("createAccessControlDb() create database");
+        System.out.println("Create AccessControlDb");
 
         if (isDockerImage() || isKubernetesImage()) {
             jdbcConnect = kubeJDBCConnect;
@@ -269,7 +332,7 @@ public class AccessControlDb {
             }
         }
 
-        System.out.println("createAccessControlDb() database created");
+        LOG.info("AccessControlDb database created");
         return true;
     }
 
@@ -362,7 +425,11 @@ public class AccessControlDb {
                             count++;
                         }
 
-                        if (count != 1) {
+                        /*
+                        ** There should only be 0 or 1 responses from the getUID() query. There are 0 responses when
+                        **   this is used to check for the presence of a record within a table.
+                         */
+                        if (count > 1) {
                             uid = null;
                             LOG.warn("getUID() incorrect response count: " + count);
                             LOG.warn(uidQueryStr);

@@ -1,6 +1,5 @@
 package com.webutils.webserver.manual;
 
-import com.google.common.io.BaseEncoding;
 import com.webutils.chunkmgr.requestcontext.ChunkAllocContextPool;
 import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
 import com.webutils.storageserver.requestcontext.StorageServerContextPool;
@@ -28,18 +27,6 @@ public class TestMain {
     public static void main(String[] args) {
 
         final String CLOSE_CONNECTION_AFTER_HEADER = "DisconnectAfterHeader";
-
-        String md5FromHeader = "RUyS5v1cKdbFcsRdO7NgfQ==";
-        byte[] bytes = BaseEncoding.base64().decode(md5FromHeader);
-        if (bytes.length != 16) {
-            System.out.println("The value of the Content-MD5 header '" + md5FromHeader +
-                    "' was not the correct length after base-64 decoding");
-        } else {
-            String encodeStr = BaseEncoding.base64().encode(bytes);
-
-            boolean match = encodeStr.equals(md5FromHeader);
-            System.out.println("initial " + md5FromHeader + " encode: " + encodeStr + " match: " + match);
-        }
 
         ServerIdentifierTableMgr serverTableMgr;
 
@@ -81,17 +68,35 @@ public class TestMain {
             serverTableMgr = new LocalServersMgr(flavor);
         }
 
+        CreateObjectStorageTables objectStorageDbSetup = new CreateObjectStorageTables(flavor);
+        AccessControlDb accessControlDb = new AccessControlDb(flavor);
+
         /*
-        ** The following builds a default configuration. It sets up
+        ** For test purposes, this is the place to drop all of the databases and allow the system to start in a
+        **   clean state. The three databases are:
+        **     ServiceServersDb - Used to keep track of the servers to provide a DNS type lookup of IP addresses and
+        **        TCP Ports. It is also used by the Chunk Manager Service to manage the chunks that are used to store
+        **        object data on the Storage Servers.
+        **     ObjectStorageDb - This is the database that keeps track of all the information related the objects
+        **        being managed by the client. This database is owned by the Object Server service.
+        **     AccessControlDb - This is the database that keeps track of the customer tenancies and their users. It
+        **        provides the authentication service. FIXME: Move this into its own service.
+         */
+        serverTableMgr.dropDatabase();
+        objectStorageDbSetup.dropDatabase();
+        accessControlDb.dropDatabase();
+
+        /*
+        ** The following builds a default configuration. It sets up the different databases if they are not already
+        **   present. It then populates some initial information to allow the tests to run.
          */
         serverTableMgr.checkAndSetupStorageServers();
-
-        CreateObjectStorageTables objectStorageDbSetup = new CreateObjectStorageTables(flavor);
         objectStorageDbSetup.checkAndSetupObjectStorageDb();
-
-        AccessControlDb accessControlDb = new AccessControlDb(flavor);
         accessControlDb.checkAndSetupAccessControls();
 
+        /*
+        ** Create the Tenancy to use for the test cases
+         */
         String customerName = "testCustomer";
         String tenancyName = "Tenancy-12345-abcde";
 
@@ -146,12 +151,14 @@ public class TestMain {
             **   to already be up and running for it to work. In general, it can simply be commented out as the code
             **   is not needed to run the tests in the IntelliJ environment.
              */
+            /*
             KubernetesInfo kubeInfo = new KubernetesInfo(flavor);
             try {
                 kubernetesPodIp = kubeInfo.getExternalKubeIp();
             } catch (IOException io_ex) {
                 System.out.println("IOException: " + io_ex.getMessage());
             }
+            */
         }
 
         AtomicInteger threadCount = new AtomicInteger(1);
@@ -302,28 +309,32 @@ public class TestMain {
             }
         }
 
-        MemoryManager clientTestMemoryManager = new MemoryManager(flavor);
+        /*
+        ** Create an extra Storage Server and set the address for the Chunk Manager Service so that it can be accessed
+         */
+        PostCreateServer createServer = new PostCreateServer(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
+        createServer.execute();
+        CreateChunkMgrService createChunkMgrService = new CreateChunkMgrService(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
+        createChunkMgrService.execute();
 
+        waitForTestsToComplete(threadCount);
+
+        /*
+        ** Setup the infrastructure for the older type of tests
+         */
+        MemoryManager clientTestMemoryManager = new MemoryManager(flavor);
         ClientContextPool clientContextPool = new ClientContextPool(flavor, clientTestMemoryManager, serverTableMgr);
         NioTestClient testClient = new NioTestClient(clientContextPool);
         testClient.start();
 
-/*
         ClientTest client_CreateBucket_Simple = new ClientTest_CreateBucket_Simple("CreateBucket_Simple", testClient,
                 serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         client_CreateBucket_Simple.execute();
- */
+
         ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         checkMd5.execute();
 
         waitForTestsToComplete(threadCount);
-
-
-        //PostCreateServer createServer = new PostCreateServer(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
-        //createServer.execute();
-
-        //CreateChunkMgrService createChunkMgrService = new CreateChunkMgrService(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
-        //createChunkMgrService.execute();
 
         //AllocateChunksSimple allocateChunks = new AllocateChunksSimple(serverIpAddr, CHUNK_ALLOC_SERVER_TCP_PORT, threadCount);
         //allocateChunks.execute();
@@ -336,14 +347,14 @@ public class TestMain {
         //GetObjectSimple getObjectSimple = new GetObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         //getObjectSimple.execute();
 
-        //ListObjectsSimple listObjectsSimple = new ListObjectsSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
-        //listObjectsSimple.execute();
+        ListObjectsSimple listObjectsSimple = new ListObjectsSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
+        listObjectsSimple.execute();
 
-        //ListChunksAll listChunksAll = new ListChunksAll(serverIpAddr, CHUNK_ALLOC_SERVER_TCP_PORT, threadCount);
+        //ListChunksAll listChunksAll = new ListChunksAll(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
         //listChunksAll.execute();
 
-        //ListServersAll listServersAll = new ListServersAll(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
-        //listServersAll.execute();
+        ListServersAll listServersAll = new ListServersAll(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
+        listServersAll.execute();
 
         /*
         GetObjectBadBucket getObjectBadBucket = new GetObjectBadBucket(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);

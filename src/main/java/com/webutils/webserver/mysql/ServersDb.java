@@ -121,6 +121,10 @@ public abstract class ServersDb {
 
     private static final String DROP_SERVER_IDENTIFIER_TABLE = "DROP TABLE IF EXISTS serverIdentifier";
 
+    private static final String DROP_SERVICE_SERVERS_USER = "DROP USER '" + SERVICE_SERVER_USER + "'@'localhost'";
+    private static final String DROP_SERVICE_SERVERS_DB = "DROP DATABASE " + SERVICE_SERVERS_DB_NAME;
+
+
     private static final String kubeJDBCDatabaseConnect = "jdbc:mysql://host.docker.internal/ServiceServersDb?serverTimeZone=US/Mountain";
     private static final String execJDBCDatabaseConnect = "jdbc:mysql://localhost/ServiceServersDb?serverTimezone=US/Mountain";
     private static final String kubeJDBCConnect = "jdbc:mysql://host.docker.internal/?serverTimeZone=US/Mountain";
@@ -172,6 +176,68 @@ public abstract class ServersDb {
             chunkMgr.addStoredProcedures();
         }
     }
+
+    /*
+     ** This is used to delete the ServiceServersDb and its users
+     */
+    public void dropDatabase() {
+        Connection conn = null;
+        int vendorError;
+        String jdbcConnect;
+
+        if (isDockerImage() || isKubernetesImage()) {
+            jdbcConnect = kubeJDBCConnect;
+        } else {
+            jdbcConnect = execJDBCConnect;
+        }
+
+        try {
+            conn = DriverManager.getConnection(jdbcConnect, userName, password);
+        } catch (SQLException ex) {
+            vendorError = ex.getErrorCode();
+            System.out.println("dropDatabase(2) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState() +
+                    " " + vendorError);
+            LOG.error("dropDatabase(2) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState() + " " + vendorError);
+        }
+
+        if (conn != null) {
+            Statement stmt = null;
+
+            try {
+                stmt = conn.createStatement();
+                stmt.execute(DROP_SERVICE_SERVERS_USER);
+
+                stmt.execute(DROP_SERVICE_SERVERS_DB);
+            } catch (SQLException sqlEx) {
+                System.out.println("dropDatabase() - SQLException: " + sqlEx.getMessage() + " vendorError: " + sqlEx.getErrorCode());
+                LOG.error("dropDatabase() - SQLException: " + sqlEx.getMessage() + " vendorError: " + sqlEx.getErrorCode());
+            }
+            finally {
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("dropDatabase() - close - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        LOG.error("dropDatabase() - close - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database.
+             */
+            try {
+                conn.close();
+            } catch (SQLException sqlEx) {
+                // handle any errors
+                System.out.println("SQL conn close(2) SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("SQL conn close(2) SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+            }
+        }
+
+        LOG.info("dropDatabase() ServiceServersDb database dropped");
+    }
+
 
     /*
     ** This obtains a connection to communicate with the MySQL Storage Server database.
@@ -235,7 +301,6 @@ public abstract class ServersDb {
         }
 
         try {
-            System.out.println("Trying to connect to MySql");
             conn = DriverManager.getConnection(jdbcConnect, userName, password);
 
             /*
@@ -250,26 +315,24 @@ public abstract class ServersDb {
                 LOG.error("createServerDb() - SQL conn close(1) SQLException: " + sqlEx.getMessage());
             }
 
-            System.out.println("createServerDb() database found");
-
             return false;
         } catch (SQLException ex) {
             // handle any errors
 
             vendorError = ex.getErrorCode();
-            System.out.println("createServerDb(1) - JDBC connect: " + jdbcConnect);
-            System.out.println("createServerDb(1) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState());
-            LOG.error("createServerDb(1) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState());
-
             if (vendorError != MysqlErrorNumbers.ER_BAD_DB_ERROR) {
+                System.out.println("createServerDb(1) - JDBC connect: " + jdbcConnect);
+                System.out.println("createServerDb(1) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState());
+                LOG.error("createServerDb(1) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState());
+
                 return false;
             }
         }
 
         /*
-         ** If the code reaches here, the database needs to be created
+         ** If the code reaches here, the ServiceServersDb database needs to be created
          */
-        System.out.println("createServerDb() create database");
+        System.out.println("Create ServiceServersDb");
 
         if (isDockerImage() || isKubernetesImage()) {
             jdbcConnect = kubeJDBCConnect;
@@ -325,7 +388,7 @@ public abstract class ServersDb {
             }
         }
 
-        System.out.println("createServerDb() database created");
+        LOG.info("ServiceServersDb database created");
         return true;
     }
 
@@ -375,8 +438,6 @@ public abstract class ServersDb {
      */
     private void createServerTable() {
 
-        LOG.info("createServerTable()");
-
         Connection conn = getServersDbConn();
 
         if (conn != null) {
@@ -413,8 +474,6 @@ public abstract class ServersDb {
      **   Storage Server if they do not already exist (meaning they are created if the database did not exist).
      */
     private void createChunkTable() {
-
-        LOG.info("createChunkTable()");
 
         Connection conn = getServersDbConn();
 

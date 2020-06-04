@@ -25,6 +25,8 @@ public class UserTableMgr extends AccessControlDb {
 
     private final static String GET_TENANCY_FROM_KEY = "SELECT tenancyId FROM TenancyUser WHERE accessKey = UNHEX(?)";
 
+    private final static String GET_USER_ID = "SELECT userId FROM TenancyUser WHERE userName = AES_ENCRYPT(?, ?) AND tenancyId = ?";
+
     private int objectUniqueId;
 
     /*
@@ -81,6 +83,15 @@ public class UserTableMgr extends AccessControlDb {
                     "\r\n}";
             httpInfo.setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
             return HttpStatus.PRECONDITION_FAILED_412;
+        }
+
+        /*
+         ** Check if this was already created
+         */
+        int userId = getUserId(userName, passphrase, tenancyId);
+        if (userId != -1) {
+            System.out.println("User already created");
+            return HttpStatus.OK_200;
         }
 
         int accessRights = 0;
@@ -314,6 +325,50 @@ public class UserTableMgr extends AccessControlDb {
         }
 
         return tenancyId;
+    }
+
+    public int getUserId(final String userName, final String passphrase, final int tenancyId) {
+        int userId = -1;
+
+        Connection conn = getAccessControlDbConn();
+
+        if (conn != null) {
+            PreparedStatement stmt = null;
+
+            try {
+                /*
+                 ** The fields for the GET_USER_ID are:
+                 **   1 - userName
+                 **   2 - passphrase
+                 **   3 - tenancyId
+                 */
+                stmt = conn.prepareStatement(GET_USER_ID);
+                stmt.setString(1, userName);
+                stmt.setString(2, passphrase);
+                stmt.setInt(3, tenancyId);
+                ResultSet rs = stmt.executeQuery();
+                if (rs.next()) {
+                    userId = rs.getInt(1);
+                }
+                rs.close();
+            } catch (SQLException sqlEx) {
+                LOG.error("getUserId() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                System.out.println("SQLException: " + sqlEx.getMessage());
+            } finally {
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("getUserId() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQLException: " + sqlEx.getMessage());
+                    }
+                }
+            }
+
+            closeAccessControlDbConn(conn);
+        }
+
+        return userId;
     }
 
     private int validateFields(final HttpRequestInfo httpInfo) {

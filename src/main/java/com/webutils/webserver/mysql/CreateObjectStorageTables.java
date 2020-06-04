@@ -39,9 +39,8 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             " bucketId INT AUTO_INCREMENT, " +
             " bucketName VARCHAR(255) NOT NULL, " +
             " compartmentId VARCHAR(255) NOT NULL, " +
-            " storageTier VARCHAR(64) NOT NULL," +
+            " storageTier int NOT NULL," +
             " objectEventsEnabled INT NOT NULL," +
-            " opcClientRequestId VARCHAR(255)," +
             " createTime TIMESTAMP NOT NULL," +
             " bucketUID BINARY(16) NOT NULL," +
             " namespaceId INT NOT NULL," +
@@ -109,6 +108,7 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             ")";
 
     private static final String createObjectStorageDatabase = "CREATE DATABASE " + objectStorageDbName;
+    private static final String DROP_OBJECT_STORAGE_DB = "DROP DATABASE " + objectStorageDbName;
 
     protected static final String userName = "root";
     protected static final String password = "ktm300exc";
@@ -119,6 +119,8 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
     private static final String privilegeObjectStorageUser = "GRANT ALL PRIVILEGES ON " + objectStorageDbName +
             ".* TO '" + objectStorageUser + "'@'localhost'";
 
+    private static final String DROP_OBJECT_STORAGE_USER = "DROP USER '" + objectStorageUser + "'@'localhost'";
+
 
     public CreateObjectStorageTables(final WebServerFlavor flavor) {
         super(flavor);
@@ -126,12 +128,77 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
     }
 
     /*
+    ** This checks if the ObjectStorageDb database is present and if it is not, it creates it along with the tables and
+    **   the database user.
     **
+    ** NOTE: A worthwhile enhancement would be to use a different user per Tenancy to insure better differentiation
+    **   and logging between customers.
      */
     public void checkAndSetupObjectStorageDb() {
         if (createObjectStorageDb()) {
             createObjectStorageTables();
         }
+    }
+
+    /*
+    ** This is used to delete the ObjectStorageDb and its users
+     */
+    public void dropDatabase() {
+        Connection conn = null;
+        int vendorError;
+        String jdbcConnect;
+
+        if (isDockerImage() || isKubernetesImage()) {
+            jdbcConnect = kubeJDBCConnect;
+        } else {
+            jdbcConnect = execJDBCConnect;
+        }
+
+        try {
+            conn = DriverManager.getConnection(jdbcConnect, userName, password);
+        } catch (SQLException ex) {
+            vendorError = ex.getErrorCode();
+            System.out.println("dropDatabase(2) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState() +
+                    " " + vendorError);
+            LOG.error("dropDatabase(2) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState() + " " + vendorError);
+        }
+
+        if (conn != null) {
+            Statement stmt = null;
+
+            try {
+                stmt = conn.createStatement();
+                stmt.execute(DROP_OBJECT_STORAGE_USER);
+
+                stmt.execute(DROP_OBJECT_STORAGE_DB);
+            } catch (SQLException sqlEx) {
+                System.out.println("dropDatabase() - SQLException: " + sqlEx.getMessage() + " vendorError: " + sqlEx.getErrorCode());
+                LOG.error("dropDatabase() - SQLException: " + sqlEx.getMessage() + " vendorError: " + sqlEx.getErrorCode());
+            }
+            finally {
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("dropDatabase() - close - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        LOG.error("dropDatabase() - close - SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database.
+             */
+            try {
+                conn.close();
+            } catch (SQLException sqlEx) {
+                // handle any errors
+                System.out.println("SQL conn close(2) SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("SQL conn close(2) SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+            }
+        }
+
+        LOG.info("dropDatabase() ObjectStorageDb database dropped");
     }
 
 
@@ -223,19 +290,19 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             // handle any errors
 
             vendorError = ex.getErrorCode();
-            System.out.println("createObjectStorageDb(1) - JDBC connect: " + jdbcConnect);
-            System.out.println("createObjectStorageDb(1) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState());
-            LOG.error("createObjectStorageDb(1) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState());
-
             if (vendorError != MysqlErrorNumbers.ER_BAD_DB_ERROR) {
+                System.out.println("createObjectStorageDb(1) - JDBC connect: " + jdbcConnect);
+                System.out.println("createObjectStorageDb(1) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState());
+                LOG.error("createObjectStorageDb(1) - SQLException: " + ex.getMessage() + " SQLState: " + ex.getSQLState());
+
                 return false;
             }
         }
 
         /*
-         ** If the code reaches here, the database needs to be created
+         ** If the code reaches here, the ObjectStorageDb database needs to be created
          */
-        LOG.info("createObjectStorageDb() create database");
+        System.out.println("Create ObjectStorageDb");
 
         if (isDockerImage() || isKubernetesImage()) {
             jdbcConnect = kubeJDBCConnect;
@@ -260,7 +327,7 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
 
             /*
             ** For clarity and better handling of errors, may want to separate out the different execute statements. For
-            **   example, if the Object Storage user has laready been created, it will cause an exception and return
+            **   example, if the Object Storage user has already been created, it will cause an exception and return
             **   a vendor error of 1396.
              */
             try {
@@ -298,7 +365,7 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             }
         }
 
-        LOG.info("createObjectStorageDb() ObjectStorageDb database created");
+        LOG.info("ObjectStorageDb database created");
         return true;
     }
 

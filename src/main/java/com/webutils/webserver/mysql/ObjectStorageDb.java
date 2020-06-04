@@ -143,7 +143,11 @@ public class ObjectStorageDb {
                             count++;
                         }
 
-                        if (count != 1) {
+                        /*
+                         ** There should only be 0 or 1 responses from the getUID() query. There are 0 responses when
+                         **   this is used to check for the presence of a record within a table.
+                         */
+                        if (count > 1) {
                             uid = null;
                             LOG.warn("getUID() incorrect response count: " + count);
                             LOG.warn(uidQueryStr);

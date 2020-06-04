@@ -68,7 +68,7 @@ public class PostContentParser {
             ** Convert to a string. Then tokenize if using space, tab, NewLine, CR, \f and Double Quote.
             */
             String tmpStr = HttpInfo.bb_to_str(bufferToParse);
-            StringTokenizer stk = new StringTokenizer(tmpStr, " \t\n\r\f\"");
+            StringTokenizer stk = new StringTokenizer(tmpStr, ", \t\n\r\f\"");
             while (stk.hasMoreTokens()) {
                 String str1 = stk.nextToken();
 

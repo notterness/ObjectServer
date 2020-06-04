@@ -178,9 +178,10 @@ public abstract class ClientTest {
         return status;
     }
 
+    /*
+    ** This is used to wake up the thread waiting for the test to complete.
+     */
     void statusReceived(int result) {
-        System.out.println("ClientTest[" + clientTestName + "]  statusReceived() : " + result);
-
         synchronized (writeDone) {
             statusSignalSent = true;
             writeDone.notify();
@@ -205,7 +206,9 @@ public abstract class ClientTest {
             }
         }
 
-        System.out.println("ClientTest[" + clientTestName + "] waitForStatus() done: " + status);
+        if (!status) {
+            System.out.println("ClientTest[" + clientTestName + "] waitForStatus() timed out");
+        }
 
         return status;
     }
