@@ -24,7 +24,7 @@ public class BucketTableMgr extends ObjectStorageDb {
     private final static String CREATE_BUCKET_2 = "', '";                                  // compartmentId
     private final static String CREATE_BUCKET_3 = "', '";                                  // storageTier
     private final static String CREATE_BUCKET_4 = "', ";                                   // objectEventsEnabled
-    private final static String CREATE_BUCKET_5 = ", NULL, CURRENT_TIMESTAMP(), UUID_TO_BIN(UUID()), (SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN('";
+    private final static String CREATE_BUCKET_5 = ", CURRENT_TIMESTAMP(), UUID_TO_BIN(UUID()), (SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN('";
     private final static String CREATE_BUCKET_6 = "') ) )";
 
     private final static String GET_BUCKET_UID_1 = "SELECT BIN_TO_UUID(bucketUID) bucketUID FROM bucket WHERE bucketName = '";
@@ -43,8 +43,6 @@ public class BucketTableMgr extends ObjectStorageDb {
     private final static String GET_BUCKET_STORAGE_TIER_1 = "SELECT storageTier FROM bucket WHERE bucketID = ";
 
     private final static String GET_BUCKET_CREATE_TIME = "SELECT createTime FROM bucket WHERE bucketID = ";
-
-    private final static String GET_OPC_CLIENT_ID = "SELECT opcClientRequestId FROM bucket WHERE bucketId = ";
 
     private final static String SUCCESS_HEADER_1 = "opc-client-request-id: ";
     private final static String SUCCESS_HEADER_2 = "opc-request-id: ";
@@ -219,14 +217,8 @@ public class BucketTableMgr extends ObjectStorageDb {
         return getSingleStr(getBucketCreateTime);
     }
 
-    private String getOpcClientRequestId(final int bucketId) {
-       String getOpClientId = GET_OPC_CLIENT_ID + bucketId;
-
-       return getSingleStr(getOpClientId);
-    }
-
     public StorageTierEnum getBucketStorageTier(final int bucketId) {
-        String storageTierStr = null;
+        int storageTier = 0;
 
         String bucketStorageTierQuery = GET_BUCKET_STORAGE_TIER_1 + bucketId;
 
@@ -253,14 +245,14 @@ public class BucketTableMgr extends ObjectStorageDb {
                             /*
                              ** The rs.getString(1) is the String format of the UID.
                              */
-                            storageTierStr = rs.getString(1);
-                            LOG.info("Requested storageTier: " + storageTierStr);
+                            storageTier = rs.getInt(1);
+                            LOG.info("Requested storageTier: " + storageTier);
 
                             count++;
                         }
 
                         if (count != 1) {
-                            storageTierStr = null;
+                            storageTier = 0;
                             LOG.warn("getBucketStorageTier() too many responses count: " + count);
                         }
                     } catch (SQLException sqlEx) {
@@ -290,15 +282,7 @@ public class BucketTableMgr extends ObjectStorageDb {
             closeObjectStorageDbConn(conn);
         }
 
-        StorageTierEnum tier;
-
-        if (storageTierStr != null) {
-            tier = StorageTierEnum.fromString(storageTierStr);
-        } else {
-            tier = StorageTierEnum.INVALID_TIER;
-        }
-
-        return tier;
+        return StorageTierEnum.fromInt(storageTier);
     }
 
     /*
@@ -312,24 +296,17 @@ public class BucketTableMgr extends ObjectStorageDb {
     private String buildSuccessHeader(final HttpRequestInfo objectCreateInfo, final String bucketUID) {
         String successHeader;
 
-        int bucketId = getBucketId(bucketUID);
-        if (bucketId != -1) {
-            String opcClientId = objectCreateInfo.getOpcClientRequestId();
+        String opcClientId = objectCreateInfo.getOpcClientRequestId();
 
-            /*
-            ** FIXME: Need to add in the Location for the full path to the bucket
-             */
-            if (opcClientId != null) {
-                successHeader = SUCCESS_HEADER_1 + opcClientId + "\n" + SUCCESS_HEADER_2 + opcRequestId + "\n" +
-                        SUCCESS_HEADER_3 + bucketUID + "\n" + SUCCESS_HEADER_4 + "test" + "\n";
-            } else {
-                successHeader = SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + bucketUID + "\n" +
-                        SUCCESS_HEADER_4 + "test" + "\n";
-            }
-
-            //LOG.info(successHeader);
+        /*
+        ** FIXME: Need to add in the Location for the full path to the bucket
+         */
+        if (opcClientId != null) {
+            successHeader = SUCCESS_HEADER_1 + opcClientId + "\n" + SUCCESS_HEADER_2 + opcRequestId + "\n" +
+                    SUCCESS_HEADER_3 + bucketUID + "\n" + SUCCESS_HEADER_4 + "test" + "\n";
         } else {
-            successHeader = null;
+            successHeader = SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + bucketUID + "\n" +
+                    SUCCESS_HEADER_4 + "test" + "\n";
         }
 
         return successHeader;

@@ -27,7 +27,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
     **   5 - contentLength (int)
     **   6 - storageType (int)
     **   7 - contentMd5  (String)
-    **   8 - bucketUID (String)
+    **   8 - bucketId (int)
     **   9 - namespaceUID (String)
      */
     private final static String CREATE_OBJ_1 = "INSERT INTO object VALUES ( NULL, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(), NULL, 0, CURRENT_TIMESTAMP(), UUID_TO_BIN(UUID()), 0,";
@@ -184,7 +184,7 @@ public class ObjectTableMgr extends ObjectStorageDb {
 
                 stmt.setString(3, Integer.toString(versionId));
 
-                LOG.info("createObjectEntry opcClientRequestId: " + opcClientRequestId);
+                LOG.info("createObjectEntry opcClientRequestId: " + opcClientRequestId + " tier: " + tier.toInt());
                 if (opcClientRequestId != null) {
                     stmt.setString(4, opcClientRequestId);
                 } else {

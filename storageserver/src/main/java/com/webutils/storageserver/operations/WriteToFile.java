@@ -5,6 +5,7 @@ import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
+import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -128,13 +129,14 @@ public class WriteToFile implements Operation {
         ByteBuffer readBuffer;
         if ((readBuffer = clientReadBufferMgr.peek(clientFileWritePtr)) != null) {
             savedSrcPosition = readBuffer.position();
-            event();
         } else {
             savedSrcPosition = 0;
         }
 
         String filePathNameStr = buildChunkFileName();
         if (filePathNameStr == null) {
+            clientReadBufferMgr.unregister(clientFileWritePtr);
+            clientFileWritePtr = null;
             return null;
         }
 
@@ -146,7 +148,18 @@ public class WriteToFile implements Operation {
             writeFileChannel = new FileOutputStream(outFile, false).getChannel();
         } catch (FileNotFoundException ex) {
             LOG.info("WriteToFile[" + requestContext.getRequestId() + "] file not found: " + ex.getMessage());
+            String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
+                    "\r\n  \"message\": \"Unable to open file - " + filePathNameStr + "\"" +
+                    "\r\n}";
+            requestContext.getHttpInfo().setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
             writeFileChannel = null;
+
+            /*
+            ** Need to cleanup
+             */
+            clientReadBufferMgr.unregister(clientFileWritePtr);
+            clientFileWritePtr = null;
+            return null;
         }
 
         LOG.info("WriteToFile[" + requestContext.getRequestId() + "] initialize done savedSrcPosition: " + savedSrcPosition);
@@ -285,8 +298,13 @@ public class WriteToFile implements Operation {
     public void complete() {
         LOG.info("WriteToFile[" + requestContext.getRequestId() + "] complete");
 
-        clientReadBufferMgr.unregister(clientFileWritePtr);
-        clientFileWritePtr = null;
+        /*
+        ** Need to account for the case where the directory or the file had issues
+         */
+        if (clientFileWritePtr != null) {
+            clientReadBufferMgr.unregister(clientFileWritePtr);
+            clientFileWritePtr = null;
+        }
     }
 
     /*
@@ -353,7 +371,7 @@ public class WriteToFile implements Operation {
      ** It is comprised of the chunk location, chunk number, chunk lba and located at
      **   ./logs/StorageServer"IoInterfaceIdentifier"/"chunk location"
      *
-     ** FIXME: This method and the one it ReadFromFile need to be put into a common place.
+     ** FIXME: This method and the one in ReadFromFile need to be put into a common place.
      */
     public String buildChunkFileName() {
         int chunkNumber = requestContext.getHttpInfo().getObjectChunkNumber();
@@ -365,8 +383,26 @@ public class WriteToFile implements Operation {
             return null;
         }
 
-        return "./logs/StorageServer" + requestContext.getIoInterfaceIdentifier() + "/" + "/chunk_" + chunkLocation +
-                "_" + chunkNumber + "_" + chunkLba + ".dat";
+        /*
+        ** Check if the directory exists
+         */
+        String directory = "./logs/StorageServer" + requestContext.getIoInterfaceIdentifier();
+        File tmpDir = new File(directory);
+        if (!tmpDir.exists()) {
+            try {
+                Files.createDirectories(Paths.get(directory));
+            } catch (IOException ex) {
+                LOG.error("Unable to create directory - " + directory);
+                String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
+                        "\r\n  \"message\": \"Unable to create directory - " + directory + "\"" +
+                        "\r\n}";
+                requestContext.getHttpInfo().setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+
+                return null;
+            }
+        }
+
+        return directory + "/" + "/chunk_" + chunkLocation + "_" + chunkNumber + "_" + chunkLba + ".dat";
     }
 
 

@@ -187,11 +187,17 @@ public class WriteObjectChunk implements Operation {
                         chunkMgrService = servers.get(0);
                         chunkMgrService.setHttpInfo(httpInfo);
                     } else {
+                        HttpRequestInfo objectCreateInfo = requestContext.getHttpInfo();
+
                         /*
                          ** Nothing more can be done, might as well return an error
                          */
                         LOG.warn("Unable to obtain address for chunkMgrService");
-                        currState = ExecutionState.WRITE_STORAGE_CHUNK_FINALIZE;
+                        String failureMessage = "{\r\n  \"code\":" + HttpStatus.INTERNAL_SERVER_ERROR_500 +
+                                "\r\n  \"message\": \"Unable to obtain address for Chunk Manager Service\"" +
+                                "\r\n}";
+                        objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
+                        currState = ExecutionState.WRITE_STORAGE_CHUNK_CALLBACK;
                         event();
                         break;
                     }
@@ -199,10 +205,12 @@ public class WriteObjectChunk implements Operation {
                     HttpRequestInfo objectCreateInfo = requestContext.getHttpInfo();
 
                     LOG.warn("Unable to obtain serverTableMgr");
-                    String failureMessage = "\"Unable to obtain ServerIdentifierTableMgr\"";
+                    String failureMessage = "{\r\n  \"code\":" + HttpStatus.INTERNAL_SERVER_ERROR_500 +
+                            "\r\n  \"message\": \"Unable to obtain Service Manager Instance\"" +
+                            "\r\n}";
                     objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
 
-                    currState = ExecutionState.WRITE_STORAGE_CHUNK_FINALIZE;
+                    currState = ExecutionState.WRITE_STORAGE_CHUNK_CALLBACK;
                     event();
                     break;
                 }
@@ -317,7 +325,7 @@ public class WriteObjectChunk implements Operation {
                 }
 
                 if (allResponded) {
-                    LOG.info("WriteObjectChunk() WRITE_STORAGE_CHUNK_COMPLETE allResponded");
+                    LOG.info("WriteObjectChunk() WRITE_STORAGE_CHUNK_FINALIZE allResponded");
 
                     /*
                      ** For debug purposes, dump out the response results from the Storage Servers
@@ -418,6 +426,7 @@ public class WriteObjectChunk implements Operation {
                     currState = ExecutionState.WRITE_STORAGE_CHUNK_CALLBACK;
                 }
                 else {
+                    LOG.info("WriteObjectChunk() WRITE_STORAGE_CHUNK_FINALIZE not all Responded");
                     break;
                 }
 

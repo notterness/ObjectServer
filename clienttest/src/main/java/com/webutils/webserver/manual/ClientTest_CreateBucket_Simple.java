@@ -2,6 +2,7 @@ package com.webutils.webserver.manual;
 
 import com.webutils.webserver.common.Sha256Digest;
 import com.webutils.webserver.niosockets.NioTestClient;
+import org.eclipse.jetty.http.HttpStatus;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
@@ -24,7 +25,7 @@ class ClientTest_CreateBucket_Simple extends ClientTest {
     public String buildRequestString(final String Md5Digest) {
         String contentStr = buildContent();
 
-        return new String("POST /n/faketenantname" + "" +
+        return new String("POST /n/Tenancy-12345-abcde" + "" +
                 "/b/ HTTP/1.1\n" +
                 "Host: ClientTest-" + super.clientTestName + "\n" +
                 "Content-Type: application/json\n" +
@@ -48,10 +49,10 @@ class ClientTest_CreateBucket_Simple extends ClientTest {
      */
     @Override
     public void targetResponse(final int result, final ByteBuffer readBuffer) {
-        if (result == -1) {
+        if ((result == 0) && (httpStatus == HttpStatus.OK_200)) {
             System.out.println(super.clientTestName + " passed");
         } else {
-            System.out.println(super.clientTestName + " failed");
+            System.out.println(super.clientTestName + " failed httpStatus: " + httpStatus);
             super.client.setTestFailed(super.clientTestName);
         }
 
@@ -62,7 +63,7 @@ class ClientTest_CreateBucket_Simple extends ClientTest {
         String contentString = new String(
                 "{\n" +
                         "  \"compartmentId\": \"clienttest.compartment.12345.abcde\",\n" +
-                        "  \"namespace\": \"testnamespace\",\n" +
+                        "  \"namespace\": \"Namespace-xyz-987\",\n" +
                         "  \"name\": \"CreateBucket_Simple\",\n" +
                         "  \"objectEventsEnabled\": false,\n" +
                         "  \"freeformTags\": {\"Test_1\": \"Test_2\"}, \n" +
@@ -96,7 +97,6 @@ class ClientTest_CreateBucket_Simple extends ClientTest {
         ** Now compute the Sha-256 digest
          */
         tmpBuffer.flip();
-        System.out.println("start: " + tmpBuffer.position() + " limit: " + tmpBuffer.limit());
         digest.digestByteBuffer(tmpBuffer);
         sha256Digest = digest.getFinalDigest();
 

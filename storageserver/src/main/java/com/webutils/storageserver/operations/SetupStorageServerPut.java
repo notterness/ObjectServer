@@ -153,32 +153,38 @@ public class SetupStorageServerPut implements Operation {
                 WriteToFile writeToFile = new WriteToFile(requestContext, clientReadPtr, this);
                 storageServerPutHandlerOperations.put(writeToFile.getOperationType(), writeToFile);
                 BufferManagerPointer writeToFilePtr = writeToFile.initialize();
-
-                /*
-                 ** Dole out another buffer to read in the content data if there is not data remaining in
-                 **   the buffer from the HTTP Parsing. This is only done once and all further doling out
-                 **   of buffers is done within the WriteToFile operation.
-                 **
-                 ** NOTE: The check for calling either the writeToFile or metering operations needs to use the
-                 **   BufferManagerPointer returned from the writeToFile.initialize() method as that is the one used
-                 **   to obtain buffers to write to the file.
-                 */
-                BufferManager clientReadBufferManager = requestContext.getClientReadBufferManager();
-                ByteBuffer remainingBuffer = clientReadBufferManager.peek(writeToFilePtr);
-                if (remainingBuffer != null) {
-                    if (remainingBuffer.remaining() > 0) {
-                        writeToFile.event();
+                if (writeToFilePtr != null) {
+                    /*
+                     ** Dole out another buffer to read in the content data if there is not data remaining in
+                     **   the buffer from the HTTP Parsing. This is only done once and all further doling out
+                     **   of buffers is done within the WriteToFile operation.
+                     **
+                     ** NOTE: The check for calling either the writeToFile or metering operations needs to use the
+                     **   BufferManagerPointer returned from the writeToFile.initialize() method as that is the one used
+                     **   to obtain buffers to write to the file.
+                     */
+                    BufferManager clientReadBufferManager = requestContext.getClientReadBufferManager();
+                    ByteBuffer remainingBuffer = clientReadBufferManager.peek(writeToFilePtr);
+                    if (remainingBuffer != null) {
+                        if (remainingBuffer.remaining() > 0) {
+                            writeToFile.event();
+                        } else {
+                            metering.event();
+                        }
                     } else {
+                        /*
+                         ** There are no buffers waiting with data, so need to dole out another buffer to start a read
+                         **   operation.
+                         */
                         metering.event();
                     }
                 } else {
                     /*
-                     ** There are no buffers waiting with data, so need to dole out another buffer to start a read
-                     **   operation.
+                    ** This is an error due to the file not being able to be created or the directory not being able
+                    **   to be created.
                      */
-                    metering.event();
+                    complete();
                 }
-
                 LOG.info("SetupStorageServerPut[" + requestContext.getRequestId() + "] initialized");
             } else {
                 /*

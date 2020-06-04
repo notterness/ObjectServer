@@ -1,7 +1,5 @@
 package com.webutils.webserver.http;
 
-import com.webutils.webserver.requestcontext.ServerIdentifier;
-
 public class ListChunkInfo {
 
     private final int id;

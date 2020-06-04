@@ -38,10 +38,7 @@ public abstract class ServerIdentifierTableMgr extends ServersDb {
      **     "storage-server-3"
      */
     public boolean retrieveServers(final String sqlQuery, final List<ServerIdentifier> servers, final int chunkNumber) {
-        boolean success = true;
-
-        LOG.info("ServersDb retrieveStorageServers() dockerImage: " + isDockerImage() + " k8Image: " +
-                isKubernetesImage());
+        boolean success = false;
 
         Connection conn = getServersDbConn();
 
@@ -77,13 +74,13 @@ public abstract class ServerIdentifierTableMgr extends ServersDb {
 
                                 LOG.info("StorageServer host: " + rs.getString(1) + " " + inetAddress.toString() + " port: " +
                                         rs.getInt(3));
+
+                                success = true;
                             } catch (UnknownHostException ex) {
-                                success = false;
                                 LOG.warn("retrieveServers() Unknown host: " + rs.getString(1) + " " + ex.getMessage());
                             }
                         }
                     } catch (SQLException sqlEx) {
-                        success = false;
                         System.out.println("retrieveServers() rs.next() SQLException: " + sqlEx.getMessage());
                         LOG.warn("retrieveServers() rs.next() SQLException: " + sqlEx.getMessage());
                     }

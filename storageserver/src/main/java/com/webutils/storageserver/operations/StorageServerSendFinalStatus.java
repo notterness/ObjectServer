@@ -127,7 +127,7 @@ public class StorageServerSendFinalStatus implements Operation {
                             break;
                     }
                 } else {
-                    resultBuilder.buildResponse(respBuffer, resultCode, true, true);
+                    resultBuilder.buildResponse(respBuffer, resultCode, false, true);
                 }
 
                 respBuffer.flip();

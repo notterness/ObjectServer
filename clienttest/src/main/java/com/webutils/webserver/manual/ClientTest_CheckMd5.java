@@ -56,7 +56,7 @@ class ClientTest_CheckMd5 extends ClientTest {
     public String buildRequestString(final String Md5_Digest) {
         return new String("PUT /n/Namespace-xyz-987" + "" +
                 "/b/CreateBucket_Simple" +
-                "/o/5e223890-ea13-11e9-851d-234132e0fb02 HTTP/1.1\n" +
+                "/o/TestObject-1234-abcd HTTP/1.1\n" +
                 "Host: ClientTest-" + super.clientTestName + "\n" +
                 "Content-Type: application/json\n" +
                 "Connection: keep-alive\n" +
