@@ -151,7 +151,8 @@ public class WriteToFile implements Operation {
             String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
                     "\r\n  \"message\": \"Unable to open file - " + filePathNameStr + "\"" +
                     "\r\n}";
-            requestContext.getHttpInfo().setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+            requestContext.getHttpInfo().emitMetric(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+            requestContext.getHttpInfo().setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412);
             writeFileChannel = null;
 
             /*
@@ -369,7 +370,7 @@ public class WriteToFile implements Operation {
      ** This builds the filePath to where the chunk of data will be saved.
      **
      ** It is comprised of the chunk location, chunk number, chunk lba and located at
-     **   ./logs/StorageServer"IoInterfaceIdentifier"/"chunk location"
+     **   ./logs/StorageServer"IoInterfaceIdentifier"/chunk_"chunk location"_"chunk number"_"chunk lba".dat
      *
      ** FIXME: This method and the one in ReadFromFile need to be put into a common place.
      */
@@ -396,7 +397,8 @@ public class WriteToFile implements Operation {
                 String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
                         "\r\n  \"message\": \"Unable to create directory - " + directory + "\"" +
                         "\r\n}";
-                requestContext.getHttpInfo().setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+                requestContext.getHttpInfo().emitMetric(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+                requestContext.getHttpInfo().setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412);
 
                 return null;
             }

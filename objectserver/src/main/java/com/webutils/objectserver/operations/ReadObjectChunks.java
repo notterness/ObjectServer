@@ -254,6 +254,8 @@ public class ReadObjectChunks implements Operation {
                             ** First check if this chunk read has completed successfully
                              */
                             int responseCode = server.getResponseStatus();
+                            LOG.info("WAIT_FOR_ALL_CHUNK_READS chunkIndex: " + chunkIndex + " responseCode: " + responseCode);
+
                             if (responseCode == HttpStatus.OK_200) {
                                 /*
                                 ** If the chunk read has completed, make sure that the overall status is good. If it is

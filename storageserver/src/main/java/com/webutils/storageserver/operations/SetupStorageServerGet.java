@@ -124,20 +124,27 @@ public class SetupStorageServerGet implements Operation {
             storageServerGetHandlerOps.put(readFromFile.getOperationType(), readFromFile);
             BufferManagerPointer objectDataReadyPtr = readFromFile.initialize();
 
-            CloseOutRequest closeRequest = new CloseOutRequest(requestContext);
-            storageServerGetHandlerOps.put(closeRequest.getOperationType(), closeRequest);
-            closeRequest.initialize();
+            if (objectDataReadyPtr != null) {
+                CloseOutRequest closeRequest = new CloseOutRequest(requestContext);
+                storageServerGetHandlerOps.put(closeRequest.getOperationType(), closeRequest);
+                closeRequest.initialize();
 
-            WriteToClient writeToClient = new WriteToClient(requestContext, requestContext.getClientConnection(),
-                    closeRequest, objectDataReadyPtr, null);
-            storageServerGetHandlerOps.put(writeToClient.getOperationType(), writeToClient);
-            writeToClient.initialize();
+                WriteToClient writeToClient = new WriteToClient(requestContext, requestContext.getClientConnection(),
+                        closeRequest, objectDataReadyPtr, null);
+                storageServerGetHandlerOps.put(writeToClient.getOperationType(), writeToClient);
+                writeToClient.initialize();
 
-            /*
-            ** Meter out a buffer to kick off the readFromFile operation (this will actually build the HTTP response
-            **   buffer first and then start reading in data from the file).
-             */
-            metering.event();
+                /*
+                 ** Meter out a buffer to kick off the readFromFile operation (this will actually build the HTTP response
+                 **   buffer first and then start reading in data from the file).
+                 */
+                metering.event();
+            } else {
+                /*
+                ** The file could not be read, so simply cleanup
+                 */
+                complete();
+            }
 
             getOperationSetupDone = true;
         } else {
@@ -160,8 +167,13 @@ public class SetupStorageServerGet implements Operation {
          */
         Operation operation;
 
+        /*
+        ** If the file could not be opened for reading, the WRITE_TO_CLIENT will not be instantiated
+         */
         operation = storageServerGetHandlerOps.remove(OperationTypeEnum.WRITE_TO_CLIENT);
-        operation.complete();
+        if (operation != null) {
+            operation.complete();
+        }
 
         operation = storageServerGetHandlerOps.remove(OperationTypeEnum.READ_FROM_FILE);
         operation.complete();

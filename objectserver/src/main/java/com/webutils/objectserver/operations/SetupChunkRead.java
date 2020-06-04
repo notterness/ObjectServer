@@ -317,7 +317,7 @@ public class SetupChunkRead implements Operation {
                         /*
                         ** Some sort of an error response
                          */
-                        storageServer.setResponseStatus(HttpStatus.OK_200);
+                        storageServer.setResponseStatus(status);
                         currState = ExecutionState.CALLBACK_OPS;
                         event();
                     }

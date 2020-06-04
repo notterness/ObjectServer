@@ -645,7 +645,8 @@ public class ClientGetObject implements Operation {
         Operation httpRespHandler = requestHandlerOps.remove(OperationTypeEnum.RESPONSE_HANDLER);
         httpRespHandler.complete();
 
-        if (httpInfo.getContentLength() != 0) {
+        int objectSize = httpInfo.getContentLength();
+        if (objectSize != 0) {
             /*
              ** The next Operations are run once the response header has been received. The routines are to
              **   compute the Md5 digest and decrypt all the data into the chunk buffer.
@@ -660,7 +661,7 @@ public class ClientGetObject implements Operation {
             md5Digest.initialize();
 
             WriteObjectToFile writeObjectToFile = new WriteObjectToFile(requestContext, httpBufferPointer,
-                    responseBufferMetering, requestParams.getFilePathName(), this);
+                    responseBufferMetering, requestParams.getFilePathName(), objectSize,this);
             requestHandlerOps.put(writeObjectToFile.getOperationType(), writeObjectToFile);
             writeObjectToFile.initialize();
 

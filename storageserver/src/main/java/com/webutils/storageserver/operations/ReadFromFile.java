@@ -6,6 +6,7 @@ import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
+import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -140,7 +141,7 @@ public class ReadFromFile implements Operation {
          */
         savedSrcPosition = 0;
 
-       String filePathNameStr = buildChunkFileName();
+        String filePathNameStr = buildChunkFileName();
 
         /*
          ** Open up the File for reading
@@ -157,7 +158,21 @@ public class ReadFromFile implements Operation {
             }
         } catch (FileNotFoundException ex) {
             LOG.info("ReadFromFile[" + requestContext.getRequestId() + "] file not found: " + ex.getMessage());
+
+            String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
+                    "\r\n  \"message\": \"Unable to open file - " + filePathNameStr + "\"" +
+                    "\r\n}";
+            requestContext.getHttpInfo().emitMetric(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
+            requestContext.getHttpInfo().setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412);
+
             readFileChannel = null;
+
+            /*
+             ** Need to cleanup
+             */
+            chunkGetBufferMgr.unregister(chunkFileReadPtr);
+            chunkFileReadPtr = null;
+            return null;
         }
 
         LOG.info("ReadFromFile[" + requestContext.getRequestId() + "] initialize done - bytesToReadFromFile: " +
@@ -286,15 +301,19 @@ public class ReadFromFile implements Operation {
     public void complete() {
         LOG.info("ReadFromFile[" + requestContext.getRequestId() + "] complete");
 
-        try {
-            readFileChannel.close();
-        } catch (IOException ex) {
-            LOG.info("ReadFromFile[" + requestContext.getRequestId() + "] close exception: " + ex.getMessage());
+        if (readFileChannel != null) {
+            try {
+                readFileChannel.close();
+            } catch (IOException ex) {
+                LOG.info("ReadFromFile[" + requestContext.getRequestId() + "] close exception: " + ex.getMessage());
+            }
+            readFileChannel = null;
         }
-        readFileChannel = null;
 
-        chunkGetBufferMgr.unregister(chunkFileReadPtr);
-        chunkFileReadPtr = null;
+        if (chunkFileReadPtr != null) {
+            chunkGetBufferMgr.unregister(chunkFileReadPtr);
+            chunkFileReadPtr = null;
+        }
     }
 
     /*
@@ -414,7 +433,7 @@ public class ReadFromFile implements Operation {
      ** This builds the filePath to where the chunk of data will be read from.
      **
      ** It is comprised of the chunk location, chunk number, chunk lba and located at
-     **   ./logs/StorageServer"IoInterfaceIdentifier"/"chunk location"
+     **   ./logs/StorageServer"IoInterfaceIdentifier"/chunk_"chunk location"_"chunk number"_"chunk lba".dat
      *
      ** FIXME: This method and the one it WriteToFile need to be put into a common place.
      */
@@ -423,13 +442,14 @@ public class ReadFromFile implements Operation {
         int chunkLba = requestContext.getHttpInfo().getObjectChunkLba();
         String chunkLocation = requestContext.getHttpInfo().getObjectChunkLocation();
 
+        String directory = "./logs/StorageServer" + requestContext.getIoInterfaceIdentifier();
+
         if ((chunkNumber == -1) || (chunkLba == -1) || (chunkLocation == null)) {
             LOG.error("WriteToFile chunkNumber: " + chunkNumber + " chunkLba: " + chunkLba + " chunkLocation: " + chunkLocation);
             return null;
         }
 
-        return "./logs/StorageServer" + requestContext.getIoInterfaceIdentifier() + "/" + chunkLocation +
-                "/chunk_" + chunkNumber + "_" + chunkLba + ".dat";
+        return directory + "/" + "/chunk_" + chunkLocation + "_" + chunkNumber + "_" + chunkLba + ".dat";
     }
 
 

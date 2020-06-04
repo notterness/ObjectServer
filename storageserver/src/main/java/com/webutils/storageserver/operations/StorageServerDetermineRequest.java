@@ -157,6 +157,8 @@ public class StorageServerDetermineRequest implements Operation {
              */
             if (httpRequestInfo.getMethod() != HttpMethodEnum.GET_METHOD) {
                 sendFinalStatus();
+            } else if (httpRequestInfo.getParseFailureCode() != HttpStatus.OK_200)  {
+                sendFinalStatus();
             }
         }
     }

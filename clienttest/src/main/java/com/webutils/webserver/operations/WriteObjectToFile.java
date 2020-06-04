@@ -81,7 +81,8 @@ public class WriteObjectToFile implements Operation {
     /*
      */
     public WriteObjectToFile(final ClientRequestContext requestContext, final BufferManagerPointer readBufferPtr,
-                             final Operation metering, final String fileName, final Operation completeCb) {
+                             final Operation metering, final String fileName, final int objectSize,
+                             final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.clientReadBufferMgr = requestContext.getClientReadBufferManager();
@@ -91,7 +92,7 @@ public class WriteObjectToFile implements Operation {
         this.readBufferPointer = readBufferPtr;
 
         this.readBufferMetering = metering;
-        this.bytesToWriteToFile = requestContext.getRequestContentLength();
+        this.bytesToWriteToFile = objectSize;
 
         /*
          ** This starts out not being on any queue
@@ -151,7 +152,7 @@ public class WriteObjectToFile implements Operation {
         /*
          ** Open up the File for writing
          */
-        File outFile = new File("/Users/notterness/WebServer/webserver/logs/" + fileName);
+        File outFile = new File("./logs/" + fileName);
         try {
             writeFileChannel = new FileOutputStream(outFile, false).getChannel();
         } catch (FileNotFoundException ex) {
