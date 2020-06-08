@@ -126,11 +126,15 @@ public class ChunkMgrSendFinalStatus implements Operation {
                             resultBuilder.buildPostOkResponse(respBuffer);
                             break;
 
+                        case DELETE_METHOD:
+                            resultBuilder.buildDeleteOkResponse(respBuffer);
+                            break;
+
                         case LIST_METHOD:
                             break;
 
                         default:
-                            resultBuilder.buildResponse(respBuffer, resultCode, true, true);
+                            resultBuilder.buildResponse(respBuffer, resultCode, false, false);
                             break;
                     }
                 } else {

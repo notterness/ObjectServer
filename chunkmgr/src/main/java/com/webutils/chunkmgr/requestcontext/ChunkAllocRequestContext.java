@@ -195,6 +195,9 @@ public class ChunkAllocRequestContext extends RequestContext {
         SetupListServersGet listServersHandler = new SetupListServersGet(this, memoryManager, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.LIST_SERVERS_METHOD, listServersHandler);
 
+        SetupDeleteChunks deleteChunks = new SetupDeleteChunks(this, metering, determineRequest);
+        supportedHttpRequests.put(HttpMethodEnum.DELETE_METHOD, deleteChunks);
+
         /*
          ** Setup the specific part for parsing the buffers as an HTTP Request.
          */

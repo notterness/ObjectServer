@@ -1,9 +1,8 @@
 package com.webutils.webserver.manual;
 
-import com.webutils.webserver.common.AllocateChunksParams;
 import com.webutils.webserver.common.DeleteChunksParams;
 import com.webutils.webserver.http.AllocateChunksResponseContent;
-import com.webutils.webserver.http.StorageTierEnum;
+import com.webutils.webserver.http.DeleteChunksResponseParser;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.LocalServersMgr;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
@@ -13,30 +12,26 @@ import com.webutils.webserver.requestcontext.ServerIdentifier;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 
 import java.net.InetAddress;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class AllocateChunksSimple2 {
+public class DeleteChunksSimple {
 
     static WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
 
-    private static final int CHUNK_NUMBER = 0;
     private final ClientContextPool clientContextPool;
     private final NioCliClient cliClient;
 
     private final ClientServiceRequest cli;
 
-    private final AllocateChunksResponseContent contentParser;
-
     private final int eventThreadId;
 
-    AllocateChunksSimple2(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount,
-                          final AllocateChunksResponseContent contentParser) {
+    private final MemoryManager cliMemoryManager;
 
-        this.contentParser = contentParser;
+    DeleteChunksSimple(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount,
+                          final List<ServerIdentifier> servers) {
 
-        MemoryManager cliMemoryManager = new MemoryManager(flavor);
+        this.cliMemoryManager = new MemoryManager(flavor);
 
         ServerIdentifierTableMgr serverTableMgr = new LocalServersMgr(flavor);
 
@@ -46,22 +41,17 @@ public class AllocateChunksSimple2 {
 
         this.eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
 
-        AllocateChunksParams params = new AllocateChunksParams(StorageTierEnum.STANDARD_TIER, CHUNK_NUMBER);
-        params.setOpcClientRequestId("AllocateChunksSimple2-5-29-2020.01");
+        DeleteChunksParams params = new DeleteChunksParams(servers);
+        params.setOpcClientRequestId("DeleteChunksSimple-6-8-2020.01");
 
+        DeleteChunksResponseParser parser = new DeleteChunksResponseParser();
         cli = new ClientServiceRequest(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
-                params, contentParser, testCount);
+                params, parser, testCount);
 
     }
 
     public void execute() {
         cli.execute();
-
-        /*
-         ** Now delete the chunks that were allocated
-         */
-        List<ServerIdentifier> servers = new LinkedList<>();
-        contentParser.extractAllocations(servers, CHUNK_NUMBER);
 
         cliClient.stop();
 

@@ -1,22 +1,18 @@
 package com.webutils.storageserver.operations;
 
+import com.webutils.storageserver.http.ChunkFileHandler;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
-import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.charset.Charset;
-import java.nio.charset.CharsetEncoder;
-import java.nio.charset.StandardCharsets;
 
 public class ReadFromFile implements Operation {
     private static final Logger LOG = LoggerFactory.getLogger(ReadFromFile.class);
@@ -83,6 +79,7 @@ public class ReadFromFile implements Operation {
     /*
      ** The following are used for the file management
      */
+    private final ChunkFileHandler fileHandler;
     private FileChannel readFileChannel;
 
     /*
@@ -102,6 +99,8 @@ public class ReadFromFile implements Operation {
         this.completeCallback = completeCb;
 
         this.respHeaderBuilt = false;
+
+        this.fileHandler = new ChunkFileHandler(requestContext);
 
         /*
          ** This starts out not being on any queue
@@ -126,6 +125,21 @@ public class ReadFromFile implements Operation {
          */
         fileBytesRead = 0;
 
+        readFileChannel = fileHandler.getReadFileChannel();
+        if (readFileChannel == null) {
+            LOG.warn("ReadFromFile[" + requestContext.getRequestId() + "] initialize failed");
+            return null;
+        }
+
+        try {
+            bytesToReadFromFile = readFileChannel.size();
+        } catch (IOException io_ex) {
+            LOG.error("Unable to obtain file length - ex:" + io_ex.getMessage());
+            fileHandler.close(readFileChannel);
+            readFileChannel = null;
+            return null;
+        }
+
         /*
          ** Register this with the Buffer Manager to allow it to be event(ed) when
          **   buffers are added by the read producer.
@@ -141,39 +155,9 @@ public class ReadFromFile implements Operation {
          */
         savedSrcPosition = 0;
 
-        String filePathNameStr = buildChunkFileName();
-
         /*
          ** Open up the File for reading
          */
-        bytesToReadFromFile = 0;
-        File inFile = new File(filePathNameStr);
-        try {
-            readFileChannel = new FileInputStream(inFile).getChannel();
-
-            try {
-                bytesToReadFromFile = readFileChannel.size();
-            } catch (IOException io_ex) {
-                LOG.error("Unable to obtain file length - " + filePathNameStr + " ex:" + io_ex.getMessage());
-            }
-        } catch (FileNotFoundException ex) {
-            LOG.info("ReadFromFile[" + requestContext.getRequestId() + "] file not found: " + ex.getMessage());
-
-            String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
-                    "\r\n  \"message\": \"Unable to open file - " + filePathNameStr + "\"" +
-                    "\r\n}";
-            requestContext.getHttpInfo().emitMetric(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
-            requestContext.getHttpInfo().setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412);
-
-            readFileChannel = null;
-
-            /*
-             ** Need to cleanup
-             */
-            chunkGetBufferMgr.unregister(chunkFileReadPtr);
-            chunkFileReadPtr = null;
-            return null;
-        }
 
         LOG.info("ReadFromFile[" + requestContext.getRequestId() + "] initialize done - bytesToReadFromFile: " +
                 bytesToReadFromFile);
@@ -301,14 +285,9 @@ public class ReadFromFile implements Operation {
     public void complete() {
         LOG.info("ReadFromFile[" + requestContext.getRequestId() + "] complete");
 
-        if (readFileChannel != null) {
-            try {
-                readFileChannel.close();
-            } catch (IOException ex) {
-                LOG.info("ReadFromFile[" + requestContext.getRequestId() + "] close exception: " + ex.getMessage());
-            }
-            readFileChannel = null;
-        }
+        fileHandler.close(readFileChannel);
+        readFileChannel = null;
+
 
         if (chunkFileReadPtr != null) {
             chunkGetBufferMgr.unregister(chunkFileReadPtr);
@@ -428,29 +407,5 @@ public class ReadFromFile implements Operation {
 
         return goodResponseSent;
     }
-
-    /*
-     ** This builds the filePath to where the chunk of data will be read from.
-     **
-     ** It is comprised of the chunk location, chunk number, chunk lba and located at
-     **   ./logs/StorageServer"IoInterfaceIdentifier"/chunk_"chunk location"_"chunk number"_"chunk lba".dat
-     *
-     ** FIXME: This method and the one it WriteToFile need to be put into a common place.
-     */
-    public String buildChunkFileName() {
-        int chunkNumber = requestContext.getHttpInfo().getObjectChunkNumber();
-        int chunkLba = requestContext.getHttpInfo().getObjectChunkLba();
-        String chunkLocation = requestContext.getHttpInfo().getObjectChunkLocation();
-
-        String directory = "./logs/StorageServer" + requestContext.getIoInterfaceIdentifier();
-
-        if ((chunkNumber == -1) || (chunkLba == -1) || (chunkLocation == null)) {
-            LOG.error("WriteToFile chunkNumber: " + chunkNumber + " chunkLba: " + chunkLba + " chunkLocation: " + chunkLocation);
-            return null;
-        }
-
-        return directory + "/" + "/chunk_" + chunkLocation + "_" + chunkNumber + "_" + chunkLba + ".dat";
-    }
-
 
 }

@@ -16,6 +16,19 @@ public abstract class ContentParser {
     protected static final String COMPARTMENT_ID_ATTRIBUTE = "compartmentId";
     protected static final String STORAGE_TIER_ATTRIBUTE = "storageTier";
 
+    /*
+    ** These are used by multiple content parsers, so they are kept in the base class
+     */
+    public static final String SERVER_NAME = "storage-server-name";
+    protected static final String STORAGE_ID = "storage-id";
+    protected static final String SERVER_IP = "storage-server-ip";
+    protected static final String SERVER_PORT = "storage-server-port";
+    protected static final String CHUNK_ID = "chunk-id";
+    public static final String CHUNK_UID = "chunk-etag";
+    public static final String CHUNK_LBA = "chunk-lba";
+    protected static final String CHUNK_LOCATION = "chunk-location";
+
+
     private static final int DEFINED_TAGS_SUB_CATEGORY_DEPTH = 3;
     private static final int CHUNK_ALLOCATION_CATEGORY_DEPTH = 2;
 

@@ -1,5 +1,6 @@
 package com.webutils.storageserver.requestcontext;
 
+import com.webutils.storageserver.operations.SetupStorageServerChunkDelete;
 import com.webutils.storageserver.operations.SetupStorageServerGet;
 import com.webutils.storageserver.operations.SetupStorageServerPut;
 import com.webutils.storageserver.operations.StorageServerDetermineRequest;
@@ -97,6 +98,9 @@ public class StorageServerRequestContext extends RequestContext {
 
         SetupStorageServerGet storageServerGetHandler = new SetupStorageServerGet(this, memoryManager, determineRequestType);
         this.supportedHttpRequests.put(HttpMethodEnum.GET_METHOD, storageServerGetHandler);
+
+        SetupStorageServerChunkDelete storageServerDeleteHandler = new SetupStorageServerChunkDelete(this, determineRequestType);
+        this.supportedHttpRequests.put(HttpMethodEnum.DELETE_METHOD, storageServerDeleteHandler);
 
         /*
          ** Setup the specific part for parsing the buffers as an HTTP Request.

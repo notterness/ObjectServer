@@ -1,23 +1,17 @@
 package com.webutils.storageserver.operations;
 
+import com.webutils.storageserver.http.ChunkFileHandler;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
-import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
 public class WriteToFile implements Operation {
 
@@ -73,6 +67,7 @@ public class WriteToFile implements Operation {
     /*
     ** The following are used for the file management
      */
+    private final ChunkFileHandler fileHandler;
     private FileChannel writeFileChannel;
 
     /*
@@ -88,6 +83,8 @@ public class WriteToFile implements Operation {
 
         this.readBufferMetering = requestContext.getOperation(OperationTypeEnum.METER_READ_BUFFERS);
         this.bytesToWriteToFile = requestContext.getRequestContentLength();
+
+        this.fileHandler = new ChunkFileHandler(requestContext);
 
         /*
          ** This starts out not being on any queue
@@ -112,6 +109,13 @@ public class WriteToFile implements Operation {
          */
         fileBytesWritten = 0;
 
+        writeFileChannel = fileHandler.getWriteFileChannel();
+        if (writeFileChannel == null) {
+            clientFileWritePtr = null;
+            LOG.info("WriteToFile[" + requestContext.getRequestId() + "] initialize failed");
+            return null;
+        }
+
         /*
          ** Register this with the Buffer Manager to allow it to be event(ed) when
          **   buffers are added by the read producer.
@@ -131,36 +135,6 @@ public class WriteToFile implements Operation {
             savedSrcPosition = readBuffer.position();
         } else {
             savedSrcPosition = 0;
-        }
-
-        String filePathNameStr = buildChunkFileName();
-        if (filePathNameStr == null) {
-            clientReadBufferMgr.unregister(clientFileWritePtr);
-            clientFileWritePtr = null;
-            return null;
-        }
-
-        /*
-        ** Open up the File for writing
-         */
-        File outFile = new File(filePathNameStr);
-        try {
-            writeFileChannel = new FileOutputStream(outFile, false).getChannel();
-        } catch (FileNotFoundException ex) {
-            LOG.info("WriteToFile[" + requestContext.getRequestId() + "] file not found: " + ex.getMessage());
-            String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
-                    "\r\n  \"message\": \"Unable to open file - " + filePathNameStr + "\"" +
-                    "\r\n}";
-            requestContext.getHttpInfo().emitMetric(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
-            requestContext.getHttpInfo().setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412);
-            writeFileChannel = null;
-
-            /*
-            ** Need to cleanup
-             */
-            clientReadBufferMgr.unregister(clientFileWritePtr);
-            clientFileWritePtr = null;
-            return null;
         }
 
         LOG.info("WriteToFile[" + requestContext.getRequestId() + "] initialize done savedSrcPosition: " + savedSrcPosition);
@@ -274,23 +248,11 @@ public class WriteToFile implements Operation {
      ** This is used to close out the file. It has a flag to delete the file in the case of an error
      */
     private void closeOutFile(final boolean deleteFile) {
-        try {
-            writeFileChannel.close();
-        } catch (IOException ex) {
-            LOG.info("WriteObjectToFile[" + requestContext.getRequestId() + "] close exception: " + ex.getMessage());
-        }
+        fileHandler.close(writeFileChannel);
         writeFileChannel = null;
 
         if (deleteFile) {
-            String fileName = buildChunkFileName();
-            LOG.warn("Deleting file: " + fileName + " due to error: " + requestContext.getHttpParseStatus());
-
-            Path filePath = Paths.get(fileName);
-            try {
-                Files.deleteIfExists(filePath);
-            } catch (IOException ex) {
-                LOG.warn("Failure deleting file: " + fileName + " exception: " + ex.getMessage());
-            }
+            fileHandler.deleteFile();
         }
     }
 
@@ -365,47 +327,5 @@ public class WriteToFile implements Operation {
         clientFileWritePtr.dumpPointerInfo();
         LOG.info("");
     }
-
-    /*
-     ** This builds the filePath to where the chunk of data will be saved.
-     **
-     ** It is comprised of the chunk location, chunk number, chunk lba and located at
-     **   ./logs/StorageServer"IoInterfaceIdentifier"/chunk_"chunk location"_"chunk number"_"chunk lba".dat
-     *
-     ** FIXME: This method and the one in ReadFromFile need to be put into a common place.
-     */
-    public String buildChunkFileName() {
-        int chunkNumber = requestContext.getHttpInfo().getObjectChunkNumber();
-        int chunkLba = requestContext.getHttpInfo().getObjectChunkLba();
-        String chunkLocation = requestContext.getHttpInfo().getObjectChunkLocation();
-
-        if ((chunkNumber == -1) || (chunkLba == -1) || (chunkLocation == null)) {
-            LOG.error("WriteToFile chunkNumber: " + chunkNumber + " chunkLba: " + chunkLba + " chunkLocation: " + chunkLocation);
-            return null;
-        }
-
-        /*
-        ** Check if the directory exists
-         */
-        String directory = "./logs/StorageServer" + requestContext.getIoInterfaceIdentifier();
-        File tmpDir = new File(directory);
-        if (!tmpDir.exists()) {
-            try {
-                Files.createDirectories(Paths.get(directory));
-            } catch (IOException ex) {
-                LOG.error("Unable to create directory - " + directory);
-                String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
-                        "\r\n  \"message\": \"Unable to create directory - " + directory + "\"" +
-                        "\r\n}";
-                requestContext.getHttpInfo().emitMetric(HttpStatus.PRECONDITION_FAILED_412, failureMessage);
-                requestContext.getHttpInfo().setParseFailureCode(HttpStatus.PRECONDITION_FAILED_412);
-
-                return null;
-            }
-        }
-
-        return directory + "/" + "/chunk_" + chunkLocation + "_" + chunkNumber + "_" + chunkLba + ".dat";
-    }
-
 
 }

@@ -1,6 +1,7 @@
-package com.webutils.webserver.http;
+package com.webutils.chunkmgr.http;
 
-import com.webutils.webserver.requestcontext.ServerIdentifier;
+import com.webutils.chunkmgr.requestcontext.ChunkDeleteInfo;
+import com.webutils.webserver.http.ContentParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,30 +12,24 @@ import java.util.List;
 import java.util.Map;
 import java.util.StringTokenizer;
 
-public class AllocateChunksResponseContent extends ContentParser {
+public class DeleteChunksContent  extends ContentParser {
 
-    private static final Logger LOG = LoggerFactory.getLogger(AllocateChunksResponseContent.class);
+    private static final Logger LOG = LoggerFactory.getLogger(DeleteChunksContent.class);
 
     protected final LinkedList<String> requiredSubAttributes;
 
     /*
-    ** The response for the AllocateChunks request to the ChunkMgr service looks like the following:
-    **
-    **   {
-    **      "chunk-chunkIndex":
-    **       {
-    **          "storage-server-name": "  server.getServerName()  "
-    **          "storage-id": " server.getServerId() "
-    **          "storage-server-ip": " server.getServerIpAddress().toString() "
-    **          "storage-server-port": " server.getServerTcpPort() "
-    **          "chunk-id": " server.getChunkId() "
-    **          "chunk-uid": " server.getChunkUID() "
-    **          "chunk-lba": " server.getChunkLBA() "
-    **          "chunk-location": " + server.getChunkLocation() "
-    **       }
+     ** The request content for the DeleteChunks request to the ChunkMgr service looks like the following:
+     **
+     **   {
+     **      "chunk-chunkIndex":
+     **       {
+     **          "storage-server-name": "  server.getServerName()  "
+     **          "chunk-etag": " server.getChunkUID() "
+     **       }
      */
 
-    public AllocateChunksResponseContent() {
+    public DeleteChunksContent() {
         super();
 
         /*
@@ -43,13 +38,7 @@ public class AllocateChunksResponseContent extends ContentParser {
         requiredSubAttributes = new LinkedList<>();
 
         requiredSubAttributes.add(SERVER_NAME);
-        requiredSubAttributes.add(STORAGE_ID);
-        requiredSubAttributes.add(SERVER_IP);
-        requiredSubAttributes.add(SERVER_PORT);
-        requiredSubAttributes.add(CHUNK_ID);
         requiredSubAttributes.add(CHUNK_UID);
-        requiredSubAttributes.add(CHUNK_LBA);
-        requiredSubAttributes.add(CHUNK_LOCATION);
     }
 
     /*
@@ -123,48 +112,27 @@ public class AllocateChunksResponseContent extends ContentParser {
         }
     }
 
-    /*
-    ** This pulls the information passed back in the response content from the AllocateChunks method and puts it
-    **   into the ServerIdentifier class (actually a list of ServerIdentifiers).
-     */
-    public void extractAllocations(final List<ServerIdentifier> servers, final int chunkNumber) {
+    public void extractDeletions(final List<ChunkDeleteInfo> chunks) {
         for (Map.Entry<String, Map<String, String>> entry : chunkAllocations.entrySet()) {
 
             Map<String, String> subCategory = entry.getValue();
 
             String serverName = getStr(subCategory, SERVER_NAME);
-            InetAddress inetAddress = getServerIp(subCategory);
-            if (inetAddress != null) {
-                int port = getChunkServerPort(subCategory);
-                ServerIdentifier server = new ServerIdentifier(serverName, inetAddress, port, chunkNumber);
+            ChunkDeleteInfo chunkInfo = new ChunkDeleteInfo(serverName, getStr(subCategory, CHUNK_UID));
 
-                LOG.info("extractContent() serverName: " + serverName + " chunkUID: " + getStr(subCategory, CHUNK_UID));
-
-                /*
-                 ** Need to add the rest of the fields
-                 */
-                server.setChunkId(getId(subCategory, CHUNK_ID));
-                server.setChunkLBA(getChunkLba(subCategory));
-                server.setChunkUID(getStr(subCategory, CHUNK_UID));
-                server.setChunkLocation(getStr(subCategory, CHUNK_LOCATION));
-                server.setServerId(getId(subCategory, STORAGE_ID));
-
-                servers.add(server);
-            }
+            chunks.add(chunkInfo);
         }
 
-        LOG.info("extractContent() servers found: " + servers.size());
-
         /*
-        ** Done with the data, clear all the places it is held
+         ** Done with the data, clear all the places it is held
          */
         clearAllMaps();
     }
 
     /*
-    ** This is used to obtain the "storage-id" and "chunk-id". This converts the String into an integer and validates
-    **   that it is a positive integer.
-    ** The "chunk-id" is the value that uniquely represents the chunk in the ServiceServersDb.StorageServerChunk table.
+     ** This is used to obtain the "storage-id" and "chunk-id". This converts the String into an integer and validates
+     **   that it is a positive integer.
+     ** The "chunk-id" is the value that uniquely represents the chunk in the ServiceServersDb.StorageServerChunk table.
      */
     private int getId(final Map<String, String> subCategory, final String requestedId) {
         String idStr = subCategory.get(requestedId);
@@ -191,7 +159,7 @@ public class AllocateChunksResponseContent extends ContentParser {
     }
 
     /*
-    ** The following is used to obtain the "chunk-lba" for the allocated chunk
+     ** The following is used to obtain the "chunk-lba" for the allocated chunk
      */
     private int getChunkLba(final Map<String, String> subCategory) {
         String lbaStr = subCategory.get(CHUNK_LBA);
@@ -245,10 +213,10 @@ public class AllocateChunksResponseContent extends ContentParser {
     }
 
     /*
-    ** The following is used to extract the following Strings from the response:
-    **   storage-server-name
-    **   chunk-etag
-    **   chunk-location
+     ** The following is used to extract the following Strings from the response:
+     **   storage-server-name
+     **   chunk-etag
+     **   chunk-location
      */
     private String getStr(final Map<String, String> subCategory, final String requestedStr) {
         String str = subCategory.get(requestedStr);
@@ -260,15 +228,15 @@ public class AllocateChunksResponseContent extends ContentParser {
     }
 
     /*
-    ** The following is used to pull out the "storage-server-ip". This needs to handle the case where the hostname
-    **   string is something like:
-    **     "localhost/127.0.0.1"
-    **    This is the purpose of the StringTokenizer() used below.
+     ** The following is used to pull out the "storage-server-ip". This needs to handle the case where the hostname
+     **   string is something like:
+     **     "localhost/127.0.0.1"
+     **    This is the purpose of the StringTokenizer() used below.
      */
     private InetAddress getServerIp(final Map<String, String> subCategory) {
         String str = subCategory.get(SERVER_IP);
 
-        //LOG.info("serverIp: " + str);
+        LOG.info("serverIp: " + str);
 
         InetAddress inetAddress = null;
         if (str != null) {
