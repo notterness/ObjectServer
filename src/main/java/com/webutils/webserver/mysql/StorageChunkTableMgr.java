@@ -355,6 +355,11 @@ public class StorageChunkTableMgr extends ObjectStorageDb {
                                         server.setLength(length);
                                         server.setMd5Digest(md5DigestStr);
                                         server.setChunkId(chunkId);
+
+                                        /*
+                                        ** chunkUID and chunkLocation are the same
+                                         */
+                                        server.setChunkUID(location);
                                         server.setChunkLocation(location);
 
                                         server.setChunkReadErrorCount(readFailureCount);

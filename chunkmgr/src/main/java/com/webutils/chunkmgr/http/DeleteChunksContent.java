@@ -1,6 +1,6 @@
 package com.webutils.chunkmgr.http;
 
-import com.webutils.chunkmgr.requestcontext.ChunkDeleteInfo;
+import com.webutils.webserver.common.ChunkDeleteInfo;
 import com.webutils.webserver.http.ContentParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

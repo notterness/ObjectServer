@@ -1,4 +1,4 @@
-package com.webutils.chunkmgr.requestcontext;
+package com.webutils.webserver.common;
 
 public class ChunkDeleteInfo {
 

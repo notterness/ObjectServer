@@ -253,6 +253,8 @@ public class SendRequestToService implements Operation {
 
                     LOG.info("WAITING_FOR_RESPONSE_HEADER status: " + status + " contentLength: " + httpInfo.getContentLength());
 
+                    service.setResponseStatus(status);
+
                     currState = ExecutionState.READ_RESPONSE_DATA;
                     /*
                      ** Fall through to the READ_RESPONSE_DATA state

@@ -154,12 +154,15 @@ public class AllocateChunksResponseContent extends ContentParser {
         }
 
         LOG.info("extractContent() servers found: " + servers.size());
+    }
 
+    public void cleanup() {
         /*
-        ** Done with the data, clear all the places it is held
+         ** Done with the data, clear all the places it is held
          */
         clearAllMaps();
     }
+
 
     /*
     ** This is used to obtain the "storage-id" and "chunk-id". This converts the String into an integer and validates

@@ -529,19 +529,23 @@ public class NioSocket implements IoInterface {
      */
     public void closeConnection() {
 
-        LOG.info("NioSocket closeConnection()");
-        removeKey();
+        if (socketChannel != null) {
+            LOG.info("NioSocket closeConnection()");
+            removeKey();
 
-        try {
-            socketChannel.close();
-        } catch (IOException io_ex) {
-            LOG.warn("close(2) exception: " + io_ex.getMessage());
+            try {
+                socketChannel.close();
+            } catch (IOException io_ex) {
+                LOG.warn("close(2) exception: " + io_ex.getMessage());
+            }
+
+            socketChannel = null;
+
+            nioSelectHandler.removeNioSocketFromSelector(this);
+            nioSelectHandler = null;
+        } else {
+            LOG.info("NioSocket closeConnection() socketChannel is null");
         }
-
-        socketChannel = null;
-
-        nioSelectHandler.removeNioSocketFromSelector(this);
-        nioSelectHandler = null;
     }
 
     /*
@@ -552,6 +556,7 @@ public class NioSocket implements IoInterface {
         /*
          ** First remove the Key so it can no longer be used.
          */
+        LOG.warn("sendErrorEvent()");
         removeKey();
 
         socketChannel = null;
@@ -567,10 +572,10 @@ public class NioSocket implements IoInterface {
     }
 
     /*
-     ** Private method to call the Operation that is setup to handle when there is an error on
+     ** Method to call the Operation that is setup to handle when there is an error on
      **   the SocketChannel. This does everything the sendErrorEvent() does, but also tries to close the socket.
      */
-    private void closeAndSendErrorEvent() {
+    public void closeAndSendErrorEvent() {
         LOG.info("NioSocket closeAndSendErrorEvent()");
 
         /*
