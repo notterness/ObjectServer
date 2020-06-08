@@ -117,6 +117,20 @@ public class BuildHttpResult {
         HttpInfo.str_to_bb(respBuffer, tmpStr);
     }
 
+    public void buildDeleteOkResponse(final ByteBuffer respBuffer) {
+
+        String respHeader = httpRequestInfo.getResponseHeaders();
+
+        String tmpStr = "HTTP/1.1 200 OK" +
+                "\r\n" +
+                "Content-Type: text/html\n" +
+                respHeader +
+                "Content-Length: 0\n\n";
+
+        HttpInfo.str_to_bb(respBuffer, tmpStr);
+    }
+
+
     /*
     ** The OK_200 PUT response wil return the following headers:
     *

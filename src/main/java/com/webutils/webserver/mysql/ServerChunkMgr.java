@@ -68,6 +68,8 @@ public class ServerChunkMgr extends ServersDb {
 
     private static final String EXECUTE_LIST_CHUNKS = "{CALL list_chunks(?, ?, ?)}";
 
+    private static final String UPDATE_CHUNK_STATUS = "UPDATE storageServerChunk SET state = ? WHERE chunkUID = UUID_TO_BIN(?)";
+
     public ServerChunkMgr(final WebServerFlavor flavor) {
         super(flavor);
 
@@ -314,4 +316,50 @@ public class ServerChunkMgr extends ServersDb {
 
         return result;
     }
+
+    /*
+    ** This is used to update the state of a chunk. The chunk moves between the following states:
+    **   ALLOCATED - The chunk has been allocated and is in use on a Storage Server to hold data
+    **   DELETED - The chunk has been deleted (meaning the object is no longer available to the client), but it has
+    **     not been cleaned up on the Storage Server yet.
+    **   AVAILABLE - The chunk is available to be allocated.
+     */
+    public void updateChunkStatus(final String chunkUID, final ChunkStatusEnum newStatus) {
+        Connection conn = getServersDbConn();
+
+        if (conn != null) {
+            PreparedStatement stmt = null;
+
+            try {
+                /*
+                 ** Fields for the prepared statement are:
+                 **   1 - newStatus (int) - This is the new state to set the chunk
+                 **   2 - chunkUID  (String)
+                 */
+                stmt = conn.prepareStatement(UPDATE_CHUNK_STATUS);
+                stmt.setInt(1, newStatus.toInt());
+                stmt.setString(2, chunkUID);
+                stmt.executeUpdate();
+
+            } catch (SQLException sqlEx) {
+                LOG.error("updateChunkStatus() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                System.out.println("SQLException: " + sqlEx.getMessage());
+            } finally {
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("updateChunkStatus() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQLException: " + sqlEx.getMessage());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database tables.
+             */
+            closeStorageServerDbConn(conn);
+        }
+    }
+
 }

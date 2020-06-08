@@ -2,6 +2,7 @@ package com.webutils.chunkmgr.operations;
 
 import com.webutils.chunkmgr.http.AllocateChunksGetContent;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.http.ContentParser;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.http.StorageTierEnum;
 import com.webutils.webserver.mysql.ServerChunkMgr;
@@ -14,6 +15,7 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.naming.ContextNotEmptyException;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -234,12 +236,12 @@ public class AllocateChunks implements Operation {
         for (ServerIdentifier server : allocatedServers) {
             body.append("  \"chunk-" + chunkIndex + "\":\n");
             body.append("    {\n");
-            body.append("       \"storage-server-name\": \"" + server.getServerName() + "\"\n");
+            body.append("       \"" + ContentParser.SERVER_NAME + "\": \"" + server.getServerName() + "\"\n");
             body.append("       \"storage-id\": \"" + server.getServerId() + "\"\n");
             body.append("       \"storage-server-ip\": \"" + server.getServerIpAddress().toString() + "\"\n");
             body.append("       \"storage-server-port\": \"" + server.getServerTcpPort() + "\"\n");
             body.append("       \"chunk-id\": \"" + server.getChunkId() + "\"\n");
-            body.append("       \"chunk-uid\": \"" + server.getChunkUID() + "\"\n");
+            body.append("       \"" + ContentParser.CHUNK_UID + "\": \"" + server.getChunkUID() + "\"\n");
             body.append("       \"chunk-lba\": \"" + server.getChunkLBA() + "\"\n");
             body.append("       \"chunk-location\": \"" + server.getChunkUID() + "\"\n");
             body.append("    }\n");

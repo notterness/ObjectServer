@@ -3,6 +3,7 @@ package com.webutils.webserver.manual;
 import com.webutils.chunkmgr.requestcontext.ChunkAllocContextPool;
 import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
 import com.webutils.storageserver.requestcontext.StorageServerContextPool;
+import com.webutils.webserver.http.AllocateChunksResponseContent;
 import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.http.TenancyUserHttpRequestInfo;
@@ -12,12 +13,15 @@ import com.webutils.webserver.niosockets.NioTestClient;
 import com.webutils.webserver.kubernetes.KubernetesInfo;
 import com.webutils.webserver.niosockets.NioServerHandler;
 import com.webutils.webserver.requestcontext.ClientContextPool;
+import com.webutils.webserver.requestcontext.ServerIdentifier;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.eclipse.jetty.http.HttpField;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 // Server class
@@ -331,19 +335,32 @@ public class TestMain {
                 serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         client_CreateBucket_Simple.execute();
 
-        ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
-        checkMd5.execute();
+        //ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
+        //checkMd5.execute();
 
         waitForTestsToComplete(threadCount);
 
         //AllocateChunksSimple allocateChunks = new AllocateChunksSimple(serverIpAddr, CHUNK_ALLOC_SERVER_TCP_PORT, threadCount);
         //allocateChunks.execute();
-        AllocateChunksSimple2 allocateChunks = new AllocateChunksSimple2(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
+
+        AllocateChunksResponseContent contentParser = new AllocateChunksResponseContent();
+        AllocateChunksSimple2 allocateChunks = new AllocateChunksSimple2(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT,
+                threadCount, contentParser);
         allocateChunks.execute();
+
+        List<ServerIdentifier> servers = new LinkedList<>();
+        contentParser.extractAllocations(servers, 0);
+
+        DeleteChunksSimple deleteChunks = new DeleteChunksSimple(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT,
+                threadCount, servers);
+        deleteChunks.execute();
+
+        servers.clear();
 
         //DeleteObjectSimple deleteObject = new DeleteObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         //deleteObject.execute();
 
+        /*
         GetObjectSimple getObjectSimple = new GetObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         getObjectSimple.execute();
 
@@ -355,7 +372,7 @@ public class TestMain {
 
         ListServersAll listServersAll = new ListServersAll(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
         listServersAll.execute();
-
+*/
         /*
         GetObjectBadBucket getObjectBadBucket = new GetObjectBadBucket(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         getObjectBadBucket.execute();

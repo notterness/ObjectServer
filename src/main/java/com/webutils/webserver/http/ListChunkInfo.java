@@ -44,7 +44,7 @@ public class ListChunkInfo {
         body.append("  \"chunk-" + index + "\":\n");
         body.append("    {\n");
         body.append("       \"chunk-id\": \"" + id + "\"\n");
-        body.append("       \"chunk-uid\": \"" + uid + "\"\n");
+        body.append("       \"" + ContentParser.CHUNK_UID + "\": \"" + uid + "\"\n");
         body.append("       \"chunk-lba\": \"" + lba + "\"\n");
         body.append("       \"chunk-size\": \"" + size + "\"\n");
         body.append("       \"chunk-state\": \"" + state.toString() + "\"\n");

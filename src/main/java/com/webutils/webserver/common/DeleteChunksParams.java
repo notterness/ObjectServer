@@ -1,7 +1,8 @@
 package com.webutils.webserver.common;
 
+import com.webutils.webserver.http.ContentParser;
 import com.webutils.webserver.http.HttpResponseInfo;
-import com.webutils.webserver.http.StorageTierEnum;
+import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,45 +12,34 @@ import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
-public class CreateServerObjectParams extends ObjectParams {
+public class DeleteChunksParams extends ObjectParams {
 
-    private static final Logger LOG = LoggerFactory.getLogger(CreateServerObjectParams.class);
-
-    private final String serverName;
-    private final String ipAddr;
-    private final int port;
-    private final int numChunks;
-    private final StorageTierEnum tier;
+    private static final Logger LOG = LoggerFactory.getLogger(DeleteChunksParams.class);
 
     private String sha256Digest;
+    private List<ServerIdentifier> servers;
 
-    public CreateServerObjectParams(final String serverName, final String ipAddr, final int port, final int numChunks,
-                                    final StorageTierEnum tier) {
+    public DeleteChunksParams(final List<ServerIdentifier> servers) {
 
         super(null, null, null, null);
 
-        this.serverName = serverName;
-        this.ipAddr = ipAddr;
-        this.port = port;
-        this.numChunks = numChunks;
-        this.tier = tier;
-
-        this.sha256Digest = null;
+        LOG.info("server size() " + servers.size());
+        this.servers = servers;
     }
 
     /*
-     ** This builds the CreateServer POST method headers. The following headers and if they are required:
+     ** This builds the DeleteChunks DELETE method headers. The following lists the headers and if they are required:
      **
      **   Host (required) - Who is sending the request.
      **   opc-client-request-id (not required) - A unique identifier for this request provided by the client to allow
      **     then to track their requests.
      **   x-content-sha256 - A sha256 digest of the content.
-     **   Content-Length (required) - The size of the content that describes the server that is being created.
-     **
+     **   Content-Length (required) - The size of the content that is used to describe the chunks that are being requested.
      */
     public String constructRequest() {
-        String initialContent = "POST / HTTP/1.1\n";
+        String initialContent = "DELETE / HTTP/1.1\n";
 
         String contentStr = buildContent();
         int contentSizeInBytes = contentStr.length();
@@ -73,23 +63,42 @@ public class CreateServerObjectParams extends ObjectParams {
         }
 
         finalContent += "x-content-sha256: " + sha256Digest + "\n" +
-                    "Content-Length: " + contentSizeInBytes + "\n\n" +
-                    contentStr;
+                "Content-Length: " + contentSizeInBytes + "\n\n" +
+                contentStr;
 
         request += finalContent;
 
         return request;
     }
 
+    /*
+    ** The request content for the DeleteChunks request to the ChunkMgr service looks like the following:
+    **
+    **   {
+    **      "chunk-chunkIndex":
+    **       {
+    **         "storage-server-name": "  server.getServerName()  "
+    **          "chunk-etag": " server.getChunkUID() "
+    **       }
+     */
     private String buildContent() {
-        String contentString = new String(
-                "{\n" +
-                        "  \"storage-server-name\": \"" + serverName + "\",\n" +
-                        "  \"storage-server-ip\": \"" + ipAddr + "\",\n" +
-                        "  \"storage-server-port\": \"" + port + "\",\n" +
-                        "  \"allocated-chunks\": \"" + numChunks + "\",\n" +
-                        "  \"storageTier\": \"" + tier.toString() + "\",\n" +
-                        "}\n");
+
+        StringBuilder body = new StringBuilder();
+        int chunkIndex = 0;
+
+        body.append("{\n");
+        for (ServerIdentifier server : servers) {
+            body.append("  \"chunk-" + chunkIndex + "\":\n");
+            body.append("    {\n");
+            body.append("       \"" + ContentParser.SERVER_NAME + "\": \"" + server.getServerName() + "\"\n");
+            body.append("       \"" + ContentParser.CHUNK_UID + "\": \"" + server.getChunkUID() + "\"\n");
+            body.append("    }\n");
+
+            chunkIndex++;
+        }
+        body.append("}\n");
+
+        String contentString = body.toString();
 
         Sha256Digest digest = new Sha256Digest();
 
@@ -118,23 +127,22 @@ public class CreateServerObjectParams extends ObjectParams {
     }
 
     /*
-     ** This displays the results from the PutObject method.
+     ** This displays the results from the DeleteChunks method.
      **
      ** TODO: Allow the results to be dumped to a file and possibly allow a format that allows for easier parsing by
      **   the client.
      */
     public void outputResults(final HttpResponseInfo httpInfo) {
         /*
-         ** If the status is good, then display the following:
+         ** If the status is good (DeleteChunks returns 200 if successful), then display the following:
          **   opc-client-request-id
          **   opc-request-id
-         **   ETag
          */
         if (httpInfo.getResponseStatus() == HttpStatus.OK_200) {
             System.out.println("Status: 200");
             String opcClientRequestId = httpInfo.getOpcClientRequestId();
             if (opcClientRequestId != null) {
-                System.out.println("opc-clent-request-id: " + opcClientRequestId);
+                System.out.println("opc-client-request-id: " + opcClientRequestId);
             }
 
             String opcRequestId = httpInfo.getOpcRequestId();
@@ -142,9 +150,16 @@ public class CreateServerObjectParams extends ObjectParams {
                 System.out.println("opc-request-id: " + opcRequestId);
             }
 
-            String etag = httpInfo.getResponseEtag();
-            if (etag != null) {
-                System.out.println("ETag: " + etag);
+            String responseBody = httpInfo.getResponseBody();
+            if (responseBody != null) {
+                System.out.println(responseBody);
+            }
+
+        } else if (httpInfo.getResponseStatus() == HttpStatus.METHOD_NOT_ALLOWED_405) {
+            System.out.println("Status: " + httpInfo.getResponseStatus());
+            String allowableMethods = httpInfo.getAllowableMethods();
+            if (allowableMethods != null) {
+                System.out.println("Allowed Methods: " + allowableMethods);
             }
         } else {
             System.out.println("Status: " + httpInfo.getResponseStatus());
@@ -154,5 +169,6 @@ public class CreateServerObjectParams extends ObjectParams {
             }
         }
     }
+
 
 }

@@ -50,9 +50,9 @@ abstract public class HttpInfo {
     /*
      ** The following are used by the Storage Server to determine where to write the chunk data
      */
-    private static final String CHUNK_LBA = "chunk-lba";
-    private static final String CHUNK_NUMBER = "object-chunk-number";
-    private static final String CHUNK_LOCATION = "chunk-location";
+    public static final String CHUNK_LBA = "chunk-lba";
+    public static final String CHUNK_NUMBER = "object-chunk-number";
+    public static final String CHUNK_LOCATION = "chunk-location";
 
     /*
     ** The following headers are used for the GET and PUT commands

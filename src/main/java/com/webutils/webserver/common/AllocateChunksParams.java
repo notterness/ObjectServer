@@ -98,7 +98,6 @@ public class AllocateChunksParams extends ObjectParams {
          ** Now compute the Sha-256 digest
          */
         tmpBuffer.flip();
-        System.out.println("start: " + tmpBuffer.position() + " limit: " + tmpBuffer.limit());
         digest.digestByteBuffer(tmpBuffer);
         sha256Digest = digest.getFinalDigest();
 
