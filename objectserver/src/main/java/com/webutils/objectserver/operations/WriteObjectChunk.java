@@ -245,7 +245,6 @@ public class WriteObjectChunk implements Operation {
                             " port: " + serverIdentifier.getServerTcpPort());
                 }
 
-
                 if (!serverList.isEmpty()) {
                     /*
                     ** Kick off the StorageChunkAllocated operation to save the information about the chunks that
@@ -435,6 +434,7 @@ public class WriteObjectChunk implements Operation {
                 ** Done so cleanup the active list of Storage Servers
                  */
                 serverList.clear();
+                contentParser.cleanup();
 
                 /*
                 ** event() all of the operations that are ready to run once the chunk writes have succeeded.

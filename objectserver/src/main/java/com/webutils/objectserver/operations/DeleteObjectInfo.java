@@ -2,23 +2,28 @@ package com.webutils.objectserver.operations;
 
 import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.common.ChunkDeleteInfo;
+import com.webutils.webserver.common.DeleteChunksParams;
+import com.webutils.webserver.http.DeleteChunksResponseParser;
 import com.webutils.webserver.http.HttpRequestInfo;
+import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ObjectInfo;
 import com.webutils.webserver.mysql.ObjectTableMgr;
+import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.mysql.TenancyTableMgr;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
+import com.webutils.webserver.operations.SendRequestToService;
 import com.webutils.webserver.operations.WriteToClient;
+import com.webutils.webserver.requestcontext.ServerIdentifier;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public class DeleteObjectInfo implements Operation {
 
@@ -27,7 +32,7 @@ public class DeleteObjectInfo implements Operation {
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    private final OperationTypeEnum operationType = OperationTypeEnum.RETRIEVE_OBJECT_INFO;
+    private final OperationTypeEnum operationType = OperationTypeEnum.DELETE_OBJECT;
 
     private final ObjectServerRequestContext requestContext;
 
@@ -47,6 +52,8 @@ public class DeleteObjectInfo implements Operation {
      */
     enum ExecutionState {
         GET_OBJECT_INFO,
+        GET_CHUNKS,
+        DELETE_CHUNKS,
         DELETE_FROM_DATABASE,
         SEND_STATUS,
         WAIT_FOR_RESPONSE_SEND,
@@ -62,6 +69,13 @@ public class DeleteObjectInfo implements Operation {
     private final WebServerFlavor flavor;
     private int tenancyId;
     private final ObjectTableMgr objectMgr;
+
+    /*
+     ** The following is used to send the request to delete chunk allocations to the Chunk Mgr Service
+     */
+    private ServerIdentifier chunkMgrService;
+    private SendRequestToService cmdSend;
+
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -125,7 +139,7 @@ public class DeleteObjectInfo implements Operation {
                 **   version-id
                  */
                 if (objectMgr.retrieveObjectInfo(objectPutInfo, objectInfo, tenancyId) == HttpStatus.OK_200) {
-                    currState = ExecutionState.DELETE_FROM_DATABASE;
+                    currState = ExecutionState.GET_CHUNKS;
                     /*
                      ** Fall through
                      */
@@ -135,16 +149,93 @@ public class DeleteObjectInfo implements Operation {
                     break;
                 }
 
-            case DELETE_FROM_DATABASE:
+            case DELETE_CHUNKS:
+                LOG.info("DeleteObjectInfo DELETE_CHUNKS");
+
                 /*
-                 ** Delete the object information. The critical pieces to access the object information are:
-                 **    Tenancy -
-                 **    Namespace - The "holder" of all of the buckets for a particular user in a region
-                 **    Bucket Name - A place to organize objects
-                 **    Object Name - The actual object that is wanted.
-                 **    Version Id - An object can have multiple versions
+                 **
                  */
-                objectMgr.deleteObjectInfo(objectPutInfo, tenancyId);
+                ServerIdentifierTableMgr serverTableMgr = requestContext.getServerTableMgr();
+                if (serverTableMgr != null) {
+                    List<ServerIdentifier> servers = new LinkedList<>();
+                    boolean found = serverTableMgr.getServer("chunk-mgr-service", servers);
+                    if (found) {
+                        chunkMgrService = servers.get(0);
+
+                        HttpResponseInfo httpInfo = new HttpResponseInfo(requestContext.getRequestId());
+
+                        chunkMgrService.setHttpInfo(httpInfo);
+                    } else {
+                        HttpRequestInfo objectCreateInfo = requestContext.getHttpInfo();
+
+                        /*
+                         ** Nothing more can be done, might as well return an error
+                         */
+                        LOG.warn("Unable to obtain address for chunkMgrService");
+                        String failureMessage = "{\r\n  \"code\":" + HttpStatus.INTERNAL_SERVER_ERROR_500 +
+                                "\r\n  \"message\": \"Unable to obtain address for Chunk Manager Service\"" +
+                                "\r\n}";
+                        objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
+                        currState = ExecutionState.SEND_STATUS;
+                        event();
+                        break;
+                    }
+                } else {
+                    HttpRequestInfo objectCreateInfo = requestContext.getHttpInfo();
+
+                    LOG.warn("Unable to obtain serverTableMgr");
+                    String failureMessage = "{\r\n  \"code\":" + HttpStatus.INTERNAL_SERVER_ERROR_500 +
+                            "\r\n  \"message\": \"Unable to obtain Service Manager Instance\"" +
+                            "\r\n}";
+                    objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
+
+                    currState = ExecutionState.SEND_STATUS;
+                    event();
+                    break;
+                }
+
+                DeleteChunksParams params = new DeleteChunksParams(objectInfo.getChunkList());
+                params.setOpcClientRequestId(requestContext.getHttpInfo().getOpcClientRequestId());
+
+                DeleteChunksResponseParser parser = new DeleteChunksResponseParser();
+                cmdSend = new SendRequestToService(requestContext, memoryManager, chunkMgrService, params, parser, this);
+                cmdSend.initialize();
+
+                /*
+                 ** Start the process of sending the HTTP Request and the request object to the ChunkMgr service
+                 */
+                currState = ExecutionState.DELETE_FROM_DATABASE;
+                cmdSend.event();
+                break;
+
+            case DELETE_FROM_DATABASE:
+                int responseStatus = chunkMgrService.getResponseStatus();
+
+                /*
+                 ** Clean up from the request to delete the chunks
+                 */
+                cmdSend.complete();
+
+                if (responseStatus == HttpStatus.OK_200) {
+                    /*
+                     ** Delete the object information. The critical pieces to access the object information are:
+                     **    Tenancy -
+                     **    Namespace - The "holder" of all of the buckets for a particular user in a region
+                     **    Bucket Name - A place to organize objects
+                     **    Object Name - The actual object that is wanted.
+                     **    Version Id - An object can have multiple versions
+                     */
+                    objectMgr.deleteObjectInfo(objectPutInfo, tenancyId);
+                } else {
+                    HttpRequestInfo objectCreateInfo = requestContext.getHttpInfo();
+
+                    LOG.warn("Request to delete chunks from Chunk Manager Service failed - " + responseStatus);
+
+                    String failureMessage = "{\r\n  \"code\":" + responseStatus +
+                            "\r\n  \"message\": \"Request to delete chunks from Chunk Manager Service failed\"" +
+                            "\r\n}";
+                    objectCreateInfo.setParseFailureCode(responseStatus, failureMessage);
+                }
                 currState = ExecutionState.SEND_STATUS;
                 /*
                 ** Fall through

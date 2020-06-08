@@ -335,14 +335,18 @@ public class TestMain {
                 serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         client_CreateBucket_Simple.execute();
 
-        //ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
-        //checkMd5.execute();
+        ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
+        checkMd5.execute();
 
         waitForTestsToComplete(threadCount);
 
         //AllocateChunksSimple allocateChunks = new AllocateChunksSimple(serverIpAddr, CHUNK_ALLOC_SERVER_TCP_PORT, threadCount);
         //allocateChunks.execute();
 
+        /*
+        ** The AllocateChunksSimple2 and DeleteChunksSimple are sent directly to the Chunk Manager Service to validate
+        **   the AllocateChunks and DeleteChunks methods work correctly.
+         */
         AllocateChunksResponseContent contentParser = new AllocateChunksResponseContent();
         AllocateChunksSimple2 allocateChunks = new AllocateChunksSimple2(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT,
                 threadCount, contentParser);
@@ -356,14 +360,18 @@ public class TestMain {
         deleteChunks.execute();
 
         servers.clear();
+        contentParser.cleanup();
 
-        //DeleteObjectSimple deleteObject = new DeleteObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
-        //deleteObject.execute();
-
-        /*
         GetObjectSimple getObjectSimple = new GetObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         getObjectSimple.execute();
 
+        PutObjectSimple putObjectSimple = new PutObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
+        putObjectSimple.execute();
+
+        DeleteObjectSimple deleteObject = new DeleteObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
+        deleteObject.execute();
+
+        /*
         ListObjectsSimple listObjectsSimple = new ListObjectsSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         listObjectsSimple.execute();
 
@@ -386,8 +394,6 @@ public class TestMain {
         PutObjectBadNamespace putObjectBadNamespace = new PutObjectBadNamespace(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         putObjectBadNamespace.execute();
 */
-        //PutObjectSimple putObjectSimple = new PutObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
-        //putObjectSimple.execute();
 
         /*
         ** Uncomment out the following two lines to let TestMain just act as a server. It can then be used to

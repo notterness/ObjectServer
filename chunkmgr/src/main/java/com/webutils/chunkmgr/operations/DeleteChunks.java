@@ -1,16 +1,14 @@
 package com.webutils.chunkmgr.operations;
 
 import com.webutils.chunkmgr.http.DeleteChunksContent;
-import com.webutils.chunkmgr.requestcontext.ChunkDeleteInfo;
+import com.webutils.webserver.common.ChunkDeleteInfo;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.ChunkStatusEnum;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.mysql.ServerChunkMgr;
-import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
-import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
