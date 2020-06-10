@@ -1,6 +1,6 @@
 package com.webutils.webserver.manual;
 
-import com.webutils.webserver.common.StorageServerChunkDeleteParams;
+import com.webutils.webserver.common.ClientTestDeleteChunkParams;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.LocalServersMgr;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
@@ -31,7 +31,7 @@ public class StorageServerChunkDeleteSimple {
         cliClient = new NioCliClient(clientContextPool);
         cliClient.start();
 
-        StorageServerChunkDeleteParams params = new StorageServerChunkDeleteParams(server);
+        ClientTestDeleteChunkParams params = new ClientTestDeleteChunkParams(server);
         params.setOpcClientRequestId("StorageServerChunkDeleteSimple-6-9-2020.01");
 
         /*

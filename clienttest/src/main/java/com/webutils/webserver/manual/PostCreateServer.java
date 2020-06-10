@@ -33,7 +33,7 @@ public class PostCreateServer {
         cliClient.start();
 
         CreateServerObjectParams params = new CreateServerObjectParams("storage-server-4", "localhost",
-                5014, 10, StorageTierEnum.STANDARD_TIER);
+                5013, 10, StorageTierEnum.STANDARD_TIER);
         params.setOpcClientRequestId("PostCreateServer-5-20-2020.01");
 
         cli = new ClientCommandInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort, params, testCount);

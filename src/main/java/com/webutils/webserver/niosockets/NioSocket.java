@@ -632,7 +632,7 @@ public class NioSocket implements IoInterface {
             port = 0;
         }
 
-        System.out.println("NioSocket[" + nioSocketId + "] SocketChannel " + socketChannel.toString() + " listeningPort: " + port);
+        //System.out.println("NioSocket[" + nioSocketId + "] SocketChannel " + socketChannel.toString() + " listeningPort: " + port);
 
         return Integer.toString(port);
     }

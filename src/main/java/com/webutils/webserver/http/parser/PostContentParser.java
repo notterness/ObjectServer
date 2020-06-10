@@ -76,7 +76,7 @@ public class PostContentParser {
                 ** Uncomment out the following line to look at what the string is that has been parsed out by the
                 **   StringTokenizer().
                  */
-                LOG.info(" token: " + str1);
+                //LOG.info(" token: " + str1);
 
                 if (!contentParser.addData(str1)) {
                     parseError = true;

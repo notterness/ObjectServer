@@ -3,7 +3,7 @@ package com.webutils.chunkmgr.operations;
 import com.webutils.chunkmgr.http.DeleteChunksContent;
 import com.webutils.webserver.common.ChunkDeleteInfo;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.common.StorageServerChunkDeleteParams;
+import com.webutils.chunkmgr.common.StorageServerDeleteChunkParams;
 import com.webutils.webserver.http.*;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ServerChunkMgr;
@@ -159,7 +159,7 @@ public class DeleteChunks implements Operation {
                     ** Send the request to each server
                      */
                     for (ServerIdentifier server: servers) {
-                        StorageServerChunkDeleteParams params = new StorageServerChunkDeleteParams(server);
+                        StorageServerDeleteChunkParams params = new StorageServerDeleteChunkParams(server);
                         params.setOpcClientRequestId(requestContext.getHttpInfo().getOpcClientRequestId());
 
                         HttpResponseInfo httpInfo = new HttpResponseInfo(requestContext.getRequestId());

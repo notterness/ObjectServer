@@ -17,8 +17,8 @@ public class HttpResponseCompleted extends HttpResponseCallback {
 
     @Override
     public void httpResponse(final int status, final boolean headerCompleted, final boolean messageCompleted) {
-        System.out.println("httpResponse() status: " + status + " headerCompleted: " + headerCompleted +
-                " messageCompleted: " + messageCompleted);
+        //System.out.println("httpResponse() status: " + status + " headerCompleted: " + headerCompleted +
+        //        " messageCompleted: " + messageCompleted);
         LOG.info("httpResponse() status: " + status + " headerCompleted: " + headerCompleted +
                 " messageCompleted: " + messageCompleted);
 
