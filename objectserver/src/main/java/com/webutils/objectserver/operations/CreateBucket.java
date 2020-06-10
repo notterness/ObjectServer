@@ -4,7 +4,6 @@ import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.CreateBucketPostContent;
 import com.webutils.webserver.mysql.BucketTableMgr;
 import com.webutils.webserver.mysql.NamespaceTableMgr;
-import com.webutils.webserver.mysql.TenancyTableMgr;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
@@ -78,11 +77,8 @@ public class CreateBucket implements Operation {
         if (!bucketCreated) {
             WebServerFlavor flavor = requestContext.getWebServerFlavor();
 
-            TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
-            int tenancyId = tenancyMgr.getTenancyId("testCustomer", "Tenancy-12345-abcde");
-
             NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
-            String namespaceUID = namespaceMgr.getNamespaceUID("Namespace-xyz-987", tenancyId);
+            String namespaceUID = namespaceMgr.getNamespaceUID("Namespace-xyz-987", requestContext.getTenancyId());
 
             BucketTableMgr bucketMgr = new BucketTableMgr(flavor, requestContext.getRequestId(), requestContext.getHttpInfo());
             int status = bucketMgr.createBucketEntry(createBucketPostContent, namespaceUID);

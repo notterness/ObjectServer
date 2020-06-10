@@ -8,6 +8,7 @@ import com.webutils.webserver.http.HttpMethodEnum;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
+import com.webutils.webserver.mysql.TenancyTableMgr;
 import com.webutils.webserver.niosockets.EventPollThread;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.*;
@@ -154,6 +155,10 @@ public abstract class RequestContext {
     private final BlockingQueue<Operation> workQueue;
     private final BlockingQueue<Operation> timedWaitQueue;
 
+    /*
+    ** The following is used to keep track of the Tenancy this Request is operating within
+     */
+    private int tenancyId;
 
     public RequestContext(final MemoryManager memoryManager, final HttpRequestInfo httpInfo, final EventPollThread threadThisRunsOn,
                           final ServerIdentifierTableMgr serverTableMgr, final int threadId, final WebServerFlavor flavor) {
@@ -197,6 +202,8 @@ public abstract class RequestContext {
 
         this.putAllDataWritten = false;
         this.postMethodContentDataParsed = false;
+
+        this.tenancyId = -1;
 
         this.allClientBuffersFilled = new AtomicBoolean(false);
     }
@@ -242,6 +249,8 @@ public abstract class RequestContext {
 
         putAllDataWritten = false;
         postMethodContentDataParsed = false;
+
+        tenancyId = -1;
 
         allClientBuffersFilled.set(false);
     }
@@ -586,6 +595,18 @@ public abstract class RequestContext {
 
     public void setAllClientBuffersFilled() { allClientBuffersFilled.set(true); }
 
+    /*
+    ** Methods related to the Tenancy
+     */
+    public void setTenancyId(final int id) {
+        tenancyId = id;
+    }
+
+    public int getTenancyId() { return tenancyId; }
+
+    /*
+    ** Debug code follows
+     */
     public void dumpOperations() {
         LOG.info(" RequestContext[" + connectionRequestId + "] Operation dependency");
         Collection<Operation> createdOperations = requestHandlerOperations.values();

@@ -4,7 +4,6 @@ import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.mysql.ObjectTableMgr;
-import com.webutils.webserver.mysql.TenancyTableMgr;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
@@ -71,11 +70,8 @@ public class CreateObject implements Operation {
 
         WebServerFlavor flavor = requestContext.getWebServerFlavor();
 
-        TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
-        int tenancyId = tenancyMgr.getTenancyId("testCustomer", "Tenancy-12345-abcde");
-
         ObjectTableMgr objectMgr = new ObjectTableMgr(flavor, requestContext);
-        if (objectMgr.createObjectEntry(objectPutInfo, tenancyId) == HttpStatus.OK_200) {
+        if (objectMgr.createObjectEntry(objectPutInfo, requestContext.getTenancyId()) == HttpStatus.OK_200) {
             int objectId = objectPutInfo.getObjectId();
             if (objectId != -1) {
                 requestContext.setObjectId(objectId);

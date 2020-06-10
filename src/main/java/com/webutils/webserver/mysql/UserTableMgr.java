@@ -16,14 +16,14 @@ public class UserTableMgr extends AccessControlDb {
     private final static String CREATE_USER = "INSERT INTO TenancyUser VALUES ( NULL, AES_ENCRYPT(?, ?), AES_ENCRYPT(?, ?), UUID_TO_BIN(UUID()), ?," +
             " NULL, CURRENT_TIMESTAMP(), 0, NULL, 0, NULL, 0, NULL, ? )";
 
-    private final static String SET_ACCESS_KEY = "UPDATE TenancyUser SET accessKey = MD5(?) WHERE userId = ?";
+    private final static String SET_ACCESS_TOKEN = "UPDATE TenancyUser SET accessToken = MD5(?) WHERE userId = ?";
 
     private final static String GET_USER_UID = "SELECT BIN_TO_UUID(userUID) userUID FROM TenancyUser WHERE userId = ";
 
-    private final static String GET_ACCESS_KEY = "SELECT HEX(accessKey) accessKey FROM TenancyUser WHERE userName = " +
+    private final static String GET_ACCESS_TOKEN = "SELECT HEX(accessToken) accessToken FROM TenancyUser WHERE userName = " +
             "AES_ENCRYPT(?, ?) AND password = AES_ENCRYPT(?, ?) AND tenancyId = ?";
 
-    private final static String GET_TENANCY_FROM_KEY = "SELECT tenancyId FROM TenancyUser WHERE accessKey = UNHEX(?)";
+    private final static String GET_TENANCY_FROM_TOKEN = "SELECT tenancyId FROM TenancyUser WHERE accessToken = UNHEX(?)";
 
     private final static String GET_USER_ID = "SELECT userId FROM TenancyUser WHERE userName = AES_ENCRYPT(?, ?) AND tenancyId = ?";
 
@@ -140,7 +140,7 @@ public class UserTableMgr extends AccessControlDb {
             }
 
             /*
-            ** Now create the accessKey and save it away. The accessKey is made up from the following:
+            ** Now create the accessToken and save it away. The accessToken is made up from the following:
             **        MD5(userUID + "." + tenancyUID + "." + accessRights)
              */
             String userUID = getUserUID(objectUniqueId);
@@ -152,17 +152,17 @@ public class UserTableMgr extends AccessControlDb {
                 return HttpStatus.PRECONDITION_FAILED_412;
             }
 
-            String accessKey = userUID + "." + tenancyUID + "." + accessRights;
+            String accessToken = userUID + "." + tenancyUID + "." + accessRights;
             PreparedStatement updateStmt = null;
 
             try {
                 /*
                  ** Fields to fill in are:
-                 **   1 - accessKey String
+                 **   1 - accessToken String
                  **   2 - userId
                  */
-                updateStmt = conn.prepareStatement(SET_ACCESS_KEY);
-                updateStmt.setString(1, accessKey);
+                updateStmt = conn.prepareStatement(SET_ACCESS_TOKEN);
+                updateStmt.setString(1, accessToken);
                 updateStmt.setInt(2, objectUniqueId);
                 updateStmt.executeUpdate();
             } catch (SQLException sqlEx) {
@@ -194,7 +194,7 @@ public class UserTableMgr extends AccessControlDb {
         return getUID(getUserUIDStr);
     }
 
-    public String getAccessKey(final HttpRequestInfo httpInfo) {
+    public String getAccessToken(final HttpRequestInfo httpInfo) {
 
         String customerName = httpInfo.getCustomerName();
         String tenancyName = httpInfo.getTenancy();
@@ -242,7 +242,7 @@ public class UserTableMgr extends AccessControlDb {
 
         Connection conn = getAccessControlDbConn();
 
-        String accessKeyStr = null;
+        String accessTokenStr = null;
 
         if (conn != null) {
             PreparedStatement stmt = null;
@@ -256,7 +256,7 @@ public class UserTableMgr extends AccessControlDb {
                  **   4 - passphrase
                  **   5 - tenancyId
                  */
-                stmt = conn.prepareStatement(GET_ACCESS_KEY);
+                stmt = conn.prepareStatement(GET_ACCESS_TOKEN);
                 stmt.setString(1, userName);
                 stmt.setString(2, passphrase);
                 stmt.setString(3, password);
@@ -264,18 +264,18 @@ public class UserTableMgr extends AccessControlDb {
                 stmt.setInt(5, tenancyId);
                 ResultSet rs = stmt.executeQuery();
                 if (rs.next()) {
-                    accessKeyStr = rs.getString(1);
+                    accessTokenStr = rs.getString(1);
                 }
                 rs.close();
             } catch (SQLException sqlEx) {
-                LOG.error("getAccessKey() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("getAccessToken() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                 System.out.println("SQLException: " + sqlEx.getMessage());
             } finally {
                 if (stmt != null) {
                     try {
                         stmt.close();
                     } catch (SQLException sqlEx) {
-                        LOG.error("getAccessKey() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        LOG.error("getAccessToken() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                         System.out.println("SQLException: " + sqlEx.getMessage());
                     }
                 }
@@ -284,10 +284,10 @@ public class UserTableMgr extends AccessControlDb {
             closeAccessControlDbConn(conn);
         }
 
-        return accessKeyStr;
+        return accessTokenStr;
     }
 
-    public int getTenancyFromAccessKey(final String accessKey) {
+    public int getTenancyFromAccessToken(final String accessToken) {
         int tenancyId = -1;
 
         Connection conn = getAccessControlDbConn();
@@ -298,24 +298,24 @@ public class UserTableMgr extends AccessControlDb {
             try {
                 /*
                  ** The fields for the GET_TENANCY_FROM_KEY are:
-                 **   1 - accessKey
+                 **   1 - accessToken
                  */
-                stmt = conn.prepareStatement(GET_TENANCY_FROM_KEY);
-                stmt.setString(1, accessKey);
+                stmt = conn.prepareStatement(GET_TENANCY_FROM_TOKEN);
+                stmt.setString(1, accessToken);
                 ResultSet rs = stmt.executeQuery();
                 if (rs.next()) {
                     tenancyId = rs.getInt(1);
                 }
                 rs.close();
             } catch (SQLException sqlEx) {
-                LOG.error("getTenancyFromAccessKey() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("getTenancyFromAccessToken() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                 System.out.println("SQLException: " + sqlEx.getMessage());
             } finally {
                 if (stmt != null) {
                     try {
                         stmt.close();
                     } catch (SQLException sqlEx) {
-                        LOG.error("getTenancyFromAccessKey() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        LOG.error("getTenancyFromAccessToken() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                         System.out.println("SQLException: " + sqlEx.getMessage());
                     }
                 }
