@@ -26,13 +26,13 @@ abstract public class HttpInfo {
      */
     private static final String MD5_OVERRIDE_HEADER = "md5-override";
 
-    protected static final String CONTENT_LENGTH = "Content-Length";
+    public static final String CONTENT_LENGTH = "Content-Length";
     private static final String CONTENT_MD5 = "Content-MD5";
 
-    private static final String CONTENT_SHA256 = "x-content-sha256";
+    public static final String CONTENT_SHA256 = "x-content-sha256";
 
-    private static final String CLIENT_OPC_REQUEST_ID = "opc-client-request-id";
-    private static final String OPC_REQUEST_ID = "opc-request-id";
+    public static final String CLIENT_OPC_REQUEST_ID = "opc-client-request-id";
+    public static final String OPC_REQUEST_ID = "opc-request-id";
 
     private static final String OBJECT_NAME = "/o";
     private static final String NAMESPACE_NAME = "/n";
@@ -53,6 +53,8 @@ abstract public class HttpInfo {
     public static final String CHUNK_LBA = "chunk-lba";
     public static final String CHUNK_NUMBER = "object-chunk-number";
     public static final String CHUNK_LOCATION = "chunk-location";
+    public static final String CHUNK_ID = "chunk-id";
+
 
     /*
     ** The following headers are used for the GET and PUT commands
@@ -632,11 +634,33 @@ abstract public class HttpInfo {
         try {
             chunkNumber = Integer.parseInt(chunkNumbers.get(0));
         } catch (NumberFormatException ex) {
-            LOG.warn("object-chunk-number is not a valid numeric format - " + chunkNumbers.get(0));
+            LOG.warn("chunk-id is not a valid numeric format - " + chunkNumbers.get(0));
             chunkNumber = -1;
         }
 
         return chunkNumber;
+    }
+
+    /*
+     ** Will return -1 if the passed in "chunk-id" is not a valid representation of an integer or it is
+     **   missing.
+     */
+    public int getObjectChunkId() {
+        List<String> chunkIds = headers.get(CHUNK_ID);
+
+        if (chunkIds.size() != 1) {
+            return -1;
+        }
+
+        int chunkId;
+        try {
+            chunkId = Integer.parseInt(chunkIds.get(0));
+        } catch (NumberFormatException ex) {
+            LOG.warn("object-chunk-number is not a valid numeric format - " + chunkIds.get(0));
+            chunkId = -1;
+        }
+
+        return chunkId;
     }
 
     /*

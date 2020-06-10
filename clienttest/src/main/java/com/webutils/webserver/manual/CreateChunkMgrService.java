@@ -14,13 +14,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class CreateChunkMgrService {
 
-    static WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
+    static WebServerFlavor flavor = WebServerFlavor.CLI_CLIENT;
 
     private final ClientContextPool clientContextPool;
     private final NioCliClient cliClient;
 
     private final ClientCommandInterface cli;
-    private final int eventThreadId;
 
     CreateChunkMgrService(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount) {
 
@@ -32,8 +31,6 @@ public class CreateChunkMgrService {
         cliClient = new NioCliClient(clientContextPool);
         cliClient.start();
 
-        this.eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
-
         CreateServerObjectParams params = new CreateServerObjectParams("chunk-mgr-service", "localhost",
                 5002, 0, StorageTierEnum.INVALID_TIER);
         params.setOpcClientRequestId("CreateChunkMgrService-6-1-2020.01");
@@ -44,6 +41,8 @@ public class CreateChunkMgrService {
 
     public void execute() {
         cli.execute();
+
+        int eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
 
         cliClient.stop();
 

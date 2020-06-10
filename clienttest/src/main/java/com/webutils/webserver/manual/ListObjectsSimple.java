@@ -13,13 +13,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class ListObjectsSimple {
 
-    static WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
+    static WebServerFlavor flavor = WebServerFlavor.CLI_CLIENT;
 
     private final ClientContextPool clientContextPool;
     private final NioCliClient cliClient;
 
     private final ClientCommandInterface cli;
-    private final int eventThreadId;
 
     ListObjectsSimple(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount) {
 
@@ -31,18 +30,17 @@ public class ListObjectsSimple {
         cliClient = new NioCliClient(clientContextPool);
         cliClient.start();
 
-        this.eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
-
         ListObjectsParams params = new ListObjectsParams("Namespace-xyz-987", "CreateBucket_Simple",
                 null, null);
         params.setOpcClientRequestId("ListObjectsSimple-5-14-2020.01");
 
-        cli = new ClientCommandInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
-                params, testCount);
+        cli = new ClientCommandInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort, params, testCount);
     }
 
     public void execute() {
         cli.execute();
+
+        int eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
 
         cliClient.stop();
 

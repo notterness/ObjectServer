@@ -1,7 +1,7 @@
 package com.webutils.webserver.manual;
 
+import com.webutils.webserver.common.DeleteChunksClientTest;
 import com.webutils.webserver.common.DeleteChunksParams;
-import com.webutils.webserver.http.AllocateChunksResponseContent;
 import com.webutils.webserver.http.DeleteChunksResponseParser;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.LocalServersMgr;
@@ -24,8 +24,6 @@ public class DeleteChunksSimple {
 
     private final ClientServiceRequest cli;
 
-    private final int eventThreadId;
-
     private final MemoryManager cliMemoryManager;
 
     DeleteChunksSimple(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount,
@@ -39,9 +37,7 @@ public class DeleteChunksSimple {
         cliClient = new NioCliClient(clientContextPool);
         cliClient.start();
 
-        this.eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
-
-        DeleteChunksParams params = new DeleteChunksParams(servers);
+        DeleteChunksParams params = new DeleteChunksClientTest(servers);
         params.setOpcClientRequestId("DeleteChunksSimple-6-8-2020.01");
 
         DeleteChunksResponseParser parser = new DeleteChunksResponseParser();
@@ -52,6 +48,8 @@ public class DeleteChunksSimple {
 
     public void execute() {
         cli.execute();
+
+        int eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
 
         cliClient.stop();
 

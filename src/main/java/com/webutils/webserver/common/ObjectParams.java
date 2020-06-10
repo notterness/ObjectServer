@@ -60,6 +60,7 @@ public abstract class ObjectParams {
     public void setHostName(final String host) { hostName = host; }
 
     public void setOpcClientRequestId(final String clientRequestId) { opcClientRequestId = clientRequestId; }
+    public String getOpcClientRequestId() { return opcClientRequestId; }
 
     public String getFilePathName() { return objectFilePath; }
 

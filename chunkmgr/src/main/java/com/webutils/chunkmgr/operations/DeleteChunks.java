@@ -3,12 +3,15 @@ package com.webutils.chunkmgr.operations;
 import com.webutils.chunkmgr.http.DeleteChunksContent;
 import com.webutils.webserver.common.ChunkDeleteInfo;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.http.ChunkStatusEnum;
-import com.webutils.webserver.http.HttpRequestInfo;
+import com.webutils.webserver.common.StorageServerChunkDeleteParams;
+import com.webutils.webserver.http.*;
+import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ServerChunkMgr;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
+import com.webutils.webserver.operations.SendRequestToService;
 import com.webutils.webserver.requestcontext.RequestContext;
+import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,23 +28,38 @@ public class DeleteChunks implements Operation {
      */
     private final OperationTypeEnum operationType = OperationTypeEnum.DELETE_CHUNKS;
 
-    /*
-     ** The following are used to build the response header
-     */
-    private final static String SUCCESS_HEADER_1 = "opc-client-request-id: ";
-    private final static String SUCCESS_HEADER_2 = "opc-request-id: ";
-    private final static String SUCCESS_HEADER_3 = "ETag: ";
-
     private final RequestContext requestContext;
+
+    private final MemoryManager memoryManager;
 
     private final DeleteChunksContent deleteChunksContent;
 
     private final Operation completeCallback;
 
     /*
-     ** Used to insure that the database operations to create the bucket do not get run multiple times.
+     ** The following are the states the DeleteChunk needs to go through to change the state of the chunks
+     **   and remove the chunks from the Storage Servers
      */
-    private boolean chunksDeleted;
+    enum ExecutionState {
+        SET_CHUNKS_TO_DELETED,
+        DELETE_CHUNKS_FROM_STORAGE_SERVERS,
+        SET_CHUNKS_TO_AVAILABLE,
+        CALLBACK_OPS,
+        EMPTY_STATE
+    }
+
+    private ExecutionState currState;
+
+    /*
+    ** The following are the accessor classes to get to the StorageServerChunk and ServerIdentifier tables
+    **   in the ServiceServersDb database.
+     */
+    private final ServerChunkMgr chunkMgr;
+
+    private final List<ChunkDeleteInfo> chunks;
+    private final List<ServerIdentifier> servers;
+
+    private final List<SendRequestToService> serviceRequests;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -50,18 +68,25 @@ public class DeleteChunks implements Operation {
      */
     private boolean onExecutionQueue;
 
-    public DeleteChunks(final RequestContext requestContext, final DeleteChunksContent deleteChunksContent,
-                        final Operation completeCb) {
+    public DeleteChunks(final RequestContext requestContext, final MemoryManager memoryManager,
+                        final DeleteChunksContent deleteChunksContent, final Operation completeCb) {
         this.requestContext = requestContext;
+        this.memoryManager = memoryManager;
         this.deleteChunksContent = deleteChunksContent;
         this.completeCallback = completeCb;
 
-        chunksDeleted = false;
+        currState = ExecutionState.SET_CHUNKS_TO_DELETED;
 
         /*
          ** This starts out not being on any queue
          */
         onExecutionQueue = false;
+
+        this.chunkMgr = new ServerChunkMgr(requestContext.getWebServerFlavor());
+
+        this.chunks = new LinkedList<>();
+        this.servers = new LinkedList<>();
+        this.serviceRequests = new LinkedList<>();
     }
 
     public OperationTypeEnum getOperationType() {
@@ -86,31 +111,147 @@ public class DeleteChunks implements Operation {
     /*
      */
     public void execute() {
-        if (!chunksDeleted) {
-            List<ChunkDeleteInfo> chunks = new LinkedList<>();
-            deleteChunksContent.extractDeletions(chunks);
+        switch (currState) {
+            case SET_CHUNKS_TO_DELETED:
+                deleteChunksContent.extractDeletions(chunks);
 
-            LOG.info("chunks size() " + chunks.size());
-            if (chunks.size() != 0) {
-                ServerChunkMgr chunkMgr = new ServerChunkMgr(requestContext.getWebServerFlavor());
+                LOG.info("chunks size() " + chunks.size());
+                if (chunks.size() != 0) {
+                    for (ChunkDeleteInfo chunk: chunks) {
+                        chunkMgr.updateChunkStatus(chunk.getChunkUID(), ChunkStatusEnum.CHUNK_DELETED);
+                    }
 
-                for (ChunkDeleteInfo chunk: chunks) {
-                    chunkMgr.updateChunkStatus(chunk.getChunkUID(), ChunkStatusEnum.CHUNK_DELETED);
+                    requestContext.getHttpInfo().setResponseHeaders(buildSuccessHeader());
+                } else {
+                    String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_REQUIRED_428 +
+                            "\r\n  \"message\": \"No chunks to delete\"" +
+                            "\r\n}";
+                    requestContext.getHttpInfo().emitMetric(HttpStatus.PRECONDITION_REQUIRED_428, failureMessage);
+                    requestContext.getHttpInfo().setParseFailureCode(HttpStatus.PRECONDITION_REQUIRED_428);
+
+                    currState = ExecutionState.CALLBACK_OPS;
+                    event();
+                    break;
                 }
 
-                requestContext.getHttpInfo().setResponseHeaders(buildSuccessHeader());
-            } else {
-                String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_REQUIRED_428 +
-                        "\r\n  \"message\": \"No chunks to delete\"" +
-                        "\r\n}";
-                requestContext.getHttpInfo().emitMetric(HttpStatus.PRECONDITION_REQUIRED_428, failureMessage);
-                requestContext.getHttpInfo().setParseFailureCode(HttpStatus.PRECONDITION_REQUIRED_428);
-            }
+                currState = ExecutionState.DELETE_CHUNKS_FROM_STORAGE_SERVERS;
+                /*
+                ** Uncomment out the following lines to skip sending the DeleteChunk request to the Storager Servder
+                currState = ExecutionState.CALLBACK_OPS;
+                event();
+                break;
+                */
+                /*
+                ** Fall through
+                 */
 
-            chunks.clear();
-            completeCallback.complete();
+            case DELETE_CHUNKS_FROM_STORAGE_SERVERS:
+                getServers(chunks, servers);
 
-            chunksDeleted = true;
+                if (servers.size() > 0) {
+                    /*
+                    ** Once all the requests are sent to the Storage Servers, then wait in the SET_CHUNKS_TO_AVAILABLE
+                    **   state for all the results.
+                     */
+                    currState = ExecutionState.SET_CHUNKS_TO_AVAILABLE;
+
+                    /*
+                    ** Send the request to each server
+                     */
+                    for (ServerIdentifier server: servers) {
+                        StorageServerChunkDeleteParams params = new StorageServerChunkDeleteParams(server);
+                        params.setOpcClientRequestId(requestContext.getHttpInfo().getOpcClientRequestId());
+
+                        HttpResponseInfo httpInfo = new HttpResponseInfo(requestContext.getRequestId());
+                        server.setHttpInfo(httpInfo);
+
+                        SendRequestToService cmdSend = new SendRequestToService(requestContext, memoryManager, server, params, null, this);
+                        cmdSend.initialize();
+
+                        serviceRequests.add(cmdSend);
+                        cmdSend.event();
+                    }
+                } else {
+                    String failureMessage = "{\r\n  \"code\":" + HttpStatus.NO_CONTENT_204 +
+                            "\r\n  \"message\": \"No servers found\"" +
+                            "\r\n}";
+                    requestContext.getHttpInfo().emitMetric(HttpStatus.NO_CONTENT_204, failureMessage);
+                    requestContext.getHttpInfo().setParseFailureCode(HttpStatus.NO_CONTENT_204);
+
+                    currState = ExecutionState.CALLBACK_OPS;
+                    event();
+                }
+                break;
+
+            case SET_CHUNKS_TO_AVAILABLE:
+                boolean allResponded = true;
+                for (ServerIdentifier server : servers) {
+                    if (server.getResponseStatus() == -1) {
+                        allResponded = false;
+                        break;
+                    }
+                }
+
+                if (allResponded) {
+                    LOG.info("DeleteChunks() SET_CHUNKS_TO_AVAILABLE allResponded");
+
+                    /*
+                    ** Need to call complete() for all of the serviceRequests to make sure all the resources are
+                    **   are cleaned up.
+                     */
+                    for (SendRequestToService cmdSend: serviceRequests) {
+                        cmdSend.complete();
+                    }
+                    serviceRequests.clear();
+
+                    /*
+                    ** Now check the results for the different servers and if the results was OK_200 then move the
+                    **   chunk status to CHUNK_AVAILABLE.
+                    **
+                    ** TODO: If the result from the status indicated that the chunk was not removed, there needs to be
+                    **   a background thread that attempts to delete the chunk at a later point
+                     */
+                    for (ServerIdentifier server : servers) {
+                        int result = requestContext.getStorageResponseResult(server);
+
+                        if (result == HttpStatus.OK_200) {
+                            chunkMgr.updateChunkStatus(server.getChunkUID(), ChunkStatusEnum.CHUNK_AVAILABLE);
+                        } else {
+                            chunkMgr.updateChunkStatus(server.getChunkUID(), ChunkStatusEnum.CHUNK_DELETE_FAILED);
+
+                            String message = "{\r\n  \"code\":" + HttpStatus.UNPROCESSABLE_ENTITY_422 + "\n" +
+                                    "  \"message\": \"StorageServerChunkDelete failed\"\n" +
+                                    "  \"" + ContentParser.SERVER_IP + "\": \"" + server.getServerIpAddress().toString() + "\"\n" +
+                                    "  \"" + ContentParser.SERVER_PORT + "\": \"" + server.getServerTcpPort() + "\"\n" +
+                                    "  \"" + ContentParser.CHUNK_UID + "\": \"" + server.getChunkUID() + "\"\n" +
+                                    "}";
+                            requestContext.getHttpInfo().emitMetric(HttpStatus.UNPROCESSABLE_ENTITY_422, message);
+                        }
+                    }
+
+                    servers.clear();
+
+                    currState = ExecutionState.CALLBACK_OPS;
+                    /*
+                    ** Fall through
+                     */
+                } else {
+                    /*
+                    ** Still waiting on responses from the various Storage Servers
+                     */
+                    break;
+                }
+
+            case CALLBACK_OPS:
+                currState = ExecutionState.EMPTY_STATE;
+
+                chunks.clear();
+                complete();
+                completeCallback.complete();
+                break;
+
+            case EMPTY_STATE:
+                break;
         }
     }
 
@@ -174,7 +315,7 @@ public class DeleteChunks implements Operation {
     }
 
     /*
-     ** This builds the OK_200 response headers for the DELETE DeleteChunks method. This returns the following headers:
+     ** This builds the OK_200 response headers for the DeleteChunks method (DELETE). This returns the following headers:
      **
      **   opc-client-request-id - If the client passed one in, otherwise it it will not be returned
      **   opc-request-id
@@ -187,12 +328,43 @@ public class DeleteChunks implements Operation {
         int opcRequestId = requestInfo.getRequestId();
 
         if (opcClientRequestId != null) {
-            successHeader = SUCCESS_HEADER_1 + opcClientRequestId + "\n" + SUCCESS_HEADER_2 + opcRequestId + "\n";
+            successHeader = HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n" +
+                            HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n";
         } else {
-            successHeader = SUCCESS_HEADER_2 + opcRequestId + "\n";
+            successHeader = HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n";
         }
 
         return successHeader;
     }
 
+    /*
+    ** This is used to obtain the Storage Server information needed to send the Chunk Delete request. The information
+    **   needed is:
+    **     service.serverIpAddress
+    **     service.serverTcpPort
+    **     service.chunkLBA
+    **     service.chunkId
+    **     service.chunkLocation (use the chunkUID for this)
+     */
+    private void getServers(final List<ChunkDeleteInfo> chunks, final List<ServerIdentifier> servers) {
+
+        for (ChunkDeleteInfo chunk: chunks) {
+            List<ServerIdentifier> foundServers = new LinkedList<>();
+
+            requestContext.getServerTableMgr().getServer(chunk.getServerName(), foundServers);
+            if (foundServers.size() == 1) {
+                ServerIdentifier server = foundServers.get(0);
+
+                server.setChunkUID(chunk.getChunkUID());
+                server.setChunkLocation(chunk.getChunkUID());
+                if (chunkMgr.getChunkInfoForDelete(server, chunk.getChunkUID())) {
+                    servers.add(server);
+                } else {
+                    LOG.warn("Unable to locate chunkUID: " + chunk.getChunkUID());
+                }
+            }
+
+            foundServers.clear();
+        }
+    }
 }

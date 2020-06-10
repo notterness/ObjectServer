@@ -1,5 +1,7 @@
 package com.webutils.webserver.common;
 
+import com.webutils.webserver.http.HttpInfo;
+import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.http.StorageTierEnum;
 import org.eclipse.jetty.http.HttpStatus;
@@ -59,11 +61,11 @@ public class AllocateChunksParams extends ObjectParams {
         }
 
         if (opcClientRequestId != null) {
-            request += "opc-client-request-id: " + opcClientRequestId + "\n";
+            request += HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n";
         }
 
-        finalContent += "x-content-sha256: " + sha256Digest + "\n" +
-                "Content-Length: " + contentSizeInBytes + "\n\n" +
+        finalContent += HttpInfo.CONTENT_SHA256 + ": " + sha256Digest + "\n" +
+                HttpInfo.CONTENT_LENGTH + ": " + contentSizeInBytes + "\n\n" +
                 contentStr;
 
         request += finalContent;
@@ -74,8 +76,8 @@ public class AllocateChunksParams extends ObjectParams {
     private String buildContent() {
         String contentString = new String(
                 "{\n" +
-                        "  \"object-chunk-number\": \"" + 0 + "\",\n" +
-                        "  \"storageTier\": \"" + tier.toString() + "\",\n" +
+                        "  \"" + HttpInfo.CHUNK_NUMBER + "\": \"" + 0 + "\",\n" +
+                        "  \"" + HttpRequestInfo.STORAGE_TIER_HEADER + "\": \"" + tier.toString() + "\",\n" +
                         "}\n");
 
         Sha256Digest digest = new Sha256Digest();

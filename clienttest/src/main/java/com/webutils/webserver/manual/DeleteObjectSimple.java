@@ -13,15 +13,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class DeleteObjectSimple {
 
-    static WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
+    static WebServerFlavor flavor = WebServerFlavor.CLI_CLIENT;
 
     private final ClientContextPool clientContextPool;
     private final NioCliClient cliClient;
 
-    private final ClientCommandInterface cli;
-    private final int eventThreadId;
+    private final ClientServiceRequest cli;
 
-    DeleteObjectSimple(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount) {
+    DeleteObjectSimple(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount, final String objectName) {
 
         MemoryManager cliMemoryManager = new MemoryManager(flavor);
 
@@ -31,18 +30,18 @@ public class DeleteObjectSimple {
         cliClient = new NioCliClient(clientContextPool);
         cliClient.start();
 
-        this.eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
-
         DeleteObjectParams params = new DeleteObjectParams("Namespace-xyz-987", "CreateBucket_Simple",
-                "TestObject_1", "testObjectFile");
-        params.setOpcClientRequestId("DeleteObjectSimple-5-13-2020.01");
+                objectName);
+        params.setOpcClientRequestId("DeleteObjectSimple-5-13-2020.01-" + objectName);
 
-        cli = new ClientCommandInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
-                params, testCount);
+        cli = new ClientServiceRequest(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
+                params, null, testCount);
     }
 
     public void execute() {
         cli.execute();
+
+        int eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
 
         cliClient.stop();
 

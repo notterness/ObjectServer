@@ -1,7 +1,6 @@
 package com.webutils.webserver.manual;
 
 import com.webutils.webserver.common.ListChunksParams;
-import com.webutils.webserver.common.ListObjectsParams;
 import com.webutils.webserver.http.ChunkStatusEnum;
 import com.webutils.webserver.http.StorageTierEnum;
 import com.webutils.webserver.memory.MemoryManager;
@@ -14,17 +13,16 @@ import com.webutils.webserver.requestcontext.WebServerFlavor;
 import java.net.InetAddress;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ListChunksAll {
+public class ListAllocatedChunks {
 
-    static WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
+    static WebServerFlavor flavor = WebServerFlavor.CLI_CLIENT;
 
     private final ClientContextPool clientContextPool;
     private final NioCliClient cliClient;
 
     private final ClientCommandInterface cli;
-    private final int eventThreadId;
 
-    ListChunksAll(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount) {
+    ListAllocatedChunks(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount) {
 
         MemoryManager cliMemoryManager = new MemoryManager(flavor);
 
@@ -34,18 +32,17 @@ public class ListChunksAll {
         cliClient = new NioCliClient(clientContextPool);
         cliClient.start();
 
-        this.eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
-
         ListChunksParams params = new ListChunksParams(StorageTierEnum.INVALID_TIER, null,
                 ChunkStatusEnum.CHUNK_ALLOCATED, 0);
         params.setOpcClientRequestId("ListChunksAll-5-26-2020.01");
 
-        cli = new ClientCommandInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
-                params, testCount);
+        cli = new ClientCommandInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort, params, testCount);
     }
 
     public void execute() {
         cli.execute();
+
+        int eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
 
         cliClient.stop();
 

@@ -21,12 +21,9 @@ public abstract class ContentParser {
      */
     public static final String SERVER_NAME = "storage-server-name";
     protected static final String STORAGE_ID = "storage-id";
-    protected static final String SERVER_IP = "storage-server-ip";
-    protected static final String SERVER_PORT = "storage-server-port";
-    protected static final String CHUNK_ID = "chunk-id";
+    public static final String SERVER_IP = "storage-server-ip";
+    public static final String SERVER_PORT = "storage-server-port";
     public static final String CHUNK_UID = "chunk-etag";
-    public static final String CHUNK_LBA = "chunk-lba";
-    protected static final String CHUNK_LOCATION = "chunk-location";
 
 
     private static final int DEFINED_TAGS_SUB_CATEGORY_DEPTH = 3;

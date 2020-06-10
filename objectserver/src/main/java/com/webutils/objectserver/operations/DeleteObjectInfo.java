@@ -1,8 +1,8 @@
 package com.webutils.objectserver.operations;
 
+import com.webutils.objectserver.common.DeleteChunksObjectServer;
 import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.common.ChunkDeleteInfo;
 import com.webutils.webserver.common.DeleteChunksParams;
 import com.webutils.webserver.http.DeleteChunksResponseParser;
 import com.webutils.webserver.http.HttpRequestInfo;
@@ -194,7 +194,7 @@ public class DeleteObjectInfo implements Operation {
                     break;
                 }
 
-                DeleteChunksParams params = new DeleteChunksParams(objectInfo.getChunkList());
+                DeleteChunksParams params = new DeleteChunksObjectServer(objectInfo.getChunkList());
                 params.setOpcClientRequestId(requestContext.getHttpInfo().getOpcClientRequestId());
 
                 DeleteChunksResponseParser parser = new DeleteChunksResponseParser();

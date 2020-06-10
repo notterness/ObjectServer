@@ -5,6 +5,7 @@ import com.webutils.chunkmgr.requestcontext.ChunkAllocRequestContext;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.common.Sha256ResultHandler;
+import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.operations.ComputeSha256Digest;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
@@ -24,6 +25,8 @@ public class SetupDeleteChunks implements Operation {
     private final OperationTypeEnum operationType = OperationTypeEnum.SETUP_DELETE_CHUNKS;
 
     private final ChunkAllocRequestContext requestContext;
+
+    private final MemoryManager memoryManager;
 
     private final Operation metering;
 
@@ -58,10 +61,11 @@ public class SetupDeleteChunks implements Operation {
      **   method.
      ** The completeCb will call the DetermineRequest operation's event() method when the POST completes.
      */
-    public SetupDeleteChunks(final ChunkAllocRequestContext requestContext, final Operation metering,
-                                 final Operation completeCb) {
+    public SetupDeleteChunks(final ChunkAllocRequestContext requestContext, final MemoryManager memoryManager,
+                             final Operation metering, final Operation completeCb) {
 
         this.requestContext = requestContext;
+        this.memoryManager = memoryManager;
         this.metering = metering;
         this.completeCallback = completeCb;
 
@@ -118,7 +122,7 @@ public class SetupDeleteChunks implements Operation {
              **   then the chunks need to be deleted from the ServiceServersDb.StorageServerChunk table and the request
              **   to delete the various chunks sent to the Storage Servers.
              */
-            deleteChunks = new DeleteChunks(requestContext, deleteChunksContent, this);
+            deleteChunks = new DeleteChunks(requestContext, memoryManager, deleteChunksContent, this);
             handlerOperations.put(deleteChunks.getOperationType(), deleteChunks);
             deleteChunks.initialize();
 

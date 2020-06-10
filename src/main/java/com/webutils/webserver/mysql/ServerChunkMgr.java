@@ -70,6 +70,8 @@ public class ServerChunkMgr extends ServersDb {
 
     private static final String UPDATE_CHUNK_STATUS = "UPDATE storageServerChunk SET state = ? WHERE chunkUID = UUID_TO_BIN(?)";
 
+    private static final String GET_CHUNK_INFO_FOR_DELETE = "SELECT chunkId, startLba FROM StorageServerChunk WHERE chunkUID = UUID_TO_BIN(?)";
+
     public ServerChunkMgr(final WebServerFlavor flavor) {
         super(flavor);
 
@@ -362,4 +364,62 @@ public class ServerChunkMgr extends ServersDb {
         }
     }
 
+    public boolean getChunkInfoForDelete(final ServerIdentifier server, final String chunkUID) {
+        boolean success= false;
+        Connection conn = getServersDbConn();
+
+        if (conn != null) {
+            PreparedStatement stmt = null;
+            ResultSet rs = null;
+
+            try {
+                /*
+                 ** Fields for the prepared statement are:
+                 **   1 - chunkUID (String)
+                 */
+                stmt = conn.prepareStatement(GET_CHUNK_INFO_FOR_DELETE);
+                stmt.setString(1, chunkUID);
+                rs = stmt.executeQuery();
+                if (rs != null) {
+                    if (rs.next()) {
+                        int id = rs.getInt(1);
+                        int lba = rs.getInt(2);
+
+                        server.setChunkId(id);
+                        server.setChunkLBA(lba);
+
+                        success = true;
+                    }
+                }
+            } catch (SQLException sqlEx) {
+                LOG.error("getChunkInfoForDelete() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                System.out.println("SQLException: " + sqlEx.getMessage());
+            } finally {
+                if (rs != null) {
+                    try {
+                        rs.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("getChunkInfoForDelete() rs.close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQLException: " + sqlEx.getMessage());
+                    }
+                }
+
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("getChunkInfoForDelete() stmt.close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQLException: " + sqlEx.getMessage());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database tables.
+             */
+            closeStorageServerDbConn(conn);
+        }
+
+        return success;
+    }
 }

@@ -15,8 +15,8 @@ public class HttpResponseInfo extends HttpInfo {
 
     private static final String OPC_CONTENT_MD5 = "opc-content-md5";
     private static final String RESPONSE_HEADER_ETAG = "etag";
-    private static final String RESPONSE_LAST_MODIFIED = "last-modified";
-    private static final String RESPONSE_VERSION_ID = "version-id";
+    public static final String RESPONSE_LAST_MODIFIED = "last-modified";
+    public static final String RESPONSE_VERSION_ID = "version-id";
 
     private static final String RESPONSE_ALLOWED_METHODS = "allow";
 

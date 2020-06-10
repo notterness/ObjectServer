@@ -13,7 +13,7 @@ public abstract class HttpRequestInfo extends HttpInfo {
 
     private static final Logger LOG = LoggerFactory.getLogger(HttpRequestInfo.class);
 
-    private static final String STORAGE_TIER_HEADER = "storageTier";
+    public static final String STORAGE_TIER_HEADER = "storageTier";
     private static final String SERVER_NAME_HEADER = "storage-server-name";
     private static final String CHUNK_STATUS_HEADER = "chunk-status";
 

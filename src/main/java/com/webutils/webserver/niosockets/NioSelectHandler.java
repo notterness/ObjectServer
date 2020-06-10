@@ -205,6 +205,17 @@ public class NioSelectHandler {
         }
 
         /*
+        ** Debug information about connection from the client side
+         */
+        try {
+            LOG.info("handleConnect() " + socketChannel.getLocalAddress() + " remote: " +
+                    socketChannel.getRemoteAddress());
+        } catch (IOException ex) {
+            LOG.warn("handleConnect() display channel exception: " + ex.getMessage());
+        }
+
+
+        /*
         ** Call the registered ConnectComplete operation if one is registered.
          */
         NioSocket nioSocket = (NioSocket) key.attachment();

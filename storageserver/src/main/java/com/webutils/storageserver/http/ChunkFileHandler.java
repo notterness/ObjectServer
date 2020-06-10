@@ -87,7 +87,7 @@ public class ChunkFileHandler {
     public void deleteFile() {
         String fileName = buildChunkFileName();
         if (fileName != null) {
-            LOG.warn("Deleting file: " + fileName + " due to error: " + requestContext.getHttpParseStatus());
+            LOG.warn("Deleting file: " + fileName + " error(may not be one): " + requestContext.getHttpParseStatus());
 
             Path filePath = Paths.get(fileName);
             try {
@@ -105,15 +105,15 @@ public class ChunkFileHandler {
      **   ./logs/StorageServer"IoInterfaceIdentifier"/chunk_"chunk location"_"chunk number"_"chunk lba".dat
      */
     public String buildChunkFileName() {
-        int chunkNumber = requestContext.getHttpInfo().getObjectChunkNumber();
+        int chunkId = requestContext.getHttpInfo().getObjectChunkId();
         int chunkLba = requestContext.getHttpInfo().getObjectChunkLba();
         String chunkLocation = requestContext.getHttpInfo().getObjectChunkLocation();
 
-        if ((chunkNumber == -1) || (chunkLba == -1) || (chunkLocation == null)) {
-            LOG.error("WriteToFile chunkNumber: " + chunkNumber + " chunkLba: " + chunkLba + " chunkLocation: " + chunkLocation);
+        if ((chunkId == -1) || (chunkLba == -1) || (chunkLocation == null)) {
+            LOG.error("WriteToFile chunkId: " + chunkId + " chunkLba: " + chunkLba + " chunkLocation: " + chunkLocation);
             String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
                     "\r\n  \"message\": \"Missing chunk attributes\"" +
-                    "\r\n  \"" + HttpInfo.CHUNK_NUMBER + "\": \"" + chunkNumber + "\"" +
+                    "\r\n  \"" + HttpInfo.CHUNK_ID + "\": \"" + chunkId + "\"" +
                     "\r\n  \"" + HttpInfo.CHUNK_LBA + "\": \"" + chunkLba + "\"" +
                     "\r\n  \"" + HttpInfo.CHUNK_LOCATION + "\": \"" + Objects.requireNonNullElse(chunkLocation, "null") + "\"" +
                     "\r\n}";
@@ -142,7 +142,7 @@ public class ChunkFileHandler {
             }
         }
 
-        return directory + "/" + "/chunk_" + chunkLocation + "_" + chunkNumber + "_" + chunkLba + ".dat";
+        return directory + "/chunk_" + chunkLocation + "_" + chunkId + "_" + chunkLba + ".dat";
     }
 
 }

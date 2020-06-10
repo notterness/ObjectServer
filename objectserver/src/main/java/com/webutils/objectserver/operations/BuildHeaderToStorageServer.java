@@ -234,13 +234,13 @@ public class BuildHeaderToStorageServer implements Operation {
                     "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
                     "Accept-Language: en-us\n" +
                     "Accept-Encoding: gzip, deflate\n" +
-                    "opc-client-request-id: " + opcClientRequestId + "\n" +
-                    "opc-request-id: " + requestContext.getRequestId() + "\n" +
+                    HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n" +
+                    HttpInfo.OPC_REQUEST_ID + ": " + requestContext.getRequestId() + "\n" +
                     "ETag: " + requestContext.getHttpInfo().getObjectUID() + "\n" +
-                    "object-chunk-number: " + storageServer.getChunkNumber() + "\n" +
-                    "chunk-lba: " + storageServer.getChunkLBA() + "\n" +
-                    "chunk-location: " + storageServer.getChunkLocation() + "\n" +
-                    "Content-Length: " + chunkBytesToEncrypt + "\n\n";
+                    HttpInfo.CHUNK_ID + ": " + storageServer.getChunkId() + "\n" +
+                    HttpInfo.CHUNK_LBA + ": " + storageServer.getChunkLBA() + "\n" +
+                    HttpInfo.CHUNK_LOCATION + ": " + storageServer.getChunkLocation() + "\n" +
+                    HttpInfo.CONTENT_LENGTH + ": " + chunkBytesToEncrypt + "\n\n";
         } else {
             commonPieces = "Host: ObjectServerWrite\n" +
                     "Content-Type: application/json\n" +
@@ -249,12 +249,12 @@ public class BuildHeaderToStorageServer implements Operation {
                     "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
                     "Accept-Language: en-us\n" +
                     "Accept-Encoding: gzip, deflate\n" +
-                    "opc-request-id: " + requestContext.getRequestId() + "\n" +
+                    HttpInfo.OPC_REQUEST_ID + ": " + requestContext.getRequestId() + "\n" +
                     "ETag: " + requestContext.getHttpInfo().getObjectUID() + "\n" +
-                    "object-chunk-number: " + storageServer.getChunkNumber() + "\n" +
-                    "chunk-lba: " + storageServer.getChunkLBA() + "\n" +
-                    "chunk-location: " + storageServer.getChunkLocation() + "\n" +
-                    "Content-Length: " + chunkBytesToEncrypt + "\n\n";
+                    HttpInfo.CHUNK_ID + ": " + storageServer.getChunkId() + "\n" +
+                    HttpInfo.CHUNK_LBA + ": " + storageServer.getChunkLBA() + "\n" +
+                    HttpInfo.CHUNK_LOCATION + ": " + storageServer.getChunkLocation() + "\n" +
+                    HttpInfo.CONTENT_LENGTH + ": " + chunkBytesToEncrypt + "\n\n";
         }
 
         if (errorInjectString == null) {
@@ -276,12 +276,12 @@ public class BuildHeaderToStorageServer implements Operation {
                     "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
                     "Accept-Language: en-us\n" +
                     "Accept-Encoding: gzip, deflate\n" +
-                    "opc-client-request-id: " + opcClientRequestId + "\n" +
-                    "opc-request-id: " + requestContext.getRequestId() + "\n" +
-                    "object-chunk-number: " + storageServer.getChunkNumber() + "\n" +
-                    "chunk-lba: " + storageServer.getChunkLBA() + "\n" +
-                    "chunk-location: " + storageServer.getChunkLocation() + "\n" +
-                    "Content-Length: 0\n\n";
+                    HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n" +
+                    HttpInfo.OPC_REQUEST_ID + ": " + requestContext.getRequestId() + "\n" +
+                    HttpInfo.CHUNK_ID + ": " + storageServer.getChunkId() + "\n" +
+                    HttpInfo.CHUNK_LBA + ": " + storageServer.getChunkLBA() + "\n" +
+                    HttpInfo.CHUNK_LOCATION + ": " + storageServer.getChunkLocation() + "\n" +
+                    HttpInfo.CONTENT_LENGTH + ": 0\n\n";
         } else {
             commonPieces = "Host: ObjectServerRead\n" +
                     "Content-Type: application/json\n" +
@@ -290,11 +290,11 @@ public class BuildHeaderToStorageServer implements Operation {
                     "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
                     "Accept-Language: en-us\n" +
                     "Accept-Encoding: gzip, deflate\n" +
-                    "opc-request-id: " + requestContext.getRequestId() + "\n" +
-                    "object-chunk-number: " + storageServer.getChunkNumber() + "\n" +
-                    "chunk-lba: " + storageServer.getChunkLBA() + "\n" +
-                    "chunk-location: " + storageServer.getChunkLocation() + "\n" +
-                    "Content-Length: 0\n\n";
+                    HttpInfo.OPC_REQUEST_ID + ": " + requestContext.getRequestId() + "\n" +
+                    HttpInfo.CHUNK_ID + ": " + storageServer.getChunkId() + "\n" +
+                    HttpInfo.CHUNK_LBA + ": " + storageServer.getChunkLBA() + "\n" +
+                    HttpInfo.CHUNK_LOCATION + ": " + storageServer.getChunkLocation() + "\n" +
+                    HttpInfo.CONTENT_LENGTH + ": 0\n\n";
         }
 
         if (errorInjectString == null) {

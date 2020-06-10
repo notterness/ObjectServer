@@ -15,14 +15,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class AllocateChunksSimple {
 
-    static WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
+    static WebServerFlavor flavor = WebServerFlavor.CLI_CLIENT;
 
     private final ClientContextPool clientContextPool;
     private final NioCliClient cliClient;
 
     private final ClientCommandInterface cli;
-
-    private final int eventThreadId;
 
     AllocateChunksSimple(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount) {
 
@@ -34,17 +32,16 @@ public class AllocateChunksSimple {
         cliClient = new NioCliClient(clientContextPool);
         cliClient.start();
 
-        this.eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
-
         AllocateChunksParams params = new AllocateChunksParams(StorageTierEnum.STANDARD_TIER, 0);
         params.setOpcClientRequestId("AllocateChunksSimple-5-21-2020.01");
 
-        cli = new ClientCommandInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
-                params, testCount);
+        cli = new ClientCommandInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort, params, testCount);
     }
 
     public void execute() {
         cli.execute();
+
+        int eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
 
         cliClient.stop();
 

@@ -2,6 +2,8 @@ package com.webutils.storageserver.operations;
 
 import com.webutils.storageserver.http.ChunkFileHandler;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.http.HttpInfo;
+import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
@@ -79,6 +81,9 @@ public class SetupStorageServerChunkDelete implements Operation {
     public void execute() {
 
         fileHandler.deleteFile();
+
+        requestContext.getHttpInfo().setResponseHeaders(buildResponseHeaders());
+
         complete();
     }
 
@@ -146,6 +151,29 @@ public class SetupStorageServerChunkDelete implements Operation {
      */
     public void dumpCreatedOperations(final int level) {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
+    }
+
+    /*
+     ** This builds the OK_200 response headers for the StorageServerChunkDelete method (DELETE). This returns the following headers:
+     **
+     **   opc-client-request-id - If the client passed one in, otherwise it it will not be returned
+     **   opc-request-id
+     */
+    private String buildResponseHeaders() {
+        String successHeader;
+
+        HttpRequestInfo requestInfo = requestContext.getHttpInfo();
+        String opcClientRequestId = requestInfo.getOpcClientRequestId();
+        int opcRequestId = requestInfo.getRequestId();
+
+        if (opcClientRequestId != null) {
+            successHeader = HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n" +
+                    HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n";
+        } else {
+            successHeader = HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n";
+        }
+
+        return successHeader;
     }
 
 }

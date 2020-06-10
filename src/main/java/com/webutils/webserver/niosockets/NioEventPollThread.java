@@ -6,6 +6,7 @@ import com.webutils.webserver.requestcontext.RequestContextPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.nio.channels.*;
 import java.util.LinkedList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -13,8 +14,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class NioEventPollThread implements Runnable, EventPollThread {
 
     private static final Logger LOG = LoggerFactory.getLogger(NioEventPollThread.class);
-
-    private static final int ALLOCATED_NIO_SOCKET = 10;
 
     private final NioEventPollBalancer threadPoolOwner;
 
@@ -69,8 +68,8 @@ public class NioEventPollThread implements Runnable, EventPollThread {
         /*
         ** Create a collection of NioSocket to handle communications with the Storage Servers
          */
-        for (int i = 0; i < ALLOCATED_NIO_SOCKET; i++) {
-            NioSocket connection = new NioSocket(nioSelectHandler);
+        for (int i = 0; i < NioEventPollBalancer.ALLOCATED_NIO_SOCKET; i++) {
+            NioSocket connection = new NioSocket(nioSelectHandler, eventPollThreadBaseId + i);
 
             freeConnections.add(connection);
         }
@@ -92,9 +91,9 @@ public class NioEventPollThread implements Runnable, EventPollThread {
         ** Remove all the entries on the freeConnections list
          */
         int numFreeConnections = freeConnections.size();
-        if (numFreeConnections != ALLOCATED_NIO_SOCKET) {
+        if (numFreeConnections != NioEventPollBalancer.ALLOCATED_NIO_SOCKET) {
             System.out.println("[" + eventPollThreadBaseId + "] numFreeConnections: " + numFreeConnections + " expected ALLOCATED_NIO_SOCKET: " +
-                    ALLOCATED_NIO_SOCKET);
+                    NioEventPollBalancer.ALLOCATED_NIO_SOCKET);
         }
         freeConnections.clear();
 
@@ -114,10 +113,11 @@ public class NioEventPollThread implements Runnable, EventPollThread {
     public IoInterface allocateConnection(final Operation waitingOperation) {
         IoInterface connection =  freeConnections.poll();
         if (connection == null) {
+            LOG.info("allocateConnection [" + eventPollThreadBaseId + "] connection null");
             waitingForConnections.add(waitingOperation);
+        } else {
+            LOG.info("allocateConnection [" + eventPollThreadBaseId + "] NioSocket[" + connection.getId() + "]");
         }
-
-        LOG.info("allocateConnection [" + eventPollThreadBaseId + "]");
         return connection;
     }
 
@@ -152,6 +152,18 @@ public class NioEventPollThread implements Runnable, EventPollThread {
          */
         RequestContext requestContext = requestContextPool.allocateContext(eventPollThreadBaseId);
 
+        int requestId = uniqueRequestId.getAndIncrement();
+
+        /*
+        ** Debug information to track connections from the server side
+         */
+        try {
+            LOG.info("registerClientSocket[" + eventPollThreadBaseId + "] " + clientChannel.getLocalAddress() + " " +
+                    clientChannel.getRemoteAddress() + " requestId: " + requestId);
+        } catch (IOException ex) {
+            LOG.warn("registerClientSocket[" + eventPollThreadBaseId + "] display channel exception: " + ex.getMessage());
+        }
+
         /*
         ** The IoInterface is the wrapper around the NIO SocketChannel code that allows communication over a socket
         **   with the client who generated this request.
@@ -161,14 +173,13 @@ public class NioEventPollThread implements Runnable, EventPollThread {
             if (connection != null) {
                 connection.startClient(clientChannel);
 
-                int requestId = uniqueRequestId.getAndIncrement();
                 requestContext.initializeServer(connection, requestId);
             } else {
                 LOG.warn("[" + eventPollThreadBaseId + "] no free connections");
                 success = false;
             }
         } else {
-            LOG.warn("[" + eventPollThreadBaseId + "] no free requests");
+            LOG.warn("registerClientSocket[" + eventPollThreadBaseId + "] no free requests");
             success = false;
         }
 

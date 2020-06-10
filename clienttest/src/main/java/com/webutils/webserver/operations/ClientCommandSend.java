@@ -97,12 +97,12 @@ public class ClientCommandSend implements Operation {
      */
     public ClientCommandSend(final ClientInterface clientInterface, final ClientRequestContext requestContext,
                            final MemoryManager memoryManager, final ServerIdentifier server,
-                           final ObjectParams commandParams) {
+                           final ObjectParams requestParams) {
 
         this.clientInterface = clientInterface;
         this.requestContext = requestContext;
         this.objectServer = server;
-        this.requestParams = commandParams;
+        this.requestParams = requestParams;
         this.memoryManager = memoryManager;
 
         /*
@@ -126,8 +126,9 @@ public class ClientCommandSend implements Operation {
 
         serverConnectionClosedDueToError = false;
 
+        String clientOpcRequestId = Objects.requireNonNullElse(requestParams.getOpcClientRequestId(), "");
         LOG.info("ClientCommandSend addr: " + objectServer.getServerIpAddress().toString() + " port: " +
-                objectServer.getServerTcpPort());
+                objectServer.getServerTcpPort() + " clientOpcRequestId: " + clientOpcRequestId);
     }
 
     public OperationTypeEnum getOperationType() {

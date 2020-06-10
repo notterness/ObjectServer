@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public abstract class ClientTest {
 
-    private static final WebServerFlavor webServerFlavor = WebServerFlavor.INTEGRATION_TESTS;
+    private static final WebServerFlavor webServerFlavor = WebServerFlavor.CLI_CLIENT;
 
     private InetAddress serverIpAddr;
     private int serverTcpPort;

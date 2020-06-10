@@ -11,4 +11,8 @@ public class ChunkDeleteInfo {
     }
 
     public String getChunkUID() { return chunkUID; }
+
+    public String getServerName() {
+        return serverName;
+    }
 }

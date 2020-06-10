@@ -46,10 +46,10 @@ public class AllocateChunksResponseContent extends ContentParser {
         requiredSubAttributes.add(STORAGE_ID);
         requiredSubAttributes.add(SERVER_IP);
         requiredSubAttributes.add(SERVER_PORT);
-        requiredSubAttributes.add(CHUNK_ID);
+        requiredSubAttributes.add(HttpInfo.CHUNK_ID);
         requiredSubAttributes.add(CHUNK_UID);
-        requiredSubAttributes.add(CHUNK_LBA);
-        requiredSubAttributes.add(CHUNK_LOCATION);
+        requiredSubAttributes.add(HttpInfo.CHUNK_LBA);
+        requiredSubAttributes.add(HttpInfo.CHUNK_LOCATION);
     }
 
     /*
@@ -143,10 +143,10 @@ public class AllocateChunksResponseContent extends ContentParser {
                 /*
                  ** Need to add the rest of the fields
                  */
-                server.setChunkId(getId(subCategory, CHUNK_ID));
+                server.setChunkId(getId(subCategory, HttpInfo.CHUNK_ID));
                 server.setChunkLBA(getChunkLba(subCategory));
                 server.setChunkUID(getStr(subCategory, CHUNK_UID));
-                server.setChunkLocation(getStr(subCategory, CHUNK_LOCATION));
+                server.setChunkLocation(getStr(subCategory, HttpInfo.CHUNK_LOCATION));
                 server.setServerId(getId(subCategory, STORAGE_ID));
 
                 servers.add(server);
@@ -197,7 +197,7 @@ public class AllocateChunksResponseContent extends ContentParser {
     ** The following is used to obtain the "chunk-lba" for the allocated chunk
      */
     private int getChunkLba(final Map<String, String> subCategory) {
-        String lbaStr = subCategory.get(CHUNK_LBA);
+        String lbaStr = subCategory.get(HttpInfo.CHUNK_LBA);
         int lba = -1;
 
         if (lbaStr != null) {

@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class AllocateChunksSimple2 {
 
-    static WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
+    static WebServerFlavor flavor = WebServerFlavor.CLI_CLIENT;
 
     private static final int CHUNK_NUMBER = 0;
     private final ClientContextPool clientContextPool;
@@ -28,8 +28,6 @@ public class AllocateChunksSimple2 {
     private final ClientServiceRequest cli;
 
     private final AllocateChunksResponseContent contentParser;
-
-    private final int eventThreadId;
 
     AllocateChunksSimple2(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount,
                           final AllocateChunksResponseContent contentParser) {
@@ -44,14 +42,10 @@ public class AllocateChunksSimple2 {
         cliClient = new NioCliClient(clientContextPool);
         cliClient.start();
 
-        this.eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
-
         AllocateChunksParams params = new AllocateChunksParams(StorageTierEnum.STANDARD_TIER, CHUNK_NUMBER);
         params.setOpcClientRequestId("AllocateChunksSimple2-5-29-2020.01");
 
-        cli = new ClientServiceRequest(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
-                params, contentParser, testCount);
-
+        cli = new ClientServiceRequest(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort, params, contentParser, testCount);
     }
 
     public void execute() {
@@ -62,6 +56,8 @@ public class AllocateChunksSimple2 {
          */
         List<ServerIdentifier> servers = new LinkedList<>();
         contentParser.extractAllocations(servers, CHUNK_NUMBER);
+
+        int eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
 
         cliClient.stop();
 

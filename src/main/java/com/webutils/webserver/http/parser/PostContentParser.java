@@ -65,7 +65,7 @@ public class PostContentParser {
 
             //LOG.info("parseBuffer() contentLength: " + contentLength + " contentBytesParsed: " + contentBytesParsed);
             /*
-            ** Convert to a string. Then tokenize if using space, tab, NewLine, CR, \f and Double Quote.
+            ** Convert to a string. Then tokenize it using space, tab, NewLine, CR, \f and Double Quote.
             */
             String tmpStr = HttpInfo.bb_to_str(bufferToParse);
             StringTokenizer stk = new StringTokenizer(tmpStr, ", \t\n\r\f\"");
@@ -76,7 +76,7 @@ public class PostContentParser {
                 ** Uncomment out the following line to look at what the string is that has been parsed out by the
                 **   StringTokenizer().
                  */
-                //LOG.info(" token: " + str1);
+                LOG.info(" token: " + str1);
 
                 if (!contentParser.addData(str1)) {
                     parseError = true;

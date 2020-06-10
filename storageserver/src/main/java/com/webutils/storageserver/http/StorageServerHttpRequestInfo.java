@@ -72,10 +72,10 @@ public class StorageServerHttpRequestInfo extends HttpRequestInfo {
 
             case GET_METHOD:
                 if ((objectName != null) && !objectName.equals("StorageServer")) {
-                    LOG.warn("GET Missing Critical Object Info [" + requestId + "] /n/StorageServer is missing");
+                    LOG.warn("GET Missing Critical Object Info [" + requestId + "] StorageServer is missing");
 
                     String failureMessage = "{\r\n  \"code\":" + HttpStatus.BAD_REQUEST_400 +
-                            "\r\n  \"message\": \"Missing required attributes - /n/StorageServer is missing\" + " +
+                            "\r\n  \"message\": \"Missing required attribute - StorageServer\" + " +
                             "\r\n}";
                     LOG.warn(failureMessage);
                     setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
@@ -83,27 +83,11 @@ public class StorageServerHttpRequestInfo extends HttpRequestInfo {
                 break;
 
             case DELETE_METHOD:
-                if (bucketName == null) {
-                    LOG.warn("DELETE Missing Critical Object Info [" + requestId + "] bucketName is missing");
+                if ((objectName != null) && !objectName.equals("StorageServer")) {
+                    LOG.warn("DELETE Missing Critical Object Info [" + requestId + "] StorageServer is missing");
 
                     String failureMessage = "{\r\n  \"code\":" + HttpStatus.BAD_REQUEST_400 +
-                            "\r\n  \"message\": \"Missing required attributes - bucketName is missing\" + " +
-                            "\r\n}";
-                    LOG.warn(failureMessage);
-                    setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
-                } else if (namespace == null) {
-                    LOG.warn("DELETE Missing Critical Object Info [" + requestId + "] namespace is missing");
-
-                    String failureMessage = "{\r\n  \"code\":" + HttpStatus.BAD_REQUEST_400 +
-                            "\r\n  \"message\": \"Missing required attributes - namespace is missing\" + " +
-                            "\r\n}";
-                    LOG.warn(failureMessage);
-                    setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
-                } else if (objectName == null) {
-                    LOG.warn("DELETE Missing Critical Object Info [" + requestId + "] objectName is null");
-
-                    String failureMessage = "{\r\n  \"code\":" + HttpStatus.BAD_REQUEST_400 +
-                            "\r\n  \"message\": \"Missing required attributes - objectName is missing\" + " +
+                            "\r\n  \"message\": \"Missing required attribute - StorageServer\" + " +
                             "\r\n}";
                     LOG.warn(failureMessage);
                     setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);

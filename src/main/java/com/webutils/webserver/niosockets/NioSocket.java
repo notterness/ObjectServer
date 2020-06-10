@@ -30,7 +30,7 @@ public class NioSocket implements IoInterface {
     **   which in turn means there is a Selector() loop that this must use. The Selector() loop
     **   is controlled via the NioSelectHandler object.
      */
-    private NioSelectHandler nioSelectHandler;
+    private final NioSelectHandler nioSelectHandler;
 
     private SelectionKey key;
 
@@ -81,9 +81,13 @@ public class NioSocket implements IoInterface {
 
     private int currentInterestOps;
 
-    public NioSocket(final NioSelectHandler nioSelectHandler) {
+    private final int nioSocketId;
+
+    public NioSocket(final NioSelectHandler nioSelectHandler, final int nioSocketId) {
 
         this.nioSelectHandler = nioSelectHandler;
+        this.nioSocketId = nioSocketId;
+
         this.key = null;
 
         this.readBufferManager = null;
@@ -99,6 +103,8 @@ public class NioSocket implements IoInterface {
         currentInterestOps = 0;
     }
 
+    public int getId() { return nioSocketId; }
+
     /*
     ** This is the actual method to call to start all of the processing threads for a TCP port. The SocketChannel
     **   is assigned as part of the startClient() method to allow the NioSocket objects to be allocated out of a
@@ -106,7 +112,7 @@ public class NioSocket implements IoInterface {
      */
     public void startClient(final SocketChannel socket) {
         socketChannel = socket;
-        this.nioSelectHandler.addNioSocketToSelector(this);
+        nioSelectHandler.addNioSocketToSelector(this);
     }
 
     public void startClient(final String readFileName, final Operation errorHandler) {
@@ -133,7 +139,7 @@ public class NioSocket implements IoInterface {
 
         InetSocketAddress socketAddress = new InetSocketAddress(targetAddress, targetPort);
 
-        LOG.info("startInitiator() addr: " + socketAddress.toString());
+        LOG.info("startInitiator() NioSocket[" + nioSocketId + "] addr: " + socketAddress.toString());
 
         try {
             socketChannel = SocketChannel.open();
@@ -141,7 +147,7 @@ public class NioSocket implements IoInterface {
             /*
             ** What to do if the socket cannot be opened
              */
-            LOG.warn("Unable to open SocketChannel " + io_ex.getMessage());
+            LOG.warn("Unable to open SocketChannel NioSocket[" + nioSocketId + "] " + io_ex.getMessage());
             errorHandler.event();
             return false;
         }
@@ -155,7 +161,7 @@ public class NioSocket implements IoInterface {
 
             socketChannel.connect(socketAddress);
         } catch (IOException io_ex) {
-            LOG.warn("Unable to configureBlocking() " + io_ex.getMessage());
+            LOG.warn("Unable to configureBlocking NioSocket[" + nioSocketId + "] " + io_ex.getMessage());
 
             try {
                 socketChannel.close();
@@ -163,7 +169,7 @@ public class NioSocket implements IoInterface {
                 /*
                 ** Unable to close the socket as it might have already been closed
                  */
-                LOG.warn("Unable to close() " + ex.getMessage());
+                LOG.warn("Unable to close() NioSocket[" + nioSocketId + "]" + ex.getMessage());
             }
             socketChannel = null;
 
@@ -186,7 +192,7 @@ public class NioSocket implements IoInterface {
                 /*
                  ** Unable to close the socket as it might have already been closed
                  */
-                LOG.warn("close(1) exception: " + ex.getMessage());
+                LOG.warn("close(1) NioSocket[" + nioSocketId + "] exception: " + ex.getMessage());
             }
             socketChannel = null;
             success = false;
@@ -204,7 +210,7 @@ public class NioSocket implements IoInterface {
         /*
         ** Not used for NIO
          */
-        LOG.error("NioSocket invalid startInitiator() call method");
+        LOG.error("NioSocket[" + nioSocketId + "] invalid startInitiator() call method");
         return true;
     }
 
@@ -217,11 +223,11 @@ public class NioSocket implements IoInterface {
      */
     public void registerReadBufferManager(final BufferManager readBufferMgr, final BufferManagerPointer readPtr) {
 
-        LOG.info(" readPtr register (" + readPtr.getIdentifier() + ":" + readPtr.getOperationType() + ") bufferIndex: " +
+        LOG.info("NioSocket[" + nioSocketId + "] readPtr register (" + readPtr.getIdentifier() + ":" + readPtr.getOperationType() + ") bufferIndex: " +
                 readPtr.getCurrIndex());
 
         if (readBufferManager != null) {
-            LOG.info(" readPtr push (" + readPtr.getIdentifier() + ":" + readPtr.getOperationType() + ") bufferIndex: " +
+            LOG.info("NioSocket[" + nioSocketId + "] readPtr push (" + readPtr.getIdentifier() + ":" + readPtr.getOperationType() + ") bufferIndex: " +
                     readPtr.getCurrIndex());
 
             BufferAssociation assocation = new BufferAssociation(readBufferManager, readPointer);
@@ -248,11 +254,11 @@ public class NioSocket implements IoInterface {
      */
     public void registerWriteBufferManager(final BufferManager writeBufferMgr, final BufferManagerPointer writePtr) {
 
-        LOG.info(" writePtr register (" + writePtr.getIdentifier() + ":" + writePtr.getOperationType() + ") bufferIndex: " +
+        LOG.info("NioSocket[" + nioSocketId + "] writePtr register (" + writePtr.getIdentifier() + ":" + writePtr.getOperationType() + ") bufferIndex: " +
                 writePtr.getCurrIndex());
 
         if (writeBufferManager != null) {
-            LOG.info(" writePtr push (" + writePtr.getIdentifier() + ":" + writePtr.getOperationType() + ") bufferIndex: " +
+            LOG.info("NioSocket[" + nioSocketId + "] writePtr push (" + writePtr.getIdentifier() + ":" + writePtr.getOperationType() + ") bufferIndex: " +
                     writePtr.getCurrIndex());
 
             BufferAssociation assocation = new BufferAssociation(writeBufferManager, writePointer);
@@ -271,7 +277,7 @@ public class NioSocket implements IoInterface {
      */
     public void unregisterReadBufferManager() {
 
-        LOG.info(" readPtr unregister (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+        LOG.info("NioSocket[" + nioSocketId + "] readPtr unregister (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
                 readPointer.getCurrIndex());
 
         if (!readBufferAssociations.empty()) {
@@ -281,11 +287,11 @@ public class NioSocket implements IoInterface {
                 readBufferManager = association.getBufferManager();
                 readPointer = association.getBufferManagerPointer();
 
-                LOG.warn(" POP readPtr unregister (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                LOG.warn("NioSocket[" + nioSocketId + "] POP readPtr unregister (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
                         readPointer.getCurrIndex());
 
             } catch (EmptyStackException ex) {
-                LOG.warn(" ERROR readPtr unregister (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                LOG.warn("NioSocket[" + nioSocketId + "] ERROR readPtr unregister (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
                         readPointer.getCurrIndex());
 
                 readBufferManager = null;
@@ -303,7 +309,7 @@ public class NioSocket implements IoInterface {
      **   write buffers.
      */
     public void unregisterWriteBufferManager() {
-        LOG.info(" writePtr unregister (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+        LOG.info("NioSocket[" + nioSocketId + "] writePtr unregister (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
                 writePointer.getCurrIndex());
 
         if (!writeBufferAssociations.empty()) {
@@ -313,11 +319,11 @@ public class NioSocket implements IoInterface {
                 writeBufferManager = association.getBufferManager();
                 writePointer = association.getBufferManagerPointer();
 
-                LOG.info(" POP writePtr unregister (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+                LOG.info("NioSocket[" + nioSocketId + "] POP writePtr unregister (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
                         writePointer.getCurrIndex());
 
             } catch (EmptyStackException ex) {
-                LOG.warn(" ERROR writePtr unregister (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+                LOG.warn("NioSocket[" + nioSocketId + "] ERROR writePtr unregister (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
                         writePointer.getCurrIndex());
 
                 writeBufferManager = null;
@@ -340,11 +346,11 @@ public class NioSocket implements IoInterface {
                 /*
                  ** Use the key again
                  */
-                LOG.info("currentInterestOps: " + currentInterestOps);
+                LOG.info("NioSocket[" + nioSocketId + "] currentInterestOps: " + currentInterestOps);
                 try {
                     key.interestOps(currentInterestOps);
                 } catch (CancelledKeyException ex) {
-                    LOG.error("NioSocket updateInterestOps() currentInterestOps: " + currentInterestOps + " exception: " +
+                    LOG.error("NioSocket[" + nioSocketId + "] updateInterestOps() currentInterestOps: " + currentInterestOps + " exception: " +
                             ex.getMessage());
                     return false;
                 }
@@ -363,7 +369,7 @@ public class NioSocket implements IoInterface {
      ** It sets the OP_READ flag for the Selector that is managed by the NioSelectHandler object.
      */
     public void readBufferAvailable() {
-        LOG.info(" readBufferAvailable (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+        LOG.info("NioSocket[" + nioSocketId + "] readBufferAvailable (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
                 readPointer.getCurrIndex() + " interestOps: " + currentInterestOps);
 
         currentInterestOps |= SelectionKey.OP_READ;
@@ -384,13 +390,13 @@ public class NioSocket implements IoInterface {
         currentInterestOps &= (SelectionKey.OP_CONNECT | SelectionKey.OP_WRITE);
         while ((readBuffer = readBufferManager.peek(readPointer)) != null) {
 
-            LOG.info(" read(" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+            LOG.info("[" + nioSocketId + "] read(" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
                     readPointer.getCurrIndex() + " position: " + readBuffer.position() + " limit: " + readBuffer.limit());
 
             try {
                 int bytesRead = socketChannel.read(readBuffer);
 
-                LOG.info(" read(" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                LOG.info("[" + nioSocketId + "] read(" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
                         readPointer.getCurrIndex() + " position: " + readBuffer.position() + " bytesRead: " + bytesRead);
                 if (bytesRead > 0) {
                     /*
@@ -406,14 +412,14 @@ public class NioSocket implements IoInterface {
                     /*
                     ** Need to close the SocketChannel and event() the error handler.
                      */
-                    LOG.warn("read(" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                    LOG.warn("[" + nioSocketId + "] read(" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
                             readPointer.getCurrIndex() + " bytesRead -1");
                     closeAndSendErrorEvent();
                     currentInterestOps = 0;
                     break;
                 }
             } catch (IOException io_ex) {
-                LOG.error(" (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
+                LOG.error("[" + nioSocketId + "] (" + readPointer.getIdentifier() + ":" + readPointer.getOperationType() + ") bufferIndex: " +
                         readPointer.getCurrIndex() + " exception: " + io_ex.getMessage());
                 closeAndSendErrorEvent();
                 currentInterestOps = 0;
@@ -431,7 +437,7 @@ public class NioSocket implements IoInterface {
     **   object.
      */
     public void writeBufferReady() {
-        LOG.info(" writeBufferReady (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+        LOG.info("[" + nioSocketId + "] writeBufferReady (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
                 writePointer.getCurrIndex() + " interestOps: " + currentInterestOps);
 
         currentInterestOps |= SelectionKey.OP_WRITE;
@@ -445,7 +451,7 @@ public class NioSocket implements IoInterface {
         ByteBuffer writeBuffer;
 
         if (writePointer == null) {
-            LOG.error("null writePointer socketChannel: " + socketChannel.toString());
+            LOG.error("[" + nioSocketId + "]null writePointer socketChannel: " + socketChannel.toString());
         }
 
         /*
@@ -454,7 +460,7 @@ public class NioSocket implements IoInterface {
         currentInterestOps &= (SelectionKey.OP_CONNECT | SelectionKey.OP_READ);
         while ((writeBuffer = writeBufferManager.peek(writePointer)) != null) {
 
-            LOG.info(" write (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+            LOG.info("[" + nioSocketId + "] write (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
                     writePointer.getCurrIndex() + " position: " + writeBuffer.position() + " limit: " + writeBuffer.limit());
 
             /*
@@ -469,7 +475,7 @@ public class NioSocket implements IoInterface {
                 int bytesWritten = socketChannel.write(tempBuffer);
 
                 if (bytesWritten > 0) {
-                    LOG.info(" write (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bytesWritten: " +
+                    LOG.info("[" + nioSocketId + "] write (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bytesWritten: " +
                             bytesWritten + " position: " + tempBuffer.position() + " remaining: " + tempBuffer.remaining());
 
                     /*
@@ -492,14 +498,14 @@ public class NioSocket implements IoInterface {
                     /*
                      ** Need to close the SocketChannel and event() the error handler.
                      */
-                    LOG.warn(" (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+                    LOG.warn("[" + nioSocketId + "] (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
                             writePointer.getCurrIndex() + " bytesWritten -1");
                     closeAndSendErrorEvent();
                     writePostion = 0;
                     break;
                 }
             } catch (IOException io_ex) {
-                LOG.error(" (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
+                LOG.error("[" + nioSocketId + "] (" + writePointer.getIdentifier() + ":" + writePointer.getOperationType() + ") bufferIndex: " +
                         writePointer.getCurrIndex() + " exception: " + io_ex.getMessage());
                 closeAndSendErrorEvent();
                 writePostion = 0;
@@ -515,7 +521,7 @@ public class NioSocket implements IoInterface {
      */
     public void removeKey() {
         if (key != null) {
-            LOG.info("NioSocket removeKey()");
+            LOG.info("NioSocket[" + nioSocketId + "] removeKey()");
 
             key.attach(null);
             key.cancel();
@@ -530,21 +536,20 @@ public class NioSocket implements IoInterface {
     public void closeConnection() {
 
         if (socketChannel != null) {
-            LOG.info("NioSocket closeConnection()");
+            LOG.info("NioSocket[" + nioSocketId + "] closeConnection()");
             removeKey();
 
             try {
                 socketChannel.close();
             } catch (IOException io_ex) {
-                LOG.warn("close(2) exception: " + io_ex.getMessage());
+                LOG.warn("NioSocket[" + nioSocketId + "] close(2) exception: " + io_ex.getMessage());
             }
 
             socketChannel = null;
 
             nioSelectHandler.removeNioSocketFromSelector(this);
-            nioSelectHandler = null;
         } else {
-            LOG.info("NioSocket closeConnection() socketChannel is null");
+            LOG.info("NioSocket[" + nioSocketId + "] closeConnection() socketChannel is null");
         }
     }
 
@@ -556,7 +561,7 @@ public class NioSocket implements IoInterface {
         /*
          ** First remove the Key so it can no longer be used.
          */
-        LOG.warn("sendErrorEvent()");
+        LOG.warn("NioSocket[" + nioSocketId + "] sendErrorEvent()");
         removeKey();
 
         socketChannel = null;
@@ -566,7 +571,6 @@ public class NioSocket implements IoInterface {
          **   likely be a CancelledKeyException when trying to us it.
          */
         nioSelectHandler.removeNioSocketFromSelector(this);
-        nioSelectHandler = null;
 
         socketErrorHandler.event();
     }
@@ -576,7 +580,7 @@ public class NioSocket implements IoInterface {
      **   the SocketChannel. This does everything the sendErrorEvent() does, but also tries to close the socket.
      */
     public void closeAndSendErrorEvent() {
-        LOG.info("NioSocket closeAndSendErrorEvent()");
+        LOG.info("NioSocket[" + nioSocketId + "]  closeAndSendErrorEvent()");
 
         /*
          ** First remove the Key so it can no longer be used.
@@ -586,7 +590,7 @@ public class NioSocket implements IoInterface {
         try {
             socketChannel.close();
         } catch (IOException io_ex) {
-            LOG.warn("close(3) exception: " + io_ex.getMessage());
+            LOG.warn("NioSocket[" + nioSocketId + "] close(3) exception: " + io_ex.getMessage());
         }
 
         socketChannel = null;
@@ -596,7 +600,6 @@ public class NioSocket implements IoInterface {
          **   likely be a CancelledKeyException when trying to us it.
          */
         nioSelectHandler.removeNioSocketFromSelector(this);
-        nioSelectHandler = null;
 
         socketErrorHandler.event();
     }
@@ -615,7 +618,7 @@ public class NioSocket implements IoInterface {
         if (connectCompleteHandler != null) {
             connectCompleteHandler.event();
         } else {
-            LOG.warn("No connect complete handler registered");
+            LOG.warn("NioSocket[" + nioSocketId + "] No connect complete handler registered");
         }
     }
 
@@ -629,7 +632,7 @@ public class NioSocket implements IoInterface {
             port = 0;
         }
 
-        System.out.println("SocketChannel " + socketChannel.toString() + " listeningPort: " + port);
+        System.out.println("NioSocket[" + nioSocketId + "] SocketChannel " + socketChannel.toString() + " listeningPort: " + port);
 
         return Integer.toString(port);
     }

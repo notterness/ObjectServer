@@ -15,11 +15,14 @@ public enum ChunkStatusEnum {
      **   DELETED - The chunk has been deleted (meaning the object is no longer available to the client), but it has
      **     not been cleaned up on the Storage Server yet.
      **   AVAILABLE - The chunk is available to be allocated.
+     **   DELETE_FAILED - The request to the Storage Server to delete the chunk failed. This needs to be retried or
+     **     cleaned up if the Storage Server is removed.
      */
     INVALID_CHUNK_STATUS(0, "INVALID"),
     CHUNK_ALLOCATED(1, "ALLOCATED"),
     CHUNK_DELETED(2, "DELETED"),
-    CHUNK_AVAILABLE(3, "AVAILABLE");
+    CHUNK_AVAILABLE(3, "AVAILABLE"),
+    CHUNK_DELETE_FAILED(4, "DELETE_FAILED");
 
     private final int value;
     private final String name;

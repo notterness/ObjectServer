@@ -65,6 +65,9 @@ public class NioServerHandler implements Runnable {
     }
 
     public void stop() {
+
+        LOG.info("NioServerHandler[" + serverThreadBaseId + "] stop()");
+
         threadRunning = false;
 
         try {

@@ -25,7 +25,7 @@ class ClientTest_CreateBucket_Simple extends ClientTest {
     public String buildRequestString(final String Md5Digest) {
         String contentStr = buildContent();
 
-        return new String("POST /n/Tenancy-12345-abcde" + "" +
+        return "POST /n/Tenancy-12345-abcde" + "" +
                 "/b/ HTTP/1.1\n" +
                 "Host: ClientTest-" + super.clientTestName + "\n" +
                 "Content-Type: application/json\n" +
@@ -36,7 +36,7 @@ class ClientTest_CreateBucket_Simple extends ClientTest {
                 "Accept-Encoding: gzip, deflate\n" +
                 "x-content-sha256: " + sha256Digest + "\n" +
                 "Content-Length: " + contentStr.length() + "\n\n" +
-                contentStr);
+                contentStr;
     }
 
     @Override
@@ -60,22 +60,22 @@ class ClientTest_CreateBucket_Simple extends ClientTest {
     }
 
     private String buildContent() {
-        String contentString = new String(
+        String contentString =
                 "{\n" +
-                        "  \"compartmentId\": \"clienttest.compartment.12345.abcde\",\n" +
-                        "  \"namespace\": \"Namespace-xyz-987\",\n" +
-                        "  \"name\": \"CreateBucket_Simple\",\n" +
-                        "  \"objectEventsEnabled\": false,\n" +
-                        "  \"freeformTags\": {\"Test_1\": \"Test_2\"}, \n" +
-                        "  \"definedTags\":\n" +
-                        "  {\n" +
-                        "    \"MyTags\":\n" +
-                        "    {\n" +
-                        "      \"TestTag_1\": \"ABC\", \n" +
-                        "      \"TestTag_2\": \"123\", \n" +
-                        "    }\n" +
-                        "  }\n" +
-                        "}\n");
+                "  \"compartmentId\": \"clienttest.compartment.12345.abcde\",\n" +
+                "  \"namespace\": \"Namespace-xyz-987\",\n" +
+                "  \"name\": \"CreateBucket_Simple\",\n" +
+                "  \"objectEventsEnabled\": false,\n" +
+                "  \"freeformTags\": {\"Test_1\": \"Test_2\"}, \n" +
+                "  \"definedTags\":\n" +
+                "  {\n" +
+                "    \"MyTags\":\n" +
+                "    {\n" +
+                "      \"TestTag_1\": \"ABC\", \n" +
+                "      \"TestTag_2\": \"123\", \n" +
+                "    }\n" +
+                "  }\n" +
+                "}\n";
 
         Sha256Digest digest = new Sha256Digest();
 

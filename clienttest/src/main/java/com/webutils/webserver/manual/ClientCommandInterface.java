@@ -24,11 +24,11 @@ public class ClientCommandInterface extends ClientInterface {
     private static final String clientName = "ObjectCLI/0.0.1";
 
     ClientCommandInterface(final NioCliClient cliClient, final MemoryManager memoryManger, final InetAddress serverIpAddr, final int serverTcpPort,
-                           final ObjectParams deleteRequestParams, AtomicInteger testCount) {
+                           final ObjectParams requestParams, AtomicInteger testCount) {
 
         super(cliClient, memoryManger, serverIpAddr, serverTcpPort, testCount);
 
-        this.requestParams = deleteRequestParams;
+        this.requestParams = requestParams;
 
         /*
          ** The testClient is responsible for providing the threads the Operation(s) will run on and the

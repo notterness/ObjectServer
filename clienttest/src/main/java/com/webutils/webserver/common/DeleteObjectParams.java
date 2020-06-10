@@ -1,5 +1,6 @@
 package com.webutils.webserver.common;
 
+import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpResponseInfo;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -9,9 +10,9 @@ public class DeleteObjectParams extends ObjectParams {
 
     private static final Logger LOG = LoggerFactory.getLogger(DeleteObjectParams.class);
 
-    public DeleteObjectParams(final String namespace, final String bucket, final String object, final String objectFilePath) {
+    public DeleteObjectParams(final String namespace, final String bucket, final String object) {
 
-        super(namespace, bucket, object, objectFilePath);
+        super(namespace, bucket, object, null);
     }
 
     /*
@@ -59,14 +60,14 @@ public class DeleteObjectParams extends ObjectParams {
         }
 
         if (opcClientRequestId != null) {
-            request += "opc-client-request-id: " + opcClientRequestId + "\n";
+            request += HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n";
         }
 
         if (ifMatch != null) {
             request += "if-match: " + ifMatch + "\n";
         }
 
-        finalContent += "Content-Length: 0\n\n";
+        finalContent += HttpInfo.CONTENT_LENGTH + ": 0\n\n";
 
         request += finalContent;
 
@@ -91,22 +92,22 @@ public class DeleteObjectParams extends ObjectParams {
             System.out.println("Status: 204");
             String opcClientRequestId = httpInfo.getOpcClientRequestId();
             if (opcClientRequestId != null) {
-                System.out.println("opc-clent-request-id: " + opcClientRequestId);
+                System.out.println(HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId);
             }
 
             String opcRequestId = httpInfo.getOpcRequestId();
             if (opcRequestId != null) {
-                System.out.println("opc-request-id: " + opcRequestId);
+                System.out.println(HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId);
             }
 
             String lastModified = httpInfo.getResponseLastModified();
             if (lastModified != null) {
-                System.out.println("last-modified: " + lastModified);
+                System.out.println(HttpResponseInfo.RESPONSE_LAST_MODIFIED + ": " + lastModified);
             }
 
             String versionId = httpInfo.getResponseVersionId();
             if (versionId != null) {
-                System.out.println("version-id: " + versionId);
+                System.out.println(HttpResponseInfo.RESPONSE_VERSION_ID + ": " + versionId);
             }
         } else if (httpInfo.getResponseStatus() == HttpStatus.METHOD_NOT_ALLOWED_405) {
             System.out.println("Status: " + httpInfo.getResponseStatus());

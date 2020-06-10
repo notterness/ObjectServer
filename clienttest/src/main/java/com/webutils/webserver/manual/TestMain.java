@@ -37,7 +37,7 @@ public class TestMain {
         final int OBJECT_SERVER_TCP_PORT = 5001;
         final int CHUNK_MGR_SERVICE_TCP_PORT = 5002;
 
-        final int NUMBER_TEST_STORAGE_SERVERS = 3;
+        final int NUMBER_TEST_STORAGE_SERVERS = 4;
         final int STORAGE_SERVER_BASE_ID_OFFSET = 100;
 
         int baseTcpPort = ServersDb.STORAGE_SERVER_TCP_PORT;
@@ -355,32 +355,55 @@ public class TestMain {
         List<ServerIdentifier> servers = new LinkedList<>();
         contentParser.extractAllocations(servers, 0);
 
-        DeleteChunksSimple deleteChunks = new DeleteChunksSimple(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT,
-                threadCount, servers);
+        if (servers.size() > 0) {
+            /*
+            ** Delete a single chunk from the Storage Server. This is not actually a good thing to do in real life, but
+            **   for test purposes it allows the interface to be validated.
+             */
+            StorageServerChunkDeleteSimple storageServerDeleteChunk = new StorageServerChunkDeleteSimple(serverIpAddr,
+                    baseTcpPort, threadCount, servers.get(0));
+            storageServerDeleteChunk.execute();
+        }
+
+        DeleteChunksSimple deleteChunks = new DeleteChunksSimple(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount, servers);
         deleteChunks.execute();
 
         servers.clear();
         contentParser.cleanup();
 
+        /*
+        ** Read an object from the Object Server, save it to a file. Then upload that file as a new object. And
+        **   finally, delete the object.
+         */
         GetObjectSimple getObjectSimple = new GetObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         getObjectSimple.execute();
 
         PutObjectSimple putObjectSimple = new PutObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         putObjectSimple.execute();
 
-        DeleteObjectSimple deleteObject = new DeleteObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
-        deleteObject.execute();
-
         /*
         ListObjectsSimple listObjectsSimple = new ListObjectsSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         listObjectsSimple.execute();
 
-        ListChunksAll listChunksAll = new ListChunksAll(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
-        listChunksAll.execute();
+        ListAllocatedChunks listChunks = new ListAllocatedChunks(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
+        listChunks.execute();
 
         ListServersAll listServersAll = new ListServersAll(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
         listServersAll.execute();
 */
+
+        /*
+        ** Delete all of the objects created as part of this test suite
+         */
+        DeleteObjectSimple deleteObject1 = new DeleteObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount,
+                "TestObject_1");
+        deleteObject1.execute();
+
+        DeleteObjectSimple deleteObject2 = new DeleteObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount,
+                "TestObject-1234-abcd");
+        deleteObject2.execute();
+
+
         /*
         GetObjectBadBucket getObjectBadBucket = new GetObjectBadBucket(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
         getObjectBadBucket.execute();

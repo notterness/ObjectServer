@@ -123,6 +123,10 @@ public class StorageServerSendFinalStatus implements Operation {
                             resultBuilder.buildPostOkResponse(respBuffer);
                             break;
 
+                        case DELETE_METHOD:
+                            resultBuilder.buildDeleteOkResponse(respBuffer);
+                            break;
+
                         default:
                             break;
                     }
@@ -154,7 +158,6 @@ public class StorageServerSendFinalStatus implements Operation {
                 /*
                  ** Go right to the CloseOutRequest operation. That will close out the connection.
                  */
-
             }
 
             httpResponseSent = true;

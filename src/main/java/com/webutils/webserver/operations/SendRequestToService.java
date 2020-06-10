@@ -119,6 +119,7 @@ public class SendRequestToService implements Operation {
     private boolean serverConnectionClosedDueToError;
 
     /*
+    ** NOTE: This call the server.setHttpInfo() must be made before instantiating the SendRequestToService class.
      */
     public SendRequestToService(final RequestContext requestContext, final MemoryManager memoryManager,
                                 final ServerIdentifier server, final ObjectParams commandParams,
@@ -564,7 +565,6 @@ public class SendRequestToService implements Operation {
              ** TODO: Add a test case for the startInitiator failing to make sure the cleanup
              **   is properly handled.
              */
-            complete();
             return false;
         }
 

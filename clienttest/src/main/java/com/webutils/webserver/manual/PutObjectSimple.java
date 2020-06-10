@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class PutObjectSimple {
 
-    static WebServerFlavor flavor = WebServerFlavor.INTEGRATION_TESTS;
+    static WebServerFlavor flavor = WebServerFlavor.CLI_CLIENT;
 
     private final ClientContextPool clientContextPool;
     private final NioCliClient cliClient;
@@ -38,9 +38,7 @@ public class PutObjectSimple {
                 "TestObject_1", "/Users/notterness/WebServer/webserver/logs/" + "testObjectFile");
         params.setOpcClientRequestId("PutObjectSimple-5-12-2020.01");
 
-
-        cli = new ClientPutInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
-                params, testCount);
+        cli = new ClientPutInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort, params, testCount);
     }
 
     public void execute() {

@@ -11,9 +11,6 @@ public class CreateServerPostContent extends ContentParser {
 
     private static final Logger LOG = LoggerFactory.getLogger(CreateServerPostContent.class);
 
-    private static final String STORAGE_SERVER_IP = "storage-server-ip";
-    private static final String STORAGE_SERVER_PORT = "storage-server-port";
-    private static final String STORAGE_SERVER_NAME = "storage-server-name";
     private static final String STORAGE_SERVER_NUM_CHUNKS = "allocated-chunks";
 
 
@@ -23,9 +20,9 @@ public class CreateServerPostContent extends ContentParser {
         /*
          ** Fill in the list of required attributes so they are easy to check
          */
-        requiredAttributes.add(STORAGE_SERVER_NAME);
-        requiredAttributes.add(STORAGE_SERVER_IP);
-        requiredAttributes.add(STORAGE_SERVER_PORT);
+        requiredAttributes.add(SERVER_NAME);
+        requiredAttributes.add(SERVER_IP);
+        requiredAttributes.add(SERVER_PORT);
         requiredAttributes.add(STORAGE_SERVER_NUM_CHUNKS);
         requiredAttributes.add(STORAGE_TIER_ATTRIBUTE);
     }
@@ -126,7 +123,7 @@ public class CreateServerPostContent extends ContentParser {
     }
 
     public String getServerName() {
-        return params.get(STORAGE_SERVER_NAME);
+        return params.get(SERVER_NAME);
     }
 
     public String getCompartmentId() {
@@ -134,14 +131,14 @@ public class CreateServerPostContent extends ContentParser {
     }
 
     public String getServerIP() {
-        return params.get(STORAGE_SERVER_IP);
+        return params.get(SERVER_IP);
     }
 
     /*
     ** Pull the "storage-server-port" out and validate that it is a positive integer
      */
     public int getServerPort() {
-        String portStr = params.get(STORAGE_SERVER_PORT);
+        String portStr = params.get(SERVER_PORT);
         int port = -1;
 
         if (portStr != null) {
@@ -152,14 +149,14 @@ public class CreateServerPostContent extends ContentParser {
                 ** TODO: Determine valid range for port numbers
                  */
                 if (port < 0) {
-                    LOG.warn(STORAGE_SERVER_PORT + " must be a positive integer - " + port);
+                    LOG.warn(SERVER_PORT + " must be a positive integer - " + port);
                     port = -1;
                 }
             } catch (NumberFormatException ex) {
                 LOG.warn("Server Port is invalid: " + portStr);
             }
         } else {
-            LOG.warn(STORAGE_SERVER_PORT + "attribute is missing");
+            LOG.warn(SERVER_PORT + "attribute is missing");
         }
         return port;
     }

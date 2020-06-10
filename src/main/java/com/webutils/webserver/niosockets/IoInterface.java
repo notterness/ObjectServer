@@ -55,4 +55,6 @@ public interface IoInterface {
     void connectComplete();
 
     String getIdentifierInfo();
+
+    int getId();
 }

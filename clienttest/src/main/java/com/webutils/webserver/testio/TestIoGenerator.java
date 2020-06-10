@@ -47,6 +47,8 @@ public class TestIoGenerator implements IoInterface {
         this.socketErrorHandler = null;
     }
 
+    public int getId() { return 0; }
+
     /*
      ** This is the actual method to call to start all of the processing threads for a TCP port. The SocketChannel
      **   is assigned as part of the startClient() method to allow the NioSocket objects to be allocated out of a
