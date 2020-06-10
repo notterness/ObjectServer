@@ -102,18 +102,16 @@ public class ChunkFileHandler {
      ** This builds the filePath to where the chunk of data will be saved.
      **
      ** It is comprised of the chunk location, chunk number, chunk lba and located at
-     **   ./logs/StorageServer"IoInterfaceIdentifier"/chunk_"chunk location"_"chunk number"_"chunk lba".dat
+     **   ./logs/StorageServer"IoInterfaceIdentifier"/chunk_"chunk location"_"chunk lba".dat
      */
     public String buildChunkFileName() {
-        int chunkId = requestContext.getHttpInfo().getObjectChunkId();
         int chunkLba = requestContext.getHttpInfo().getObjectChunkLba();
         String chunkLocation = requestContext.getHttpInfo().getObjectChunkLocation();
 
-        if ((chunkId == -1) || (chunkLba == -1) || (chunkLocation == null)) {
-            LOG.error("WriteToFile chunkId: " + chunkId + " chunkLba: " + chunkLba + " chunkLocation: " + chunkLocation);
+        if ((chunkLba == -1) || (chunkLocation == null)) {
+            LOG.error("WriteToFile chunkLba: " + chunkLba + " chunkLocation: " + chunkLocation);
             String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
                     "\r\n  \"message\": \"Missing chunk attributes\"" +
-                    "\r\n  \"" + HttpInfo.CHUNK_ID + "\": \"" + chunkId + "\"" +
                     "\r\n  \"" + HttpInfo.CHUNK_LBA + "\": \"" + chunkLba + "\"" +
                     "\r\n  \"" + HttpInfo.CHUNK_LOCATION + "\": \"" + Objects.requireNonNullElse(chunkLocation, "null") + "\"" +
                     "\r\n}";
@@ -142,7 +140,7 @@ public class ChunkFileHandler {
             }
         }
 
-        return directory + "/chunk_" + chunkLocation + "_" + chunkId + "_" + chunkLba + ".dat";
+        return directory + "/chunk_" + chunkLocation + "_" + chunkLba + ".dat";
     }
 
 }

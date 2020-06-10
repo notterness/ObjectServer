@@ -81,7 +81,8 @@ public enum OperationTypeEnum {
 
 
     PARSE_CONTENT(450),
-    CREATE_BUCKET(451),
+    PARSE_ERROR_CONTENT(451),
+    CREATE_BUCKET(452),
 
     DATABASE_SETUP(500),
 

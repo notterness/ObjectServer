@@ -363,6 +363,10 @@ public class SendRequestToService implements Operation {
             parseContent.complete();
         }
 
+        Operation parseErrorContent = requestHandlerOps.remove(OperationTypeEnum.PARSE_ERROR_CONTENT);
+        if (parseErrorContent != null) {
+            parseErrorContent.complete();
+        }
         Operation readBuffer = requestHandlerOps.remove(OperationTypeEnum.READ_BUFFER);
         readBuffer.complete();
 
@@ -604,16 +608,32 @@ public class SendRequestToService implements Operation {
         Operation httpRespHandler = requestHandlerOps.remove(OperationTypeEnum.SERVICE_RESPONSE_HANDLER);
         httpRespHandler.complete();
 
-        if (httpInfo.getContentLength() != 0) {
+        int contentLength = httpInfo.getContentLength();
+        if (contentLength != 0) {
             /*
-             ** The next Operations are run once the response header has been received. This is to convert the response
-             **   content into a usable form.
+            ** The handling is different for error responses versus a good response. An error response generally has
+            **   the form of:
+            **    {
+            **       "code": Integer value of error
+            **       "message": "the error message"
+            **       --> then optional additional data in the form of the following and there may be multiple entries
+            **       "field name": "field information"
+            **    }
              */
-            int contentLength = httpInfo.getContentLength();
-            ParseContentBuffers parseContentBuffers = new ParseContentBuffers(requestContext, responseBufferManager,
-                    httpBufferPointer, responseBufferMetering, contentParser, contentLength, this);
-            requestHandlerOps.put(parseContentBuffers.getOperationType(), parseContentBuffers);
-            parseContentBuffers.initialize();
+            Operation parseContent;
+            if (httpInfo.getResponseStatus() == HttpStatus.OK_200) {
+                /*
+                 ** The next Operations are run once the response header has been received. This is to convert the response
+                 **   content into a usable form.
+                 */
+                parseContent = new ParseContentBuffers(requestContext, responseBufferManager, httpBufferPointer,
+                        responseBufferMetering, contentParser, contentLength, this);
+            } else {
+                parseContent = new ParseErrorContent(requestContext, responseBufferManager, httpBufferPointer,
+                        responseBufferMetering, contentLength, this);
+            }
+            requestHandlerOps.put(parseContent.getOperationType(), parseContent);
+            parseContent.initialize();
 
             return true;
         }

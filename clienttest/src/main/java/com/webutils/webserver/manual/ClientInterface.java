@@ -80,12 +80,12 @@ public abstract class ClientInterface {
                 } catch (InterruptedException int_ex) {
                     int_ex.printStackTrace();
                     status = false;
+                    System.out.println("ClientInterface[" + clientName + "] waitForRequestComplete() timed out");
+
                     break;
                 }
             }
         }
-
-        System.out.println("ClientInterface[" + clientName + "] waitForRequestComplete() done: " + status);
 
         return status;
     }

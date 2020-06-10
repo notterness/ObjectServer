@@ -25,8 +25,8 @@ public class ServiceResponseCallback extends HttpResponseCallback {
         /*
          ** Uncomment out the following for additional debug if needed.
          */
-        System.out.println("httpResponse() status: " + status + " headerCompleted: " + headerCompleted +
-                " messageCompleted: " + messageCompleted);
+        //System.out.println("httpResponse() status: " + status + " headerCompleted: " + headerCompleted +
+        //        " messageCompleted: " + messageCompleted);
 
         requestContext.setStorageServerResponse(serverIdentifier, status);
         httpResponseReceivedCallback.event();

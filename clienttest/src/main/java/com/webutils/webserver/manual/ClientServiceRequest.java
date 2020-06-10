@@ -54,7 +54,7 @@ public class ClientServiceRequest extends ClientInterface {
         ClientCallbackOperation callbackOp = new ClientCallbackOperation(clientContext, this, httpInfo);
 
         LOG.info("ClientTest - " + requestParams.getOpcClientRequestId());
-        System.out.println("STARTING ClientTest - " + requestParams.getOpcClientRequestId());
+        System.out.println("\nSTARTING ClientTest - " + requestParams.getOpcClientRequestId());
         SendRequestToService cmdSend = new SendRequestToService(clientContext, memoryManager, service, requestParams,
                 contentParser, callbackOp);
         cmdSend.initialize();
