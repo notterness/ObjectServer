@@ -11,14 +11,12 @@ import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ObjectInfo;
 import com.webutils.webserver.mysql.ObjectTableMgr;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
-import com.webutils.webserver.mysql.TenancyTableMgr;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.operations.SendRequestToService;
 import com.webutils.webserver.operations.WriteToClient;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
-import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,8 +64,6 @@ public class DeleteObjectInfo implements Operation {
     ** Information used to obtain the information about an object and to delete it
      */
     private final HttpRequestInfo objectPutInfo;
-    private final WebServerFlavor flavor;
-    private int tenancyId;
     private final ObjectTableMgr objectMgr;
 
     /*
@@ -97,10 +93,9 @@ public class DeleteObjectInfo implements Operation {
 
         this.currState = ExecutionState.GET_OBJECT_INFO;
 
-        this.flavor = requestContext.getWebServerFlavor();
         this.objectPutInfo = requestContext.getHttpInfo();
 
-        this.objectMgr = new ObjectTableMgr(flavor, requestContext);
+        this.objectMgr = new ObjectTableMgr(requestContext.getWebServerFlavor(), requestContext);
     }
 
     public OperationTypeEnum getOperationType() {
@@ -112,8 +107,6 @@ public class DeleteObjectInfo implements Operation {
     }
 
     public BufferManagerPointer initialize() {
-        TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
-        tenancyId = tenancyMgr.getTenancyId("testCustomer", "Tenancy-12345-abcde");
 
         return null;
     }
@@ -138,7 +131,7 @@ public class DeleteObjectInfo implements Operation {
                 **   last-modified
                 **   version-id
                  */
-                if (objectMgr.retrieveObjectInfo(objectPutInfo, objectInfo, tenancyId) == HttpStatus.OK_200) {
+                if (objectMgr.retrieveObjectInfo(objectPutInfo, objectInfo, requestContext.getTenancyId()) == HttpStatus.OK_200) {
                     currState = ExecutionState.GET_CHUNKS;
                     /*
                      ** Fall through
@@ -225,7 +218,7 @@ public class DeleteObjectInfo implements Operation {
                      **    Object Name - The actual object that is wanted.
                      **    Version Id - An object can have multiple versions
                      */
-                    objectMgr.deleteObjectInfo(objectPutInfo, tenancyId);
+                    objectMgr.deleteObjectInfo(objectPutInfo, requestContext.getTenancyId());
                 } else {
                     HttpRequestInfo objectCreateInfo = requestContext.getHttpInfo();
 

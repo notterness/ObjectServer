@@ -4,7 +4,6 @@ import com.webutils.objectserver.common.ListObjectData;
 import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpRequestInfo;
-import com.webutils.webserver.mysql.TenancyTableMgr;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import org.slf4j.Logger;
@@ -102,15 +101,13 @@ public class SetupObjectList implements Operation {
         if (!operationSetupDone) {
             HttpRequestInfo objectListInfo = requestContext.getHttpInfo();
 
-            TenancyTableMgr tenancyMgr = new TenancyTableMgr(requestContext.getWebServerFlavor());
-            int tenancyId = tenancyMgr.getTenancyId("testCustomer", "Tenancy-12345-abcde");
-
             /*
             ** NOTE: The default requestedFields are: name, size, time-created and md5
              */
             List<String> requestedFields = new ArrayList<>();
             requestContext.getHttpInfo().getFields(requestedFields);
-            ListObjectData listData = new ListObjectData(requestContext, objectListInfo, requestedFields, tenancyId);
+            ListObjectData listData = new ListObjectData(requestContext, objectListInfo, requestedFields,
+                    requestContext.getTenancyId());
             listData.execute();
 
             event();

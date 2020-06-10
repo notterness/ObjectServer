@@ -1,13 +1,11 @@
 package com.webutils.objectserver.operations;
 
-import com.webutils.objectserver.common.ListObjectData;
 import com.webutils.objectserver.requestcontext.ObjectServerRequestContext;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ObjectInfo;
 import com.webutils.webserver.mysql.ObjectTableMgr;
-import com.webutils.webserver.mysql.TenancyTableMgr;
 import com.webutils.webserver.niosockets.IoInterface;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
@@ -118,11 +116,8 @@ public class RetrieveObjectInfo implements Operation {
 
                 WebServerFlavor flavor = requestContext.getWebServerFlavor();
 
-                TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
-                int tenancyId = tenancyMgr.getTenancyId("testCustomer", "Tenancy-12345-abcde");
-
                 ObjectTableMgr objectMgr = new ObjectTableMgr(flavor, requestContext);
-                if (objectMgr.retrieveObjectInfo(objectPutInfo, objectInfo, tenancyId) == HttpStatus.OK_200) {
+                if (objectMgr.retrieveObjectInfo(objectPutInfo, objectInfo, requestContext.getTenancyId()) == HttpStatus.OK_200) {
                     int objectId = objectInfo.getObjectId();
                     objectInfo.setEtag(objectMgr.getObjectUID(objectId));
 

@@ -127,10 +127,10 @@ public class TestMain {
         UserTableMgr userMgr = new UserTableMgr(flavor);
         userMgr.createTenancyUser(httpInfo);
 
-        String accessKey = userMgr.getAccessKey(httpInfo);
-        System.out.println("accessKey: " + accessKey);
+        String accessToken = userMgr.getAccessToken(httpInfo);
+        System.out.println("accessToken: " + accessToken);
 
-        int id = userMgr.getTenancyFromAccessKey(accessKey);
+        int id = userMgr.getTenancyFromAccessToken(accessToken);
         System.out.println("tenancyId: " + tenancyId + " retrieved id: " + id);
 
         NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);

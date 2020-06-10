@@ -3,6 +3,7 @@ package com.webutils.webserver.operations;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.http.HttpMethodEnum;
+import com.webutils.webserver.mysql.TenancyTableMgr;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -102,6 +103,14 @@ public class DetermineRequest implements Operation {
 
                 sendFinalStatus.event();
             } else {
+                /*
+                ** Obtain the tenancyId
+                 */
+                String customerName = "testCustomer";
+                String tenancyName = "Tenancy-12345-abcde";
+
+                TenancyTableMgr tenancyMgr = new TenancyTableMgr(requestContext.getWebServerFlavor());
+                requestContext.setTenancyId(tenancyMgr.getTenancyId(customerName, tenancyName));
 
                 /*
                  ** Now, based on the HTTP method, figure out the Operation to event that will setup the sequences for the

@@ -41,9 +41,9 @@ public class AccessControlDb {
             ")";
 
     /*
-    ** The accessKey is used by the client to access the Object Server. It is passed in as one of the headers for
-    **   all of the methods supported by the Object Server. The accessKey validates the user and is used to determine
-    **   the Tenancy that is being accessed. The accessKey is made up from the following:
+    ** The accessToken is used by the client to access the Object Server. It is passed in as one of the headers for
+    **   all of the methods supported by the Object Server. The accessToken validates the user and is used to determine
+    **   the Tenancy that is being accessed. The accessToken is made up from the following:
     *        MD5(userUID + "." + tenancyUID + "." + accessRights)
      */
     private static final String CREATE_TENANCY_USER_TABLE = "CREATE TABLE IF NOT EXISTS TenancyUser (" +
@@ -52,7 +52,7 @@ public class AccessControlDb {
             " password VARBINARY(256) NOT NULL, " +
             " userUID BINARY(16) NOT NULL, " +
             " accessRights INT NOT NULL, "  +
-            " accessKey BINARY(32), " +
+            " accessToken BINARY(32), " +
             " accountCreated TIMESTAMP NOT NULL, " +
             " disabled BOOL NOT NULL, " +
             " disabledTime TIMESTAMP, " +
