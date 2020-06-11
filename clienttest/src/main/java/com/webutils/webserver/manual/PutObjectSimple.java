@@ -7,11 +7,15 @@ import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.niosockets.NioCliClient;
 import com.webutils.webserver.requestcontext.ClientContextPool;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class PutObjectSimple {
+
+    private static final Logger LOG = LoggerFactory.getLogger(PutObjectSimple.class);
 
     static WebServerFlavor flavor = WebServerFlavor.CLI_CLIENT;
 
@@ -22,7 +26,8 @@ public class PutObjectSimple {
 
     private final int eventThreadId;
 
-    PutObjectSimple(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount) {
+    PutObjectSimple(final InetAddress serverIpAddr, final int serverTcpPort, final String accessToken,
+                    final AtomicInteger testCount) {
 
         MemoryManager cliMemoryManager = new MemoryManager(flavor);
 
@@ -35,8 +40,12 @@ public class PutObjectSimple {
         this.eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
 
         PutObjectParams params = new PutObjectParams("Namespace-xyz-987", "CreateBucket_Simple",
-                "TestObject_1", "/Users/notterness/WebServer/webserver/logs/" + "testObjectFile");
+                "TestObject_1", "/Users/notterness/WebServer/webserver/logs/" + "testObjectFile",
+                accessToken);
         params.setOpcClientRequestId("PutObjectSimple-5-12-2020.01");
+
+        LOG.info("ClientTest - " + params.getOpcClientRequestId());
+        System.out.println("\nSTARTING ClientTest - " + params.getOpcClientRequestId());
 
         cli = new ClientPutInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort, params, testCount);
     }

@@ -68,7 +68,7 @@
                 </Delete>
             </DefaultRolloverStrategy>
         </RollingRandomAccessFile>
-        <!-- The rolled filename must be unique across all casper services -->
+        <!-- The rolled filename must be unique across all Web Server services -->
         <RollingRandomAccessFile name="tracing_log" fileName="logs/tracing.log"
                                  filePattern="logs/tracing-ws-%d{yyyy-MM-dd'T'HH:mm':00Z'}.%i.log.gz">
             <PatternLayout>

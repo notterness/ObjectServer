@@ -1,5 +1,6 @@
 package com.webutils.webserver.common;
 
+import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpResponseInfo;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -23,10 +24,13 @@ public class PutObjectParams extends ObjectParams {
      */
     private boolean computeMd5Digest;
 
-    private AtomicBoolean md5DigestSet;
+    private final AtomicBoolean md5DigestSet;
     private String md5Digest;
 
-    public PutObjectParams(final String namespace, final String bucket, final String object, final String objectFilePath) {
+    private final String accessToken;
+
+    public PutObjectParams(final String namespace, final String bucket, final String object, final String objectFilePath,
+                           final String accessToken) {
 
         super(namespace, bucket, object, objectFilePath);
 
@@ -34,6 +38,8 @@ public class PutObjectParams extends ObjectParams {
 
         this.md5DigestSet = new AtomicBoolean(false);
         this.md5Digest = null;
+
+        this.accessToken = accessToken;
     }
 
     /*
@@ -83,18 +89,22 @@ public class PutObjectParams extends ObjectParams {
         }
 
         if (opcClientRequestId != null) {
-            request += "opc-client-request-id: " + opcClientRequestId + "\n";
+            request += HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n";
         }
 
         if (ifNoneMatch != null) {
-            request += "if-none-match: *\n";
+            request += HttpInfo.IF_NONE_MATCH + ": *\n";
+        }
+
+        if (accessToken != null) {
+            finalContent += HttpInfo.ACCESS_TOKEN + ": " + accessToken + "\n";
         }
 
         if (computeMd5Digest && md5DigestSet.get()) {
-            finalContent += "Content-MD5: " + md5Digest + "\n" +
-                    "Content-Length: " + objectSizeInBytes + "\n\n";
+            finalContent += HttpInfo.CONTENT_MD5 + ": " + md5Digest + "\n" +
+                    HttpInfo.CONTENT_LENGTH + ": " + objectSizeInBytes + "\n\n";
         } else {
-            finalContent += "Content-Length: " + objectSizeInBytes + "\n\n";
+            finalContent += HttpInfo.CONTENT_LENGTH + ": " + objectSizeInBytes + "\n\n";
         }
 
         request += finalContent;
@@ -122,17 +132,17 @@ public class PutObjectParams extends ObjectParams {
             System.out.println("Status: 200");
             String opcClientRequestId = httpInfo.getOpcClientRequestId();
             if (opcClientRequestId != null) {
-                System.out.println("opc-clent-request-id: " + opcClientRequestId);
+                System.out.println(HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId);
             }
 
             String opcRequestId = httpInfo.getOpcRequestId();
             if (opcRequestId != null) {
-                System.out.println("opc-request-id: " + opcRequestId);
+                System.out.println(HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId);
             }
 
             String contentMd5 = httpInfo.getResponseContentMd5();
             if (contentMd5 != null) {
-                System.out.println("opc-content-md5: " + contentMd5);
+                System.out.println(HttpResponseInfo.OPC_CONTENT_MD5 + ": " + contentMd5);
             }
 
             String etag = httpInfo.getResponseEtag();

@@ -630,7 +630,7 @@ public class SendRequestToService implements Operation {
                         responseBufferMetering, contentParser, contentLength, this);
             } else {
                 parseContent = new ParseErrorContent(requestContext, responseBufferManager, httpBufferPointer,
-                        responseBufferMetering, contentLength, this);
+                        responseBufferMetering, contentLength, httpInfo, this);
             }
             requestHandlerOps.put(parseContent.getOperationType(), parseContent);
             parseContent.initialize();

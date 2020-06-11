@@ -23,7 +23,7 @@ public class ResponseMd5ResultHandler extends Md5ResultHandler {
     public String validateMD5Header(final HttpResponseInfo httpResponseInfo) {
         String md5FromResponseHeader = httpResponseInfo.getResponseContentMd5();
         if (md5FromResponseHeader == null) {
-            LOG.warn("opc-content-md5 header not provided");
+            LOG.warn(HttpResponseInfo.OPC_CONTENT_MD5 + " header not provided");
             return null;
         }
 

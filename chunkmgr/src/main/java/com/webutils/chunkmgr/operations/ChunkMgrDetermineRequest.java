@@ -81,7 +81,7 @@ public class ChunkMgrDetermineRequest implements Operation {
 
     /*
      ** This execute() method does two distinct things.
-     **    1) First it uses the information in the CasperHttpInfo object to determine the HTTP Request to be handled.
+     **    1) First it uses the information in the HttpInfo object to determine the HTTP Request to be handled.
      **       There is a setup request operation for each type of HTTP Request and that is then initialized() and
      **       started via the event() method. At that point, the DetermineRequest operation sits idle until the
      **       HTTP Request is completed and the DetermineRequest operation has its event() method called again.

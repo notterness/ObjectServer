@@ -1,5 +1,6 @@
 package com.webutils.webserver.common;
 
+import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpResponseInfo;
 import org.eclipse.jetty.http.HttpStatus;
 
@@ -8,9 +9,14 @@ import org.eclipse.jetty.http.HttpStatus;
  */
 public class GetObjectParams extends ObjectParams {
 
-    public GetObjectParams(final String namespace, final String bucket, final String object, final String objectFilePath) {
+    private final String accessToken;
+
+    public GetObjectParams(final String namespace, final String bucket, final String object, final String objectFilePath,
+                           final String accessToken) {
 
         super(namespace, bucket, object, objectFilePath);
+
+        this.accessToken = accessToken;
     }
 
     /*
@@ -64,15 +70,22 @@ public class GetObjectParams extends ObjectParams {
         }
 
         if (opcClientRequestId != null) {
-            request += "opc-client-request-id: " + opcClientRequestId + "\n";
+            request += HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n";
         }
 
         if (versionId != null) {
-            request += "versionId: " + versionId + "\n";
+            request += HttpInfo.VERSION_ID + ": " + versionId + "\n";
         }
 
         if (ifMatch != null) {
-            request += "if-match: " + ifMatch + "\n";
+            request += HttpInfo.IF_MATCH + ": " + ifMatch + "\n";
+        }
+
+        /*
+        ** The accessToken is required to allow the ObjectGet method to be executed.
+         */
+        if (accessToken != null) {
+            request += HttpInfo.ACCESS_TOKEN + ": " + accessToken + "\n";
         }
 
         request += finalContent;
@@ -98,12 +111,12 @@ public class GetObjectParams extends ObjectParams {
             System.out.println("Status: 200");
             String opcClientRequestId = httpInfo.getOpcClientRequestId();
             if (opcClientRequestId != null) {
-                System.out.println("opc-clent-request-id: " + opcClientRequestId);
+                System.out.println(HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId);
             }
 
             String opcRequestId = httpInfo.getOpcRequestId();
             if (opcRequestId != null) {
-                System.out.println("opc-request-id: " + opcRequestId);
+                System.out.println(HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId);
             }
 
             String etag = httpInfo.getResponseEtag();
@@ -112,11 +125,11 @@ public class GetObjectParams extends ObjectParams {
             }
 
             int contentLength = httpInfo.getContentLength();
-            System.out.println("content-length: " + contentLength);
+            System.out.println(HttpInfo.CONTENT_LENGTH + ": " + contentLength);
 
             String contentMd5 = httpInfo.getResponseContentMd5();
             if (contentMd5 != null) {
-                System.out.println("opc-content-md5: " + contentMd5);
+                System.out.println(HttpResponseInfo.OPC_CONTENT_MD5 + ": " + contentMd5);
             }
 
             String lastModified = httpInfo.getResponseLastModified();

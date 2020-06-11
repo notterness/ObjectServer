@@ -1,9 +1,11 @@
-package com.webutils.webserver.operations;
+package com.webutils.objectserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.http.HttpMethodEnum;
-import com.webutils.webserver.mysql.TenancyTableMgr;
+import com.webutils.webserver.mysql.UserTableMgr;
+import com.webutils.webserver.operations.Operation;
+import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -23,6 +25,19 @@ public class DetermineRequest implements Operation {
     private final RequestContext requestContext;
 
     /*
+     ** This is to make the execute() function more manageable
+     */
+    enum ExecutionState {
+        VALIDATE,
+        OBTAIN_TENANCY,
+        EXECUTE_METHOD,
+        CALLBACK_OPS,
+        EMPTY_STATE
+    }
+
+    private ExecutionState currState;
+
+    /*
      ** The following are used to insure that an Operation is never on more than one queue and that
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
      **   execution queue (onExecutionQueue) is will always go on the execution queue.
@@ -38,8 +53,7 @@ public class DetermineRequest implements Operation {
 
     private final HttpRequestInfo httpRequestInfo;
 
-    private boolean methodDeterminationDone;
-
+    private Operation sendFinalStatus;
 
     public DetermineRequest(final RequestContext requestContext, final Map<HttpMethodEnum, Operation> supportedHttpRequests) {
 
@@ -53,7 +67,7 @@ public class DetermineRequest implements Operation {
          */
         onExecutionQueue = false;
 
-        methodDeterminationDone = false;
+        this.currState = ExecutionState.VALIDATE;
     }
 
     public OperationTypeEnum getOperationType() {
@@ -80,7 +94,7 @@ public class DetermineRequest implements Operation {
 
     /*
     ** This execute() method does two distinct things.
-    **    1) First it uses the information in the CasperHttpInfo object to determine the HTTP Request to be handled.
+    **    1) First it uses the information in the HttpInfo object to determine the HTTP Request to be handled.
     **       There is a setup request operation for each type of HTTP Request and that is then initialized() and
     **       started via the event() method. At that point, the DetermineRequest operation sits idle until the
     **       HTTP Request is completed and the DetermineRequest operation has its event() method called again.
@@ -88,72 +102,107 @@ public class DetermineRequest implements Operation {
     **       Response (via the SendFinalStatus operation) to the client.
      */
     public void execute() {
-        Operation sendFinalStatus = requestContext.getOperation(OperationTypeEnum.SEND_FINAL_STATUS);
-        if (sendFinalStatus == null) {
-             LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] sendFinalStatus null");
-             return;
-        }
-
-        if (!methodDeterminationDone) {
-            if (requestContext.getHttpParseError()) {
+        switch (currState) {
+            case VALIDATE:
+                sendFinalStatus = requestContext.getOperation(OperationTypeEnum.SEND_FINAL_STATUS);
+                if (sendFinalStatus == null) {
+                    LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] sendFinalStatus null");
+                    return;
+                }
+                currState = ExecutionState.OBTAIN_TENANCY;
                 /*
-                 ** Event the send client response operation here so that the final status is sent
+                ** Fall through
                  */
-                LOG.warn("DetermineRequest[" + requestContext.getRequestId() + "] sending final status HTTP Parse error");
 
-                sendFinalStatus.event();
-            } else {
+            case OBTAIN_TENANCY:
                 /*
-                ** Obtain the tenancyId
+                 ** Obtain the tenancyId
                  */
-                String customerName = "testCustomer";
-                String tenancyName = "Tenancy-12345-abcde";
+                String accessToken = httpRequestInfo.getAccessToken();
 
-                TenancyTableMgr tenancyMgr = new TenancyTableMgr(requestContext.getWebServerFlavor());
-                requestContext.setTenancyId(tenancyMgr.getTenancyId(customerName, tenancyName));
+                if (accessToken != null) {
+                    UserTableMgr userMgr = new UserTableMgr(requestContext.getWebServerFlavor());
+                    requestContext.setTenancyId(userMgr.getTenancyFromAccessToken(accessToken));
 
+                    currState = ExecutionState.EXECUTE_METHOD;
+                    /*
+                     ** Fall through
+                     */
+                } else {
+                    /*
+                    ** This is a permissions error
+                     */
+                    LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] accessToken not provided");
+                    httpRequestInfo.setParseFailureCode(HttpStatus.NETWORK_AUTHENTICATION_REQUIRED_511);
+
+                    currState = ExecutionState.CALLBACK_OPS;
+                    event();
+                    break;
+                }
+
+            case EXECUTE_METHOD:
+                currState = ExecutionState.CALLBACK_OPS;
+                if (requestContext.getHttpParseError()) {
+                    /*
+                     ** Event the send client response operation here so that the final status is sent
+                     */
+                    LOG.warn("DetermineRequest[" + requestContext.getRequestId() + "] sending final status HTTP Parse error");
+                } else {
+
+                    /*
+                     ** Now, based on the HTTP method, figure out the Operation to event that will setup the sequences for the
+                     **   handling of the request.
+                     */
+                    HttpMethodEnum method = httpRequestInfo.getMethod();
+                    Operation httpMethod = supportedHttpRequests.get(method);
+                    if (httpMethod != null) {
+                        /*
+                         ** The operation being run is added to the list for the RequestContext so that it can be cleaned up
+                         **   if needed (meaning calling the complete() method).
+                         */
+                        requestContext.addOperation(httpMethod);
+
+                        LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] execute(1) " + method.toString());
+                        httpMethod.initialize();
+                        httpMethod.event();
+                        break;
+                    } else {
+                        LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] execute(1) unsupported request " + method.toString());
+                        httpRequestInfo.setParseFailureCode(HttpStatus.METHOD_NOT_ALLOWED_405);
+                    }
+                }
                 /*
-                 ** Now, based on the HTTP method, figure out the Operation to event that will setup the sequences for the
-                 **   handling of the request.
+                ** Fall through is all cases except when the httpMethod is called (meaning initialize() and event())
                  */
+
+            case CALLBACK_OPS:
                 HttpMethodEnum method = httpRequestInfo.getMethod();
-                Operation httpRequestSetup = supportedHttpRequests.get(method);
-                if (httpRequestSetup != null) {
-                    /*
-                    ** The operation being run is added to the list for the RequestContext so that it can be cleaned up
-                    **   if needed (meaning calling the complete() method).
-                     */
-                    requestContext.addOperation(httpRequestSetup);
+                LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] execute(2) " + method.toString());
 
-                    LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] execute(1) " + method.toString());
-                    httpRequestSetup.initialize();
-                    httpRequestSetup.event();
-                } else {
-                    LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] execute(1) unsupported request " + method.toString());
-                    httpRequestInfo.setParseFailureCode(HttpStatus.METHOD_NOT_ALLOWED_405);
-
+                /*
+                ** Call sendFinalStatus() for all error cases. The ObjectGet method handles sending out the good status
+                **   prior to it sending the object data, so if there is not an error, sendFinalStatus() must not be
+                **   called here.
+                 */
+                if ((httpRequestInfo.getParseFailureCode() != HttpStatus.OK_200) || (method != HttpMethodEnum.GET_METHOD)) {
                     sendFinalStatus.event();
-                }
-            }
-
-            methodDeterminationDone = true;
-        } else {
-            HttpMethodEnum method = httpRequestInfo.getMethod();
-            LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] execute(2) " + method.toString());
-
-            if (method != HttpMethodEnum.GET_METHOD) {
-                sendFinalStatus.event();
-            } else {
-                Operation closeOutRequest = requestContext.getOperation(OperationTypeEnum.CLOSE_OUT_REQUEST);
-                if (closeOutRequest != null) {
-                    /*
-                    ** This will finish up this request
-                     */
-                    closeOutRequest.event();
                 } else {
-                    LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] closeOutRequest null");
+                    Operation closeOutRequest = requestContext.getOperation(OperationTypeEnum.CLOSE_OUT_REQUEST);
+                    if (closeOutRequest != null) {
+                        /*
+                         ** This will finish up this request
+                         */
+                        closeOutRequest.event();
+                    } else {
+                        LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] closeOutRequest null");
+                    }
                 }
-            }
+
+                currState = ExecutionState.EMPTY_STATE;
+                break;
+
+            case EMPTY_STATE:
+                break;
         }
     }
 

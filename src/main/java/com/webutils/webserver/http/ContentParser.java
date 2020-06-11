@@ -8,12 +8,12 @@ import java.util.*;
 public abstract class ContentParser {
     private static final Logger LOG = LoggerFactory.getLogger(ContentParser.class);
 
-    private static final String FREE_FORM_TAG = "freeformTags";
-    private static final String DEFINED_TAGS = "definedTags";
+    public static final String FREE_FORM_TAG = "freeformTags";
+    public static final String DEFINED_TAGS = "definedTags";
 
     private static final String CHUNK_ALLOC_RESPONSE = "chunk-";
 
-    protected static final String COMPARTMENT_ID_ATTRIBUTE = "compartmentId";
+    public static final String COMPARTMENT_ID_ATTRIBUTE = "compartmentId";
     protected static final String STORAGE_TIER_ATTRIBUTE = "storageTier";
 
     /*

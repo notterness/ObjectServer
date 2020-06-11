@@ -338,8 +338,6 @@ public class DeleteObjectInfo implements Operation {
     private SendObjectDeleteResponse setupResponseSend() {
 
         /*
-         ** In the good path, after the HTTP Response is sent back to the client, then start reading in the chunks
-         **   that make up the requested object.
          */
         SendObjectDeleteResponse sendResponse = new SendObjectDeleteResponse(requestContext, memoryManager, objectInfo);
         deleteObjectInfoOps.put(sendResponse.getOperationType(), sendResponse);

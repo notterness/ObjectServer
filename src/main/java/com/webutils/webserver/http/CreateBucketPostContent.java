@@ -27,8 +27,9 @@ import java.util.*;
 public class CreateBucketPostContent extends ContentParser {
     private static final Logger LOG = LoggerFactory.getLogger(CreateBucketPostContent.class);
 
-    private static final String NAME_ATTRIBUTE = "name";
-    private static final String EVENTS_ENABLED_ATTRIBUTE = "objectEventsEnabled";
+    public static final String NAME_ATTRIBUTE = "name";
+    public static final String NAMESPACE_ATTRIBUTE = "namespace";
+    public static final String EVENTS_ENABLED_ATTRIBUTE = "objectEventsEnabled";
 
     public CreateBucketPostContent() {
         super();
@@ -37,6 +38,7 @@ public class CreateBucketPostContent extends ContentParser {
         ** Fill in the list of required attributes so they are easy to check
          */
         requiredAttributes.add(NAME_ATTRIBUTE);
+        requiredAttributes.add(NAMESPACE_ATTRIBUTE);
         requiredAttributes.add(COMPARTMENT_ID_ATTRIBUTE);
     }
 
@@ -94,6 +96,8 @@ public class CreateBucketPostContent extends ContentParser {
     public String getBucketName() {
         return params.get(NAME_ATTRIBUTE);
     }
+
+    public String getNamespace() { return params.get(NAMESPACE_ATTRIBUTE); }
 
     public String getCompartmentId() {
         return params.get(COMPARTMENT_ID_ATTRIBUTE);

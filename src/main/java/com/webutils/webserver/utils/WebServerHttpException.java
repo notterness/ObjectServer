@@ -1,7 +1,7 @@
 package com.webutils.webserver.utils;
 
 
-public interface CasperHttpException {
+public interface WebServerHttpException {
     ErrorCode errorCode();
 
     ErrorCode s3ErrorCode();
