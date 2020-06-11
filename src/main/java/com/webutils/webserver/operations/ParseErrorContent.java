@@ -3,6 +3,7 @@ package com.webutils.webserver.operations;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpInfo;
+import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +38,8 @@ public class ParseErrorContent implements Operation {
 
     private String respBodyStr;
 
+    private final HttpResponseInfo httpInfo;
+
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
@@ -45,12 +48,15 @@ public class ParseErrorContent implements Operation {
     private boolean onExecutionQueue;
 
     public ParseErrorContent(final RequestContext requestContext, final BufferManager readBufferMgr,
-                               final BufferManagerPointer readBufferPtr, final Operation metering,
-                               final int contentLength, final Operation completeCb) {
+                             final BufferManagerPointer readBufferPtr, final Operation metering,
+                             final int contentLength, final HttpResponseInfo httpInfo, final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.readBufferPointer = readBufferPtr;
         this.metering = metering;
+
+        this.httpInfo = httpInfo;
+
         this.completeCallback = completeCb;
 
         this.bytesToConvert = contentLength;
@@ -66,10 +72,10 @@ public class ParseErrorContent implements Operation {
     }
 
     public ParseErrorContent(final RequestContext requestContext, final BufferManagerPointer readBufferPtr,
-                             final Operation metering, final Operation completeCb) {
+                             final Operation metering, final HttpResponseInfo httpInfo, final Operation completeCb) {
 
         this(requestContext, requestContext.getClientReadBufferManager(), readBufferPtr, metering,
-                requestContext.getRequestContentLength(), completeCb);
+                requestContext.getRequestContentLength(), httpInfo, completeCb);
     }
 
     public OperationTypeEnum getOperationType() {
@@ -164,6 +170,7 @@ public class ParseErrorContent implements Operation {
                 if (bytesConverted < bytesToConvert) {
                     metering.event();
                 } else if (bytesConverted == bytesToConvert) {
+                    httpInfo.setResponseBody(respBodyStr);
                     completeCallback.event();
                 }
 

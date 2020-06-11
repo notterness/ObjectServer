@@ -78,7 +78,9 @@ public class CreateBucket implements Operation {
             WebServerFlavor flavor = requestContext.getWebServerFlavor();
 
             NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
-            String namespaceUID = namespaceMgr.getNamespaceUID("Namespace-xyz-987", requestContext.getTenancyId());
+            String namespace = createBucketPostContent.getNamespace();
+
+            String namespaceUID = namespaceMgr.getNamespaceUID(namespace, requestContext.getTenancyId());
 
             BucketTableMgr bucketMgr = new BucketTableMgr(flavor, requestContext.getRequestId(), requestContext.getHttpInfo());
             int status = bucketMgr.createBucketEntry(createBucketPostContent, namespaceUID);

@@ -141,7 +141,7 @@ public class ObjectServerRequestContext extends RequestContext {
      **          to parse another HTTP Request. This will allow a pool of RequestContext to be allocated at start of
      **          day and then reused.
      **
-     ** The DetermineRequest uses the information that the HTTP Parser generated and stored in the CasperHttpInfo
+     ** The DetermineRequest uses the information that the HTTP Parser generated and stored in the HttpInfo
      **   object to setup the correct method handler. There is a list of supported HTTP Methods kept in the
      **   Map<Operation> supportedHttpRequests. Once the correct request is determined, the Operation to setup the
      **   method handler is run.
@@ -188,7 +188,7 @@ public class ObjectServerRequestContext extends RequestContext {
 
         /*
          ** The DetermineRequest operation is run after the HTTP Request has been parsed and the method
-         **   handler determined via the setHttpMethodAndVersion() method in the CasperHttpInfo object.
+         **   handler determined via the setHttpMethodAndVersion() method in the HttpInfo object.
          */
         determineRequest = new DetermineRequest(this, supportedHttpRequests);
         requestHandlerOperations.put(determineRequest.getOperationType(), determineRequest);

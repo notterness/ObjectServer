@@ -22,7 +22,8 @@ public class PutObjectBadNamespace {
 
     private final int eventThreadId;
 
-    PutObjectBadNamespace(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount) {
+    PutObjectBadNamespace(final InetAddress serverIpAddr, final int serverTcpPort, final String accessToken,
+                          final AtomicInteger testCount) {
 
         MemoryManager cliMemoryManager = new MemoryManager(flavor);
 
@@ -35,7 +36,8 @@ public class PutObjectBadNamespace {
         this.eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
 
         PutObjectParams params = new PutObjectParams("BadNamespaceName", "CreateBucket_Simple",
-                "TestObject_1", "/Users/notterness/WebServer/webserver/logs/" + "testObjectFile");
+                "TestObject_1", "/Users/notterness/WebServer/webserver/logs/" + "testObjectFile",
+                accessToken);
         params.setOpcClientRequestId("PutObjectBadNamespace-5-12-2020.01");
 
         cli = new ClientPutInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,

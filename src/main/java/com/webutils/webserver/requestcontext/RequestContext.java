@@ -495,7 +495,7 @@ public abstract class RequestContext {
     }
 
     /*
-    ** The getHttpInfo() getter is used to access the CasperHttpInfo where the details about the HTTP Request are
+    ** The getHttpInfo() getter is used to access the HttpInfo where the details about the HTTP Request are
     **   kept.
      */
     public HttpRequestInfo getHttpInfo() {

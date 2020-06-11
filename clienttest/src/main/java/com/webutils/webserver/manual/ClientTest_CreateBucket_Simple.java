@@ -1,6 +1,9 @@
 package com.webutils.webserver.manual;
 
 import com.webutils.webserver.common.Sha256Digest;
+import com.webutils.webserver.http.ContentParser;
+import com.webutils.webserver.http.CreateBucketPostContent;
+import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.niosockets.NioTestClient;
 import org.eclipse.jetty.http.HttpStatus;
 
@@ -16,9 +19,13 @@ class ClientTest_CreateBucket_Simple extends ClientTest {
 
     private String sha256Digest;
 
+    private final String accessToken;
+
     ClientTest_CreateBucket_Simple(final String testName, final NioTestClient client, final InetAddress serverIpAddr,
-                          final int serverTcpPort, AtomicInteger testCount) {
+                          final int serverTcpPort, final String accessToken, final AtomicInteger testCount) {
         super(testName, client, serverIpAddr, serverTcpPort, testCount);
+
+        this.accessToken = accessToken;
     }
 
     @Override
@@ -35,7 +42,8 @@ class ClientTest_CreateBucket_Simple extends ClientTest {
                 "Accept-Language: en-us\n" +
                 "Accept-Encoding: gzip, deflate\n" +
                 "x-content-sha256: " + sha256Digest + "\n" +
-                "Content-Length: " + contentStr.length() + "\n\n" +
+                HttpInfo.ACCESS_TOKEN + ": " + accessToken + "\n" +
+                HttpInfo.CONTENT_LENGTH + ": " + contentStr.length() + "\n\n" +
                 contentStr;
     }
 
@@ -62,12 +70,12 @@ class ClientTest_CreateBucket_Simple extends ClientTest {
     private String buildContent() {
         String contentString =
                 "{\n" +
-                "  \"compartmentId\": \"clienttest.compartment.12345.abcde\",\n" +
-                "  \"namespace\": \"Namespace-xyz-987\",\n" +
-                "  \"name\": \"CreateBucket_Simple\",\n" +
-                "  \"objectEventsEnabled\": false,\n" +
-                "  \"freeformTags\": {\"Test_1\": \"Test_2\"}, \n" +
-                "  \"definedTags\":\n" +
+                "  \"" + ContentParser.COMPARTMENT_ID_ATTRIBUTE + "\": \"clienttest.compartment.12345.abcde\",\n" +
+                "  \"" + CreateBucketPostContent.NAMESPACE_ATTRIBUTE + "\": \"Namespace-xyz-987\",\n" +
+                "  \"" + CreateBucketPostContent.NAME_ATTRIBUTE + "\": \"CreateBucket_Simple\",\n" +
+                "  \"" + CreateBucketPostContent.EVENTS_ENABLED_ATTRIBUTE + "\": false,\n" +
+                "  \"" + ContentParser.FREE_FORM_TAG + "\": {\"Test_1\": \"Test_2\"}, \n" +
+                "  \"" + ContentParser.DEFINED_TAGS + "\":\n" +
                 "  {\n" +
                 "    \"MyTags\":\n" +
                 "    {\n" +

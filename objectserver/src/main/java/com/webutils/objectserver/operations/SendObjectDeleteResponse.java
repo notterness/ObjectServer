@@ -14,10 +14,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.charset.Charset;
-import java.nio.charset.CharsetEncoder;
-import java.nio.charset.StandardCharsets;
 
 public class SendObjectDeleteResponse implements Operation {
 
@@ -32,11 +28,7 @@ public class SendObjectDeleteResponse implements Operation {
     /*
      ** Strings used to build the success response for the chunk write
      */
-    private final static String SUCCESS_HEADER_1 = "opc-client-request-id: ";
-    private final static String SUCCESS_HEADER_2 = "opc-request-id: ";
     private final static String SUCCESS_HEADER_5 = "last-modified: ";
-    private final static String SUCCESS_HEADER_7 = "version-id: ";
-    private final static String SUCCESS_HEADER_8 = "Content-Length: ";
 
 
     /*
@@ -128,7 +120,7 @@ public class SendObjectDeleteResponse implements Operation {
 
                 if (requestContext.getHttpParseStatus() == HttpStatus.OK_200) {
                     /*
-                    ** FIXME: THis needs to return NO_CONTENT_204 for a successful delete instead of OK_200
+                    ** This needs to return NO_CONTENT_204 for a successful delete instead of OK_200 for a successful delete
                      */
                     LOG.info("SendObjectDeleteResponse[" + requestContext.getRequestId() + "] resultCode: NO_CONTENT_204");
 
@@ -274,15 +266,18 @@ public class SendObjectDeleteResponse implements Operation {
         if (opcClientRequestId != null) {
             successHeader = "HTTP/1.1 204 NO_CONTENT" +
                     "\r\n" +
-                    "Content-Type: text/html\n" + SUCCESS_HEADER_1 + opcClientRequestId + "\n";
+                    "Content-Type: text/html\n" +
+                    HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n";
         } else {
             successHeader = "HTTP/1.1 204 NO_CONTENT" +
                     "\r\n" +
                     "Content-Type: text/html\n";
         }
 
-        successHeader += SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_5 + lastModified + "\n" +
-                SUCCESS_HEADER_7 + versionId + "\n" + SUCCESS_HEADER_8 + 0 + "\n\n";
+        successHeader += HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
+                SUCCESS_HEADER_5 + lastModified + "\n" +
+                HttpInfo.VERSION_ID + ": " + versionId + "\n" +
+                HttpInfo.CONTENT_LENGTH + ": " + 0 + "\n\n";
 
         HttpInfo.str_to_bb(respBuffer, successHeader);
     }
@@ -299,24 +294,26 @@ public class SendObjectDeleteResponse implements Operation {
 
         String opcClientRequestId = httpInfo.getOpcClientRequestId();
         int opcRequestId = requestContext.getRequestId();
-        String etag = objectInfo.getEtag();
 
         LOG.info("buildFailureHeader()  opc-client-request-id: " + opcClientRequestId);
 
         if (opcClientRequestId != null) {
             failureHeader = "HTTP/1.1 " + httpInfo.getParseFailureCode() + " FAILED\r\n" +
-                    "Content-Type: text/html\n" + SUCCESS_HEADER_1 + opcClientRequestId + "\n";
+                    "Content-Type: text/html\n" +
+                    HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n";
         } else {
             failureHeader = "HTTP/1.1 " + httpInfo.getParseFailureCode() + " FAILED\r\n" +
                     "Content-Type: text/html\n";
         }
 
+        failureHeader += HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n";
+
         String failureMessage = httpInfo.getParseFailureReason();
         if (failureMessage != null) {
-            failureHeader += SUCCESS_HEADER_8 + failureMessage.length() + "\n\n";
+            failureHeader += HttpInfo.CONTENT_LENGTH + ": " + failureMessage.length() + "\n\n";
             failureHeader += failureMessage;
         } else {
-            failureHeader += SUCCESS_HEADER_8 + 0 + "\n\n";
+            failureHeader += HttpInfo.CONTENT_LENGTH + ": " + 0 + "\n\n";
         }
 
         HttpInfo.str_to_bb(respBuffer, failureHeader);

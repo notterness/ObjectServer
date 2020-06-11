@@ -1,7 +1,9 @@
 package com.webutils.webserver.mysql;
 
 import com.google.common.io.BaseEncoding;
+import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpRequestInfo;
+import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.http.StorageTierEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
@@ -46,12 +48,8 @@ public class ObjectTableMgr extends ObjectStorageDb {
 
     private final static String GET_OPC_CLIENT_ID = "SELECT opcClientRequestId FROM object WHERE objectId = ";
 
-    private final static String SUCCESS_HEADER_1 = "opc-client-request-id: ";
-    private final static String SUCCESS_HEADER_2 = "opc-request-id: ";
-    private final static String SUCCESS_HEADER_3 = "opc-content-md5: ";
     private final static String SUCCESS_HEADER_4 = "ETag: ";
     private final static String SUCCESS_HEADER_5 = "last-modified: ";
-    private final static String SUCCESS_HEADER_6 = "version-id: ";
 
     private final static String RETRIEVE_OBJECT_QUERY = "SELECT * FROM object WHERE objectId = ";
 
@@ -838,11 +836,11 @@ public class ObjectTableMgr extends ObjectStorageDb {
         String contentMD5 = requestContext.getMd5ResultHandler().getComputedMd5Digest();
 
         if (opcClientId != null) {
-            successHeader = SUCCESS_HEADER_1 + opcClientId + "\n" + SUCCESS_HEADER_2 + opcRequestId + "\n" +
-                    SUCCESS_HEADER_3 + contentMD5 + "\n" + SUCCESS_HEADER_4 + objectUID + "\n" +
+            successHeader = HttpInfo.CLIENT_OPC_REQUEST_ID + opcClientId + "\n" + HttpInfo.OPC_REQUEST_ID + opcRequestId + "\n" +
+                    HttpResponseInfo.OPC_CONTENT_MD5 + contentMD5 + "\n" + SUCCESS_HEADER_4 + objectUID + "\n" +
                     SUCCESS_HEADER_5 + createTime + "\n";
         } else {
-            successHeader = SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + contentMD5 + "\n" +
+            successHeader = HttpInfo.OPC_REQUEST_ID + opcRequestId + "\n" + HttpResponseInfo.OPC_CONTENT_MD5 + contentMD5 + "\n" +
                     SUCCESS_HEADER_4 + objectUID + "\n" + SUCCESS_HEADER_5 + createTime + "\n";
         }
 

@@ -20,7 +20,8 @@ public class DeleteObjectSimple {
 
     private final ClientServiceRequest cli;
 
-    DeleteObjectSimple(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount, final String objectName) {
+    DeleteObjectSimple(final InetAddress serverIpAddr, final int serverTcpPort, final String objectName,
+                       final String accessToken, AtomicInteger testCount) {
 
         MemoryManager cliMemoryManager = new MemoryManager(flavor);
 
@@ -31,7 +32,7 @@ public class DeleteObjectSimple {
         cliClient.start();
 
         DeleteObjectParams params = new DeleteObjectParams("Namespace-xyz-987", "CreateBucket_Simple",
-                objectName);
+                objectName, accessToken);
         params.setOpcClientRequestId("DeleteObjectSimple-5-13-2020.01-" + objectName);
 
         cli = new ClientServiceRequest(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,

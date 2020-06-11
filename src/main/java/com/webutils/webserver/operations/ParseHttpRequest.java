@@ -67,8 +67,7 @@ public class ParseHttpRequest implements Operation {
         this.clientReadBufferMgr = this.requestContext.getClientReadBufferManager();
 
         /*
-         ** The CasperHttpInfo keeps track of the details of a particular
-         **   HTTP transfer and the parsed information.
+         ** The HttpInfo keeps track of the details of a particular HTTP transfer and the parsed information.
          */
         this.httpRequestInfo = requestContext.getHttpInfo();
 

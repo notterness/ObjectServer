@@ -332,7 +332,7 @@ public class TestMain {
         testClient.start();
 
         ClientTest client_CreateBucket_Simple = new ClientTest_CreateBucket_Simple("CreateBucket_Simple", testClient,
-                serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
+                serverIpAddr, OBJECT_SERVER_TCP_PORT, accessToken, threadCount);
         client_CreateBucket_Simple.execute();
 
         ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
@@ -375,14 +375,14 @@ public class TestMain {
         ** Read an object from the Object Server, save it to a file. Then upload that file as a new object. And
         **   finally, delete the object.
          */
-        GetObjectSimple getObjectSimple = new GetObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
+        GetObjectSimple getObjectSimple = new GetObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, accessToken, threadCount);
         getObjectSimple.execute();
 
-        PutObjectSimple putObjectSimple = new PutObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
+        PutObjectSimple putObjectSimple = new PutObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, accessToken, threadCount);
         putObjectSimple.execute();
 
         /*
-        ListObjectsSimple listObjectsSimple = new ListObjectsSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
+        ListObjectsSimple listObjectsSimple = new ListObjectsSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, accessToken, threadCount);
         listObjectsSimple.execute();
 
         ListAllocatedChunks listChunks = new ListAllocatedChunks(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
@@ -395,26 +395,26 @@ public class TestMain {
         /*
         ** Delete all of the objects created as part of this test suite
          */
-        DeleteObjectSimple deleteObject1 = new DeleteObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount,
-                "TestObject_1");
+        DeleteObjectSimple deleteObject1 = new DeleteObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT,
+                "TestObject_1", accessToken, threadCount);
         deleteObject1.execute();
 
-        DeleteObjectSimple deleteObject2 = new DeleteObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount,
-                "TestObject-1234-abcd");
+        DeleteObjectSimple deleteObject2 = new DeleteObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT,
+                "TestObject-1234-abcd", accessToken, threadCount);
         deleteObject2.execute();
 
 
         /*
-        GetObjectBadBucket getObjectBadBucket = new GetObjectBadBucket(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
+        GetObjectBadBucket getObjectBadBucket = new GetObjectBadBucket(serverIpAddr, OBJECT_SERVER_TCP_PORT, accessToken, threadCount);
         getObjectBadBucket.execute();
 
-        GetObjectBadNamespace getObjectBadNamespace = new GetObjectBadNamespace(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
+        GetObjectBadNamespace getObjectBadNamespace = new GetObjectBadNamespace(serverIpAddr, OBJECT_SERVER_TCP_PORT, accessToken, threadCount);
         getObjectBadNamespace.execute();
 
-        PutObjectBadBucket putObjectBadBucket = new PutObjectBadBucket(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
+        PutObjectBadBucket putObjectBadBucket = new PutObjectBadBucket(serverIpAddr, OBJECT_SERVER_TCP_PORT, accessToken, threadCount);
         putObjectBadBucket.execute();
 
-        PutObjectBadNamespace putObjectBadNamespace = new PutObjectBadNamespace(serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
+        PutObjectBadNamespace putObjectBadNamespace = new PutObjectBadNamespace(serverIpAddr, OBJECT_SERVER_TCP_PORT, accessToken, threadCount);
         putObjectBadNamespace.execute();
 */
 

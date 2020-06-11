@@ -27,7 +27,7 @@ abstract public class HttpInfo {
     private static final String MD5_OVERRIDE_HEADER = "md5-override";
 
     public static final String CONTENT_LENGTH = "Content-Length";
-    private static final String CONTENT_MD5 = "Content-MD5";
+    public static final String CONTENT_MD5 = "Content-MD5";
 
     public static final String CONTENT_SHA256 = "x-content-sha256";
 
@@ -47,6 +47,9 @@ abstract public class HttpInfo {
     public static final String USER_NAME = "user-name";
     public static final String USER_PASSWORD = "user-password";
 
+    public static final String ACCESS_TOKEN = "access-token";
+
+
     /*
      ** The following are used by the Storage Server to determine where to write the chunk data
      */
@@ -63,10 +66,10 @@ abstract public class HttpInfo {
     **       operations, this means that upload any that do not match the ETag. For PUT operations, it means to fail
     **       the upload if there already exists an object with the ETag.
      */
-    private static final String IF_MATCH = "if-match";
-    private static final String IF_NONE_MATCH = "if-none-match";
+    public static final String IF_MATCH = "if-match";
+    public static final String IF_NONE_MATCH = "if-none-match";
 
-    private static final String VERSION_ID = "versionId";
+    public static final String VERSION_ID = "versionId";
 
     /*
     ** The following is used to determine what information should be returned by the ListObjects GET method.
@@ -432,28 +435,7 @@ abstract public class HttpInfo {
     **    getObject() - "/o/" field in the URI
     **    getTestType() - "/t/" field in the URI - NOT FOR PRODUCTION
     **
-    ** Return "tenancy" from the PathParam
      */
-    public String getTenancy() {
-        List<String> tenancyNames = headers.get(TENANCY_NAME);
-
-        if ((tenancyNames == null) || (tenancyNames.size() != 1)) {
-            return null;
-        }
-
-        return tenancyNames.get(0);
-    }
-
-    public String getCustomerName() {
-        List<String> customerNames = headers.get(CUSTOMER_NAME);
-
-        if ((customerNames == null) || (customerNames.size() != 1)) {
-            return null;
-        }
-
-        return customerNames.get(0);
-    }
-
     /*
      ** Return the "namespace" (NAMESPACE_NAME) that was parsed from the HTTP uri
      */
@@ -504,6 +486,48 @@ abstract public class HttpInfo {
      */
     public String getTestType() { return objectUriInfoMap.get(TEST_TYPE); }
 
+    /*
+     ** Return "tenancy-name" from the headers
+     */
+    public String getTenancy() {
+        List<String> tenancyNames = headers.get(TENANCY_NAME);
+
+        if ((tenancyNames == null) || (tenancyNames.size() != 1)) {
+            return null;
+        }
+
+        return tenancyNames.get(0);
+    }
+
+    public String getCustomerName() {
+        List<String> customerNames = headers.get(CUSTOMER_NAME);
+
+        if ((customerNames == null) || (customerNames.size() != 1)) {
+            return null;
+        }
+
+        return customerNames.get(0);
+    }
+
+    /*
+    ** The accessToken is make up from the Tenancy, User Name and User Password to create a token that can be used to
+    **   perform different methods. The current set of methods that use the accessToken are:
+    **
+    **     ObjectPut
+    **     ObjectGet
+    **     ObjectDelete
+    **     ObjectList
+    **     BucketPost
+     */
+    public String getAccessToken() {
+        List<String> accessTokens = headers.get(ACCESS_TOKEN);
+
+        if ((accessTokens == null) || (accessTokens.size() != 1)) {
+            return null;
+        }
+
+        return accessTokens.get(0);
+    }
 
     /*
     ** Return the "connection-key" that is used to validate the connection

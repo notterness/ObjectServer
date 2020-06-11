@@ -10,9 +10,13 @@ public class DeleteObjectParams extends ObjectParams {
 
     private static final Logger LOG = LoggerFactory.getLogger(DeleteObjectParams.class);
 
-    public DeleteObjectParams(final String namespace, final String bucket, final String object) {
+    private final String accessToken;
+
+    public DeleteObjectParams(final String namespace, final String bucket, final String object, final String accessToken) {
 
         super(namespace, bucket, object, null);
+
+        this.accessToken = accessToken;
     }
 
     /*
@@ -64,7 +68,11 @@ public class DeleteObjectParams extends ObjectParams {
         }
 
         if (ifMatch != null) {
-            request += "if-match: " + ifMatch + "\n";
+            request += HttpInfo.IF_MATCH + ": " + ifMatch + "\n";
+        }
+
+        if (accessToken != null) {
+            request += HttpInfo.ACCESS_TOKEN + ": " + accessToken + "\n";
         }
 
         finalContent += HttpInfo.CONTENT_LENGTH + ": 0\n\n";

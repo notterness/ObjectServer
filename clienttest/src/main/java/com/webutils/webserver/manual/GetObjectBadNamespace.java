@@ -21,7 +21,8 @@ public class GetObjectBadNamespace {
     private final ClientGetInterface cli;
     private final int eventThreadId;
 
-    GetObjectBadNamespace(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount) {
+    GetObjectBadNamespace(final InetAddress serverIpAddr, final int serverTcpPort, final String accessToken,
+                          AtomicInteger testCount) {
 
         MemoryManager cliMemoryManager = new MemoryManager(flavor);
 
@@ -34,7 +35,7 @@ public class GetObjectBadNamespace {
         this.eventThreadId = cliClient.getEventThread().getEventPollThreadBaseId();
 
         GetObjectParams params = new GetObjectParams("BadNamespaceName", "CreateBucket_Simple",
-                "5e223890-ea13-11e9-851d-234132e0fb02", "testObjectFile");
+                "5e223890-ea13-11e9-851d-234132e0fb02", "testObjectFile", accessToken);
         params.setOpcClientRequestId("GetObjectSimple-5-12-2020.01");
 
         cli = new ClientGetInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,

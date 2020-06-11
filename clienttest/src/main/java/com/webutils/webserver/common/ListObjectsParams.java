@@ -1,5 +1,6 @@
 package com.webutils.webserver.common;
 
+import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpResponseInfo;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -9,9 +10,13 @@ public class ListObjectsParams extends ObjectParams {
 
     private static final Logger LOG = LoggerFactory.getLogger(ListObjectsParams.class);
 
-    public ListObjectsParams(final String namespace, final String bucket, final String object, final String objectFilePath) {
+    private final String accessToken;
 
-        super(namespace, bucket, object, objectFilePath);
+    public ListObjectsParams(final String namespace, final String bucket, final String object, final String accessToken) {
+
+        super(namespace, bucket, object, null);
+
+        this.accessToken = accessToken;
     }
 
     /*
@@ -58,12 +63,12 @@ public class ListObjectsParams extends ObjectParams {
         }
 
         if (opcClientRequestId != null) {
-            request += "opc-client-request-id: " + opcClientRequestId + "\n";
+            request += HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n";
         }
 
         request += "fields: name, etag, version, md5, size, time-created, tier\n";
 
-        finalContent += "Content-Length: 0\n\n";
+        finalContent += HttpInfo.CONTENT_LENGTH + ": 0\n\n";
 
         request += finalContent;
 

@@ -7,7 +7,7 @@ import com.webutils.webserver.utils.*;
         value = 400,
         statusMessage = "InvalidDigest"
 )
-public class InvalidDigestException extends CasperException implements CasperHttpException {
+public class InvalidDigestException extends WebServerException implements WebServerHttpException {
     private final Digest expected;
     private final Digest actual;
 
