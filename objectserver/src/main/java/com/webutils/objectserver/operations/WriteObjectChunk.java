@@ -1,5 +1,6 @@
 package com.webutils.objectserver.operations;
 
+import com.webutils.objectserver.common.ObjectServerAllocateChunksParams;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.common.AllocateChunksParams;
 import com.webutils.webserver.common.ResponseMd5ResultHandler;
@@ -215,7 +216,7 @@ public class WriteObjectChunk implements Operation {
                     break;
                 }
 
-                AllocateChunksParams params = new AllocateChunksParams(StorageTierEnum.STANDARD_TIER, chunkNumber);
+                AllocateChunksParams params = new ObjectServerAllocateChunksParams(StorageTierEnum.STANDARD_TIER, chunkNumber);
                 params.setOpcClientRequestId(requestContext.getHttpInfo().getOpcClientRequestId());
 
                 cmdSend = new SendRequestToService(requestContext, memoryManager, chunkMgrService, params, contentParser, this);

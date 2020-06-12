@@ -1,7 +1,7 @@
 package com.webutils.webserver.manual;
 
 import com.webutils.webserver.common.AllocateChunksParams;
-import com.webutils.webserver.common.DeleteChunksParams;
+import com.webutils.webserver.common.ClientTestAllocateChunksParams;
 import com.webutils.webserver.http.AllocateChunksResponseContent;
 import com.webutils.webserver.http.StorageTierEnum;
 import com.webutils.webserver.memory.MemoryManager;
@@ -42,7 +42,7 @@ public class AllocateChunksSimple2 {
         cliClient = new NioCliClient(clientContextPool);
         cliClient.start();
 
-        AllocateChunksParams params = new AllocateChunksParams(StorageTierEnum.STANDARD_TIER, CHUNK_NUMBER);
+        AllocateChunksParams params = new ClientTestAllocateChunksParams(StorageTierEnum.STANDARD_TIER, CHUNK_NUMBER);
         params.setOpcClientRequestId("AllocateChunksSimple2-5-29-2020.01");
 
         cli = new ClientServiceRequest(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort, params, contentParser, testCount);

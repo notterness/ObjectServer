@@ -79,7 +79,7 @@ public class Sha256ResultHandler {
                 LOG.warn("x-content-sha256 [" + requestContext.getRequestId() +  "] did not match computed. expected: " +
                         sha256FromHeader + " computed: " + computedSha256Digest);
 
-                String failureMessage = "\"Bad Sha256 Compare\",\n  \"x-content-sha256\": \"" + sha256FromHeader +
+                String failureMessage = "\"Bad Sha256 Compare\",\n  \"" + HttpInfo.CONTENT_SHA256 + "\": \"" + sha256FromHeader +
                         "\",\n  \"Computed Sha256\": \"" + computedSha256Digest + "\"";
 
                 httpInfo.setParseFailureCode(HttpStatus.UNPROCESSABLE_ENTITY_422, failureMessage);

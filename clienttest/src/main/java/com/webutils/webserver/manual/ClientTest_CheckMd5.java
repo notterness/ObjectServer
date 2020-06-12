@@ -1,5 +1,6 @@
 package com.webutils.webserver.manual;
 
+import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.niosockets.NioTestClient;
 import com.webutils.webserver.common.Md5Digest;
 import com.webutils.webserver.memory.MemoryManager;
@@ -17,11 +18,14 @@ class ClientTest_CheckMd5 extends ClientTest {
 
     private final Md5Digest digest;
 
+    private final String accessToken;
+
     ClientTest_CheckMd5(final String testName, final NioTestClient client, final InetAddress serverIpAddr,
-                        final int serverTcpPort, AtomicInteger testCount) {
+                        final int serverTcpPort, final String accessToken, final AtomicInteger testCount) {
         super(testName, client, serverIpAddr, serverTcpPort, testCount);
 
-        digest = new Md5Digest();
+        this.digest = new Md5Digest();
+        this.accessToken = accessToken;
         objectBuffer = null;
     }
 
@@ -54,7 +58,7 @@ class ClientTest_CheckMd5 extends ClientTest {
 
     @Override
     public String buildRequestString(final String Md5_Digest) {
-        return new String("PUT /n/Namespace-xyz-987" + "" +
+        return "PUT /n/Namespace-xyz-987" + "" +
                 "/b/CreateBucket_Simple" +
                 "/o/TestObject-1234-abcd HTTP/1.1\n" +
                 "Host: ClientTest-" + super.clientTestName + "\n" +
@@ -64,8 +68,9 @@ class ClientTest_CheckMd5 extends ClientTest {
                 "User-Agent: Rested/2009 CFNetwork/978.0.7 Darwin/18.7.0 (x86_64)\n" +
                 "Accept-Language: en-us\n" +
                 "Accept-Encoding: gzip, deflate\n" +
-                "Content-MD5: " + Md5_Digest + "\n" +
-                "Content-Length: " + BYTES_IN_CONTENT + "\n\n");
+                HttpInfo.CONTENT_MD5 + ": " + Md5_Digest + "\n" +
+                HttpInfo.ACCESS_TOKEN + ": " + accessToken + "\n" +
+                HttpInfo.CONTENT_LENGTH + ": " + BYTES_IN_CONTENT + "\n\n";
     }
 
     /*

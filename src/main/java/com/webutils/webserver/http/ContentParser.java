@@ -167,7 +167,8 @@ public abstract class ContentParser {
                      */
                     if (keyStringStack.empty()) {
                         /*
-                         ** Simple case, just add to the normal bucketParams Map
+                         ** Simple case, just add to the normal bucketParams Map. To output what is being added to the
+                         **   attribute map, uncomment the following LOG statement.
                          */
                         //LOG.info("empty stack - " + keyStr + " : " + str1);
                         params.put(keyStr, str1);
@@ -215,7 +216,7 @@ public abstract class ContentParser {
      **   Create Bucket POST operation.
      */
     public void dumpMaps() {
-        LOG.info("bucketParams");
+        LOG.info("params");
         for (Map.Entry<String, String> entry : params.entrySet()) {
             LOG.info("    " + entry.getKey() + " : " + entry.getValue());
         }
