@@ -81,14 +81,21 @@ public class CreateBucket implements Operation {
             String namespace = createBucketPostContent.getNamespace();
 
             String namespaceUID = namespaceMgr.getNamespaceUID(namespace, requestContext.getTenancyId());
-
-            BucketTableMgr bucketMgr = new BucketTableMgr(flavor, requestContext.getRequestId(), requestContext.getHttpInfo());
-            int status = bucketMgr.createBucketEntry(createBucketPostContent, namespaceUID);
-            if (status != HttpStatus.OK_200) {
-                /*
-                **
-                 */
-                LOG.warn("CreateBucket failed status: " + status);
+            if (namespaceUID != null) {
+                BucketTableMgr bucketMgr = new BucketTableMgr(flavor, requestContext.getRequestId(), requestContext.getHttpInfo());
+                int status = bucketMgr.createBucketEntry(createBucketPostContent, namespaceUID);
+                if (status != HttpStatus.OK_200) {
+                    /*
+                     **
+                     */
+                    LOG.warn("CreateBucket failed status: " + status);
+                }
+            } else {
+                LOG.warn("CreateBucket failed - unknown namespace: " + namespace);
+                String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.BAD_REQUEST_400 + "\"" +
+                        "\r\n  \"message\": \"Unknown namespace - " + namespace + "\"" +
+                        "\r\n}";
+                requestContext.getHttpInfo().setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
             }
 
             completeCallback.complete();

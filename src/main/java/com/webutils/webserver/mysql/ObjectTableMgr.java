@@ -836,12 +836,16 @@ public class ObjectTableMgr extends ObjectStorageDb {
         String contentMD5 = requestContext.getMd5ResultHandler().getComputedMd5Digest();
 
         if (opcClientId != null) {
-            successHeader = HttpInfo.CLIENT_OPC_REQUEST_ID + opcClientId + "\n" + HttpInfo.OPC_REQUEST_ID + opcRequestId + "\n" +
-                    HttpResponseInfo.OPC_CONTENT_MD5 + contentMD5 + "\n" + SUCCESS_HEADER_4 + objectUID + "\n" +
+            successHeader = HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientId + "\n" +
+                    HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
+                    HttpResponseInfo.OPC_CONTENT_MD5 + ": " + contentMD5 + "\n" +
+                    SUCCESS_HEADER_4 + objectUID + "\n" +
                     SUCCESS_HEADER_5 + createTime + "\n";
         } else {
-            successHeader = HttpInfo.OPC_REQUEST_ID + opcRequestId + "\n" + HttpResponseInfo.OPC_CONTENT_MD5 + contentMD5 + "\n" +
-                    SUCCESS_HEADER_4 + objectUID + "\n" + SUCCESS_HEADER_5 + createTime + "\n";
+            successHeader = HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
+                    HttpResponseInfo.OPC_CONTENT_MD5 + ": " + contentMD5 + "\n" +
+                    SUCCESS_HEADER_4 + objectUID + "\n" +
+                    SUCCESS_HEADER_5 + createTime + "\n";
         }
 
         return successHeader;

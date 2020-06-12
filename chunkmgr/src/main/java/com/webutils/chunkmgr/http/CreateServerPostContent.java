@@ -101,7 +101,7 @@ public class CreateServerPostContent extends ContentParser {
      **   Create Bucket POST operation.
      */
     public void dumpMaps() {
-        LOG.info("bucketParams");
+        LOG.info("params");
         for (Map.Entry<String, String> entry : params.entrySet()) {
             LOG.info("    " + entry.getKey() + " : " + entry.getValue());
         }

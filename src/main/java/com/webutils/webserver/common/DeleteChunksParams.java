@@ -62,7 +62,7 @@ public abstract class DeleteChunksParams extends ObjectParams {
             request += "opc-client-request-id: " + opcClientRequestId + "\n";
         }
 
-        finalContent += "x-content-sha256: " + sha256Digest + "\n" +
+        finalContent += HttpResponseInfo.CONTENT_SHA256 + ": " + sha256Digest + "\n" +
                 "Content-Length: " + contentSizeInBytes + "\n\n" +
                 contentStr;
 

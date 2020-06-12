@@ -2,8 +2,10 @@ package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
+import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.http.HttpResponseListener;
+import com.webutils.webserver.http.parser.ResponseHttpParser;
 import com.webutils.webserver.manual.ClientTest;
 import com.webutils.webserver.manual.HttpResponseCompleted;
 import com.webutils.webserver.requestcontext.RequestContext;
@@ -44,7 +46,12 @@ public class ClientResponseHandler implements Operation {
     private final BufferManagerPointer readBufferPointer;
     private BufferManagerPointer httpResponseBufferPointer;
 
-    private HttpParser httpParser;
+    /*
+     ** The HTTP Parser is used to extract the status from the Storage Server response
+     */
+    private ResponseHttpParser parser;
+    private boolean initialHttpBuffer;
+
 
     public ClientResponseHandler(final RequestContext requestContext, final ClientTest clientTest,
                                  final BufferManagerPointer readBufferPtr, final HttpResponseInfo httpInfo) {
@@ -79,13 +86,9 @@ public class ClientResponseHandler implements Operation {
         httpResponseBufferPointer = clientReadBufferManager.register(this, readBufferPointer);
 
         HttpResponseCompleted httpResponseCompleted = new HttpResponseCompleted(clientTest);
-        HttpResponseListener listener = new HttpResponseListener(httpInfo, httpResponseCompleted);
-        httpParser = new HttpParser(listener);
 
-        if (httpParser.isState(HttpParser.State.END))
-            httpParser.reset();
-        if (!httpParser.isState(HttpParser.State.START))
-            throw new IllegalStateException("!START");
+        parser = new ResponseHttpParser(httpInfo, httpResponseCompleted);
+        initialHttpBuffer = true;
 
         return httpResponseBufferPointer;
     }
@@ -107,10 +110,54 @@ public class ClientResponseHandler implements Operation {
             /*
              ** Now run the Buffer State through the Http Parser
              */
-            httpParser.parseNext(httpBuffer);
-            clientReadBufferManager.updateConsumerReadPointer(httpResponseBufferPointer);
+            boolean remainingBuffer = parser.parseHttpData(httpBuffer, initialHttpBuffer);
+            if (remainingBuffer) {
+                /*
+                 ** Leave the pointer in the same place since there is data remaining in the buffer
+                 */
+                LOG.info("ClientResponseHandler[" + requestContext.getRequestId() + "] remaining position: " +
+                        httpBuffer.position() + " limit: " + httpBuffer.limit());
+
+            } else {
+                /*
+                 ** Only update the pointer if the data in the buffer was all consumed.
+                 */
+                LOG.info("ClientResponseHandler[" + requestContext.getRequestId() + "]  position: " +
+                        httpBuffer.position() + " limit: " + httpBuffer.limit());
+
+                clientReadBufferManager.updateConsumerReadPointer(httpResponseBufferPointer);
+            }
+
+            initialHttpBuffer = false;
+
+            /*
+             ** Need to break out of the loop if the parsing is complete.
+             */
+            if (httpInfo.getHeaderComplete()) {
+                break;
+            }
         }
 
+        /*
+         ** Check if there needs to be another read to bring in more of the HTTP request
+         */
+        boolean headerParsed = httpInfo.getHeaderComplete();
+        if (!headerParsed) {
+            /*
+             ** Allocate another buffer and read in more data. But, do not
+             **   allocate if there was a parsing error.
+             */
+            if (!requestContext.getHttpParseError()) {
+                /*
+                 ** Meter out another buffer here.
+                 */
+            } else {
+                LOG.info("ResponseHandler[" + requestContext.getRequestId() + "] parsing error, no allocation");
+            }
+        } else {
+            LOG.info("ResponseHandler[" + requestContext.getRequestId() + "] header was parsed");
+
+        }
     }
 
     /*
@@ -119,8 +166,6 @@ public class ClientResponseHandler implements Operation {
     public void complete() {
 
         LOG.info("ClientResponseHandler[" + requestContext.getRequestId() + "] complete()");
-        httpParser.reset();
-        httpParser = null;
 
         clientReadBufferManager.unregister(httpResponseBufferPointer);
         httpResponseBufferPointer = null;

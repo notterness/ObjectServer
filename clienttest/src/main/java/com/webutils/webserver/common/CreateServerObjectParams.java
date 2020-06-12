@@ -1,7 +1,6 @@
 package com.webutils.webserver.common;
 
-import com.webutils.webserver.http.HttpResponseInfo;
-import com.webutils.webserver.http.StorageTierEnum;
+import com.webutils.webserver.http.*;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,11 +68,11 @@ public class CreateServerObjectParams extends ObjectParams {
         }
 
         if (opcClientRequestId != null) {
-            request += "opc-client-request-id: " + opcClientRequestId + "\n";
+            request += HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n";
         }
 
-        finalContent += "x-content-sha256: " + sha256Digest + "\n" +
-                    "Content-Length: " + contentSizeInBytes + "\n\n" +
+        finalContent += HttpInfo.CONTENT_SHA256 + ": " + sha256Digest + "\n" +
+                    HttpInfo.CONTENT_LENGTH + ": " + contentSizeInBytes + "\n\n" +
                     contentStr;
 
         request += finalContent;
@@ -84,11 +83,11 @@ public class CreateServerObjectParams extends ObjectParams {
     private String buildContent() {
         String contentString = new String(
                 "{\n" +
-                        "  \"storage-server-name\": \"" + serverName + "\",\n" +
-                        "  \"storage-server-ip\": \"" + ipAddr + "\",\n" +
-                        "  \"storage-server-port\": \"" + port + "\",\n" +
+                        "  \"" + ContentParser.SERVER_NAME + "\": \"" + serverName + "\",\n" +
+                        "  \"\"" + ContentParser.SERVER_IP + "\": \"" + ipAddr + "\",\n" +
+                        "  \"\"" + ContentParser.SERVER_PORT + "\": \"" + port + "\",\n" +
                         "  \"allocated-chunks\": \"" + numChunks + "\",\n" +
-                        "  \"storageTier\": \"" + tier.toString() + "\",\n" +
+                        "  \"" + HttpRequestInfo.STORAGE_TIER_HEADER + "\": \"" + tier.toString() + "\",\n" +
                         "}\n");
 
         Sha256Digest digest = new Sha256Digest();
@@ -134,12 +133,12 @@ public class CreateServerObjectParams extends ObjectParams {
             System.out.println("Status: 200");
             String opcClientRequestId = httpInfo.getOpcClientRequestId();
             if (opcClientRequestId != null) {
-                System.out.println("opc-clent-request-id: " + opcClientRequestId);
+                System.out.println(HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId);
             }
 
             String opcRequestId = httpInfo.getOpcRequestId();
             if (opcRequestId != null) {
-                System.out.println("opc-request-id: " + opcRequestId);
+                System.out.println(HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId);
             }
 
             String etag = httpInfo.getResponseEtag();

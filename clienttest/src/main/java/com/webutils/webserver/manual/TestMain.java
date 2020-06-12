@@ -133,9 +133,10 @@ public class TestMain {
         int id = userMgr.getTenancyFromAccessToken(accessToken);
         System.out.println("tenancyId: " + tenancyId + " retrieved id: " + id);
 
+        String namespace = "Namespace-xyz-987";
         NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
-        namespaceMgr.createNamespaceEntry("Namespace-xyz-987", tenancyId, "Noel-MAC");
-        String namespaceUID = namespaceMgr.getNamespaceUID("Namespace-xyz-987", tenancyId);
+        namespaceMgr.createNamespaceEntry(namespace, tenancyId, "Noel-MAC");
+        String namespaceUID = namespaceMgr.getNamespaceUID(namespace, tenancyId);
 
         /*
         ** Debug stuff to look at Kubernetes Pod information
@@ -331,11 +332,13 @@ public class TestMain {
         NioTestClient testClient = new NioTestClient(clientContextPool);
         testClient.start();
 
-        ClientTest client_CreateBucket_Simple = new ClientTest_CreateBucket_Simple("CreateBucket_Simple", testClient,
-                serverIpAddr, OBJECT_SERVER_TCP_PORT, accessToken, threadCount);
-        client_CreateBucket_Simple.execute();
+        String bucketName = "CreateBucket_Simple";
+        PostBucketSimple postBucket = new PostBucketSimple(tenancyName, namespace, bucketName, serverIpAddr, OBJECT_SERVER_TCP_PORT,
+                accessToken, threadCount);
+        postBucket.execute();
 
-        ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverIpAddr, OBJECT_SERVER_TCP_PORT, threadCount);
+        ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverIpAddr, OBJECT_SERVER_TCP_PORT,
+                accessToken, threadCount);
         checkMd5.execute();
 
         waitForTestsToComplete(threadCount);

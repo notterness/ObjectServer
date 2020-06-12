@@ -4,7 +4,6 @@ import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.http.StorageTierEnum;
-import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,14 +13,14 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 
-public class AllocateChunksParams extends ObjectParams {
+public abstract class AllocateChunksParams extends ObjectParams {
 
     private static final Logger LOG = LoggerFactory.getLogger(AllocateChunksParams.class);
 
     private final StorageTierEnum tier;
 
     private String sha256Digest;
-    private int objectChunkNumber;
+    private final int objectChunkNumber;
 
     public AllocateChunksParams(final StorageTierEnum tier, final int objectChunkNumber) {
 
@@ -74,11 +73,11 @@ public class AllocateChunksParams extends ObjectParams {
     }
 
     private String buildContent() {
-        String contentString = new String(
+        String contentString =
                 "{\n" +
-                        "  \"" + HttpInfo.CHUNK_NUMBER + "\": \"" + 0 + "\",\n" +
-                        "  \"" + HttpRequestInfo.STORAGE_TIER_HEADER + "\": \"" + tier.toString() + "\",\n" +
-                        "}\n");
+                "  \"" + HttpInfo.CHUNK_NUMBER + "\": \"" + objectChunkNumber + "\",\n" +
+                "  \"" + HttpRequestInfo.STORAGE_TIER_HEADER + "\": \"" + tier.toString() + "\",\n" +
+                "}\n";
 
         Sha256Digest digest = new Sha256Digest();
 
@@ -106,50 +105,12 @@ public class AllocateChunksParams extends ObjectParams {
         return contentString;
     }
 
-
-
     /*
      ** This displays the results from the AllocateChunks method.
      **
-     ** TODO: Allow the results to be dumped to a file and possibly allow a format that allows for easier parsing by
-     **   the client.
+     ** This is an abstract method to allow the user of this class to decide what they want to display when the
+     **   AllocateChunks method request completes.
      */
-    public void outputResults(final HttpResponseInfo httpInfo) {
-        /*
-         ** If the status is good (AllocateChunks returns 200 if successful), then display the following:
-         **   opc-client-request-id
-         **   opc-request-id
-         */
-        if (httpInfo.getResponseStatus() == HttpStatus.OK_200) {
-            System.out.println("Status: 200");
-            String opcClientRequestId = httpInfo.getOpcClientRequestId();
-            if (opcClientRequestId != null) {
-                System.out.println("opc-client-request-id: " + opcClientRequestId);
-            }
-
-            String opcRequestId = httpInfo.getOpcRequestId();
-            if (opcRequestId != null) {
-                System.out.println("opc-request-id: " + opcRequestId);
-            }
-
-            String responseBody = httpInfo.getResponseBody();
-            if (responseBody != null) {
-                System.out.println(responseBody);
-            }
-
-        } else if (httpInfo.getResponseStatus() == HttpStatus.METHOD_NOT_ALLOWED_405) {
-            System.out.println("Status: " + httpInfo.getResponseStatus());
-            String allowableMethods = httpInfo.getAllowableMethods();
-            if (allowableMethods != null) {
-                System.out.println("Allowed Methods: " + allowableMethods);
-            }
-        } else {
-            System.out.println("Status: " + httpInfo.getResponseStatus());
-            String responseBody = httpInfo.getResponseBody();
-            if (responseBody != null) {
-                System.out.println(responseBody);
-            }
-        }
-    }
+    public abstract void outputResults(final HttpResponseInfo httpInfo);
 
 }
