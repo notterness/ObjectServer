@@ -517,7 +517,10 @@ abstract public class HttpInfo {
     **     ObjectGet
     **     ObjectDelete
     **     ObjectList
-    **     BucketPost
+    **     CreateBucket - POST
+    **     DeleteBucket
+    **     CreateNamespace
+    **     DeleteNamespace
      */
     public String getAccessToken() {
         List<String> accessTokens = headers.get(ACCESS_TOKEN);
