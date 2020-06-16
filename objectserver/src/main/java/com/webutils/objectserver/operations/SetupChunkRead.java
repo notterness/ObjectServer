@@ -134,8 +134,6 @@ public class SetupChunkRead implements Operation {
      */
     private IoInterface storageServerConn;
 
-    private boolean serverConnectionClosedDueToError;
-
     private WriteChunkToClient writeChunkToClient;
 
     /*
@@ -181,8 +179,6 @@ public class SetupChunkRead implements Operation {
         requestHandlerOperations = new HashMap<>();
 
         currState = ExecutionState.SETUP_CHUNK_READ_OPS;
-
-        serverConnectionClosedDueToError = false;
 
         LOG.info("SetupChunkRead[" + requestContext.getRequestId() + "] addr: " +
                 storageServer.getServerIpAddress().toString() + " port: " +
@@ -512,13 +508,6 @@ public class SetupChunkRead implements Operation {
         }
         requestHandlerOperations.clear();
 
-        /*
-         ** Close out the connection used to communicate with the Storage Server. Then
-         ** clear out the reference to the connection so it may be released back to the pool.
-         */
-        if (!serverConnectionClosedDueToError) {
-            storageServerConn.closeConnection();
-        }
         requestContext.releaseConnection(storageServerConn);
         storageServerConn = null;
 
@@ -562,10 +551,6 @@ public class SetupChunkRead implements Operation {
          ** Release the Chunk Buffer
          */
         chunkMemPool.releaseChunk(allocInfo);
-    }
-
-    public void connectionCloseDueToError() {
-        serverConnectionClosedDueToError = true;
     }
 
     public void setAllDataWritten() { storageServer.setClientChunkWriteDone(); }

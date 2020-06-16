@@ -71,11 +71,6 @@ public class HandleChunkReadConnError implements Operation {
         requestContext.setStorageServerResponse(serverIdentifier, HttpStatus.SERVICE_UNAVAILABLE_503);
 
         /*
-         ** Tell the SetupChunkRead that the NioSocket connection has already been closed.
-         */
-        chunkRead.connectionCloseDueToError();
-
-        /*
          ** Add this to the execute queue if it is not already on it.
          */
         requestContext.addToWorkQueue(this);

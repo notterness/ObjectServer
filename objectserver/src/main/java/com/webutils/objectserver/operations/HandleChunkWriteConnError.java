@@ -75,11 +75,6 @@ public class HandleChunkWriteConnError implements Operation {
         requestContext.setStorageServerResponse(serverIdentifier, HttpStatus.SERVICE_UNAVAILABLE_503);
 
         /*
-        ** Tell the SetupChunkWrite that the NioSocket connection has already been closed.
-         */
-        chunkWrite.connectionCloseDueToError();
-
-        /*
          ** Add this to the execute queue if it is not already on it.
          */
         requestContext.addToWorkQueue(this);

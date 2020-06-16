@@ -116,8 +116,6 @@ public class SendRequestToService implements Operation {
      */
     private final IoInterface objectServerConn;
 
-    private boolean serverConnectionClosedDueToError;
-
     /*
     ** NOTE: This call the server.setHttpInfo() must be made before instantiating the SendRequestToService class.
      */
@@ -152,8 +150,6 @@ public class SendRequestToService implements Operation {
         requestHandlerOps = new HashMap<>();
 
         currState = ExecutionState.SETUP_COMMAND_SEND_OPS;
-
-        serverConnectionClosedDueToError = false;
 
         LOG.info("SendRequestToService addr: " + service.getServerIpAddress().toString() + " port: " +
                 service.getServerTcpPort());
@@ -386,14 +382,6 @@ public class SendRequestToService implements Operation {
         }
         requestHandlerOps.clear();
 
-        /*
-         ** Close out the connection used to communicate with the Storage Server. Then
-         ** clear out the reference to the connection so it may be released back to the pool.
-         */
-        if (!serverConnectionClosedDueToError) {
-            objectServerConn.closeConnection();
-        }
-
         requestContext.releaseConnection(objectServerConn);
 
         /*
@@ -412,10 +400,6 @@ public class SendRequestToService implements Operation {
          ** remove the HttpResponseInfo association from the ServerIdentifier
          */
         service.setHttpInfo(null);
-    }
-
-    public void connectionCloseDueToError() {
-        serverConnectionClosedDueToError = true;
     }
 
     /*

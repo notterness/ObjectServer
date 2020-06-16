@@ -91,8 +91,6 @@ public class ClientCommandSend implements Operation {
      */
     private final IoInterface objectServerConn;
 
-    private boolean serverConnectionClosedDueToError;
-
     /*
      */
     public ClientCommandSend(final ClientInterface clientInterface, final ClientRequestContext requestContext,
@@ -123,8 +121,6 @@ public class ClientCommandSend implements Operation {
         requestHandlerOps = new HashMap<>();
 
         currState = ExecutionState.SETUP_COMMAND_SEND_OPS;
-
-        serverConnectionClosedDueToError = false;
 
         String clientOpcRequestId = Objects.requireNonNullElse(requestParams.getOpcClientRequestId(), "");
         LOG.info("ClientCommandSend addr: " + objectServer.getServerIpAddress().toString() + " port: " +
@@ -355,14 +351,6 @@ public class ClientCommandSend implements Operation {
         }
         requestHandlerOps.clear();
 
-        /*
-         ** Close out the connection used to communicate with the Storage Server. Then
-         ** clear out the reference to the connection so it may be released back to the pool.
-         */
-        if (!serverConnectionClosedDueToError) {
-            objectServerConn.closeConnection();
-        }
-
         requestContext.releaseConnection(objectServerConn);
 
         /*
@@ -380,10 +368,6 @@ public class ClientCommandSend implements Operation {
          ** remove the HttpResponseInfo association from the ServerIdentifier
          */
         objectServer.setHttpInfo(null);
-    }
-
-    public void connectionCloseDueToError() {
-        serverConnectionClosedDueToError = true;
     }
 
     /*

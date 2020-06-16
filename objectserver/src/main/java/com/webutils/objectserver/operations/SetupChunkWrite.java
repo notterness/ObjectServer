@@ -81,8 +81,6 @@ public class SetupChunkWrite implements Operation {
 
     private boolean chunkWriteSetupComplete;
 
-    private boolean serverConnectionClosedDueToError;
-
     /*
     ** SetupChunkWrite is called at the beginning of each chunk (128MB) block of data. This is what sets
     **   up the calls to obtain the VON information and the meta-data write to the database.
@@ -116,8 +114,6 @@ public class SetupChunkWrite implements Operation {
         requestHandlerOperations = new HashMap<>();
 
         chunkWriteSetupComplete = false;
-
-        serverConnectionClosedDueToError = false;
 
         LOG.info("SetupChunkWrite[" + requestContext.getRequestId() + "] addr: " +
                 storageServer.getServerIpAddress().toString() + " port: " +
@@ -327,13 +323,6 @@ public class SetupChunkWrite implements Operation {
         }
         requestHandlerOperations.clear();
 
-        /*
-         ** Close out the connection used to communicate with the Storage Server. Then
-         ** clear out the reference to the connection so it may be released back to the pool.
-         */
-        if (!serverConnectionClosedDueToError) {
-            storageServerConnection.closeConnection();
-        }
         requestContext.releaseConnection(storageServerConnection);
         storageServerConnection = null;
 
@@ -373,13 +362,6 @@ public class SetupChunkWrite implements Operation {
         ** Now call back the Operation that will handle the completion
          */
         completeCallback.event();
-    }
-
-    /*
-    ** This must be on a per connection basis
-     */
-    public void connectionCloseDueToError() {
-        serverConnectionClosedDueToError = true;
     }
 
     /*

@@ -110,8 +110,6 @@ public class ClientGetObject implements Operation {
      */
     private final IoInterface objectServerConn;
 
-    private boolean serverConnectionClosedDueToError;
-
     /*
      ** The updater used to manage the Md5 digest and its result
      */
@@ -149,8 +147,6 @@ public class ClientGetObject implements Operation {
         requestHandlerOps = new HashMap<>();
 
         currState = ExecutionState.SETUP_OBJECT_READ_OPS;
-
-        serverConnectionClosedDueToError = false;
 
         LOG.info("ClientGetObject addr: " + objectServer.getServerIpAddress().toString() + " port: " +
                 objectServer.getServerTcpPort());
@@ -414,14 +410,6 @@ public class ClientGetObject implements Operation {
         }
         requestHandlerOps.clear();
 
-        /*
-         ** Close out the connection used to communicate with the Storage Server. Then
-         ** clear out the reference to the connection so it may be released back to the pool.
-         */
-        if (!serverConnectionClosedDueToError) {
-            objectServerConn.closeConnection();
-        }
-
         requestContext.releaseConnection(objectServerConn);
 
         /*
@@ -459,10 +447,6 @@ public class ClientGetObject implements Operation {
          ** remove the HttpResponseInfo association from the ServerIdentifier
          */
         objectServer.setHttpInfo(null);
-    }
-
-    public void connectionCloseDueToError() {
-        serverConnectionClosedDueToError = true;
     }
 
     /*

@@ -2,12 +2,12 @@ package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.common.PutObjectParams;
+import com.webutils.webserver.common.ObjectParams;
+import com.webutils.webserver.http.ContentParser;
 import com.webutils.webserver.http.HttpResponseInfo;
-import com.webutils.webserver.manual.ClientInterface;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.IoInterface;
-import com.webutils.webserver.requestcontext.ClientRequestContext;
+import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -15,37 +15,30 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
-/*
- ** This implements the logic to send the PutObject command to the Object Server. It provides the back end for the
- **   CLI command.
- */
-@SuppressWarnings("SpellCheckingInspection")
-public class ClientPutObject implements Operation {
+public class SendRequestAndDataToService implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ClientPutObject.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SendRequestAndDataToService.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    private final OperationTypeEnum operationType = OperationTypeEnum.CLIENT_PUT_OBJECT;
+    private final static OperationTypeEnum operationType = OperationTypeEnum.SEND_SERVICE_REQUEST_PLUS_DATA;
 
-    /*
-     ** The overall controlling object that allocated the request context and threads.
-     */
-    private final ClientInterface clientInterface;
+    private final static int REMOTE_READ_BUFFER_MANAGER = 4000;
+    private final static int REMOTE_WRITE_BUFFER_MANAGER = 4100;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
      */
-    private final ClientRequestContext requestContext;
+    private final RequestContext requestContext;
 
     /*
      ** The ServerIdentifier is this object reader's unique identifier. It identifies the Object Server through the
      **   IP address and Port number.
      */
-    private final ServerIdentifier objectServer;
+    private final ServerIdentifier service;
 
-    private final PutObjectParams requestParams;
+    private final ObjectParams requestParams;
 
     private final MemoryManager memoryManager;
 
@@ -53,9 +46,7 @@ public class ClientPutObject implements Operation {
      ** This is to make the execute() function more manageable
      */
     enum ExecutionState {
-        GET_OBJECT_FILE_MD5,
-        WAIT_FOR_FILE_MD5_DIGEST,
-        SETUP_OBJECT_PUT_OPS,
+        SETUP_COMMAND_SEND_OPS,
         WAITING_FOR_CONN_COMP,
         SEND_CONTENT_DATA,
         WAITING_FOR_RESPONSE_HEADER,
@@ -75,17 +66,14 @@ public class ClientPutObject implements Operation {
     private boolean onExecutionQueue;
 
     /*
-    ** The writeBufferPointer is what is returned from the FileReadBufferMetering operation and is used by the
-    **   BuildRequestHeader and ReadObjectFromFile operations to send data to the Object Server.
+     ** The response buffer metering is used by the
      */
-    private BufferManagerPointer writeBufferPointer;
-
-    /*
-     ** The response buffer metering is used by the WritObjectToFile operation
-     */
-    private BufferReadMetering responseBufferMetering;
+    private BufferManager responseBufferManager;
+    private ServiceResponseBufferMetering responseBufferMetering;
 
     private BufferManagerPointer httpBufferPointer;
+
+    private BufferManager serviceWriteBufferMgr;
 
     /*
      ** The HttpResponseInfo is unique to this read chunk operation as the response coming back is only for one chunk
@@ -93,6 +81,12 @@ public class ClientPutObject implements Operation {
      */
     private final HttpResponseInfo httpInfo;
 
+    private final ContentParser contentParser;
+
+    /*
+     ** The operation that is called when this has completed
+     */
+    private final Operation completeCallback;
 
     /*
      ** The following is a map of all of the created Operations to handle this request.
@@ -105,23 +99,27 @@ public class ClientPutObject implements Operation {
     private final IoInterface objectServerConn;
 
     /*
+     ** NOTE: This call the server.setHttpInfo() must be made before instantiating the SendRequestToService class.
      */
-    public ClientPutObject(final ClientInterface clientInterface, final ClientRequestContext requestContext,
-                           final MemoryManager memoryManager, final ServerIdentifier server,
-                           final PutObjectParams putParams) {
+    public SendRequestAndDataToService(final RequestContext requestContext, final MemoryManager memoryManager,
+                                       final ServerIdentifier server, final ObjectParams commandParams,
+                                       final ContentParser contentParser, final Operation completeCb) {
 
-        this.clientInterface = clientInterface;
         this.requestContext = requestContext;
-        this.objectServer = server;
-        this.requestParams = putParams;
+        this.service = server;
+        this.requestParams = commandParams;
         this.memoryManager = memoryManager;
+
+        this.contentParser = contentParser;
+
+        this.completeCallback = completeCb;
 
         /*
          ** Obtain the HttpResponseInfo for this request.
          */
-        this.httpInfo = server.getHttpInfo();
+        this.httpInfo = service.getHttpInfo();
 
-        this.objectServerConn = requestContext.getClientConnection();
+        this.objectServerConn = requestContext.allocateConnection(this);
 
         /*
          ** This starts out not being on any queue
@@ -133,10 +131,10 @@ public class ClientPutObject implements Operation {
          */
         requestHandlerOps = new HashMap<>();
 
-        currState = ExecutionState.GET_OBJECT_FILE_MD5;
+        currState = ExecutionState.SETUP_COMMAND_SEND_OPS;
 
-        LOG.info("ClientPutObject addr: " + objectServer.getServerIpAddress().toString() + " port: " +
-                objectServer.getServerTcpPort());
+        LOG.info("SendRequestToService addr: " + service.getServerIpAddress().toString() + " port: " +
+                service.getServerTcpPort());
     }
 
     public OperationTypeEnum getOperationType() {
@@ -161,36 +159,32 @@ public class ClientPutObject implements Operation {
     }
 
     /*
+     ** The execute() method consists of a state machine to perform the following:
      **
+     **   SETUP_COMMAND_SEND_OPS - This sets up the operations needed to send the request to the remote service and the
+     **     operations needed to read back in the response headers and content. Once the operations are all setup it
+     **     attempts to make the connection to the remote service.
+     **   WAITING_FOR_CONN_COMP - This is the waiting state for the request to be sent to the remote service.
+     **   SEND_CONTENT_DATA - This cleans up some of the operations that were used to send the request to the remote
+     **     service. It is a placeholder for sending content data, but currently that is not supported.
+     **   WAITING_FOR_RESPONSE_HEADER - This is where the state machine waits for the response header(s) from the
+     **     remote service. When this state completes, all of the response header(s) will have been read in and added
+     **     to the HTTP information structure and the next step is to read in the content data (if the "Content-Length"
+     **     is not set to 0).
+     **   READ_RESPONSE_DATA - Read the content data and parse it.
+     **   CONTENT_PROCESSED - All the data from the remote service has been read in and this request is completed.
+     **   CALLBACK_OPS - Callback the initiating operation.
      */
     public void execute() {
         switch (currState) {
-            case GET_OBJECT_FILE_MD5:
-                currState = ExecutionState.WAIT_FOR_FILE_MD5_DIGEST;
-
-                ObjectFileComputeMd5 computeFileMd5 = new ObjectFileComputeMd5(requestContext, this,
-                        memoryManager, requestParams);
-                computeFileMd5.initialize();
-                break;
-
-            case WAIT_FOR_FILE_MD5_DIGEST:
-                if (requestParams.getMd5DigestSet()) {
-                    currState = ExecutionState.SETUP_OBJECT_PUT_OPS;
-                    /*
-                    ** Fall through
-                     */
-                } else {
-                    break;
-                }
-
-            case SETUP_OBJECT_PUT_OPS:
-                if (setupPutOps()) {
+            case SETUP_COMMAND_SEND_OPS:
+                if (setupCommandSendOps()) {
                     currState = ExecutionState.WAITING_FOR_CONN_COMP;
                 } else {
                     /*
                      ** This is the case where the connection to the Storage Server could not be established
                      */
-                    objectServer.setResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR_500);
+                    service.setResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR_500);
                     currState = ExecutionState.CALLBACK_OPS;
                     event();
                 }
@@ -203,19 +197,19 @@ public class ClientPutObject implements Operation {
                  **   was made and the data has been written)
                  */
                 int status;
-                if (requestContext.hasHttpRequestBeenSent(objectServer)) {
+                if (requestContext.hasHttpRequestBeenSent(service)) {
 
-                    requestContext.removeHttpRequestSent(objectServer);
+                    requestContext.removeHttpRequestSent(service);
                     currState = ExecutionState.SEND_CONTENT_DATA;
                     /*
                      ** Fall through to handle the case where the connection was setup and the response header was
                      **   received prior to this being scheduled.
                      */
-                } else if ((status = requestContext.getStorageResponseResult(objectServer)) != HttpStatus.OK_200) {
-                    LOG.warn("ClientPutObject failure: " + status + " addr: " + objectServer.getServerIpAddress().toString() +
-                            " port: " + objectServer.getServerTcpPort());
+                } else if ((status = requestContext.getStorageResponseResult(service)) != HttpStatus.OK_200) {
+                    LOG.warn("SendRequestToService failure: " + status + " addr: " + service.getServerIpAddress().toString() +
+                            " port: " + service.getServerTcpPort());
 
-                    objectServer.setResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR_500);
+                    service.setResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR_500);
 
                     currState = ExecutionState.CALLBACK_OPS;
                     event();
@@ -228,31 +222,34 @@ public class ClientPutObject implements Operation {
 
             case SEND_CONTENT_DATA:
                 currState = ExecutionState.WAITING_FOR_RESPONSE_HEADER;
-                setupFileWrite();
+                setupContentWrite();
+                event();
                 break;
 
             case WAITING_FOR_RESPONSE_HEADER:
                 if (httpInfo.getHeaderComplete()) {
                     int status = httpInfo.getResponseStatus();
 
-                    LOG.info("WAITING_FOR_RESPONSE_HEADER status: " + status);
+                    LOG.info("WAITING_FOR_RESPONSE_HEADER status: " + status + " contentLength: " + httpInfo.getContentLength());
+
+                    service.setResponseStatus(status);
 
                     currState = ExecutionState.READ_RESPONSE_DATA;
                     /*
-                    ** Fall through to the READ_RESPONSE_DATA state
+                     ** Fall through to the READ_RESPONSE_DATA state
                      */
 
                     if (status == -1) {
                         /*
-                        ** Should not be here if the getHeaderComplete() is true as a -1 status indicates that a
-                        **   response header has not been received.
+                         ** Should not be here if the getHeaderComplete() is true as a -1 status indicates that a
+                         **   response header has not been received.
                          */
                         LOG.warn("WAITING_FOR_RESPONSE_HEADER should not be here status: " + status);
                         break;
                     }
                 } else {
                     /*
-                    ** Still waiting for the response header to arrive
+                     ** Still waiting for the response header to arrive
                      */
                     break;
                 }
@@ -263,8 +260,8 @@ public class ClientPutObject implements Operation {
                     currState = ExecutionState.CONTENT_PROCESSED;
                 } else {
                     /*
-                    ** Since startContentRead() returned false, that means the Content-Length was set to 0 and there
-                    **   is nothing more to read.
+                     ** Since startContentRead() returned false, that means the Content-Length was set to 0 and there
+                     **   is nothing more to read.
                      */
                     currState = ExecutionState.CALLBACK_OPS;
                     event();
@@ -273,42 +270,33 @@ public class ClientPutObject implements Operation {
 
             case CONTENT_PROCESSED:
                 boolean parseError = requestContext.getHttpParseError();
-                boolean allDataWritten = requestContext.getAllObjectDataWritten();
-                LOG.info("CONTENT_PROCESSED  allDataWritten: " + allDataWritten +
-                        " parseError: " + parseError);
+                LOG.info("CONTENT_PROCESSED  parseError: " + parseError);
 
-                if (allDataWritten) {
-                    objectServer.setResponseStatus(HttpStatus.OK_200);
-
-                    LOG.info("chunk read from Object Server complete");
+                if (parseError) {
                     /*
-                     ** Fall through
+                     ** Need to callback the higher level
                      */
-                    currState = ExecutionState.CALLBACK_OPS;
-                } else if (parseError) {
-                    /*
-                     ** Need to callback the higher level. The file will have already been deleted.
-                     */
-                } else {
-                    /*
-                     ** Still waiting for the md5 operations to complete
-                     */
-                    break;
+                    LOG.info("SendRequestToService parser error");
                 }
+                /*
+                 ** Fall through
+                 */
+                currState = ExecutionState.CALLBACK_OPS;
 
             case CALLBACK_OPS:
-                LOG.info("ClientPutObject CALLBACK_OPS");
+                LOG.info("ClientCommandSend CALLBACK_OPS");
 
                 /*
-                ** Display the results
+                 ** Display the results
                  */
                 requestParams.outputResults(httpInfo);
 
                 /*
-                 ** Now call back the clientInterface to let the CLI command clean up
+                 ** Now call back the operation that made the request to the remote service
                  */
+                completeCallback.event();
+
                 currState = ExecutionState.EMPTY_STATE;
-                clientInterface.clientRequestCompleted(httpInfo.getResponseStatus());
                 break;
 
             case EMPTY_STATE:
@@ -325,8 +313,8 @@ public class ClientPutObject implements Operation {
      */
     public void complete() {
 
-        LOG.info("ClientPutObject complete() addr: " + objectServer.getServerIpAddress().toString() + " port: " +
-                objectServer.getServerTcpPort());
+        LOG.info("SendRequestToService complete() addr: " + service.getServerIpAddress().toString() + " port: " +
+                service.getServerTcpPort());
 
         /*
          ** The following must be called in order to make sure that the BufferManagerPointer
@@ -334,31 +322,29 @@ public class ClientPutObject implements Operation {
          **   headerWriter are dependent upon the pointers in headerBuilder. But, if there was
          */
         Operation headerWriter = requestHandlerOps.remove(OperationTypeEnum.WRITE_TO_CLIENT);
-        headerWriter.complete();
-
-        Operation headerBuilder = requestHandlerOps.remove(OperationTypeEnum.BUILD_OBJECT_GET_HEADER);
-        if (headerBuilder != null) {
-            headerBuilder.complete();
-        } else {
-            Operation readFromFile = requestHandlerOps.remove(OperationTypeEnum.READ_OBJECT_FROM_FILE);
-            if (readFromFile != null) {
-                readFromFile.complete();
-            }
+        if (headerWriter != null) {
+            headerWriter.complete();
         }
 
-        Operation processResponse = requestHandlerOps.remove(OperationTypeEnum.RESPONSE_HANDLER);
+        Operation headerBuilder = requestHandlerOps.remove(OperationTypeEnum.BUILD_REQUEST_HEADER);
+        if (headerBuilder != null) {
+            headerBuilder.complete();
+        }
+
+        Operation processResponse = requestHandlerOps.remove(OperationTypeEnum.SERVICE_RESPONSE_HANDLER);
         if (processResponse != null) {
             processResponse.complete();
         }
 
-        /*
-         ** Check if the ConvertRespBodyToString operation is present. It may not be in certain error conditions.
-         */
-        Operation convertBodyToStr = requestHandlerOps.remove(OperationTypeEnum.CONVERT_RESP_BODY_TO_STR);
-        if (convertBodyToStr != null) {
-            convertBodyToStr.complete();
+        Operation parseContent = requestHandlerOps.remove(OperationTypeEnum.PARSE_CONTENT);
+        if (parseContent != null) {
+            parseContent.complete();
         }
 
+        Operation parseErrorContent = requestHandlerOps.remove(OperationTypeEnum.PARSE_ERROR_CONTENT);
+        if (parseErrorContent != null) {
+            parseErrorContent.complete();
+        }
         Operation readBuffer = requestHandlerOps.remove(OperationTypeEnum.READ_BUFFER);
         readBuffer.complete();
 
@@ -382,19 +368,20 @@ public class ClientPutObject implements Operation {
 
         /*
          ** Return the allocated buffers that were used to receive the HTTP Response and the data
-         **   from the Storage Server
+         **   from the remote service
          */
         responseBufferMetering.complete();
+        responseBufferManager = null;
 
         /*
          ** Clear the HTTP Request sent for this Storage Server
          */
-        requestContext.removeHttpRequestSent(objectServer);
+        requestContext.removeHttpRequestSent(service);
 
         /*
          ** remove the HttpResponseInfo association from the ServerIdentifier
          */
-        objectServer.setHttpInfo(null);
+        service.setHttpInfo(null);
     }
 
     /*
@@ -413,19 +400,19 @@ public class ClientPutObject implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("ClientPutObject markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("SendRequestToService markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("ClientPutObject markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SendRequestToService markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("ClientPutObject markRemovedFromQueue(false) not on a queue");
+            LOG.warn("SendRequestToService markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("ClientPutObject markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SendRequestToService markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -440,7 +427,7 @@ public class ClientPutObject implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("ClientPutObject hasWaitTimeElapsed() not supposed to be on delayed queue");
+        LOG.warn("SendRequestToService hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
 
@@ -463,21 +450,33 @@ public class ClientPutObject implements Operation {
      **
      ** It will return false if the setup of the connection to the Object Server fails
      */
-    private boolean setupPutOps() {
+    private boolean setupCommandSendOps() {
         /*
-         ** Allocate ByteBuffer(s) for the PUT request header that will be sent to the Object Server
+         ** Allocate ByteBuffer(s) for the request header that will be sent to the remote service
          */
-        FileReadBufferMetering bufferMetering = new FileReadBufferMetering(requestContext, memoryManager);
+        serviceWriteBufferMgr = new BufferManager(SendRequestToService.REMOTE_SERVICE_RESPONSE_BUFFERS, "ServiceWriteBufferMgr",
+                REMOTE_WRITE_BUFFER_MANAGER);
+
+        BufferWriteMetering bufferMetering = new BufferWriteMetering(requestContext, memoryManager, serviceWriteBufferMgr);
         requestHandlerOps.put(bufferMetering.getOperationType(), bufferMetering);
-        writeBufferPointer = bufferMetering.initialize();
+        BufferManagerPointer writeBufferPointer = bufferMetering.initialize();
 
 
         /*
-         ** Allocate ByteBuffer(s) to read in the response from the Storage Server. By using a metering operation, the
+         ** Create a BufferManager to accept the response from the remote service. This BufferManager is just used
+         **   as a placeholder for buffers while they are processed.
+         **
+         */
+        responseBufferManager = new BufferManager(SendRequestToService.REMOTE_SERVICE_RESPONSE_BUFFERS, "ServiceReadBufferMgr",
+                REMOTE_READ_BUFFER_MANAGER);
+
+        /*
+         ** Allocate ByteBuffer(s) to read in the response from the remote service. By using a metering operation, the
          **   setup for the reading of the Object Server response header can be be deferred until the TCP connection to the
          **   Object Server is successful.
          */
-        responseBufferMetering = new BufferReadMetering(requestContext, memoryManager);
+        responseBufferMetering = new ServiceResponseBufferMetering(requestContext, memoryManager, responseBufferManager,
+                SendRequestToService.REMOTE_SERVICE_RESPONSE_BUFFERS);
         BufferManagerPointer respBufferPointer = responseBufferMetering.initialize();
 
         /*
@@ -488,34 +487,27 @@ public class ClientPutObject implements Operation {
         requestHandlerOps.put(errorHandler.getOperationType(), errorHandler);
 
         /*
-         ** The PUT Header must be written to the Object Server so that the data can be written following it
+         ** The Command Header must be written to the remote service so that the data can be written following it
          */
-        BuildRequestHeader headerBuilder = new BuildRequestHeader(requestContext, requestContext.getClientWriteBufferManager(),
+        BuildRequestHeader headerBuilder = new BuildRequestHeader(requestContext, serviceWriteBufferMgr,
                 writeBufferPointer, requestParams);
         requestHandlerOps.put(headerBuilder.getOperationType(), headerBuilder);
         BufferManagerPointer writePointer = headerBuilder.initialize();
 
         WriteToClient headerWriter = new WriteToClient(requestContext, objectServerConn, this,
-                writePointer, objectServer);
+                serviceWriteBufferMgr, writePointer, service);
         requestHandlerOps.put(headerWriter.getOperationType(), headerWriter);
         headerWriter.initialize();
 
         /*
-         ** For the Object Server, setup a ConnectComplete operation that is used when the NIO
-         **   connection is made with the Object Server.
+         ** For the remote service, setup a ConnectComplete operation that is used when the NIO
+         **   connection is made with the remote service server.
          */
         List<Operation> operationList = new LinkedList<>();
         operationList.add(headerBuilder);
         operationList.add(responseBufferMetering);
-        ConnectComplete connectComplete = new ConnectComplete(requestContext, operationList, objectServer.getServerTcpPort());
+        ConnectComplete connectComplete = new ConnectComplete(requestContext, operationList, service.getServerTcpPort());
         requestHandlerOps.put(connectComplete.getOperationType(), connectComplete);
-
-        /*
-         ** Use the ClientReadBufferManager to accept the response from the Object Server. This BufferManager is used
-         **   to hold the response buffers as they are read in from the Object Server.
-         **
-         */
-        BufferManager responseBufferManager = requestContext.getClientReadBufferManager();
 
         /*
          ** Setup the operations to read in the HTTP Response header and process it
@@ -525,15 +517,15 @@ public class ClientPutObject implements Operation {
         httpBufferPointer = readBuffer.initialize();
 
 
-        ResponseHandler httpRespHandler = new ResponseHandler(requestContext, responseBufferManager, httpBufferPointer,
-                responseBufferMetering, this, objectServer);
+        ServiceResponseHandler httpRespHandler = new ServiceResponseHandler(requestContext, responseBufferManager, httpBufferPointer,
+                responseBufferMetering, this, service);
         requestHandlerOps.put(httpRespHandler.getOperationType(), httpRespHandler);
         httpRespHandler.initialize();
 
         /*
          ** Now open a initiator connection to write encrypted buffers out of.
          */
-        if (!objectServerConn.startInitiator(objectServer.getServerIpAddress(), objectServer.getServerTcpPort(),
+        if (!objectServerConn.startInitiator(service.getServerIpAddress(), service.getServerTcpPort(),
                 connectComplete, errorHandler)) {
             /*
              ** This means the SocketChannel could not be opened. Need to indicate a problem
@@ -543,7 +535,6 @@ public class ClientPutObject implements Operation {
              ** TODO: Add a test case for the startInitiator failing to make sure the cleanup
              **   is properly handled.
              */
-            complete();
             return false;
         }
 
@@ -551,14 +542,14 @@ public class ClientPutObject implements Operation {
     }
 
     /*
-    ** This is used to setup the write of the clients file to the Object Server
+     ** This is used to setup the write of content data to the service
      */
-    private void setupFileWrite() {
+    private void setupContentWrite() {
 
         /*
-        ** First tear down the BuildRequestHeader and WriteToClient operations. The WriteToClient needs to be
-        **   removed since it's dependency will change to being on the ReadObjectFromFile operation instead of
-        **   BuildRequestHeader.
+         ** First tear down the BuildRequestHeader and WriteToClient operations. The WriteToClient needs to be
+         **   removed since it's dependency will change to being on a passed in buffer instead of
+         **   BuildRequestHeader.
          */
         Operation writeToClient = requestHandlerOps.remove(OperationTypeEnum.WRITE_TO_CLIENT);
         writeToClient.complete();
@@ -566,48 +557,49 @@ public class ClientPutObject implements Operation {
         Operation buildPutHeader = requestHandlerOps.remove(OperationTypeEnum.BUILD_REQUEST_HEADER);
         buildPutHeader.complete();
 
-        Operation fileMetering = requestHandlerOps.get(OperationTypeEnum.FILE_READ_BUFFER_METERING);
-
-        ReadObjectFromFile readFromFile = new ReadObjectFromFile(requestContext, fileMetering, writeBufferPointer,
-                requestParams, this);
-        requestHandlerOps.put(readFromFile.getOperationType(), readFromFile);
-        BufferManagerPointer fileReadPointer = readFromFile.initialize();
-
-        WriteToClient writeDataToObjectServer = new WriteToClient(requestContext, objectServerConn, this,
-                fileReadPointer, objectServer);
-        requestHandlerOps.put(writeDataToObjectServer.getOperationType(), writeDataToObjectServer);
-        writeDataToObjectServer.initialize();
-
-        /*
-         ** Start the reading from the file by metering out a buffer to read data into
-         */
-        fileMetering.event();
+        Operation writeMetering = requestHandlerOps.remove(OperationTypeEnum.BUFFER_WRITE_METERING);
+        writeMetering.complete();
     }
 
 
     /*
-    ** This is used to read in the content returned with the response headers. If the Content-Length is 0, it will not
-    **   setup anything and will simply return false.
+     ** This is used to read in the content returned with the response headers. If the Content-Length is 0, it will not
+     **   setup anything and will simply return false.
      */
     private boolean startContentRead() {
         /*
-         ** Tear down the response header reader and handler as they are no longer needed.
-         **
          ** The following must be called in order to make sure that the BufferManagerPointer dependencies are torn down
          **   in the correct order. The pointers in httpRespHandler are dependent upon the pointers in readRespBuffer.
          */
-        Operation httpRespHandler = requestHandlerOps.remove(OperationTypeEnum.RESPONSE_HANDLER);
+        Operation httpRespHandler = requestHandlerOps.remove(OperationTypeEnum.SERVICE_RESPONSE_HANDLER);
         httpRespHandler.complete();
 
-        if (httpInfo.getContentLength() != 0) {
+        int contentLength = httpInfo.getContentLength();
+        if (contentLength != 0) {
             /*
-             ** The next Operations are run once the response header has been received. This is to convert the bytes
-             **   read in into a String.
+             ** The handling is different for error responses versus a good response. An error response generally has
+             **   the form of:
+             **    {
+             **       "code": Integer value of error
+             **       "message": "the error message"
+             **       --> then optional additional data in the form of the following and there may be multiple entries
+             **       "field name": "field information"
+             **    }
              */
-            ConvertRespBodyToString convertToStr = new ConvertRespBodyToString(requestContext, httpBufferPointer,
-                    responseBufferMetering, httpInfo, this);
-            requestHandlerOps.put(convertToStr.getOperationType(), convertToStr);
-            convertToStr.initialize();
+            Operation parseContent;
+            if (httpInfo.getResponseStatus() == HttpStatus.OK_200) {
+                /*
+                 ** The next Operations are run once the response header has been received. This is to convert the response
+                 **   content into a usable form.
+                 */
+                parseContent = new ParseContentBuffers(requestContext, responseBufferManager, httpBufferPointer,
+                        responseBufferMetering, contentParser, contentLength, this);
+            } else {
+                parseContent = new ParseErrorContent(requestContext, responseBufferManager, httpBufferPointer,
+                        responseBufferMetering, contentLength, httpInfo, this);
+            }
+            requestHandlerOps.put(parseContent.getOperationType(), parseContent);
+            parseContent.initialize();
 
             return true;
         }
