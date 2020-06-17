@@ -2,7 +2,7 @@ package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.common.ObjectParams;
+import com.webutils.webserver.common.ObjectParamsWithData;
 import com.webutils.webserver.http.ContentParser;
 import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.memory.MemoryManager;
@@ -38,7 +38,7 @@ public class SendRequestAndDataToService implements Operation {
      */
     private final ServerIdentifier service;
 
-    private final ObjectParams requestParams;
+    private final ObjectParamsWithData requestParams;
 
     private final MemoryManager memoryManager;
 
@@ -102,7 +102,7 @@ public class SendRequestAndDataToService implements Operation {
      ** NOTE: This call the server.setHttpInfo() must be made before instantiating the SendRequestToService class.
      */
     public SendRequestAndDataToService(final RequestContext requestContext, final MemoryManager memoryManager,
-                                       final ServerIdentifier server, final ObjectParams commandParams,
+                                       final ServerIdentifier server, final ObjectParamsWithData commandParams,
                                        final ContentParser contentParser, final Operation completeCb) {
 
         this.requestContext = requestContext;
@@ -326,9 +326,9 @@ public class SendRequestAndDataToService implements Operation {
             headerWriter.complete();
         }
 
-        Operation headerBuilder = requestHandlerOps.remove(OperationTypeEnum.BUILD_REQUEST_HEADER);
-        if (headerBuilder != null) {
-            headerBuilder.complete();
+        Operation requestBuilder = requestHandlerOps.remove(OperationTypeEnum.BUILD_HEADERS_AND_DATA);
+        if (requestBuilder != null) {
+            requestBuilder.complete();
         }
 
         Operation processResponse = requestHandlerOps.remove(OperationTypeEnum.SERVICE_RESPONSE_HANDLER);
@@ -487,12 +487,13 @@ public class SendRequestAndDataToService implements Operation {
         requestHandlerOps.put(errorHandler.getOperationType(), errorHandler);
 
         /*
-         ** The Command Header must be written to the remote service so that the data can be written following it
+         ** BuildHeadersAndData creates both the Request Headers and the data that follows it. It feeds the buffers into
+         **   the BufferManager that is being used by the WriteToClient to send the data to the remote service.
          */
-        BuildRequestHeader headerBuilder = new BuildRequestHeader(requestContext, serviceWriteBufferMgr,
-                writeBufferPointer, requestParams);
-        requestHandlerOps.put(headerBuilder.getOperationType(), headerBuilder);
-        BufferManagerPointer writePointer = headerBuilder.initialize();
+        BuildHeadersAndData requestBuilder = new BuildHeadersAndData(requestContext, serviceWriteBufferMgr,
+                writeBufferPointer, bufferMetering, requestParams);
+        requestHandlerOps.put(requestBuilder.getOperationType(), requestBuilder);
+        BufferManagerPointer writePointer = requestBuilder.initialize();
 
         WriteToClient headerWriter = new WriteToClient(requestContext, objectServerConn, this,
                 serviceWriteBufferMgr, writePointer, service);
@@ -504,7 +505,7 @@ public class SendRequestAndDataToService implements Operation {
          **   connection is made with the remote service server.
          */
         List<Operation> operationList = new LinkedList<>();
-        operationList.add(headerBuilder);
+        operationList.add(requestBuilder);
         operationList.add(responseBufferMetering);
         ConnectComplete connectComplete = new ConnectComplete(requestContext, operationList, service.getServerTcpPort());
         requestHandlerOps.put(connectComplete.getOperationType(), connectComplete);
@@ -547,15 +548,15 @@ public class SendRequestAndDataToService implements Operation {
     private void setupContentWrite() {
 
         /*
-         ** First tear down the BuildRequestHeader and WriteToClient operations. The WriteToClient needs to be
+         ** First tear down the BuildHeadersAndData and WriteToClient operations. The WriteToClient needs to be
          **   removed since it's dependency will change to being on a passed in buffer instead of
          **   BuildRequestHeader.
          */
         Operation writeToClient = requestHandlerOps.remove(OperationTypeEnum.WRITE_TO_CLIENT);
         writeToClient.complete();
 
-        Operation buildPutHeader = requestHandlerOps.remove(OperationTypeEnum.BUILD_REQUEST_HEADER);
-        buildPutHeader.complete();
+        Operation requestBuilder = requestHandlerOps.remove(OperationTypeEnum.BUILD_HEADERS_AND_DATA);
+        requestBuilder.complete();
 
         Operation writeMetering = requestHandlerOps.remove(OperationTypeEnum.BUFFER_WRITE_METERING);
         writeMetering.complete();

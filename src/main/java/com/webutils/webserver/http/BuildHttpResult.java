@@ -11,10 +11,12 @@ import java.nio.charset.StandardCharsets;
 public class BuildHttpResult {
 
     private final HttpRequestInfo httpRequestInfo;
+    private final int opcRequestId;
 
-    public BuildHttpResult(final HttpRequestInfo objectCreateInfo) {
+    public BuildHttpResult(final HttpRequestInfo objectCreateInfo, final int opcRequestId) {
 
         this.httpRequestInfo = objectCreateInfo;
+        this.opcRequestId = opcRequestId;
     }
 
     public void buildResponse(final ByteBuffer respBuffer, int resultCode, boolean addContext, boolean close) {
@@ -63,8 +65,16 @@ public class BuildHttpResult {
                 tmpBuiltStr = new StringBuilder()
                         .append("HTTP/1.1 ")
                         .append(result.getCode())
-                        .append("\r\n")
-                        .append("Content-Length: ")
+                        .append("\r\n");
+
+                String clientOpcRequestId = httpRequestInfo.getOpcClientRequestId();
+                if (clientOpcRequestId != null) {
+                    tmpBuiltStr.append(HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + clientOpcRequestId + "\r\n");
+                }
+
+                tmpBuiltStr.append(HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\r\n");
+
+                tmpBuiltStr.append("Content-Length: ")
                         .append(contentLength)
                         .append("\r\n");
                 if (close) {
@@ -145,6 +155,8 @@ public class BuildHttpResult {
     ** NOTE: If the "Content-Length: 0" is replaced by "\n", then the HttpResponseListener() calls for contentComplete()
     **   and messageComplete() will not happen. The callback for the response being complete is done in the
     **   messageComplete() method. Need to figure out if the response is valid or has some other problem.
+    **
+    ** The responseHeaders for the PUT Object method are build in the ObjectTableMgr.buildSuccessHeader() method.
      */
     public void buildPutOkResponse(final ByteBuffer respBuffer) {
         String respHeader = httpRequestInfo.getResponseHeaders();

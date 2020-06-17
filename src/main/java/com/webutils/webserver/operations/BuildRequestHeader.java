@@ -150,19 +150,19 @@ public class BuildRequestHeader implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("BuildObjectGetHeader[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("BuildRequestHeader[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("BuildObjectGetHeader[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("BuildRequestHeader[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("BuildObjectGetHeader[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("BuildRequestHeader[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("BuildObjectGetHeader[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("BuildRequestHeader[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -177,8 +177,7 @@ public class BuildRequestHeader implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("BuildObjectGetHeader[" + requestContext.getRequestId() +
-                "] hasWaitTimeElapsed() not supposed to be on delayed queue");
+        LOG.warn("BuildRequestHeader[" + requestContext.getRequestId() + "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
 

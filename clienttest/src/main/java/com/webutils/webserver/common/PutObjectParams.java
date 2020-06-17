@@ -51,7 +51,7 @@ public class PutObjectParams extends ObjectParams {
     **     Object Server.
     **   Host (required) - Who is sending the request.
     **   opc-client-request-id (not required) - A unique identifier for this request provided by the client to allow
-    **     then to track their requests.
+    **     them to track their requests.
     **   if-none-match (not required) - This can only be set to "*". If it is set to "*" and there is already an object
     **     that matches the namespaceName/bucketName/objectName then an error will be returned. If this is not set and
     **     there is a matching object, a new record will be created with a higher version number. It is possible for

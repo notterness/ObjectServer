@@ -4,6 +4,7 @@ import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpRequestInfo;
+import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ObjectInfo;
 import com.webutils.webserver.operations.Operation;
@@ -15,6 +16,12 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
+/*
+** This is responsible for building the response for the GetObject method. It is done in a different way to account for
+**   needing to read all the data in from the different Storage Servers prior to sending the response. That is so that
+**   Md5 digests for the chunks can be computed and all the chunks are ready to be transferred before telling the
+**   client that they will be getting the data.
+ */
 public class SendObjectGetResponse implements Operation {
 
     private static final Logger LOG = LoggerFactory.getLogger(SendObjectGetResponse.class);
@@ -23,19 +30,6 @@ public class SendObjectGetResponse implements Operation {
      ** A unique identifier for this Operation so it can be tracked.
      */
     private final OperationTypeEnum operationType = OperationTypeEnum.SEND_OBJECT_GET_RESPONSE;
-
-    /*
-     ** Strings used to build the success response for the chunk write
-     */
-    private final static String SUCCESS_HEADER_1 = "opc-client-request-id: ";
-    private final static String SUCCESS_HEADER_2 = "opc-request-id: ";
-    private final static String SUCCESS_HEADER_3 = "Etag: ";
-    private final static String SUCCESS_HEADER_4 = "Content-MD5: ";
-    private final static String SUCCESS_HEADER_5 = "last-modified: ";
-    private final static String SUCCESS_HEADER_6 = "archival-state: ";
-    private final static String SUCCESS_HEADER_7 = "version-id: ";
-    private final static String SUCCESS_HEADER_8 = "Content-Length: ";
-
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -281,7 +275,7 @@ public class SendObjectGetResponse implements Operation {
         if (opcClientRequestId != null) {
             successHeader = "HTTP/1.1 200 OK" +
                     "\r\n" +
-                    "Content-Type: text/html\n" + SUCCESS_HEADER_1 + opcClientRequestId + "\n";
+                    "Content-Type: text/html\n" + HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n";
         } else {
             successHeader = "HTTP/1.1 200 OK" +
                     "\r\n" +
@@ -289,13 +283,18 @@ public class SendObjectGetResponse implements Operation {
         }
 
         if (contentMd5 != null) {
-            successHeader += SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + etag + "\n" +
-                    SUCCESS_HEADER_4 + contentMd5 + "\n" + SUCCESS_HEADER_5 + lastModified + "\n" +
-                    SUCCESS_HEADER_7 + versionId + "\n" + SUCCESS_HEADER_8 + contentLength + "\n\n";
+            successHeader += HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
+                    HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + etag + "\n" +
+                    HttpInfo.CONTENT_MD5 + ": " + contentMd5 + "\n" +
+                    HttpResponseInfo.RESPONSE_LAST_MODIFIED + ": " + lastModified + "\n" +
+                    HttpResponseInfo.RESPONSE_VERSION_ID + ": " + versionId + "\n" +
+                    HttpInfo.CONTENT_LENGTH + ": " + contentLength + "\n\n";
         } else {
-            successHeader += SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + etag + "\n" +
-                    SUCCESS_HEADER_5 + lastModified + "\n" +
-                    SUCCESS_HEADER_7 + versionId + "\n" + SUCCESS_HEADER_8 + contentLength + "\n\n";
+            successHeader += HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
+                    HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + etag + "\n" +
+                    HttpResponseInfo.RESPONSE_LAST_MODIFIED + ": " + lastModified + "\n" +
+                    HttpResponseInfo.RESPONSE_VERSION_ID + ": " + versionId + "\n" +
+                    HttpInfo.CONTENT_LENGTH + ": " + contentLength + "\n\n";
         }
 
         HttpInfo.str_to_bb(respBuffer, successHeader);
@@ -306,7 +305,7 @@ public class SendObjectGetResponse implements Operation {
      **
      **   opc-client-request-id - If the client passed one in, otherwise it it will not be returned
      **   opc-request-id
-     **   ETAG
+     **   ETAG (may not be valid if the Object could not be found)
      **   Content-Length - 0
      */
     private void buildFailureHeaders(final ByteBuffer respBuffer) {
@@ -323,20 +322,25 @@ public class SendObjectGetResponse implements Operation {
 
         if (opcClientRequestId != null) {
             failureHeader = "HTTP/1.1 " + httpInfo.getParseFailureCode() + " FAILED\r\n" +
-                    "Content-Type: text/html\n" + SUCCESS_HEADER_1 + opcClientRequestId + "\n";
+                    "Content-Type: text/html\n" +
+                    HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n";
         } else {
             failureHeader = "HTTP/1.1 " + httpInfo.getParseFailureCode() + " FAILED\r\n" +
                     "Content-Type: text/html\n";
         }
 
+        failureHeader += HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n";
+
+        if (etag != null) {
+            failureHeader += HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + etag + "\n";
+        }
+
         String failureMessage = httpInfo.getParseFailureReason();
         if (failureMessage != null) {
-            failureHeader += SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + etag + "\n" +
-                    SUCCESS_HEADER_8 + failureMessage.length() + "\n\n";
+            failureHeader += HttpInfo.CONTENT_LENGTH + ": " + failureMessage.length() + "\n\n";
             failureHeader += failureMessage;
         } else {
-            failureHeader += SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + etag + "\n" +
-                    SUCCESS_HEADER_8 + 0 + "\n\n";
+            failureHeader += HttpInfo.CONTENT_LENGTH + ": 0\n\n";
         }
 
         HttpInfo.str_to_bb(respBuffer, failureHeader);

@@ -3,6 +3,8 @@ package com.webutils.storageserver.operations;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.common.Md5ResultHandler;
+import com.webutils.webserver.http.HttpInfo;
+import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.operations.*;
 import com.webutils.webserver.requestcontext.RequestContext;
 import org.eclipse.jetty.http.HttpStatus;
@@ -27,13 +29,6 @@ public class SetupStorageServerPut implements Operation {
     **
      */
     private static final String CLOSE_CONNECTION_AFTER_HEADER = "DisconnectAfterHeader";
-
-    /*
-    ** Strings used to build the success response for the chunk write
-     */
-    private final static String SUCCESS_HEADER_1 = "opc-client-request-id: ";
-    private final static String SUCCESS_HEADER_2 = "opc-request-id: ";
-    private final static String SUCCESS_HEADER_3 = "opc-content-md5: ";
 
     private final RequestContext requestContext;
 
@@ -335,10 +330,12 @@ public class SetupStorageServerPut implements Operation {
         String opcRequestId = requestContext.getHttpInfo().getOpcRequestId();
 
         if (opcClientRequestId != null) {
-            successHeader = SUCCESS_HEADER_1 + opcClientRequestId + "\n" + SUCCESS_HEADER_2 + opcRequestId + "\n" +
-                    SUCCESS_HEADER_3 + contentMD5 + "\n";
+            successHeader = HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n" +
+                    HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
+                    HttpResponseInfo.OPC_CONTENT_MD5 + ": " + contentMD5 + "\n";
         } else {
-            successHeader = SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + contentMD5 + "\n";
+            successHeader = HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
+                    HttpResponseInfo.OPC_CONTENT_MD5 + ": " + "\n";
         }
 
         return successHeader;

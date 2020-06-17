@@ -20,12 +20,12 @@ public class GetObjectParams extends ObjectParams {
     }
 
     /*
-     ** This builds the PutObject request headers. The following headers and if they are required:
+     ** This builds the GetObject request headers. The following headers and if they are required:
      **
      **   namespaceName (required) "/n/" - This is the namespace that holds the bucket where the object will be kept in.
      **   bucketName (required) "/b/" - This is the bucket that will hold the object.
-     **   objectName (required) "/n/" - This is the name of the object where the file data will be retained within the
-     **     Object Server.
+     **   objectName (required) "/n/" - This is the name of the object to be uploaded from the Object Server.
+     **
      **   Host (required) - Who is sending the request.
      **   opc-client-request-id (not required) - A unique identifier for this request provided by the client to allow
      **     then to track their requests.
@@ -35,7 +35,7 @@ public class GetObjectParams extends ObjectParams {
      **   if-match (not required) - This is used to contain the specific ETag (entity tag - a unique ID associated with
      **     every object that is present in the Object Store) of the object to upload.
      **
-     **   Content-Length (required) - The size in bytes of the file being uploaded
+     **   Content-Length (required) - Must be set to 0
      **
      ** NOTE: If both versionId and if-match are set, then the if-match will override the versionId matching.
      **
@@ -107,23 +107,23 @@ public class GetObjectParams extends ObjectParams {
          **   last-modified
          **   version-id
          */
+        System.out.println("Status: " + httpInfo.getResponseStatus());
+        String opcClientRequestId = httpInfo.getOpcClientRequestId();
+        if (opcClientRequestId != null) {
+            System.out.println(HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId);
+        }
+
+        String opcRequestId = httpInfo.getOpcRequestId();
+        if (opcRequestId != null) {
+            System.out.println(HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId);
+        }
+
+        String etag = httpInfo.getResponseEtag();
+        if (etag != null) {
+            System.out.println("ETag: " + etag);
+        }
+
         if (httpInfo.getResponseStatus() == HttpStatus.OK_200) {
-            System.out.println("Status: 200");
-            String opcClientRequestId = httpInfo.getOpcClientRequestId();
-            if (opcClientRequestId != null) {
-                System.out.println(HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId);
-            }
-
-            String opcRequestId = httpInfo.getOpcRequestId();
-            if (opcRequestId != null) {
-                System.out.println(HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId);
-            }
-
-            String etag = httpInfo.getResponseEtag();
-            if (etag != null) {
-                System.out.println("ETag: " + etag);
-            }
-
             int contentLength = httpInfo.getContentLength();
             System.out.println(HttpInfo.CONTENT_LENGTH + ": " + contentLength);
 
@@ -142,7 +142,6 @@ public class GetObjectParams extends ObjectParams {
                 System.out.println("version-id: " + versionId);
             }
         } else {
-            System.out.println("Status: " + httpInfo.getResponseStatus());
             String responseBody = httpInfo.getResponseBody();
             if (responseBody != null) {
                 System.out.println(responseBody);
