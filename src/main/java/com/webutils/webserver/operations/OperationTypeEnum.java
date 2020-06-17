@@ -90,6 +90,7 @@ public enum OperationTypeEnum {
     CHUNK_WRITE_TEST_COMPLETE(601),
 
     BUILD_REQUEST_HEADER(659),
+    BUILD_HEADERS_AND_DATA(660),
     SEND_SERVICE_REQUEST(661),
     SEND_SERVICE_REQUEST_PLUS_DATA(662),
     SERVICE_RESPONSE_HANDLER(663),
@@ -105,6 +106,8 @@ public enum OperationTypeEnum {
     CLIENT_TEST_CREATE_BUCKET_SIMPLE(750),
     CLIENT_TEST_GET_OBJECT_SIMPLE(751),
     CLIENT_TEST_PUT_OBJECT_SIMPLE(752),
+
+    PUT_OBJECT_MD5_PARAMS(760),
 
     /*
     ** The following are all Operations that are used by the Client interface that is used to send commands to

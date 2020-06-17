@@ -112,8 +112,11 @@ public class Md5ResultHandler {
                 LOG.warn("Content-MD5 [" + requestContext.getRequestId() + "] did not match computed. expected: " +
                         md5FromHeader + " computed: " + computedMd5Digest);
 
-                String failureMessage = "\"Bad Md5 Compare\",\n  \"Content-MD5\": \"" + md5FromHeader +
-                        "\",\n  \"Computed-MD5\": \"" + computedMd5Digest + "\"";
+                String failureMessage = "{\r\n  \"code\": " + HttpStatus.UNPROCESSABLE_ENTITY_422 +
+                        "\r\n  \"message\": \"Failed Md5 Compare\"" +
+                        "\r\n  \"Content-MD5\": \"" + md5FromHeader + "\"" +
+                        "\r\n  \"Computed-MD5\": \"" + computedMd5Digest + "\"" +
+                        "\r\n}";
 
                 httpInfo.setParseFailureCode(HttpStatus.UNPROCESSABLE_ENTITY_422, failureMessage);
                 return;
@@ -121,7 +124,10 @@ public class Md5ResultHandler {
         } else {
             LOG.warn("Content-MD5 [" + requestContext.getRequestId() + "] passed in was invalid. computed: " +
                     computedMd5Digest);
-            String failureMessage = "\"Invalid or missing Content-Md5\",\n  \"Computed-MD5\": \"" + computedMd5Digest + "\"";
+            String failureMessage = "{\r\n  \"code\": " + HttpStatus.BAD_REQUEST_400 +
+                    "\r\n  \"message\": \"Invalid or missing Content-Md5\"" +
+                    "\r\n  \"Computed-MD5\": \"" + computedMd5Digest + "\"" +
+                    "\r\n}";
 
             httpInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
             return;

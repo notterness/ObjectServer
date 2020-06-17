@@ -8,7 +8,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-public class DeleteChunksResponseParser extends ContentParser{
+public class DeleteChunksResponseParser extends ContentParser {
 
     private static final Logger LOG = LoggerFactory.getLogger(DeleteChunksResponseParser.class);
 

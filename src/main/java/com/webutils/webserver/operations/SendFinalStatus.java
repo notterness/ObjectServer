@@ -63,7 +63,7 @@ public class SendFinalStatus implements Operation {
 
         this.clientWriteBufferMgr = this.requestContext.getClientWriteBufferManager();
 
-        this.resultBuilder = new BuildHttpResult(requestContext.getHttpInfo());
+        this.resultBuilder = new BuildHttpResult(requestContext.getHttpInfo(), requestContext.getRequestId());
 
         /*
          ** This starts out not being on any queue

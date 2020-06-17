@@ -64,27 +64,12 @@ public class AllocateChunksGetContent extends ContentParser {
 
     /*
      ** Debug method to display the information that has been stored in the various maps from the information in the
-     **   Create Bucket POST operation.
+     **   Allocate Chunks GET operation.
      */
     public void dumpMaps() {
-        LOG.info("bucketParams");
+        LOG.info("params");
         for (Map.Entry<String, String> entry : params.entrySet()) {
             LOG.info("    " + entry.getKey() + " : " + entry.getValue());
-        }
-
-        LOG.info("freeFormTags");
-        for (Map.Entry<String, String> entry : freeformTags.entrySet()) {
-            LOG.info("    " + entry.getKey() + " : " + entry.getValue());
-        }
-
-        LOG.info("definedTags");
-        for (Map.Entry<String, Map<String, String>> entry : definedTags.entrySet()) {
-            LOG.info("    sub-category - " + entry.getKey());
-
-            Map<String, String> subCategory = entry.getValue();
-            for (Map.Entry<String, String> subCategoryEntry : subCategory.entrySet()) {
-                LOG.info("        " + subCategoryEntry.getKey() + " : " + subCategoryEntry.getValue());
-            }
         }
     }
 

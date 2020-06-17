@@ -48,9 +48,6 @@ public class ObjectTableMgr extends ObjectStorageDb {
 
     private final static String GET_OPC_CLIENT_ID = "SELECT opcClientRequestId FROM object WHERE objectId = ";
 
-    private final static String SUCCESS_HEADER_4 = "ETag: ";
-    private final static String SUCCESS_HEADER_5 = "last-modified: ";
-
     private final static String RETRIEVE_OBJECT_QUERY = "SELECT * FROM object WHERE objectId = ";
 
     private final static String DELETE_OBJECT_USING_ID = "DELETE FROM object WHERE objectId = ";
@@ -839,13 +836,13 @@ public class ObjectTableMgr extends ObjectStorageDb {
             successHeader = HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientId + "\n" +
                     HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
                     HttpResponseInfo.OPC_CONTENT_MD5 + ": " + contentMD5 + "\n" +
-                    SUCCESS_HEADER_4 + objectUID + "\n" +
-                    SUCCESS_HEADER_5 + createTime + "\n";
+                    HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + objectUID + "\n" +
+                    HttpResponseInfo.RESPONSE_LAST_MODIFIED + ": " + createTime + "\n";
         } else {
             successHeader = HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
                     HttpResponseInfo.OPC_CONTENT_MD5 + ": " + contentMD5 + "\n" +
-                    SUCCESS_HEADER_4 + objectUID + "\n" +
-                    SUCCESS_HEADER_5 + createTime + "\n";
+                    HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + objectUID + "\n" +
+                    HttpResponseInfo.RESPONSE_LAST_MODIFIED + ": " + createTime + "\n";
         }
 
         return successHeader;

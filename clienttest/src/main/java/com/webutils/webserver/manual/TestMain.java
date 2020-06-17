@@ -337,9 +337,13 @@ public class TestMain {
                 accessToken, threadCount);
         postBucket.execute();
 
-        ClientTest checkMd5 = new ClientTest_CheckMd5("CheckMd5", testClient, serverIpAddr, OBJECT_SERVER_TCP_PORT,
+        PutObjectValidMd5 checkMd5 = new PutObjectValidMd5(namespace, bucketName, serverIpAddr, OBJECT_SERVER_TCP_PORT,
                 accessToken, threadCount);
         checkMd5.execute();
+
+        PutObjectBadMd5 badMd5 = new PutObjectBadMd5(namespace, bucketName, serverIpAddr, OBJECT_SERVER_TCP_PORT,
+                accessToken, threadCount);
+        badMd5.execute();
 
         waitForTestsToComplete(threadCount);
 

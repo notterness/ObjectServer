@@ -14,7 +14,7 @@ public class HttpResponseInfo extends HttpInfo {
     private static final Logger LOG = LoggerFactory.getLogger(HttpResponseInfo.class);
 
     public static final String OPC_CONTENT_MD5 = "opc-content-md5";
-    private static final String RESPONSE_HEADER_ETAG = "etag";
+    public static final String RESPONSE_HEADER_ETAG = "etag";
     public static final String RESPONSE_LAST_MODIFIED = "last-modified";
     public static final String RESPONSE_VERSION_ID = "version-id";
 
