@@ -33,9 +33,9 @@ public class ObjectStorageDb {
     protected static final String kubeJDBCConnect = "jdbc:mysql://host.docker.internal/?serverTimeZone=US/Mountain";
     protected static final String execJDBCConnect = "jdbc:mysql://localhost/?serverTimezone=US/Mountain";
 
-    protected static final String objectStorageDbName = "objectStorageDb";
-    protected static final String objectStorageUser = "objectstorageuser";
-    protected static final String objectStoragePassword = "rwt25nX1";
+    protected static final String OBJECT_STORAGE_DB_NAME = "ObjectStorageDb";
+    protected static final String OBJECT_STORAGE_USER = "objectstorageuser";
+    protected static final String OBJECT_STORAGE_PASSWORD = "rwt25nX1";
 
 
     /*
@@ -76,7 +76,7 @@ public class ObjectStorageDb {
         }
 
         try {
-            conn = DriverManager.getConnection(jdbcConnect, objectStorageUser, objectStoragePassword);
+            conn = DriverManager.getConnection(jdbcConnect, OBJECT_STORAGE_USER, OBJECT_STORAGE_PASSWORD);
         } catch (SQLException ex) {
             // handle any errors
             System.out.println("JDBC connect: " + jdbcConnect);

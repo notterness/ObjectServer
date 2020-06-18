@@ -52,7 +52,7 @@ public class ClientPutObject implements Operation {
     /*
      ** This is to make the execute() function more manageable
      */
-    enum ExecutionState {
+    private enum ExecutionState {
         GET_OBJECT_FILE_MD5,
         WAIT_FOR_FILE_MD5_DIGEST,
         SETUP_OBJECT_PUT_OPS,

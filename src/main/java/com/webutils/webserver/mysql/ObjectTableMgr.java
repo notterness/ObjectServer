@@ -60,6 +60,8 @@ public class ObjectTableMgr extends ObjectStorageDb {
 
     private final static String GET_NUMBER_OF_OBJECTS = "SELECT COUNT(*) FROM object WHERE objectName = ? AND bucketId = ?";
 
+    private final static String GET_NUMBER_OF_OBJECTS_IN_BUCKET = "SELECT COUNT(*) FROM object WHERE bucketId = ?";
+
     /*
      ** The opcRequestId is used to track the request through the system. It is uniquely generated for each
      **   request connection.
@@ -743,6 +745,10 @@ public class ObjectTableMgr extends ObjectStorageDb {
         }
     }
 
+    /*
+    ** This returns the number of Objects within a Bucket that have a specific name. Since an Object can have multiple
+    **   versions, it is possible to have multiple Objects with the same name within a Bucket.
+     */
     private int getObjectCount(final String objectName, final int bucketId) {
 
         int objectCount = 0;
@@ -771,17 +777,78 @@ public class ObjectTableMgr extends ObjectStorageDb {
             } finally {
                 if (rs != null) {
                     try {
-                        int count = 0;
-                        while (rs.next()) {
+                        if (rs.next()) {
                             /*
                              ** The rs.getInt(1) is the objectId
                              */
                             objectCount = rs.getInt(1);
-                            count++;
                         }
+                    } catch (SQLException sqlEx) {
+                        System.out.println("getObjectCount() SQL conn rs.next() SQLException: " + sqlEx.getMessage());
+                    }
 
-                        if (count != 1) {
-                            LOG.warn("getObjectCount() too many responses count: " + count);
+                    try {
+                        rs.close();
+                    } catch (SQLException sqlEx) {
+                        System.out.println("getObjectCount() SQL conn rs.close() SQLException: " + sqlEx.getMessage());
+                    }
+                }
+
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("getObjectCount() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQLException: " + sqlEx.getMessage());
+                    }
+                }
+            }
+
+            /*
+             ** Close out this connection as it was only used to create the database tables.
+             */
+            closeObjectStorageDbConn(conn);
+        }
+
+        return objectCount;
+    }
+
+    /*
+     ** This returns the number of Objects within a Bucket. The primary use case for this is to check that a Bucket
+     **   is empty prior to allowing it to be deleted.
+     */
+    public int getObjectCount(final int bucketId) {
+
+        int objectCount = 0;
+
+        Connection conn = getObjectStorageDbConn();
+
+        if (conn != null) {
+            PreparedStatement stmt = null;
+            ResultSet rs = null;
+
+            try {
+                /*
+                 ** Fields for the prepared statement are:
+                 **   1 - objectName (String)
+                 **   2 - bucketUID  (String)
+                 */
+                stmt = conn.prepareStatement(GET_NUMBER_OF_OBJECTS_IN_BUCKET);
+                stmt.setInt(1, bucketId);
+                rs = stmt.executeQuery();
+
+            } catch (SQLException sqlEx) {
+                LOG.error("getObjectCount() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                LOG.error("Bad SQL command: " + GET_HIGHEST_VERSION_OBJECT);
+                System.out.println("SQLException: " + sqlEx.getMessage());
+            } finally {
+                if (rs != null) {
+                    try {
+                        if (rs.next()) {
+                            /*
+                             ** The rs.getInt(1) is the objectId
+                             */
+                            objectCount = rs.getInt(1);
                         }
                     } catch (SQLException sqlEx) {
                         System.out.println("getObjectCount() SQL conn rs.next() SQLException: " + sqlEx.getMessage());

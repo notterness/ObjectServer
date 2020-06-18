@@ -4,10 +4,12 @@ import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.CreateBucketPostContent;
 import com.webutils.webserver.mysql.BucketTableMgr;
 import com.webutils.webserver.mysql.NamespaceTableMgr;
+import com.webutils.webserver.mysql.UserTableMgr;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
+import io.fabric8.openshift.api.model.User;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +32,21 @@ public class CreateBucket implements Operation {
     /*
     ** Used to insure that the database operations to create the bucket do not get run multiple times.
      */
-    private boolean bucketCreated;
+    private enum ExecutionState {
+        GET_CREATED_BY,
+        GET_NAMESPACE,
+        CREATE_BUCKET,
+        CALLBACK_OPS,
+        EMPTY_STATE
+    }
+
+    private ExecutionState currState;
+
+    /*
+    ** Temporary variable
+     */
+    private String namespaceUID;
+    private String createdBy;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -39,12 +55,13 @@ public class CreateBucket implements Operation {
      */
     private boolean onExecutionQueue;
 
-    public CreateBucket(final RequestContext requestContext, final CreateBucketPostContent createBucketPostContent, final Operation completeCb) {
+    public CreateBucket(final RequestContext requestContext, final CreateBucketPostContent createBucketPostContent,
+                        final Operation completeCb) {
         this.requestContext = requestContext;
         this.createBucketPostContent = createBucketPostContent;
         this.completeCallback = completeCb;
 
-        bucketCreated = false;
+        this.currState = ExecutionState.GET_CREATED_BY;
 
         /*
          ** This starts out not being on any queue
@@ -74,33 +91,74 @@ public class CreateBucket implements Operation {
     /*
      */
     public void execute() {
-        if (!bucketCreated) {
-            WebServerFlavor flavor = requestContext.getWebServerFlavor();
+        WebServerFlavor flavor = requestContext.getWebServerFlavor();
 
-            NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
-            String namespace = createBucketPostContent.getNamespace();
+        switch (currState) {
+            case GET_CREATED_BY:
+                UserTableMgr userMgr = new UserTableMgr(flavor);
 
-            String namespaceUID = namespaceMgr.getNamespaceUID(namespace, requestContext.getTenancyId());
-            if (namespaceUID != null) {
+                createdBy = userMgr.getCreatedByFromAccessToken(requestContext.getHttpInfo().getAccessToken());
+                if (createdBy == null) {
+                    LOG.warn("CreateBucket failed - unable to obtain createdBy");
+                    String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.BAD_REQUEST_400 + "\"" +
+                            "\r\n  \"message\": \"Unknown user from accessToken\"" +
+                            "\r\n}";
+                    requestContext.getHttpInfo().setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
+
+                    currState = ExecutionState.CALLBACK_OPS;
+                    event();
+                    break;
+                }
+                currState = ExecutionState.GET_NAMESPACE;
+                /*
+                ** Fall through
+                 */
+
+            case GET_NAMESPACE:
+                NamespaceTableMgr namespaceMgr = new NamespaceTableMgr(flavor);
+                String namespace = createBucketPostContent.getNamespace();
+
+                namespaceUID = namespaceMgr.getNamespaceUID(namespace, requestContext.getTenancyId());
+                if (namespaceUID == null) {
+                    LOG.warn("CreateBucket failed - unknown namespace: " + namespace);
+                    String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.BAD_REQUEST_400 + "\"" +
+                            "\r\n  \"message\": \"Unknown namespace - " + namespace + "\"" +
+                            "\r\n}";
+                    requestContext.getHttpInfo().setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
+
+                    currState = ExecutionState.CALLBACK_OPS;
+                    event();
+                    break;
+                }
+
+                currState = ExecutionState.CREATE_BUCKET;
+                /*
+                ** Fall through
+                 */
+
+            case CREATE_BUCKET:
                 BucketTableMgr bucketMgr = new BucketTableMgr(flavor, requestContext.getRequestId(), requestContext.getHttpInfo());
-                int status = bucketMgr.createBucketEntry(createBucketPostContent, namespaceUID);
+                int status = bucketMgr.createBucketEntry(createBucketPostContent, namespaceUID, createdBy);
                 if (status != HttpStatus.OK_200) {
                     /*
-                     **
+                     ** The failure message to be returned is populated in the createBucketEntry() method as it is
+                     **   dependent upon the reason for the failure and not a single generic failure message.
                      */
                     LOG.warn("CreateBucket failed status: " + status);
                 }
-            } else {
-                LOG.warn("CreateBucket failed - unknown namespace: " + namespace);
-                String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.BAD_REQUEST_400 + "\"" +
-                        "\r\n  \"message\": \"Unknown namespace - " + namespace + "\"" +
-                        "\r\n}";
-                requestContext.getHttpInfo().setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
-            }
 
-            completeCallback.complete();
+                currState = ExecutionState.CALLBACK_OPS;
+                /*
+                ** Fall through
+                 */
 
-            bucketCreated = true;
+            case CALLBACK_OPS:
+                completeCallback.complete();
+                currState = ExecutionState.EMPTY_STATE;
+                break;
+
+            case EMPTY_STATE:
+                break;
         }
     }
 

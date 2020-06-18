@@ -5,8 +5,6 @@ import com.webutils.webserver.http.CreateBucketPostContent;
 import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpResponseInfo;
 import org.eclipse.jetty.http.HttpStatus;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -14,16 +12,14 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 
-public class CreateBucketParams extends ObjectParams {
-
-    private static final Logger LOG = LoggerFactory.getLogger(CreateBucketParams.class);
+public class PostBucketParams extends ObjectParams {
 
     private String sha256Digest;
 
     private final String tenancyName;
     private final String accessToken;
 
-    public CreateBucketParams(final String tenancy, final String namespace, final String bucket, final String accessToken) {
+    public PostBucketParams(final String tenancy, final String namespace, final String bucket, final String accessToken) {
 
         super(namespace, bucket, null, null);
 
@@ -33,16 +29,17 @@ public class CreateBucketParams extends ObjectParams {
     }
 
     /*
-     ** This builds the PostBucket request headers. The following headers and if they are required:
+     ** This builds the PostBucket method headers. The following headers and if they are required:
      **
-     **   namespaceName (required) "/n/" - This is the namespace that holds the bucket where the object will be kept in.
-     **   bucketName (required) "/b/" - This is the bucket that will hold the object.
+     **   namespaceName (required) "/n/" - This is the namespace that holds the Bucket where the Object(s) will be kept.
+     **   bucketName (required) "/b/" - This has not content, just the "/b/" is provided for the URI.
+     **
      **   Host (required) - Who is sending the request.
      **   opc-client-request-id (not required) - A unique identifier for this request provided by the client to allow
      **     then to track their requests.
      **   x-content-sha256 (required) - The computed Sha256 Digest for the content related to the bucket.
      **
-     **   Content-Length (required) - The size in bytes of the file being uploaded
+     **   Content-Length (required) - The size in bytes of the bucket content information.
      **
      ** NOTE: This will be noted in multiple places. The hierarchy of how an object is saved is the following:
      **    Tenancy - This acts as the highest construct and provides an organization of all resources owned by a

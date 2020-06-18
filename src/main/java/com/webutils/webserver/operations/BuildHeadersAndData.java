@@ -29,7 +29,7 @@ public class BuildHeadersAndData implements Operation {
     /*
      ** This is to make the execute() function more manageable
      */
-    enum ExecutionState {
+    private enum ExecutionState {
         BUILD_REQUEST_HEADER,
         SEND_DATA,
         EMPTY_STATE

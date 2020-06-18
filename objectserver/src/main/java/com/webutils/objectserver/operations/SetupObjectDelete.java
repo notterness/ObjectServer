@@ -54,8 +54,8 @@ public class SetupObjectDelete implements Operation {
     private boolean onExecutionQueue;
 
     /*
-     ** This is used to setup the initial Operation dependencies required to handle the Storage Server DELETE
-     **   request. This is how are deleting from the Object Server and their chunks on the Storage Server are
+     ** This is used to setup the initial Operation dependencies required to handle the Object DELETE
+     **   request. This is how Objects are deleted from the Object Server and their chunks on the Storage Server are
      **   freed up.
      */
     public SetupObjectDelete(final ObjectServerRequestContext requestContext, final MemoryManager memoryManager,

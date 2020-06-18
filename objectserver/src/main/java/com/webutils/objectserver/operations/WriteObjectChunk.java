@@ -52,7 +52,7 @@ public class WriteObjectChunk implements Operation {
     private final MemoryManager memoryManager;
     private final BufferManagerPointer storageServerWritePointer;
 
-    enum ExecutionState {
+    private enum ExecutionState {
         REQUEST_STORAGE_CHUNKS,
         STORAGE_CHUNKS_ALLOCATED,
         STORAGE_CHUNK_INFO_SAVED,

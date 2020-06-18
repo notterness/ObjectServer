@@ -58,7 +58,7 @@ public class SetupChunkRead implements Operation {
     /*
      ** This is to make the execute() function more manageable
      */
-    enum ExecutionState {
+    private enum ExecutionState {
         SETUP_CHUNK_READ_OPS,
         WAITING_FOR_CONN_COMP,
         WAITING_FOR_RESPONSE_HEADER,

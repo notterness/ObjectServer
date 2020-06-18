@@ -5,7 +5,6 @@ import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.memory.MemoryManager;
-import com.webutils.webserver.mysql.ObjectInfo;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
@@ -15,21 +14,14 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
-public class SendObjectDeleteResponse implements Operation {
+public class SendBucketDeleteResponse implements Operation {
 
-
-    private static final Logger LOG = LoggerFactory.getLogger(SendObjectDeleteResponse.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SendBucketDeleteResponse.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    private final OperationTypeEnum operationType = OperationTypeEnum.SEND_OBJECT_DELETE_RESPONSE;
-
-    /*
-     ** Strings used to build the success response for the chunk write
-     */
-    private final static String SUCCESS_HEADER_5 = "last-modified: ";
-
+    private final OperationTypeEnum operationType = OperationTypeEnum.SEND_BUCKET_DELETE_RESPONSE;
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -49,8 +41,6 @@ public class SendObjectDeleteResponse implements Operation {
     private BufferManager clientWriteBufferMgr;
     private BufferManagerPointer writeStatusBufferPtr;
 
-    private final ObjectInfo objectInfo;
-
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
      **   if there is a choice between being on the timed wait queue (onDelayedQueue) or the normal
@@ -60,13 +50,10 @@ public class SendObjectDeleteResponse implements Operation {
 
     private boolean httpResponseSent;
 
-
-    public SendObjectDeleteResponse(final RequestContext requestContext, final MemoryManager memoryManager,
-                                 final ObjectInfo objectInfo) {
+    public SendBucketDeleteResponse(final RequestContext requestContext, final MemoryManager memoryManager) {
 
         this.requestContext = requestContext;
         this.memoryManager = memoryManager;
-        this.objectInfo = objectInfo;
 
         this.clientWriteBufferMgr = this.requestContext.getClientWriteBufferManager();
 
@@ -120,13 +107,13 @@ public class SendObjectDeleteResponse implements Operation {
 
                 if (requestContext.getHttpParseStatus() == HttpStatus.OK_200) {
                     /*
-                    ** This needs to return NO_CONTENT_204 for a successful delete instead of OK_200 for a successful delete
+                     ** This needs to return NO_CONTENT_204 for a successful delete instead of OK_200 for a successful delete
                      */
-                    LOG.info("SendObjectDeleteResponse[" + requestContext.getRequestId() + "] resultCode: NO_CONTENT_204");
+                    LOG.info("SendBucketDeleteResponse[" + requestContext.getRequestId() + "] resultCode: NO_CONTENT_204");
 
                     buildSuccessHeader(respBuffer);
                 } else {
-                    LOG.info("SendObjectDeleteResponse[" + requestContext.getRequestId() + "] resultCode: " +
+                    LOG.info("SendBucketDeleteResponse[" + requestContext.getRequestId() + "] resultCode: " +
                             requestContext.getHttpParseStatus());
 
                     buildFailureHeaders(respBuffer);
@@ -142,7 +129,7 @@ public class SendObjectDeleteResponse implements Operation {
                 /*
                  ** If we are out of memory to allocate a response, might as well close out the connection and give up.
                  */
-                LOG.info("SendObjectDeleteResponse[" + requestContext.getRequestId() + "] unable to allocate response buffer");
+                LOG.info("SendBucketDeleteResponse[" + requestContext.getRequestId() + "] unable to allocate response buffer");
 
                 /*
                  ** Go right to the CloseOutRequest operation. That will close out the connection.
@@ -154,7 +141,7 @@ public class SendObjectDeleteResponse implements Operation {
 
             requestContext.setAllClientBuffersFilled();
         } else {
-            LOG.warn("SendObjectDeleteResponse[" + requestContext.getRequestId() + "] execute() after status sent");
+            LOG.warn("SendBucketDeleteResponse[" + requestContext.getRequestId() + "] execute() after status sent");
         }
     }
 
@@ -168,7 +155,7 @@ public class SendObjectDeleteResponse implements Operation {
          */
         int bufferCount = writeStatusBufferPtr.getCurrIndex();
 
-        LOG.info("SendObjectDeleteResponse[" + requestContext.getRequestId() + "] complete() bufferCount: " + bufferCount);
+        LOG.info("SendBucketDeleteResponse[" + requestContext.getRequestId() + "] complete() bufferCount: " + bufferCount);
 
         clientWriteBufferMgr.reset(writeStatusBufferPtr);
         for (int i = 0; i < bufferCount; i++) {
@@ -176,7 +163,7 @@ public class SendObjectDeleteResponse implements Operation {
             if (buffer != null) {
                 memoryManager.poolMemFree(buffer, clientWriteBufferMgr);
             } else {
-                LOG.info("SendObjectDeleteResponse[" + requestContext.getRequestId() + "] missing buffer i: " + i);
+                LOG.info("SendBucketDeleteResponse[" + requestContext.getRequestId() + "] missing buffer i: " + i);
             }
         }
 
@@ -202,19 +189,19 @@ public class SendObjectDeleteResponse implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("SendObjectDeleteResponse[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("SendBucketDeleteResponse[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("SendObjectDeleteResponse[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SendBucketDeleteResponse[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("SendObjectDeleteResponse[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("SendBucketDeleteResponse[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("SendObjectDeleteResponse[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SendBucketDeleteResponse[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -229,7 +216,7 @@ public class SendObjectDeleteResponse implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("SendObjectDeleteResponse[" + requestContext.getRequestId() +
+        LOG.warn("SendBucketDeleteResponse[" + requestContext.getRequestId() +
                 "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
@@ -239,30 +226,20 @@ public class SendObjectDeleteResponse implements Operation {
      */
     public void dumpCreatedOperations(final int level) {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
-        LOG.info("      No BufferManagerPointers");
         LOG.info("");
     }
 
     /*
-     ** This builds the NO_CONTENT_204 response headers for the DELETE Object command. This returns the following
-     **   headers:
+     ** This builds the NO_CONTENT_204 response headers for the DELETE Bucket command. This returns the following headers:
      **
      **   opc-client-request-id - If the client passed one in, otherwise it it will not be returned
      **   opc-request-id
-     **   Last-Modified
-     **   Version-Id
      */
     private void buildSuccessHeader(final ByteBuffer respBuffer) {
         String successHeader;
 
         String opcClientRequestId = requestContext.getHttpInfo().getOpcClientRequestId();
         int opcRequestId = requestContext.getRequestId();
-
-        String lastModified = objectInfo.getLastModified();
-        String versionId = objectInfo.getVersionId();
-
-        LOG.info("buildSuccessHeader() versionId: " + versionId);
-
 
         if (opcClientRequestId != null) {
             successHeader = "HTTP/1.1 204 NO_CONTENT" +
@@ -276,15 +253,13 @@ public class SendObjectDeleteResponse implements Operation {
         }
 
         successHeader += HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
-                SUCCESS_HEADER_5 + lastModified + "\n" +
-                HttpInfo.VERSION_ID + ": " + versionId + "\n" +
                 HttpInfo.CONTENT_LENGTH + ": " + 0 + "\n\n";
 
         HttpInfo.str_to_bb(respBuffer, successHeader);
     }
 
     /*
-     ** This builds the error response headers for the DELETE Object command. This returns the following headers:
+     ** This builds the error response headers for the DELETE Bucket command. This returns the following headers:
      **
      **   opc-client-request-id - If the client passed one in, otherwise it it will not be returned
      */

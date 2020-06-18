@@ -204,7 +204,7 @@ public class ObjectServerRequestContext extends RequestContext {
         SetupObjectPut putHandler = new SetupObjectPut(this, memoryManager, metering, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, putHandler);
 
-        SetupCreateBucketPost postHandler = new SetupCreateBucketPost(this, metering, determineRequest);
+        SetupBucketPost postHandler = new SetupBucketPost(this, metering, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.POST_METHOD, postHandler);
 
         SetupObjectGet getHandler = new SetupObjectGet(this, memoryManager, chunkMemPool, determineRequest);
@@ -215,6 +215,9 @@ public class ObjectServerRequestContext extends RequestContext {
 
         SetupObjectList listHandler = new SetupObjectList(this, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.LIST_METHOD, listHandler);
+
+        SetupBucketDelete bucketDelete = new SetupBucketDelete(this, memoryManager, determineRequest);
+        supportedHttpRequests.put(HttpMethodEnum.DELETE_BUCKET, bucketDelete);
 
         /*
          ** Setup the specific part for parsing the buffers as an HTTP Request.

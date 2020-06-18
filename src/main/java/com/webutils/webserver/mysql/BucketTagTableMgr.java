@@ -16,7 +16,7 @@ public class BucketTagTableMgr  extends ObjectStorageDb {
 
     private static final Logger LOG = LoggerFactory.getLogger(BucketTagTableMgr.class);
 
-    private final static String CREATE_TAG_1 = "INSERT INTO bucketTags VALUES ( '";
+    private final static String CREATE_TAG_1 = "INSERT INTO BucketTags VALUES ( '";
     private final static String CREATE_TAG_2 = "', '";
     private final static String CREATE_TAG_2_1 = "', NULL, '";
     private final static String CREATE_TAG_3 = "', '";
@@ -24,6 +24,7 @@ public class BucketTagTableMgr  extends ObjectStorageDb {
     private final static String CREATE_TAG_5 = "', ";
     private final static String CREATE_TAG_6 = " )";
 
+    private final static String DELETE_TAGS = "DELETE FROM BucketTags WHERE bucketId = ";
 
     public BucketTagTableMgr(final WebServerFlavor flavor) {
         super(flavor);
@@ -119,5 +120,14 @@ public class BucketTagTableMgr  extends ObjectStorageDb {
         }
 
         return success;
+    }
+
+    /*
+    ** This is used to delete all the tags that are associated with a Bucket
+     */
+    public void deleteBucketTags(final int bucketId) {
+        String deleteTagsStr = DELETE_TAGS + bucketId;
+
+        executeSqlStatement(deleteTagsStr);
     }
 }

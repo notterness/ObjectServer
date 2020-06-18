@@ -41,7 +41,7 @@ public class ReadObjectChunks implements Operation {
     /*
     ** This is to make the execute() function more manageable
      */
-    enum ExecutionState {
+    private enum ExecutionState {
         DETERMINE_STORAGE_SERVERS,
         SETUP_CHUNK_READ,
         WAIT_FOR_ALL_CHUNK_READS,

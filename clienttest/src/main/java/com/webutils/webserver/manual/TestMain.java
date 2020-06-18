@@ -400,15 +400,26 @@ public class TestMain {
 */
 
         /*
-        ** Delete all of the objects created as part of this test suite
+        ** Delete all of the objects created as part of this test suite. Since there are two objects contained within
+        **   the "CreateBucket_Simple" Bucket, by trying to delete the Bucket before both objects are deleted will
+        **   return an error.
+        ** After the second Object is deleted, then the Delete Bucket will succeed.
          */
         DeleteObjectSimple deleteObject1 = new DeleteObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT,
                 "TestObject_1", accessToken, threadCount);
         deleteObject1.execute();
 
+        DeleteBucketSimple deleteBucket1 = new DeleteBucketSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT,
+                accessToken, threadCount);
+        deleteBucket1.execute();
+
         DeleteObjectSimple deleteObject2 = new DeleteObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT,
                 "TestObject-1234-abcd", accessToken, threadCount);
         deleteObject2.execute();
+
+        DeleteBucketSimple deleteBucket2 = new DeleteBucketSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT,
+                accessToken, threadCount);
+        deleteBucket2.execute();
 
 
         /*

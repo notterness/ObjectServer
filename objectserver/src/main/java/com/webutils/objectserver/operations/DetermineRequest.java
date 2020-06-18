@@ -27,7 +27,7 @@ public class DetermineRequest implements Operation {
     /*
      ** This is to make the execute() function more manageable
      */
-    enum ExecutionState {
+    private enum ExecutionState {
         VALIDATE,
         OBTAIN_TENANCY,
         EXECUTE_METHOD,
@@ -180,22 +180,44 @@ public class DetermineRequest implements Operation {
                 LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] execute(2) " + method.toString());
 
                 /*
-                ** Call sendFinalStatus() for all error cases. The ObjectGet method handles sending out the good status
-                **   prior to it sending the object data, so if there is not an error, sendFinalStatus() must not be
-                **   called here.
+                ** Call sendFinalStatus() for all error cases.
+                ** The ObjectGet method handles sending out the good status prior to it sending the object data, so if
+                **   there is not an error, sendFinalStatus() must not be called here.
+                ** The DeleteObject and DeleteBucket methods return NO_CONTENT_204 if they are successful and they both
+                **   handle returning the good status.
                  */
-                if ((httpRequestInfo.getParseFailureCode() != HttpStatus.OK_200) || (method != HttpMethodEnum.GET_METHOD)) {
-                    sendFinalStatus.event();
-                } else {
-                    Operation closeOutRequest = requestContext.getOperation(OperationTypeEnum.CLOSE_OUT_REQUEST);
-                    if (closeOutRequest != null) {
-                        /*
-                         ** This will finish up this request
-                         */
-                        closeOutRequest.event();
-                    } else {
-                        LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] closeOutRequest null");
-                    }
+                Operation closeOutRequest = requestContext.getOperation(OperationTypeEnum.CLOSE_OUT_REQUEST);
+
+                switch (method) {
+                    case DELETE_METHOD:
+                    case DELETE_BUCKET:
+                        if (closeOutRequest != null) {
+                            /*
+                             ** This will finish up this request
+                             */
+                            closeOutRequest.event();
+                        } else {
+                            LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] closeOutRequest null");
+                        }
+                        break;
+
+                    case GET_METHOD:
+                        if (httpRequestInfo.getParseFailureCode() != HttpStatus.OK_200) {
+                            sendFinalStatus.event();
+                        } else if (closeOutRequest != null) {
+                            /*
+                             ** This will finish up this request
+                             */
+                            closeOutRequest.event();
+                        } else {
+                            LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] closeOutRequest null");
+                        }
+                        break;
+
+                    default:
+                        sendFinalStatus.event();
+                        break;
+
                 }
 
                 currState = ExecutionState.EMPTY_STATE;

@@ -48,7 +48,7 @@ public class DeleteObjectInfo implements Operation {
     /*
      ** This is to make the execute() function more manageable
      */
-    enum ExecutionState {
+    private enum ExecutionState {
         GET_OBJECT_INFO,
         GET_CHUNKS,
         DELETE_CHUNKS,
@@ -120,7 +120,12 @@ public class DeleteObjectInfo implements Operation {
     }
 
     /*
-     ** This builds an in-memory representation of the information needed to access the data from an object.
+     ** This performs the following steps to delete an Object.
+     **   1) Determine if the Object to be deleted exists.
+     **   2) Find the Chunk Manager Service
+     **   3) Tell the Chunk Manager Service to delete the chunks that are used by the Object.
+     **   4) Delete the representation of the Object from the ObjectServerDb database.
+     **   5) Send status back to the client.
      */
     public void execute() {
         switch (currState) {
@@ -262,7 +267,7 @@ public class DeleteObjectInfo implements Operation {
             writeToClient.complete();
         }
 
-        Operation sendResponse = deleteObjectInfoOps.remove(OperationTypeEnum.SEND_OBJECT_GET_RESPONSE);
+        Operation sendResponse = deleteObjectInfoOps.remove(OperationTypeEnum.SEND_OBJECT_DELETE_RESPONSE);
         if (sendResponse != null) {
             sendResponse.complete();
         }
