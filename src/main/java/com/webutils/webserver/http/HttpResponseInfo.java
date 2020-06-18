@@ -17,6 +17,7 @@ public class HttpResponseInfo extends HttpInfo {
     public static final String RESPONSE_HEADER_ETAG = "etag";
     public static final String RESPONSE_LAST_MODIFIED = "last-modified";
     public static final String RESPONSE_VERSION_ID = "version-id";
+    public static final String RESPONSE_BUCKET_LOCATION = "Location";
 
     private static final String RESPONSE_ALLOWED_METHODS = "allow";
 

@@ -15,13 +15,13 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.*;
 
-public class SetupCreateBucketPost implements Operation {
-    private static final Logger LOG = LoggerFactory.getLogger(SetupCreateBucketPost.class);
+public class SetupBucketPost implements Operation {
+    private static final Logger LOG = LoggerFactory.getLogger(SetupBucketPost.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    private final OperationTypeEnum operationType = OperationTypeEnum.SETUP_CREATE_BUCKET_POST;
+    private final OperationTypeEnum operationType = OperationTypeEnum.SETUP_BUCKET_POST;
 
     private final ObjectServerRequestContext requestContext;
 
@@ -58,8 +58,8 @@ public class SetupCreateBucketPost implements Operation {
      **   method.
      ** The completeCb will call the DetermineRequest operation's event() method when the POST completes.
      */
-    public SetupCreateBucketPost(final ObjectServerRequestContext requestContext, final Operation metering,
-                                 final Operation completeCb) {
+    public SetupBucketPost(final ObjectServerRequestContext requestContext, final Operation metering,
+                           final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.metering = metering;
@@ -165,7 +165,7 @@ public class SetupCreateBucketPost implements Operation {
              **   parsing is complete and a second time when the ComputeSha256Digest has completed.
              */
             if (updator.getSha256DigestComplete() && requestContext.postMethodContentParsed()) {
-                LOG.info("SetupCreateBucketPost[" + requestContext.getRequestId() + "] Sha-256 and Parsing done");
+                LOG.info("SetupBucketPost[" + requestContext.getRequestId() + "] Sha-256 and Parsing done");
 
                 /*
                 ** Cleanup the operations
@@ -192,7 +192,7 @@ public class SetupCreateBucketPost implements Operation {
 
                 waitingOnOperations = false;
             } else {
-                LOG.info("SetupCreateBucketPost[" + requestContext.getRequestId() + "] not completed Sha-256 digestComplete: " +
+                LOG.info("SetupBucketPost[" + requestContext.getRequestId() + "] not completed Sha-256 digestComplete: " +
                         updator.getSha256DigestComplete() + " POST content parsed: " + requestContext.postMethodContentParsed());
             }
         } else {
@@ -220,7 +220,7 @@ public class SetupCreateBucketPost implements Operation {
 
         completeCallback.event();
 
-        LOG.info("SetupCreateBucketPost[" + requestContext.getRequestId() + "] completed");
+        LOG.info("SetupBucketPost[" + requestContext.getRequestId() + "] completed");
     }
 
     /*
@@ -239,19 +239,19 @@ public class SetupCreateBucketPost implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("SetupCreateBucketPost[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("SetupBucketPost[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("SetupCreateBucketPost[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SetupBucketPost[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("SetupCreateBucketPost[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("SetupBucketPost[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("SetupCreateBucketPost[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SetupBucketPost[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -266,7 +266,7 @@ public class SetupCreateBucketPost implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("SetupCreateBucketPost[" + requestContext.getRequestId() +
+        LOG.warn("SetupBucketPost[" + requestContext.getRequestId() +
                 "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }

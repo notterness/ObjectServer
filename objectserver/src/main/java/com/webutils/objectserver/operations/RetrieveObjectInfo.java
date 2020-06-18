@@ -46,7 +46,7 @@ public class RetrieveObjectInfo implements Operation {
     /*
      ** This is to make the execute() function more manageable
      */
-    enum ExecutionState {
+    private enum ExecutionState {
         READ_FROM_DATABASE,
         DATABASE_READ_ERROR,
         WAIT_FOR_RESPONSE_SEND,

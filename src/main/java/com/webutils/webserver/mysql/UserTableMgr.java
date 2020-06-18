@@ -27,6 +27,8 @@ public class UserTableMgr extends AccessControlDb {
 
     private final static String GET_USER_ID = "SELECT userId FROM TenancyUser WHERE userName = AES_ENCRYPT(?, ?) AND tenancyId = ?";
 
+    private final static String GET_USER_NAME_AND_ID = "SELECT userName, tenancyId FROM TenancyUser WHERE accessToken = UNHEX(?)";
+
     private int objectUniqueId;
 
     /*
@@ -249,7 +251,7 @@ public class UserTableMgr extends AccessControlDb {
 
             try {
                 /*
-                 ** The fields for the CREATE_USER are:
+                 ** The fields for the GET_ACCESS_TOKEN are:
                  **   1 - userName
                  **   2 - passphrase
                  **   3 - password
@@ -370,6 +372,69 @@ public class UserTableMgr extends AccessControlDb {
 
         return userId;
     }
+
+    public String getCreatedByFromAccessToken(final String accessToken) {
+        String createdBy = null;
+
+        if (accessToken != null) {
+            String userName = null;
+            int tenancyId = -1;
+
+            Connection conn = getAccessControlDbConn();
+
+            if (conn != null) {
+                PreparedStatement stmt = null;
+
+                try {
+                    /*
+                     ** The fields for the GET_TENANCY_FROM_KEY are:
+                     **   1 - accessToken
+                     */
+                    stmt = conn.prepareStatement(GET_USER_NAME_AND_ID);
+                    stmt.setString(1, accessToken);
+                    ResultSet rs = stmt.executeQuery();
+                    if (rs.next()) {
+                        userName = rs.getString(1);
+                        tenancyId = rs.getInt(2);
+                    }
+                    rs.close();
+                } catch (SQLException sqlEx) {
+                    LOG.error("getTenancyFromAccessToken() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                    System.out.println("SQLException: " + sqlEx.getMessage());
+                } finally {
+                    if (stmt != null) {
+                        try {
+                            stmt.close();
+                        } catch (SQLException sqlEx) {
+                            LOG.error("getTenancyFromAccessToken() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                            System.out.println("SQLException: " + sqlEx.getMessage());
+                        }
+                    }
+                }
+
+                closeAccessControlDbConn(conn);
+            }
+
+            /*
+             ** Now obtain the Tenancy name from the
+             */
+            if (userName != null) {
+                TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
+
+                String tenancyName = tenancyMgr.getTenancyName(tenancyId);
+                if (tenancyName != null) {
+                    createdBy = tenancyName + ".user." + userName;
+                }
+            } else {
+                LOG.warn("Unable to locate user from accessToken");
+            }
+        } else {
+            LOG.warn("accessToekn is null");
+        }
+
+        return createdBy;
+    }
+
 
     private int validateFields(final HttpRequestInfo httpInfo) {
 

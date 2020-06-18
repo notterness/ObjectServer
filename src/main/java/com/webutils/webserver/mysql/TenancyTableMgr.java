@@ -28,6 +28,7 @@ public class TenancyTableMgr extends AccessControlDb {
     private final static String GET_TENANCY_PASSPHRASE = "SELECT UNHEX(tenancyPassphrase) tenancyPassphrase FROM CustomerTenancy " +
             "WHERE tenancyId = ";
 
+    private final static String GET_TENANCY_NAME = "SELECT tenancyName FROM CustomerTenancy WHERE tenancyId = ";
 
     private int objectUniqueId;
 
@@ -205,4 +206,9 @@ public class TenancyTableMgr extends AccessControlDb {
         return getSingleStr(getTenancyPassphraseStr);
     }
 
+    public String getTenancyName(final int tenancyId) {
+        String getTenancyNameStr = GET_TENANCY_NAME + tenancyId;
+
+        return getSingleStr(getTenancyNameStr);
+    }
 }

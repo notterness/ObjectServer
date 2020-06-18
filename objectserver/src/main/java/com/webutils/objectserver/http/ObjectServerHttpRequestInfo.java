@@ -140,13 +140,11 @@ public class ObjectServerHttpRequestInfo extends HttpRequestInfo {
                     LOG.warn(failureMessage);
                     setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
                 } else if (objectName == null) {
-                    LOG.warn("DELETE Missing Critical Object Info [" + requestId + "] objectName is null");
-
-                    String failureMessage = "{\r\n  \"code\":" + HttpStatus.BAD_REQUEST_400 +
-                            "\r\n  \"message\": \"Missing required attributes - objectName is missing\" + " +
-                            "\r\n}";
-                    LOG.warn(failureMessage);
-                    setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
+                    /*
+                     ** When the "/o" is empty, then this is the DELETE Bucket method
+                     */
+                    LOG.info("Setting httpMethod to DELETE_BUCKET");
+                    httpMethod = HttpMethodEnum.DELETE_BUCKET;
                 }
                 break;
 

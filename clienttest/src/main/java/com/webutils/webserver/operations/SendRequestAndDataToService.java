@@ -45,7 +45,7 @@ public class SendRequestAndDataToService implements Operation {
     /*
      ** This is to make the execute() function more manageable
      */
-    enum ExecutionState {
+    private enum ExecutionState {
         SETUP_COMMAND_SEND_OPS,
         WAITING_FOR_CONN_COMP,
         SEND_CONTENT_DATA,

@@ -42,6 +42,7 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             " storageTier int NOT NULL," +
             " objectEventsEnabled INT NOT NULL," +
             " createTime TIMESTAMP NOT NULL," +
+            " createBy VARCHAR(255) NOT NULL," +
             " bucketUID BINARY(16) NOT NULL," +
             " namespaceId INT NOT NULL," +
             " FOREIGN KEY (namespaceId)" +
@@ -50,7 +51,7 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             " PRIMARY KEY (bucketId)" +
             ")";
 
-    private static final String createBucketTagTable = "CREATE TABLE IF NOT EXISTS bucketTags (" +
+    private static final String createBucketTagTable = "CREATE TABLE IF NOT EXISTS BucketTags (" +
             " tagName VARCHAR(64) NOT NULL," +
             " subTagName VARCHAR(64)," +
             " tagKey VARCHAR(255) NOT NULL," +
@@ -107,19 +108,19 @@ public class CreateObjectStorageTables extends ObjectStorageDb {
             " PRIMARY KEY (chunkId)" +
             ")";
 
-    private static final String createObjectStorageDatabase = "CREATE DATABASE " + objectStorageDbName;
-    private static final String DROP_OBJECT_STORAGE_DB = "DROP DATABASE " + objectStorageDbName;
+    private static final String createObjectStorageDatabase = "CREATE DATABASE " + OBJECT_STORAGE_DB_NAME;
+    private static final String DROP_OBJECT_STORAGE_DB = "DROP DATABASE " + OBJECT_STORAGE_DB_NAME;
 
     protected static final String userName = "root";
     protected static final String password = "ktm300exc";
 
-    private static final String createObjectStorageUser = "CREATE USER IF NOT EXISTS '" + objectStorageUser + "'@'localhost'" +
-            " IDENTIFIED BY '" + objectStoragePassword + "'";
+    private static final String createObjectStorageUser = "CREATE USER IF NOT EXISTS '" + OBJECT_STORAGE_USER + "'@'localhost'" +
+            " IDENTIFIED BY '" + OBJECT_STORAGE_PASSWORD + "'";
 
-    private static final String privilegeObjectStorageUser = "GRANT ALL PRIVILEGES ON " + objectStorageDbName +
-            ".* TO '" + objectStorageUser + "'@'localhost'";
+    private static final String privilegeObjectStorageUser = "GRANT ALL PRIVILEGES ON " + OBJECT_STORAGE_DB_NAME +
+            ".* TO '" + OBJECT_STORAGE_USER + "'@'localhost'";
 
-    private static final String DROP_OBJECT_STORAGE_USER = "DROP USER '" + objectStorageUser + "'@'localhost'";
+    private static final String DROP_OBJECT_STORAGE_USER = "DROP USER '" + OBJECT_STORAGE_USER + "'@'localhost'";
 
 
     public CreateObjectStorageTables(final WebServerFlavor flavor) {

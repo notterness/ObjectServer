@@ -1,31 +1,28 @@
 package com.webutils.webserver.mysql;
 
-import com.webutils.webserver.http.HttpRequestInfo;
-import com.webutils.webserver.http.CreateBucketPostContent;
-import com.webutils.webserver.http.StorageTierEnum;
+import com.webutils.webserver.http.*;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 
 public class BucketTableMgr extends ObjectStorageDb {
 
     private static final Logger LOG = LoggerFactory.getLogger(BucketTableMgr.class);
 
     /*
-    ** FIXME: Need to account for the opc-client-request-id, currently set to NULL
+    ** The fields to fill in for the CREATE_BUCKET prepared statement are:
+    **   1 - bucketName (String)
+    **   2 - compartmentId (String)
+    **   3 - storageTier (int)
+    **   4 - objectEventsEnabled (int)
+    **   5 - createdBy (String)
+    **   6 - namespaceUID (String)
      */
-    private final static String CREATE_BUCKET_1 = "INSERT INTO bucket VALUES ( NULL, '";   // bucketName
-    private final static String CREATE_BUCKET_2 = "', '";                                  // compartmentId
-    private final static String CREATE_BUCKET_3 = "', '";                                  // storageTier
-    private final static String CREATE_BUCKET_4 = "', ";                                   // objectEventsEnabled
-    private final static String CREATE_BUCKET_5 = ", CURRENT_TIMESTAMP(), UUID_TO_BIN(UUID()), (SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN('";
-    private final static String CREATE_BUCKET_6 = "') ) )";
+    private final static String CREATE_BUCKET = "INSERT INTO bucket VALUES ( NULL, ?, ?, ?, ?, CURRENT_TIMESTAMP(), ?, " +
+            "UUID_TO_BIN(UUID()), (SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN(?) ) )";
 
     private final static String GET_BUCKET_UID_1 = "SELECT BIN_TO_UUID(bucketUID) bucketUID FROM bucket WHERE bucketName = '";
     private final static String GET_BUCKET_UID_2 = "' AND namespaceId = ( SELECT namespaceId FROM customerNamespace WHERE namespaceUID = UUID_TO_BIN('";
@@ -40,14 +37,11 @@ public class BucketTableMgr extends ObjectStorageDb {
     private final static String GET_BUCKET_ID_FROM_UID_1 = "SELECT bucketId FROM bucket WHERE bucketUID = UUID_TO_BIN('";
     private final static String GET_BUCKET_ID_FROM_UID_2 = "' )";
 
-    private final static String GET_BUCKET_STORAGE_TIER_1 = "SELECT storageTier FROM bucket WHERE bucketID = ";
+    private final static String GET_BUCKET_STORAGE_TIER = "SELECT storageTier FROM bucket WHERE bucketID = ";
 
     private final static String GET_BUCKET_CREATE_TIME = "SELECT createTime FROM bucket WHERE bucketID = ";
 
-    private final static String SUCCESS_HEADER_1 = "opc-client-request-id: ";
-    private final static String SUCCESS_HEADER_2 = "opc-request-id: ";
-    private final static String SUCCESS_HEADER_3 = "ETag: ";
-    private final static String SUCCESS_HEADER_4 = "Location: ";
+    private final static String DELETE_BUCKET = "DELETE FROM bucket WHERE bucketId = ";
 
     /*
     ** The opcRequestId is used to track the request through the system. It is uniquely generated for each
@@ -67,16 +61,39 @@ public class BucketTableMgr extends ObjectStorageDb {
         this.httpRequestInfo = requestInfo;
     }
 
-    public int createBucketEntry(final CreateBucketPostContent bucketConfigData, final String namespaceUID) {
+    /*
+    ** The createBucketEntry() method is used to create an entry in the ObjectStorageDb.bucket table if one does not
+    **   already exist.
+    ** It also verifies that certain fields are present to insure that the Bucket that is created is valid.
+    **
+    ** Assuming the Bucket table entry is created, it then proceed to fill in the tag key value pairs for the
+    **   Bucket in the ObjectStorageDb.BucketTags table.
+     */
+    public int createBucketEntry(final CreateBucketPostContent bucketConfigData, final String namespaceUID,
+                                 final String createdBy) {
         int status = HttpStatus.OK_200;
 
         /*
          ** Obtain the fields required to build the Bucket table entry
          */
         String bucketName = bucketConfigData.getBucketName();
+        String compartmentId = bucketConfigData.getCompartmentId();
 
         /*
-        ** Verify tht this bucket has not already been created
+        ** Verify that there was a passed in bucketName and compartmentId before performing any database operations
+         */
+        if ((bucketName == null) || (compartmentId == null)) {
+            LOG.error("createBucketEntry() null required attributes");
+
+            String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.BAD_REQUEST_400 + "\"" +
+                    "\r\n  \"message\": \"CreateBucket missing attributes - " + bucketName + "\"" +
+                    "\r\n}";
+            httpRequestInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
+            return HttpStatus.BAD_REQUEST_400;
+        }
+
+        /*
+        ** Verify that this bucket has not already been created
          */
         String bucketUID = getBucketUID(bucketName, namespaceUID);
         if (bucketUID != null) {
@@ -95,36 +112,51 @@ public class BucketTableMgr extends ObjectStorageDb {
             return HttpStatus.CONFLICT_409;
         }
 
-        String compartmentId = bucketConfigData.getCompartmentId();
         StorageTierEnum storageTier = bucketConfigData.getStorageTier();
         int eventsEnabled = bucketConfigData.getObjectEventsEnabled();
 
-        if ((bucketName == null) || (compartmentId == null)) {
-            LOG.error("createBucketEntry() null required attributes");
-
-            String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.BAD_REQUEST_400 + "\"" +
-                    "\r\n  \"message\": \"CreateBucket missing attributes - " + bucketName + "\"" +
-                    "\r\n}";
-            httpRequestInfo.setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
-            return HttpStatus.BAD_REQUEST_400;
-        }
-
         LOG.info("createBucket() bucketName: " + bucketName);
-
-        String createBucketStr = CREATE_BUCKET_1 + bucketName + CREATE_BUCKET_2 + compartmentId + CREATE_BUCKET_3 +
-                storageTier.toInt() + CREATE_BUCKET_4 + eventsEnabled + CREATE_BUCKET_5 + namespaceUID + CREATE_BUCKET_6;
 
         Connection conn = getObjectStorageDbConn();
 
+        int bucketId = -1;
         if (conn != null) {
-            Statement stmt = null;
+            PreparedStatement stmt = null;
 
             try {
-                stmt = conn.createStatement();
-                stmt.execute(createBucketStr);
+                /*
+                 ** The fields to fill in for the CREATE_BUCKET prepared statement are:
+                 **   1 - bucketName (String)
+                 **   2 - compartmentId (String)
+                 **   3 - storageTier (int)
+                 **   4 - objectEventsEnabled (int)
+                 **   5 - createdBy (String)
+                 **   6 - namespaceUID (String)
+                 */
+                stmt = conn.prepareStatement(CREATE_BUCKET, Statement.RETURN_GENERATED_KEYS);
+                stmt.setString(1, bucketName);
+                stmt.setString(2, compartmentId);
+                stmt.setInt(3, storageTier.toInt());
+                stmt.setInt(4, eventsEnabled);
+                stmt.setString(5, createdBy);
+                stmt.setString(6, namespaceUID);
+                stmt.executeUpdate();
+
+                ResultSet rs = stmt.getGeneratedKeys();
+                if (rs.next()) {
+                    bucketId = rs.getInt(1);
+                } else {
+                    String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.INTERNAL_SERVER_ERROR_500 + "\"" +
+                            "\r\n  \"message\": \"Create bucket failed - " + bucketName + "\"" +
+                            "\r\n}";
+
+                    httpRequestInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
+                    status = HttpStatus.INTERNAL_SERVER_ERROR_500;
+                }
+
+                rs.close();
             } catch (SQLException sqlEx) {
                 LOG.error("createBucketEntry() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
-                LOG.error("Bad SQL command: " + createBucketStr);
                 System.out.println("SQLException: " + sqlEx.getMessage());
 
                 String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.INTERNAL_SERVER_ERROR_500 + "\"" +
@@ -153,32 +185,27 @@ public class BucketTableMgr extends ObjectStorageDb {
         /*
         ** Now fill in the Tag key value pair tables associated with this bucket.
          */
-        bucketUID = getBucketUID(bucketName, namespaceUID);
         if (status == HttpStatus.OK_200) {
-            if (bucketUID != null) {
-                LOG.info("bucketUID: " + bucketUID);
+            bucketUID = getBucketUID(bucketId);
 
-                int id = getBucketId(bucketName, namespaceUID);
-                if (id != -1) {
-                    BucketTagTableMgr tagMgr = new BucketTagTableMgr(flavor);
+            BucketTagTableMgr tagMgr = new BucketTagTableMgr(flavor);
+            tagMgr.createBucketTags(bucketConfigData, bucketId);
 
-                    tagMgr.createBucketTags(bucketConfigData, id);
-                }
-            } else {
-                String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.INTERNAL_SERVER_ERROR_500 + "\"" +
-                        "\r\n  \"message\": \"SQL error: unable to obtain bucket ETag - " + bucketName + "\"" +
-                        "\r\n}";
-
-                httpRequestInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
-                status = HttpStatus.INTERNAL_SERVER_ERROR_500;
-            }
-        }
-
-        if (status == HttpStatus.OK_200) {
             httpRequestInfo.setResponseHeaders(buildSuccessHeader(httpRequestInfo, bucketUID));
         }
 
         return status;
+    }
+
+    public void deleteBucket(final int bucketId) {
+        /*
+        ** First delete any references in the BucketTags table
+         */
+        BucketTagTableMgr tagMgr = new BucketTagTableMgr(flavor);
+        tagMgr.deleteBucketTags(bucketId);
+
+        String deleteBucketStr = DELETE_BUCKET + bucketId;
+        executeSqlStatement(deleteBucketStr);
     }
 
     /*
@@ -220,7 +247,7 @@ public class BucketTableMgr extends ObjectStorageDb {
     public StorageTierEnum getBucketStorageTier(final int bucketId) {
         int storageTier = 0;
 
-        String bucketStorageTierQuery = GET_BUCKET_STORAGE_TIER_1 + bucketId;
+        String bucketStorageTierQuery = GET_BUCKET_STORAGE_TIER + bucketId;
 
         Connection conn = getObjectStorageDbConn();
 
@@ -251,7 +278,7 @@ public class BucketTableMgr extends ObjectStorageDb {
                             count++;
                         }
 
-                        if (count != 1) {
+                        if (count > 1) {
                             storageTier = 0;
                             LOG.warn("getBucketStorageTier() too many responses count: " + count);
                         }
@@ -302,11 +329,14 @@ public class BucketTableMgr extends ObjectStorageDb {
         ** FIXME: Need to add in the Location for the full path to the bucket
          */
         if (opcClientId != null) {
-            successHeader = SUCCESS_HEADER_1 + opcClientId + "\n" + SUCCESS_HEADER_2 + opcRequestId + "\n" +
-                    SUCCESS_HEADER_3 + bucketUID + "\n" + SUCCESS_HEADER_4 + "test" + "\n";
+            successHeader = HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientId + "\n" +
+                    HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
+                    HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + bucketUID + "\n" +
+                    HttpResponseInfo.RESPONSE_BUCKET_LOCATION + ": " + "test" + "\n";
         } else {
-            successHeader = SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + bucketUID + "\n" +
-                    SUCCESS_HEADER_4 + "test" + "\n";
+            successHeader = HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
+                    HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + bucketUID + "\n" +
+                    HttpResponseInfo.RESPONSE_BUCKET_LOCATION + ": " + "test" + "\n";
         }
 
         return successHeader;

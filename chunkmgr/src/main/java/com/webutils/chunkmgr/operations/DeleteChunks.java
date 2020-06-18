@@ -40,7 +40,7 @@ public class DeleteChunks implements Operation {
      ** The following are the states the DeleteChunk needs to go through to change the state of the chunks
      **   and remove the chunks from the Storage Servers
      */
-    enum ExecutionState {
+    private enum ExecutionState {
         SET_CHUNKS_TO_DELETED,
         DELETE_CHUNKS_FROM_STORAGE_SERVERS,
         SET_CHUNKS_TO_AVAILABLE,
