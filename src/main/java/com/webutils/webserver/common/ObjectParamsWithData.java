@@ -150,18 +150,19 @@ public abstract class ObjectParamsWithData extends ObjectParams {
          **   last-modified
          **   version-id
          */
-        if (httpInfo.getResponseStatus() == HttpStatus.OK_200) {
-            System.out.println("Status: 200");
-            String opcClientRequestId = httpInfo.getOpcClientRequestId();
-            if (opcClientRequestId != null) {
-                System.out.println(HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId);
-            }
+        int status = httpInfo.getResponseStatus();
+        System.out.println("Status: " + status);
+        String opcClientRequestId = httpInfo.getOpcClientRequestId();
+        if (opcClientRequestId != null) {
+            System.out.println(HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId);
+        }
 
-            String opcRequestId = httpInfo.getOpcRequestId();
-            if (opcRequestId != null) {
-                System.out.println(HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId);
-            }
+        String opcRequestId = httpInfo.getOpcRequestId();
+        if (opcRequestId != null) {
+            System.out.println(HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId);
+        }
 
+        if (status == HttpStatus.OK_200) {
             String contentMd5 = httpInfo.getResponseContentMd5();
             if (contentMd5 != null) {
                 System.out.println(HttpResponseInfo.OPC_CONTENT_MD5 + ": " + contentMd5);
@@ -169,20 +170,19 @@ public abstract class ObjectParamsWithData extends ObjectParams {
 
             String etag = httpInfo.getResponseEtag();
             if (etag != null) {
-                System.out.println("ETag: " + etag);
+                System.out.println(HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + etag);
             }
 
             String lastModified = httpInfo.getResponseLastModified();
             if (lastModified != null) {
-                System.out.println("last-modified: " + lastModified);
+                System.out.println(HttpResponseInfo.RESPONSE_LAST_MODIFIED + ": " + lastModified);
             }
 
             String versionId = httpInfo.getResponseVersionId();
             if (versionId != null) {
-                System.out.println("version-id: " + versionId);
+                System.out.println(HttpResponseInfo.RESPONSE_VERSION_ID + ": " + versionId);
             }
         } else {
-            System.out.println("Status: " + httpInfo.getResponseStatus());
             String responseBody = httpInfo.getResponseBody();
             if (responseBody != null) {
                 System.out.println(responseBody);

@@ -20,7 +20,7 @@ public abstract class ContentParser {
     ** These are used by multiple content parsers, so they are kept in the base class
      */
     public static final String SERVER_NAME = "storage-server-name";
-    protected static final String STORAGE_ID = "storage-id";
+    public static final String STORAGE_ID = "storage-id";
     public static final String SERVER_IP = "storage-server-ip";
     public static final String SERVER_PORT = "storage-server-port";
     public static final String CHUNK_UID = "chunk-etag";

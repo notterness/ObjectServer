@@ -1,5 +1,6 @@
 package com.webutils.webserver.requestcontext;
 
+import com.webutils.webserver.http.ContentParser;
 import com.webutils.webserver.http.HttpResponseInfo;
 import org.eclipse.jetty.http.HttpStatus;
 
@@ -230,12 +231,12 @@ public class ServerIdentifier {
         if (initialEntry) {
             body.append("{\r\n  \"data\": [\r\n");
         }
-        body.append("  \"storage-server-name" + serverName + "\":\n");
+        body.append("  \"" + ContentParser.SERVER_NAME + "\": \"" + serverName + "\"\n");
         body.append("    {\n");
         body.append("       \"storage-id\": \"" + serverId + "\"\n");
         //body.append("       \"server-uid\": \"" +  + "\"\n");
-        body.append("       \"storage-server-ip\": \"" + getServerIpAddress().toString() + "\"\n");
-        body.append("       \"storage-server-port\": \"" + getServerTcpPort() + "\"\n");
+        body.append("       \"" + ContentParser.SERVER_IP + "\": \"" + getServerIpAddress().toString() + "\"\n");
+        body.append("       \"" + ContentParser.SERVER_PORT + "\": \"" + getServerTcpPort() + "\"\n");
         body.append("       \"storage-server-read-errors\": \"" + readFailureCount + "\"\n");
         if (lastEntry) {
             body.append("    }\n");

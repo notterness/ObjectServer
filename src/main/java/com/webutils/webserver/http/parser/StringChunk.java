@@ -22,7 +22,7 @@ public class StringChunk {
 
         currentPosition = buffer.position();
         limit = buffer.limit();
-        LOG.info(" currentPosition: " + currentPosition + " remaining: " + buffer.remaining() + " limit: " + buffer.limit());
+        //LOG.info(" currentPosition: " + currentPosition + " remaining: " + buffer.remaining() + " limit: " + buffer.limit());
     }
 
     /*

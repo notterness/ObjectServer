@@ -126,15 +126,15 @@ public class ResponseHandler implements Operation {
                 /*
                  ** Leave the pointer in the same place since there is data remaining in the buffer
                  */
-                LOG.info("ResponseHandler[" + requestContext.getRequestId() + "] remaining position: " +
-                        httpBuffer.position() + " limit: " + httpBuffer.limit());
+                //LOG.info("ResponseHandler[" + requestContext.getRequestId() + "] remaining position: " +
+                //        httpBuffer.position() + " limit: " + httpBuffer.limit());
 
             } else {
                 /*
                  ** Only update the pointer if the data in the buffer was all consumed.
                  */
-                LOG.info("ResponseHandler[" + requestContext.getRequestId() + "]  position: " +
-                        httpBuffer.position() + " limit: " + httpBuffer.limit());
+                //LOG.info("ResponseHandler[" + requestContext.getRequestId() + "]  position: " +
+                //        httpBuffer.position() + " limit: " + httpBuffer.limit());
 
                 responseBufferManager.updateConsumerReadPointer(httpResponseBufferPointer);
             }

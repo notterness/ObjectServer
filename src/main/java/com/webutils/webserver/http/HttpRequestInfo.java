@@ -15,7 +15,7 @@ public abstract class HttpRequestInfo extends HttpInfo {
 
     public static final String STORAGE_TIER_HEADER = "storageTier";
     private static final String SERVER_NAME_HEADER = "storage-server-name";
-    private static final String CHUNK_STATUS_HEADER = "chunk-status";
+    public static final String CHUNK_STATUS_HEADER = "chunk-status";
 
     /*
     ** The objectId is the identifier to access the Object record within the ObjectStorageDd after it has been created. It is

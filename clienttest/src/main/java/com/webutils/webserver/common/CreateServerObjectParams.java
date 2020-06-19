@@ -143,7 +143,7 @@ public class CreateServerObjectParams extends ObjectParams {
 
             String etag = httpInfo.getResponseEtag();
             if (etag != null) {
-                System.out.println("ETag: " + etag);
+                System.out.println(HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + etag);
             }
         } else {
             System.out.println("Status: " + httpInfo.getResponseStatus());
