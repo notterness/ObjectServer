@@ -25,7 +25,7 @@ public class GetObjectSimple {
     private final ClientGetInterface cli;
 
     GetObjectSimple(final InetAddress serverIpAddr, final int serverTcpPort, final String accessToken,
-                    AtomicInteger testCount) {
+                    final String opcClientRequestId, AtomicInteger testCount) {
 
         MemoryManager cliMemoryManager = new MemoryManager(flavor);
 
@@ -37,7 +37,7 @@ public class GetObjectSimple {
 
         GetObjectParams params = new GetObjectParams("Namespace-xyz-987", "CreateBucket_Simple",
                 "TestObject-1234-abcd", "testObjectFile", accessToken);
-        params.setOpcClientRequestId("GetObjectSimple-5-12-2020.01");
+        params.setOpcClientRequestId(opcClientRequestId);
 
         LOG.info("ClientTest - " + params.getOpcClientRequestId());
         System.out.println("\nSTARTING ClientTest - " + params.getOpcClientRequestId());

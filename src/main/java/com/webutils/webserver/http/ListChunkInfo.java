@@ -41,16 +41,16 @@ public class ListChunkInfo {
         if (initialEntry) {
             body.append("{\r\n  \"data\": [\r\n");
         }
-        body.append("  \"chunk-" + index + "\":\n");
+        body.append("  \"chunk-").append(index).append("\":\n");
         body.append("    {\n");
-        body.append("       \"chunk-id\": \"" + id + "\"\n");
-        body.append("       \"" + ContentParser.CHUNK_UID + "\": \"" + uid + "\"\n");
-        body.append("       \"chunk-lba\": \"" + lba + "\"\n");
-        body.append("       \"chunk-size\": \"" + size + "\"\n");
-        body.append("       \"chunk-state\": \"" + state.toString() + "\"\n");
-        body.append("       \"last-allocated\": \"" + lastAllocateTime + "\"\n");
-        body.append("       \"last-deleted\": \"" + lastDeleteTime + "\"\n");
-        body.append("       \"storage-id\": \"" + serverId + "\"\n");
+        body.append("       \"" + HttpInfo.CHUNK_ID + "\": \"").append(id).append("\"\n");
+        body.append("       \"" + ContentParser.CHUNK_UID + "\": \"").append(uid).append("\"\n");
+        body.append("       \"" + HttpInfo.CHUNK_LBA + "\": \"").append(lba).append("\"\n");
+        body.append("       \"chunk-size\": \"").append(size).append("\"\n");
+        body.append("       \"chunk-state\": \"").append(state.toString()).append("\"\n");
+        body.append("       \"last-allocated\": \"").append(lastAllocateTime).append("\"\n");
+        body.append("       \"last-deleted\": \"").append(lastDeleteTime).append("\"\n");
+        body.append("       \"" + ContentParser.STORAGE_ID + "\": \"").append(serverId).append("\"\n");
         if (lastEntry) {
             body.append("    }\n");
             body.append("  ]\r\n}");

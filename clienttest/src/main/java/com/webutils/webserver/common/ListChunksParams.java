@@ -1,8 +1,6 @@
 package com.webutils.webserver.common;
 
-import com.webutils.webserver.http.ChunkStatusEnum;
-import com.webutils.webserver.http.HttpResponseInfo;
-import com.webutils.webserver.http.StorageTierEnum;
+import com.webutils.webserver.http.*;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,26 +73,26 @@ public class ListChunksParams extends ObjectParams {
         }
 
         if (opcClientRequestId != null) {
-            request += "opc-client-request-id: " + opcClientRequestId + "\n";
+            request += HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n";
         }
 
         if (tier != StorageTierEnum.INVALID_TIER) {
-            request += "storageTier: " + tier.toString() + "\n";
+            request += HttpRequestInfo.STORAGE_TIER_HEADER + ": " + tier.toString() + "\n";
         }
 
         if (serverName != null) {
-            request += "storage-server-name: " + serverName + "\n";
+            request += ContentParser.SERVER_NAME + ": " + serverName + "\n";
         }
 
         if (chunkStatus != ChunkStatusEnum.INVALID_CHUNK_STATUS) {
-            request += "chunk-status: " + chunkStatus.toString() + "\n";
+            request += HttpRequestInfo.CHUNK_STATUS_HEADER + ": " + chunkStatus.toString() + "\n";
         }
 
         if (limit != 0) {
             request += "limit: " + limit + "\n";
         }
 
-        finalContent += "Content-Length: 0\n\n";
+        finalContent += HttpInfo.CONTENT_LENGTH + ": 0\n\n";
 
         request += finalContent;
 
@@ -113,31 +111,25 @@ public class ListChunksParams extends ObjectParams {
          **   opc-client-request-id
          **   opc-request-id
          */
-        if (httpInfo.getResponseStatus() == HttpStatus.OK_200) {
-            System.out.println("Status: 200");
-            String opcClientRequestId = httpInfo.getOpcClientRequestId();
-            if (opcClientRequestId != null) {
-                System.out.println("opc-client-request-id: " + opcClientRequestId);
-            }
+        int status = httpInfo.getResponseStatus();
+        System.out.println("Status: " + status);
+        String opcClientRequestId = httpInfo.getOpcClientRequestId();
+        if (opcClientRequestId != null) {
+            System.out.println(HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId);
+        }
 
-            String opcRequestId = httpInfo.getOpcRequestId();
-            if (opcRequestId != null) {
-                System.out.println("opc-request-id: " + opcRequestId);
-            }
+        String opcRequestId = httpInfo.getOpcRequestId();
+        if (opcRequestId != null) {
+            System.out.println(HttpInfo.OPC_REQUEST_ID + "opc-request-id: " + opcRequestId);
+        }
 
-            String responseBody = httpInfo.getResponseBody();
-            if (responseBody != null) {
-                System.out.println(responseBody);
-            }
-
-        } else if (httpInfo.getResponseStatus() == HttpStatus.METHOD_NOT_ALLOWED_405) {
+        if (httpInfo.getResponseStatus() == HttpStatus.METHOD_NOT_ALLOWED_405) {
             System.out.println("Status: " + httpInfo.getResponseStatus());
             String allowableMethods = httpInfo.getAllowableMethods();
             if (allowableMethods != null) {
                 System.out.println("Allowed Methods: " + allowableMethods);
             }
         } else {
-            System.out.println("Status: " + httpInfo.getResponseStatus());
             String responseBody = httpInfo.getResponseBody();
             if (responseBody != null) {
                 System.out.println(responseBody);

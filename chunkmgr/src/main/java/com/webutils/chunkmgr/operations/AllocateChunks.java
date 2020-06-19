@@ -3,6 +3,7 @@ package com.webutils.chunkmgr.operations;
 import com.webutils.chunkmgr.http.AllocateChunksGetContent;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.ContentParser;
+import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpRequestInfo;
 import com.webutils.webserver.http.StorageTierEnum;
 import com.webutils.webserver.mysql.ServerChunkMgr;
@@ -15,7 +16,6 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.naming.ContextNotEmptyException;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -31,8 +31,6 @@ public class AllocateChunks implements Operation {
     /*
      ** The following are used to build the response header
      */
-    private final static String SUCCESS_HEADER_1 = "opc-client-request-id: ";
-    private final static String SUCCESS_HEADER_2 = "opc-request-id: ";
     private final static String SUCCESS_HEADER_3 = "allocated-chunks: ";
 
     private final RequestContext requestContext;
@@ -213,10 +211,12 @@ public class AllocateChunks implements Operation {
         int opcRequestId = requestInfo.getRequestId();
 
         if (opcClientRequestId != null) {
-            successHeader = SUCCESS_HEADER_1 + opcClientRequestId + "\n" + SUCCESS_HEADER_2 + opcRequestId + "\n" +
+            successHeader = HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n" +
+                    HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
                     SUCCESS_HEADER_3 + allocated + "\n";
         } else {
-            successHeader = SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + allocated + "\n";
+            successHeader = HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
+                    SUCCESS_HEADER_3 + allocated + "\n";
         }
 
         return successHeader;
@@ -234,16 +234,16 @@ public class AllocateChunks implements Operation {
 
         body.append("{\n");
         for (ServerIdentifier server : allocatedServers) {
-            body.append("  \"chunk-" + chunkIndex + "\":\n");
+            body.append("  \"chunk-").append(chunkIndex).append("\":\n");
             body.append("    {\n");
-            body.append("       \"" + ContentParser.SERVER_NAME + "\": \"" + server.getServerName() + "\"\n");
-            body.append("       \"storage-id\": \"" + server.getServerId() + "\"\n");
-            body.append("       \"storage-server-ip\": \"" + server.getServerIpAddress().toString() + "\"\n");
-            body.append("       \"storage-server-port\": \"" + server.getServerTcpPort() + "\"\n");
-            body.append("       \"chunk-id\": \"" + server.getChunkId() + "\"\n");
-            body.append("       \"" + ContentParser.CHUNK_UID + "\": \"" + server.getChunkUID() + "\"\n");
-            body.append("       \"chunk-lba\": \"" + server.getChunkLBA() + "\"\n");
-            body.append("       \"chunk-location\": \"" + server.getChunkUID() + "\"\n");
+            body.append("       \"" + ContentParser.SERVER_NAME + "\": \"").append(server.getServerName()).append("\"\n");
+            body.append("       \"" + ContentParser.STORAGE_ID + "\": \"").append(server.getServerId()).append("\"\n");
+            body.append("       \"" + ContentParser.SERVER_IP + "\": \"").append(server.getServerIpAddress().toString()).append("\"\n");
+            body.append("       \"" + ContentParser.SERVER_PORT + "\": \"").append(server.getServerTcpPort()).append("\"\n");
+            body.append("       \"" + HttpInfo.CHUNK_ID + "\": \"").append(server.getChunkId()).append("\"\n");
+            body.append("       \"" + ContentParser.CHUNK_UID + "\": \"").append(server.getChunkUID()).append("\"\n");
+            body.append("       \"" + HttpInfo.CHUNK_LBA + "\": \"").append(server.getChunkLBA()).append("\"\n");
+            body.append("       \"" + HttpInfo.CHUNK_LOCATION + "\": \"").append(server.getChunkUID()).append("\"\n");
             body.append("    }\n");
 
             chunkIndex++;

@@ -36,7 +36,7 @@ public class GetObjectBadNamespace {
 
         GetObjectParams params = new GetObjectParams("BadNamespaceName", "CreateBucket_Simple",
                 "5e223890-ea13-11e9-851d-234132e0fb02", "testObjectFile", accessToken);
-        params.setOpcClientRequestId("GetObjectSimple-5-12-2020.01");
+        params.setOpcClientRequestId("GetObjectBadNamespace-5-12-2020.01");
 
         cli = new ClientGetInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
                 params, testCount);

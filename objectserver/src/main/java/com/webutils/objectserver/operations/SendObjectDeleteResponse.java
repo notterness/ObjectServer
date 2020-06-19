@@ -4,6 +4,7 @@ import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpRequestInfo;
+import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ObjectInfo;
 import com.webutils.webserver.operations.Operation;
@@ -24,12 +25,6 @@ public class SendObjectDeleteResponse implements Operation {
      ** A unique identifier for this Operation so it can be tracked.
      */
     private final OperationTypeEnum operationType = OperationTypeEnum.SEND_OBJECT_DELETE_RESPONSE;
-
-    /*
-     ** Strings used to build the success response for the chunk write
-     */
-    private final static String SUCCESS_HEADER_5 = "last-modified: ";
-
 
     /*
      ** The RequestContext is used to keep the overall state and various data used to track this Request.
@@ -276,7 +271,7 @@ public class SendObjectDeleteResponse implements Operation {
         }
 
         successHeader += HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
-                SUCCESS_HEADER_5 + lastModified + "\n" +
+                HttpResponseInfo.RESPONSE_LAST_MODIFIED + ": " + lastModified + "\n" +
                 HttpInfo.VERSION_ID + ": " + versionId + "\n" +
                 HttpInfo.CONTENT_LENGTH + ": " + 0 + "\n\n";
 

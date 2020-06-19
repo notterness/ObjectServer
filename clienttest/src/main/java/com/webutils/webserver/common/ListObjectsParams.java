@@ -66,6 +66,13 @@ public class ListObjectsParams extends ObjectParams {
             request += HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n";
         }
 
+        /*
+         ** The accessToken is required to allow the ObjectGet method to be executed.
+         */
+        if (accessToken != null) {
+            request += HttpInfo.ACCESS_TOKEN + ": " + accessToken + "\n";
+        }
+
         request += "fields: name, etag, version, md5, size, time-created, tier\n";
 
         finalContent += HttpInfo.CONTENT_LENGTH + ": 0\n\n";

@@ -32,13 +32,6 @@ public class ListServers implements Operation {
      */
     private final OperationTypeEnum operationType = OperationTypeEnum.LIST_SERVERS;
 
-    /*
-     ** The following are used to build the response header
-     */
-    private final static String SUCCESS_HEADER_1 = "opc-client-request-id: ";
-    private final static String SUCCESS_HEADER_2 = "opc-request-id: ";
-    private final static String SUCCESS_HEADER_8 = "Content-Length: ";
-
     private final RequestContext requestContext;
 
     private final MemoryManager memoryManager;
@@ -229,12 +222,13 @@ public class ListServers implements Operation {
                 "Content-Type: text/html\n";
 
         if (opcClientRequestId != null) {
-            successHeader += SUCCESS_HEADER_1 + opcClientRequestId + "\n" + SUCCESS_HEADER_2 + opcRequestId + "\n";
+            successHeader += HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n" +
+                    HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n";
         } else {
-            successHeader += SUCCESS_HEADER_2 + opcRequestId + "\n";
+            successHeader += HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n";
         }
 
-        successHeader += SUCCESS_HEADER_8 + contentLength + "\n\n";
+        successHeader += HttpInfo.CONTENT_LENGTH + ": " + contentLength + "\n\n";
         HttpInfo.str_to_bb(respBuffer, successHeader);
     }
 
@@ -255,20 +249,21 @@ public class ListServers implements Operation {
 
         if (opcClientRequestId != null) {
             failureHeader = "HTTP/1.1 " + httpInfo.getParseFailureCode() + " FAILED\r\n" +
-                    "Content-Type: text/html\n" + SUCCESS_HEADER_1 + opcClientRequestId + "\n";
+                    "Content-Type: text/html\n" +
+                    HttpInfo.CONTENT_LENGTH + ": " + opcClientRequestId + "\n";
         } else {
             failureHeader = "HTTP/1.1 " + httpInfo.getParseFailureCode() + " FAILED\r\n" +
                     "Content-Type: text/html\n";
         }
 
-        failureHeader += SUCCESS_HEADER_2 + opcRequestId + "\n";
+        failureHeader += HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n";
 
         String failureMessage = httpInfo.getParseFailureReason();
         if (failureMessage != null) {
-            failureHeader += SUCCESS_HEADER_8 + failureMessage.length() + "\n\n";
+            failureHeader += HttpInfo.CONTENT_LENGTH + ": " + failureMessage.length() + "\n\n";
             failureHeader += failureMessage;
         } else {
-            failureHeader += SUCCESS_HEADER_8 + 0 + "\n\n";
+            failureHeader += HttpInfo.CONTENT_LENGTH + ": 0\n\n";
         }
 
         HttpInfo.str_to_bb(respBuffer, failureHeader);

@@ -20,7 +20,7 @@ public class ListObjectsSimple {
 
     private final ClientCommandInterface cli;
 
-    ListObjectsSimple(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount) {
+    ListObjectsSimple(final InetAddress serverIpAddr, final int serverTcpPort, final String accessToken, AtomicInteger testCount) {
 
         MemoryManager cliMemoryManager = new MemoryManager(flavor);
 
@@ -31,7 +31,7 @@ public class ListObjectsSimple {
         cliClient.start();
 
         ListObjectsParams params = new ListObjectsParams("Namespace-xyz-987", "CreateBucket_Simple",
-                null, null);
+                null, accessToken);
         params.setOpcClientRequestId("ListObjectsSimple-5-14-2020.01");
 
         cli = new ClientCommandInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort, params, testCount);

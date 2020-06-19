@@ -166,7 +166,7 @@ public class HttpResponseInfo extends HttpInfo {
                             parseFailureCode + " reason: " + parseFailureReason);
                 } else {
                     contentLengthReceived = true;
-                    LOG.info("HttpResponseInfo added Content-Length: " + contentLength);
+                    //LOG.info("HttpResponseInfo added Content-Length: " + contentLength);
                 }
 
             } catch (NumberFormatException num_ex) {

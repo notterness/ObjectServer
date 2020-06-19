@@ -101,8 +101,13 @@ public class FixedSizeBufferPool {
             tracker.clear();
         }
 
-        LOG.info("releaseBuffers() caller: " + caller + " freeQueue size: " + freeQueue.size() + " inUseQueue size: " +
-                inUseQueue.size());
+        /*
+        ** Only dump out the information if there is an unexpected size for one of the queues
+         */
+        if ((freeQueue.size() != 0) || (inUseQueue.size() != 0)) {
+            LOG.info("releaseBuffers() caller: " + caller + " freeQueue size: " + freeQueue.size() + " inUseQueue size: " +
+                    inUseQueue.size());
+        }
 
         return inUseQueue.size();
     }

@@ -4,6 +4,7 @@ import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpMethodEnum;
+import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
 import com.webutils.webserver.requestcontext.RequestContext;
@@ -236,7 +237,7 @@ public class BuildHeaderToStorageServer implements Operation {
                     "Accept-Encoding: gzip, deflate\n" +
                     HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n" +
                     HttpInfo.OPC_REQUEST_ID + ": " + requestContext.getRequestId() + "\n" +
-                    "ETag: " + requestContext.getHttpInfo().getObjectUID() + "\n" +
+                    HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + requestContext.getHttpInfo().getObjectUID() + "\n" +
                     HttpInfo.CHUNK_ID + ": " + storageServer.getChunkId() + "\n" +
                     HttpInfo.CHUNK_LBA + ": " + storageServer.getChunkLBA() + "\n" +
                     HttpInfo.CHUNK_LOCATION + ": " + storageServer.getChunkLocation() + "\n" +
@@ -250,7 +251,7 @@ public class BuildHeaderToStorageServer implements Operation {
                     "Accept-Language: en-us\n" +
                     "Accept-Encoding: gzip, deflate\n" +
                     HttpInfo.OPC_REQUEST_ID + ": " + requestContext.getRequestId() + "\n" +
-                    "ETag: " + requestContext.getHttpInfo().getObjectUID() + "\n" +
+                    HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + requestContext.getHttpInfo().getObjectUID() + "\n" +
                     HttpInfo.CHUNK_ID + ": " + storageServer.getChunkId() + "\n" +
                     HttpInfo.CHUNK_LBA + ": " + storageServer.getChunkLBA() + "\n" +
                     HttpInfo.CHUNK_LOCATION + ": " + storageServer.getChunkLocation() + "\n" +

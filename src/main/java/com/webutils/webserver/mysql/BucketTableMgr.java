@@ -104,7 +104,7 @@ public class BucketTableMgr extends ObjectStorageDb {
 
             String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.CONFLICT_409 + "\"" +
                     "\r\n  \"message\": \"CreateBucket bucket already exists - " + bucketName + "\"" +
-                    "\r\n  \"ETag\": \"" + bucketUID + "\"" +
+                    "\r\n  \"" + HttpResponseInfo.RESPONSE_HEADER_ETAG + "\": \"" + bucketUID + "\"" +
                     "\r\n}";
 
             httpRequestInfo.setParseFailureCode(HttpStatus.CONFLICT_409, failureMessage);

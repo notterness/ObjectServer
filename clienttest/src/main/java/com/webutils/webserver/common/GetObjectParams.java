@@ -120,7 +120,7 @@ public class GetObjectParams extends ObjectParams {
 
         String etag = httpInfo.getResponseEtag();
         if (etag != null) {
-            System.out.println("ETag: " + etag);
+            System.out.println(HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + etag);
         }
 
         if (httpInfo.getResponseStatus() == HttpStatus.OK_200) {
@@ -134,12 +134,12 @@ public class GetObjectParams extends ObjectParams {
 
             String lastModified = httpInfo.getResponseLastModified();
             if (lastModified != null) {
-                System.out.println("last-modified: " + lastModified);
+                System.out.println(HttpResponseInfo.RESPONSE_LAST_MODIFIED + ": " + lastModified);
             }
 
             String versionId = httpInfo.getResponseVersionId();
             if (versionId != null) {
-                System.out.println("version-id: " + versionId);
+                System.out.println(HttpResponseInfo.RESPONSE_VERSION_ID + ": " + versionId);
             }
         } else {
             String responseBody = httpInfo.getResponseBody();

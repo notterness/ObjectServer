@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
+import java.util.Objects;
 
 public class DetermineRequest implements Operation {
 
@@ -122,18 +123,38 @@ public class DetermineRequest implements Operation {
 
                 if (accessToken != null) {
                     UserTableMgr userMgr = new UserTableMgr(requestContext.getWebServerFlavor());
-                    requestContext.setTenancyId(userMgr.getTenancyFromAccessToken(accessToken));
 
-                    currState = ExecutionState.EXECUTE_METHOD;
-                    /*
-                     ** Fall through
-                     */
+                    int tenancyId = userMgr.getTenancyFromAccessToken(accessToken);
+                    if (tenancyId != -1) {
+                        requestContext.setTenancyId(tenancyId);
+
+                        currState = ExecutionState.EXECUTE_METHOD;
+                        /*
+                         ** Fall through
+                         */
+                    } else {
+                        /*
+                         ** This is a permissions error
+                         */
+                        LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] invalid accessToken");
+                        String failureMessage = "{\r\n  \"code\":" + HttpStatus.NETWORK_AUTHENTICATION_REQUIRED_511 +
+                                "\r\n  \"message\": \"Unable to access Tenancy information, invalid accessToken\"" +
+                                "\r\n}";
+                        httpRequestInfo.setParseFailureCode(HttpStatus.NETWORK_AUTHENTICATION_REQUIRED_511, failureMessage);
+
+                        currState = ExecutionState.CALLBACK_OPS;
+                        event();
+                        break;
+                    }
                 } else {
                     /*
                     ** This is a permissions error
                      */
                     LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] accessToken not provided");
-                    httpRequestInfo.setParseFailureCode(HttpStatus.NETWORK_AUTHENTICATION_REQUIRED_511);
+                    String failureMessage = "{\r\n  \"code\":" + HttpStatus.NETWORK_AUTHENTICATION_REQUIRED_511 +
+                            "\r\n  \"message\": \"Unable to access Tenancy information, accessToken not provided\"" +
+                            "\r\n}";
+                    httpRequestInfo.setParseFailureCode(HttpStatus.NETWORK_AUTHENTICATION_REQUIRED_511, failureMessage);
 
                     currState = ExecutionState.CALLBACK_OPS;
                     event();
@@ -189,22 +210,18 @@ public class DetermineRequest implements Operation {
                 Operation closeOutRequest = requestContext.getOperation(OperationTypeEnum.CLOSE_OUT_REQUEST);
 
                 switch (method) {
+                    case GET_METHOD:
+                        if (httpRequestInfo.getParseFailureCode() == HttpStatus.NETWORK_AUTHENTICATION_REQUIRED_511) {
+                            sendFinalStatus.event();
+                            break;
+                        }
+                        /*
+                        ** For all other errors, they are handled by the GetObject method. The network authorization
+                        **   errors occur prior to the GetObject handler being invoked.
+                         */
                     case DELETE_METHOD:
                     case DELETE_BUCKET:
                         if (closeOutRequest != null) {
-                            /*
-                             ** This will finish up this request
-                             */
-                            closeOutRequest.event();
-                        } else {
-                            LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] closeOutRequest null");
-                        }
-                        break;
-
-                    case GET_METHOD:
-                        if (httpRequestInfo.getParseFailureCode() != HttpStatus.OK_200) {
-                            sendFinalStatus.event();
-                        } else if (closeOutRequest != null) {
                             /*
                              ** This will finish up this request
                              */

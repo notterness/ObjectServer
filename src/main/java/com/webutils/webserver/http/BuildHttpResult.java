@@ -59,7 +59,7 @@ public class BuildHttpResult {
                         .append("Content-Type: text/html\n")
                         .append("Allow: DELETE GET PUT POST\n")
                         .append("Connection: close\n")
-                        .append("Content-Length: 0\n\n");
+                        .append(HttpInfo.CONTENT_LENGTH + ": 0\n\n");
 
             } else if (resultCode != HttpStatus.CONTINUE_100) {
                 tmpBuiltStr = new StringBuilder()
@@ -74,7 +74,7 @@ public class BuildHttpResult {
 
                 tmpBuiltStr.append(HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\r\n");
 
-                tmpBuiltStr.append("Content-Length: ")
+                tmpBuiltStr.append(HttpInfo.CONTENT_LENGTH + ": ")
                         .append(contentLength)
                         .append("\r\n");
                 if (close) {
@@ -89,7 +89,7 @@ public class BuildHttpResult {
                         .append("HTTP/1.1 ")
                         .append(result.getCode())
                         .append("\r\n")
-                        .append("Content-Length: ")
+                        .append(HttpInfo.CONTENT_LENGTH + ": ")
                         .append(contentLength)
                         .append("\r\n")
                         .append(content);
@@ -104,7 +104,7 @@ public class BuildHttpResult {
                 tmpStr = "HTTP/1.1 " +
                         result.getCode() +
                         "\r\n" +
-                        "Content-Length: 0\n\n";
+                        HttpInfo.CONTENT_LENGTH + ": 0\n\n";
             } else {
                 // TODO: This is a problem and need to crash.
                 tmpStr = null;
@@ -122,7 +122,7 @@ public class BuildHttpResult {
                 "\r\n" +
                 "Content-Type: text/html\n" +
                 respHeader +
-                "Content-Length: 0\n\n";
+                HttpInfo.CONTENT_LENGTH + ": 0\n\n";
 
         HttpInfo.str_to_bb(respBuffer, tmpStr);
     }
@@ -135,7 +135,7 @@ public class BuildHttpResult {
                 "\r\n" +
                 "Content-Type: text/html\n" +
                 respHeader +
-                "Content-Length: 0\n\n";
+                HttpInfo.CONTENT_LENGTH + ": 0\n\n";
 
         HttpInfo.str_to_bb(respBuffer, tmpStr);
     }
@@ -164,7 +164,7 @@ public class BuildHttpResult {
         String tmpStr = "HTTP/1.1 200 OK" +
                 "\r\n" +
                 respHeader +
-                "Content-Length: 0\n\n";
+                HttpInfo.CONTENT_LENGTH + ": 0\n\n";
 
         HttpInfo.str_to_bb(respBuffer, tmpStr);
     }
@@ -176,7 +176,7 @@ public class BuildHttpResult {
         String tmpStr = "HTTP/1.1 200 OK" +
                 "\r\n" +
                 respHeader +
-                "Content-Length: " + respContent.length()  + "\n\n" +
+                HttpInfo.CONTENT_LENGTH + ": " + respContent.length()  + "\n\n" +
                 respContent;
 
         HttpInfo.str_to_bb(respBuffer, tmpStr);
@@ -189,7 +189,7 @@ public class BuildHttpResult {
         String tmpStr = "HTTP/1.1 200 OK" +
                 "\r\n" +
                 respHeader +
-                "Content-Length: " + respContent.length()  + "\n\n" +
+                HttpInfo.CONTENT_LENGTH + ": " + respContent.length()  + "\n\n" +
                 respContent;
 
         HttpInfo.str_to_bb(respBuffer, tmpStr);

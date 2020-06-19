@@ -144,7 +144,7 @@ public class BufferManager {
 
         int writeIndex = pointer.updateWriteIndex();
 
-        LOG.info("updateProducerWritePointer(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") writeIndex: " + writeIndex);
+        //LOG.info("updateProducerWritePointer(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") writeIndex: " + writeIndex);
 
         return writeIndex;
     }
@@ -155,7 +155,7 @@ public class BufferManager {
     public int updateConsumerReadPointer(final BufferManagerPointer pointer) {
 
         int readIndex = pointer.updateReadIndex();
-        LOG.info("updateConsumerReadPointer(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
+        //LOG.info("updateConsumerReadPointer(" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
 
         return readIndex;
     }
@@ -217,7 +217,7 @@ public class BufferManager {
     public ByteBuffer peek(final BufferManagerPointer pointer) {
         int readIndex = pointer.getReadIndex(false);
 
-        LOG.info("peek " + bufferManagerName + " (" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
+        //LOG.info("peek " + bufferManagerName + " (" + pointer.getIdentifier() + ":" + pointer.getOperationType() + ") readIndex: " + readIndex);
 
         if (readIndex != -1) {
             return bufferArray[readIndex];

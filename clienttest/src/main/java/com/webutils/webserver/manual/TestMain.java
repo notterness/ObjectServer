@@ -382,13 +382,14 @@ public class TestMain {
         ** Read an object from the Object Server, save it to a file. Then upload that file as a new object. And
         **   finally, delete the object.
          */
-        GetObjectSimple getObjectSimple = new GetObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, accessToken, threadCount);
+        GetObjectSimple getObjectSimple = new GetObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, accessToken,
+                "GetObjectSimple-5-12-2020.01", threadCount);
         getObjectSimple.execute();
 
         PutObjectSimple putObjectSimple = new PutObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, accessToken, threadCount);
         putObjectSimple.execute();
 
-        /*
+
         ListObjectsSimple listObjectsSimple = new ListObjectsSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, accessToken, threadCount);
         listObjectsSimple.execute();
 
@@ -397,7 +398,6 @@ public class TestMain {
 
         ListServersAll listServersAll = new ListServersAll(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
         listServersAll.execute();
-*/
 
         /*
         ** Delete all of the objects created as part of this test suite. Since there are two objects contained within
@@ -421,20 +421,24 @@ public class TestMain {
                 accessToken, threadCount);
         deleteBucket2.execute();
 
-
-        /*
         GetObjectBadBucket getObjectBadBucket = new GetObjectBadBucket(serverIpAddr, OBJECT_SERVER_TCP_PORT, accessToken, threadCount);
         getObjectBadBucket.execute();
 
         GetObjectBadNamespace getObjectBadNamespace = new GetObjectBadNamespace(serverIpAddr, OBJECT_SERVER_TCP_PORT, accessToken, threadCount);
         getObjectBadNamespace.execute();
 
+        /*
+        ** This attempts to perform the GetObject operation, but uses a bogus accessToken to test out the handling.
+         */
+        GetObjectSimple getObjectInvalidToken = new GetObjectSimple(serverIpAddr, OBJECT_SERVER_TCP_PORT, "BogusToken",
+                "GetObjectInvalidToken-6-19-2020.01", threadCount);
+        getObjectInvalidToken.execute();
+
         PutObjectBadBucket putObjectBadBucket = new PutObjectBadBucket(serverIpAddr, OBJECT_SERVER_TCP_PORT, accessToken, threadCount);
         putObjectBadBucket.execute();
 
         PutObjectBadNamespace putObjectBadNamespace = new PutObjectBadNamespace(serverIpAddr, OBJECT_SERVER_TCP_PORT, accessToken, threadCount);
         putObjectBadNamespace.execute();
-*/
 
         /*
         ** Uncomment out the following two lines to let TestMain just act as a server. It can then be used to

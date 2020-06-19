@@ -2,14 +2,11 @@ package com.webutils.webserver.operations;
 
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpResponseInfo;
-import com.webutils.webserver.http.HttpResponseListener;
 import com.webutils.webserver.http.parser.ResponseHttpParser;
 import com.webutils.webserver.manual.ClientTest;
 import com.webutils.webserver.manual.HttpResponseCompleted;
 import com.webutils.webserver.requestcontext.RequestContext;
-import org.eclipse.jetty.http.HttpParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -115,15 +112,15 @@ public class ClientResponseHandler implements Operation {
                 /*
                  ** Leave the pointer in the same place since there is data remaining in the buffer
                  */
-                LOG.info("ClientResponseHandler[" + requestContext.getRequestId() + "] remaining position: " +
-                        httpBuffer.position() + " limit: " + httpBuffer.limit());
+                //LOG.info("ClientResponseHandler[" + requestContext.getRequestId() + "] remaining position: " +
+                //        httpBuffer.position() + " limit: " + httpBuffer.limit());
 
             } else {
                 /*
                  ** Only update the pointer if the data in the buffer was all consumed.
                  */
-                LOG.info("ClientResponseHandler[" + requestContext.getRequestId() + "]  position: " +
-                        httpBuffer.position() + " limit: " + httpBuffer.limit());
+                //LOG.info("ClientResponseHandler[" + requestContext.getRequestId() + "]  position: " +
+                //        httpBuffer.position() + " limit: " + httpBuffer.limit());
 
                 clientReadBufferManager.updateConsumerReadPointer(httpResponseBufferPointer);
             }

@@ -2,7 +2,9 @@ package com.webutils.chunkmgr.operations;
 
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.chunkmgr.http.CreateServerPostContent;
+import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpRequestInfo;
+import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
@@ -23,13 +25,6 @@ public class CreateServer implements Operation {
      ** A unique identifier for this Operation so it can be tracked.
      */
     private final OperationTypeEnum operationType = OperationTypeEnum.CREATE_SERVER;
-
-    /*
-    ** The following are used to build the response header
-     */
-    private final static String SUCCESS_HEADER_1 = "opc-client-request-id: ";
-    private final static String SUCCESS_HEADER_2 = "opc-request-id: ";
-    private final static String SUCCESS_HEADER_3 = "ETag: ";
 
     private final RequestContext requestContext;
 
@@ -200,10 +195,12 @@ public class CreateServer implements Operation {
             int opcRequestId = requestInfo.getRequestId();
 
             if (opcClientRequestId != null) {
-                successHeader = SUCCESS_HEADER_1 + opcClientRequestId + "\n" + SUCCESS_HEADER_2 + opcRequestId + "\n" +
-                        SUCCESS_HEADER_3 + serverUID + "\n";
+                successHeader = HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n" +
+                        HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
+                        HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + serverUID + "\n";
             } else {
-                successHeader = SUCCESS_HEADER_2 + opcRequestId + "\n" + SUCCESS_HEADER_3 + serverUID + "\n";
+                successHeader = HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
+                        HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + serverUID + "\n";
             }
 
             //LOG.info(successHeader);
