@@ -94,10 +94,17 @@ public class ObjectServerHttpRequestInfo extends HttpRequestInfo {
 
             case GET_METHOD:
                 /*
-                 ** This needs to handle the difference between the object GET (retrieve the data for the object) and
-                 **   the ListObjects (which provides a list of all the objects that exist under a bucket)
+                 ** This needs to handle the differences between the Object GET (retrieve the data for the object),
+                 **   the ListObjects (which provides a list of all the objects that exist under a bucket) and
+                 **   the Health Check GET.
                  */
-                if (bucketName == null) {
+                if (isHealthCheck()) {
+                    /*
+                    ** This is the Health Check request meaning the URI had "/health" in it.
+                     */
+                    LOG.info("Setting httpMethod to HEALTH_CHECK");
+                    httpMethod = HttpMethodEnum.HEALTH_CHECK;
+                } else if (bucketName == null) {
                     LOG.warn("GET Missing Critical Object Info [" + requestId + "] bucketName is missing");
 
                     String failureMessage = "{\r\n  \"code\":" + HttpStatus.BAD_REQUEST_400 +

@@ -69,11 +69,13 @@ public abstract class ServerIdentifierTableMgr extends ServersDb {
                                  */
                                 InetAddress inetAddress = InetAddress.getByName(rs.getString(2));
 
-                                ServerIdentifier server = new ServerIdentifier(rs.getString(1), inetAddress, rs.getInt(3), chunkNumber);
+                                String serverName = rs.getString(1);
+                                int tcpPort = rs.getInt(3);
+                                ServerIdentifier server = new ServerIdentifier(serverName, inetAddress, tcpPort, chunkNumber);
                                 servers.add(server);
 
-                                LOG.info("StorageServer host: " + rs.getString(1) + " " + inetAddress.toString() + " port: " +
-                                        rs.getInt(3));
+                                LOG.info("StorageServer host: " + serverName + " " + inetAddress.toString() + " port: " +
+                                        tcpPort);
 
                                 success = true;
                             } catch (UnknownHostException ex) {

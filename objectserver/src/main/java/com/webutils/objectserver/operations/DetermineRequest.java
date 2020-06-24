@@ -137,7 +137,7 @@ public class DetermineRequest implements Operation {
                          ** This is a permissions error
                          */
                         LOG.info("DetermineRequest[" + requestContext.getRequestId() + "] invalid accessToken");
-                        String failureMessage = "{\r\n  \"code\":" + HttpStatus.NETWORK_AUTHENTICATION_REQUIRED_511 +
+                        String failureMessage = "{\r\n  \"code\": " + HttpStatus.NETWORK_AUTHENTICATION_REQUIRED_511 +
                                 "\r\n  \"message\": \"Unable to access Tenancy information, invalid accessToken\"" +
                                 "\r\n}";
                         httpRequestInfo.setParseFailureCode(HttpStatus.NETWORK_AUTHENTICATION_REQUIRED_511, failureMessage);

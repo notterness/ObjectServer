@@ -44,7 +44,7 @@ public class K8ServersMgr extends ServerIdentifierTableMgr {
             "VALUES(?, ?)";
 
     private static final String STORAGE_SERVER_REQUEST = "SELECT serverId, serverName, k8ServerIpAddr, k8ServerPort FROM ServerIdentifier " +
-            "WHERE serverType = ? storageTier = ? ORDER BY usedChunks ASC, totalAllocations ASC, lastAllocationTime DESC";
+            "WHERE serverType = ? storageTier = ? AND disabled = 0 ORDER BY usedChunks ASC, totalAllocations ASC, lastAllocationTime DESC";
 
     public K8ServersMgr(final WebServerFlavor flavor) {
         super(flavor);

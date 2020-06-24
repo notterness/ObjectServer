@@ -1,5 +1,6 @@
 package com.webutils.storageserver.http;
 
+import com.webutils.webserver.http.HttpMethodEnum;
 import com.webutils.webserver.http.HttpRequestInfo;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -71,7 +72,13 @@ public class StorageServerHttpRequestInfo extends HttpRequestInfo {
                 break;
 
             case GET_METHOD:
-                if ((objectName != null) && !objectName.equals("StorageServer")) {
+                if (isHealthCheck()) {
+                    /*
+                     ** This is the Health Check request meaning the URI had "/health" in it.
+                     */
+                    LOG.info("Setting httpMethod to HEALTH_CHECK");
+                    httpMethod = HttpMethodEnum.HEALTH_CHECK;
+                } else if ((objectName != null) && !objectName.equals("StorageServer")) {
                     LOG.warn("GET Missing Critical Object Info [" + requestId + "] StorageServer is missing");
 
                     String failureMessage = "{\r\n  \"code\":" + HttpStatus.BAD_REQUEST_400 +

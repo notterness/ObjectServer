@@ -128,6 +128,10 @@ public class SendFinalStatus implements Operation {
                             resultBuilder.buildListObjectsOkResponse(respBuffer);
                             break;
 
+                        case HEALTH_CHECK:
+                            resultBuilder.buildHealthCheckOkResponse(respBuffer);
+                            break;
+
                         default:
                             resultBuilder.buildResponse(respBuffer, resultCode, true, true);
                             break;

@@ -20,6 +20,7 @@ public enum OperationTypeEnum {
     READ_BUFFER(6),
     PARSE_HTTP_BUFFER(10),
     DETERMINE_REQUEST(11),
+    HEALTH_CHECK(12),
 
     CREATE_OBJECT(20),
     SETUP_OBJECT_GET(21),

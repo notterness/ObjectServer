@@ -77,6 +77,8 @@ public abstract class ServersDb {
             " createTime TIMESTAMP NOT NULL," +
             " lastAllocationTime TIMESTAMP," +
             " totalAllocations INT," +
+            " disabled INT NOT NULL," +
+            " disabledTime TIMESTAMP,"+
             " serverUID BINARY(16) NOT NULL," +
             " PRIMARY KEY (serverId)" +
             ")";
@@ -116,8 +118,8 @@ public abstract class ServersDb {
     ** The storageTier field is a representation of the StorageTierEnum. The default is STANDARD_TIER (1).
      */
     protected static final String ADD_STORAGE_SERVER = "INSERT INTO serverIdentifier(serverName, serverType, localServerIpAddr, localServerPort," +
-            " storageTier, allocatedChunks, usedChunks, createTime, lastAllocationTime, totalAllocations, serverUID) " +
-            "VALUES(?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), 0, UUID_TO_BIN(UUID()) )";
+            " storageTier, allocatedChunks, usedChunks, createTime, lastAllocationTime, totalAllocations, disabled, serverUID) " +
+            "VALUES(?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), 0, 0, UUID_TO_BIN(UUID()) )";
 
     private static final String DROP_SERVER_IDENTIFIER_TABLE = "DROP TABLE IF EXISTS serverIdentifier";
 

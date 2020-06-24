@@ -36,7 +36,7 @@ public class K8PodServersMgr extends ServerIdentifierTableMgr {
             "VALUES(?, ?) WHERE serverName = ?";
 
     private static final String STORAGE_SERVER_REQUEST = "SELECT serverId, serverName, k8PodServerIpAddr, k8PosServerPort FROM ServerIdentifier " +
-            "WHERE serverType = ? storageTier = ? ORDER BY usedChunks ASC, totalAllocations ASC, lastAllocationTime DESC";
+            "WHERE serverType = ? AND storageTier = ? AND disabled = 0 ORDER BY usedChunks ASC, totalAllocations ASC, lastAllocationTime DESC";
 
 
     /*
