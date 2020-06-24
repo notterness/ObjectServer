@@ -91,23 +91,28 @@ public class PostBucketParams extends ObjectParams {
      */
     public void outputResults(final HttpResponseInfo httpInfo) {
         /*
-         ** If the status is good, then display the following:
+         ** If the status is good or bad, then display the following:
          **   opc-client-request-id
          **   opc-request-id
          */
-        if (httpInfo.getResponseStatus() == HttpStatus.OK_200) {
-            System.out.println("Status: 200");
-            String opcClientRequestId = httpInfo.getOpcClientRequestId();
-            if (opcClientRequestId != null) {
-                System.out.println(HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId);
-            }
+        int status = httpInfo.getResponseStatus();
+        System.out.println("Status: " + status);
+        String opcClientRequestId = httpInfo.getOpcClientRequestId();
+        if (opcClientRequestId != null) {
+            System.out.println(HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId);
+        }
 
-            String opcRequestId = httpInfo.getOpcRequestId();
-            if (opcRequestId != null) {
-                System.out.println(HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId);
-            }
+        String opcRequestId = httpInfo.getOpcRequestId();
+        if (opcRequestId != null) {
+            System.out.println(HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId);
+        }
+
+        if (httpInfo.getResponseStatus() == HttpStatus.OK_200) {
+            /*
+            ** FIXME: At some point the response needs to be displayed for a successful CreateBucket to echo
+            **   back a bunch of the key value pairs.
+             */
         } else {
-            System.out.println("Status: " + httpInfo.getResponseStatus());
             String responseBody = httpInfo.getResponseBody();
             if (responseBody != null) {
                 System.out.println(responseBody);

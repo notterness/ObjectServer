@@ -219,6 +219,9 @@ public class ObjectServerRequestContext extends RequestContext {
         SetupBucketDelete bucketDelete = new SetupBucketDelete(this, memoryManager, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.DELETE_BUCKET, bucketDelete);
 
+        HandleHealthCheck healthCheck = new HandleHealthCheck(this, determineRequest);
+        supportedHttpRequests.put(HttpMethodEnum.HEALTH_CHECK, healthCheck);
+
         /*
          ** Setup the specific part for parsing the buffers as an HTTP Request.
          */

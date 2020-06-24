@@ -1,6 +1,6 @@
 package com.webutils.webserver.manual;
 
-import com.webutils.webserver.common.DeleteBucketParams;
+import com.webutils.webserver.common.HealthCheckParams;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.LocalServersMgr;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
@@ -11,7 +11,7 @@ import com.webutils.webserver.requestcontext.WebServerFlavor;
 import java.net.InetAddress;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class DeleteBucketSimple {
+public class SendHealthCheck {
 
     static WebServerFlavor flavor = WebServerFlavor.CLI_CLIENT;
 
@@ -20,8 +20,8 @@ public class DeleteBucketSimple {
 
     private final ClientServiceRequest cli;
 
-    DeleteBucketSimple(final InetAddress serverIpAddr, final int serverTcpPort, final String accessToken,
-                       AtomicInteger testCount) {
+    SendHealthCheck(final InetAddress serverIpAddr, final int serverTcpPort, final String accessToken,
+                    AtomicInteger testCount) {
 
         MemoryManager cliMemoryManager = new MemoryManager(flavor);
 
@@ -31,9 +31,8 @@ public class DeleteBucketSimple {
         cliClient = new NioCliClient(clientContextPool);
         cliClient.start();
 
-        DeleteBucketParams params = new DeleteBucketParams("Namespace-xyz-987", "CreateBucket_Simple",
-                accessToken);
-        params.setOpcClientRequestId("DeleteBucketSimple-6-18-2020.01");
+        HealthCheckParams params = new HealthCheckParams(false, false, accessToken);
+        params.setOpcClientRequestId("HealthCheck-6-22-2020.01");
 
         cli = new ClientServiceRequest(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
                 params, null, testCount);

@@ -133,7 +133,7 @@ public class SetupBucketDelete implements Operation {
                 String namespaceUID = namespaceMgr.getNamespaceUID(namespace, requestContext.getTenancyId());
                 if (namespaceUID == null) {
                     LOG.warn("DeleteBucket failed - unknown namespace: " + namespace);
-                    String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.BAD_REQUEST_400 + "\"" +
+                    String failureMessage = "{\r\n  \"code\": " + HttpStatus.BAD_REQUEST_400 +
                             "\r\n  \"message\": \"Unknown namespace - " + namespace + "\"" +
                             "\r\n}";
                     requestContext.getHttpInfo().setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
@@ -147,7 +147,7 @@ public class SetupBucketDelete implements Operation {
                 bucketId = bucketMgr.getBucketId(bucketName, namespaceUID);
                 if (bucketId == -1) {
                     LOG.warn("DeleteBucket failed - unknown bucket: " + bucketName);
-                    String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.BAD_REQUEST_400 + "\"" +
+                    String failureMessage = "{\r\n  \"code\": " + HttpStatus.BAD_REQUEST_400 +
                             "\r\n  \"message\": \"Unknown bucket - " + bucketName + "\"" +
                             "\r\n}";
                     requestContext.getHttpInfo().setParseFailureCode(HttpStatus.BAD_REQUEST_400, failureMessage);
@@ -166,7 +166,7 @@ public class SetupBucketDelete implements Operation {
                 int objectCount = objectMgr.getObjectCount(bucketId);
                 if (objectCount != 0) {
                     LOG.warn("DeleteBucket failed - not empty object count: " + objectCount);
-                    String failureMessage = "{\r\n  \"code\": \"" + HttpStatus.CONFLICT_409 + "\"" +
+                    String failureMessage = "{\r\n  \"code\": " + HttpStatus.CONFLICT_409 +
                             "\r\n  \"message\": \"Bucket must be empty prior to deletion\"" +
                             "\r\n  \"bucketName\": \"" + requestContext.getHttpInfo().getBucket() + "\"" +
                             "\r\n  \"objectCount\": " + objectCount +

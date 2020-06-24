@@ -31,7 +31,13 @@ public class ChunkMgrHttpRequestInfo extends HttpRequestInfo {
 
             case GET_METHOD:
                 String listType = getListType();
-                if (listType != null) {
+                if (isHealthCheck()) {
+                    /*
+                     ** This is the Health Check request meaning the URI had "/health" in it.
+                     */
+                    LOG.info("Setting httpMethod to HEALTH_CHECK");
+                    httpMethod = HttpMethodEnum.HEALTH_CHECK;
+                } else if (listType != null) {
                     if (listType.equals(LIST_CHUNKS_METHOD)) {
                         httpMethod = HttpMethodEnum.LIST_CHUNKS_METHOD;
                     } else if (listType.equals(LIST_SERVERS_METHOD)) {

@@ -16,7 +16,9 @@ public enum HttpMethodEnum {
     LIST_SERVERS_METHOD(6, "LIST_SERVERS"),
     LIST_CHUNKS_METHOD(7, "LIST_CHUNKS"),
 
-    DELETE_BUCKET(8, "DELETE_BUCKET");
+    DELETE_BUCKET(8, "DELETE_BUCKET"),
+
+    HEALTH_CHECK(9, "HEALTH_CHECK");
 
     private final int value;
     private final String methodName;

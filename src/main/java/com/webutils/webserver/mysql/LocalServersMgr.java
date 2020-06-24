@@ -26,7 +26,7 @@ public class LocalServersMgr extends ServerIdentifierTableMgr {
     private static final String getServerQueryEnd = "'";
 
     private static final String STORAGE_SERVER_REQUEST = "SELECT serverId, serverName, localServerIpAddr, localServerPort FROM ServerIdentifier " +
-            "WHERE serverType = ? AND storageTier = ? ORDER BY usedChunks ASC, totalAllocations ASC, lastAllocationTime ASC";
+            "WHERE serverType = ? AND storageTier = ? AND disabled = 0 ORDER BY usedChunks ASC, totalAllocations ASC, lastAllocationTime ASC";
 
     public LocalServersMgr(final WebServerFlavor flavor) {
         super(flavor);

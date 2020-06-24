@@ -26,7 +26,7 @@ public class StorageServerRequestContext extends RequestContext {
     /*
      **
      */
-    private StorageServerDetermineRequest determineRequestType;
+    private StorageServerDetermineRequest determineRequest;
 
 
     StorageServerRequestContext(final MemoryManager memoryManager, final HttpRequestInfo httpInfo, final EventPollThread threadThisRunsOn,
@@ -81,10 +81,10 @@ public class StorageServerRequestContext extends RequestContext {
          ** The DetermineRequest operation is run after the HTTP Request has been parsed and the method
          **   handler determined via the setHttpMethodAndVersion() method in the HttpInfo object.
          */
-        determineRequestType = new StorageServerDetermineRequest(this, supportedHttpRequests, memoryManager,
+        determineRequest = new StorageServerDetermineRequest(this, supportedHttpRequests, memoryManager,
                 clientConnection);
-        requestHandlerOperations.put(determineRequestType.getOperationType(), determineRequestType);
-        determineRequestType.initialize();
+        requestHandlerOperations.put(determineRequest.getOperationType(), determineRequest);
+        determineRequest.initialize();
 
         /*
          ** The HTTP Request methods that are supported are added to the supportedHttpRequests Map<> and are used
@@ -93,14 +93,17 @@ public class StorageServerRequestContext extends RequestContext {
          ** NOTE: Although it seems weird to add the supported HTTP requests after the creating of the
          **   StorageServerDetermineRequest, the method handler have a dependency upon the determine request.
          */
-        SetupStorageServerPut storageServerPutHandler = new SetupStorageServerPut(this, metering, determineRequestType);
+        SetupStorageServerPut storageServerPutHandler = new SetupStorageServerPut(this, metering, determineRequest);
         this.supportedHttpRequests.put(HttpMethodEnum.PUT_METHOD, storageServerPutHandler);
 
-        SetupStorageServerGet storageServerGetHandler = new SetupStorageServerGet(this, memoryManager, determineRequestType);
+        SetupStorageServerGet storageServerGetHandler = new SetupStorageServerGet(this, memoryManager, determineRequest);
         this.supportedHttpRequests.put(HttpMethodEnum.GET_METHOD, storageServerGetHandler);
 
-        SetupStorageServerChunkDelete storageServerDeleteHandler = new SetupStorageServerChunkDelete(this, determineRequestType);
+        SetupStorageServerChunkDelete storageServerDeleteHandler = new SetupStorageServerChunkDelete(this, determineRequest);
         this.supportedHttpRequests.put(HttpMethodEnum.DELETE_METHOD, storageServerDeleteHandler);
+
+        HandleHealthCheck healthCheck = new HandleHealthCheck(this, determineRequest);
+        supportedHttpRequests.put(HttpMethodEnum.HEALTH_CHECK, healthCheck);
 
         /*
          ** Setup the specific part for parsing the buffers as an HTTP Request.
@@ -123,7 +126,7 @@ public class StorageServerRequestContext extends RequestContext {
          **   will event the DetermineRequest operation to determine what operation sequence
          **   to setup.
          */
-        ParseHttpRequest httpParser = new ParseHttpRequest(this, readPointer, metering, determineRequestType);
+        ParseHttpRequest httpParser = new ParseHttpRequest(this, readPointer, metering, determineRequest);
         requestHandlerOperations.put(httpParser.getOperationType(), httpParser);
         httpParser.initialize();
 
@@ -180,7 +183,7 @@ public class StorageServerRequestContext extends RequestContext {
              ** Clear out the references to the Operations
              */
             metering = null;
-            determineRequestType = null;
+            determineRequest = null;
 
             /*
              ** Call reset() to make sure the BufferManager(s) have released all the references to

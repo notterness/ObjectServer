@@ -39,6 +39,7 @@ abstract public class HttpInfo {
     private static final String BUCKET_NAME = "/b";
     private static final String TEST_TYPE = "/t";
     private static final String LIST_TYPE = "/l";
+    private static final String HEALTH_CHECK = "/health";
 
     public static final String TENANCY_NAME = "tenancy-name";
     public static final String CUSTOMER_NAME = "customer-name";
@@ -79,6 +80,12 @@ abstract public class HttpInfo {
     private static final String FIELDS_LIST = "fields";
 
     /*
+    ** The following are used for the Health Check method
+     */
+    public static final String DISABLE_SERVICE = "disable-service";
+    public static final String ENABLE_SERVICE = "enable-service";
+
+    /*
      ** The connection this HTTP information is associated with
      */
     protected int requestId;
@@ -93,7 +100,7 @@ abstract public class HttpInfo {
      */
     protected final Map<String, List<String>> headers;
 
-    private final String[] uriFields = {OBJECT_NAME, BUCKET_NAME, NAMESPACE_NAME, LIST_TYPE, TEST_TYPE};
+    private final String[] uriFields = {OBJECT_NAME, BUCKET_NAME, NAMESPACE_NAME, LIST_TYPE, TEST_TYPE, HEALTH_CHECK};
 
     protected boolean headerComplete;
 
@@ -288,12 +295,23 @@ abstract public class HttpInfo {
             String tmp = null;
             int startingIndex = uri.indexOf(uriField);
             if (startingIndex != -1) {
+                /*
+                ** The extracted URI field is useful for determining if this is a Health Check request
+                **   and potentially if there are more URI fields that do not pass information, but the code
+                **   needs to know that the field was passed in.
+                 */
+                String extractedUriField = uri.substring(startingIndex, startingIndex + uriField.length());
                 startingIndex += uriField.length();
 
                 if (startingIndex == lastIndex) {
                     /*
-                    ** Nothing to do with this field as it is at the end of the string
+                    ** Nothing to do with this field as it is at the end of the string unless it is "/health" in
+                    **   which case, add an entry with the value set to "true" to indicate this is a Health Check
+                    **   command.
                      */
+                    if (extractedUriField.equalsIgnoreCase(HEALTH_CHECK)) {
+                        objectUriInfoMap.put(uriField, "true");
+                    }
                     continue;
                 }
 
@@ -324,7 +342,7 @@ abstract public class HttpInfo {
                     }
                 }
             } else {
-                //LOG.warn("setHttpUri() [" + requestId + "] name: " + uriField + " is null");
+                LOG.warn("setHttpUri() [" + requestId + "] name: " + uriField + " is null");
             }
 
             if (tmp != null) {
@@ -433,6 +451,7 @@ abstract public class HttpInfo {
     **    getNamespace() - "/n/" field in the URI
     **    getBucket() - "/b/" field in the URI
     **    getObject() - "/o/" field in the URI
+    **    isHealthCheck() - "/health" field in the URI
     **    getTestType() - "/t/" field in the URI - NOT FOR PRODUCTION
     **
      */
@@ -485,6 +504,14 @@ abstract public class HttpInfo {
      **    - DisconnectAfterHeader
      */
     public String getTestType() { return objectUriInfoMap.get(TEST_TYPE); }
+
+    /*
+    ** Return if this is a Health Check request
+     */
+    public boolean isHealthCheck() {
+        String healthCheckStr = objectUriInfoMap.get(HEALTH_CHECK);
+        return ( (healthCheckStr != null) && healthCheckStr.equals("true") );
+    }
 
     /*
      ** Return "tenancy-name" from the headers
@@ -718,7 +745,7 @@ abstract public class HttpInfo {
     public String getObjectChunkLocation() {
         List<String> chunkLocation = headers.get(CHUNK_LOCATION);
 
-        if (chunkLocation.size() != 1) {
+        if ((chunkLocation == null) || (chunkLocation.size() != 1)) {
             return null;
         }
 
@@ -785,6 +812,54 @@ abstract public class HttpInfo {
         }
 
         return ifNoneMatchSet;
+    }
+
+    /*
+     ** Returns if the service is supposed to be disabled
+     **
+     ** NOTE: For the health check, the service requires an explicit disable/enable operation. Simply not sending the
+     **   "disable-service" or setting "disable-service" to false is not sufficient to enable the service after it has
+     **   been disabled.
+     */
+    public boolean getServiceDisable() {
+        List<String> disableService = headers.get(DISABLE_SERVICE);
+
+        if ((disableService == null) || (disableService.size() != 1)) {
+            return false;
+        }
+
+        /*
+         */
+        boolean disabled = false;
+        String disabledStr = disableService.get(0);
+        if (disabledStr.equalsIgnoreCase("true")) {
+            disabled = true;
+        }
+        return disabled;
+    }
+
+    /*
+     ** Returns if the service is supposed to be enabled
+     **
+     ** NOTE: For the health check, the service requires an explicit disable/enable operation. Simply not sending the
+     **   "disable-service" or setting "disable-service" to false is not sufficient to enable the service after it has
+     **   been disabled.
+     */
+    public boolean getServiceEnable() {
+        List<String> enableService = headers.get(DISABLE_SERVICE);
+
+        if ((enableService == null) || (enableService.size() != 1)) {
+            return false;
+        }
+
+        /*
+         */
+        boolean enabled = false;
+        String disabledStr = enableService.get(0);
+        if (disabledStr.equalsIgnoreCase("true")) {
+            enabled = true;
+        }
+        return enabled;
     }
 
     /*

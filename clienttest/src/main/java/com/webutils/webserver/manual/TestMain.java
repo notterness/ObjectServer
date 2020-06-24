@@ -99,14 +99,45 @@ public class TestMain {
         accessControlDb.checkAndSetupAccessControls();
 
         /*
+         ** Create the Administrator Tenancy to use for the test cases
+         */
+        String adminName = "Administrator";
+        String adminTenancyName = "AdministratorTenancy-Global";
+
+        TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
+        tenancyMgr.createTenancyEntry(adminName, adminTenancyName, "admin-passphrase");
+        int tenancyId = tenancyMgr.getTenancyId(adminName, adminTenancyName);
+
+        /*
+        ** Create the user to send the Health Check commands
+         */
+        HttpRequestInfo httpHealthCheckInfo = new TenancyUserHttpRequestInfo();
+        HttpField adminTenancyField = new HttpField(HttpInfo.TENANCY_NAME, adminTenancyName);
+        httpHealthCheckInfo.addHeaderValue(adminTenancyField);
+        HttpField adminCustomerField = new HttpField(HttpInfo.CUSTOMER_NAME, adminName);
+        httpHealthCheckInfo.addHeaderValue(adminCustomerField);
+
+        String healthCheckUserName = "HealthCheckAdmin@test.com";
+        String healthCheckUserPassword = "HealthCheckAdmin_password";
+        HttpField healthCheckUserField = new HttpField(HttpInfo.USER_NAME, healthCheckUserName);
+        httpHealthCheckInfo.addHeaderValue(healthCheckUserField);
+        HttpField healthCheckPasswordField = new HttpField(HttpInfo.USER_PASSWORD, healthCheckUserPassword);
+        httpHealthCheckInfo.addHeaderValue(healthCheckPasswordField);
+
+        UserTableMgr userMgr = new UserTableMgr(flavor);
+        userMgr.createTenancyUser(httpHealthCheckInfo);
+
+        String healthCheckAccessToken = userMgr.getAccessToken(httpHealthCheckInfo);
+        System.out.println("HealthCheck accessToken: " + healthCheckAccessToken);
+
+        /*
         ** Create the Tenancy to use for the test cases
          */
         String customerName = "testCustomer";
         String tenancyName = "Tenancy-12345-abcde";
 
-        TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
         tenancyMgr.createTenancyEntry(customerName, tenancyName, "test-passphrase");
-        int tenancyId = tenancyMgr.getTenancyId(customerName, tenancyName);
+        tenancyId = tenancyMgr.getTenancyId(customerName, tenancyName);
 
         /*
         ** Create a test user
@@ -124,7 +155,6 @@ public class TestMain {
         HttpField passwordField = new HttpField(HttpInfo.USER_PASSWORD, userPassword);
         httpInfo.addHeaderValue(passwordField);
 
-        UserTableMgr userMgr = new UserTableMgr(flavor);
         userMgr.createTenancyUser(httpInfo);
 
         String accessToken = userMgr.getAccessToken(httpInfo);
@@ -313,6 +343,14 @@ public class TestMain {
                 serverIpAddr = InetAddress.getLoopbackAddress();
             }
         }
+
+        /*
+        ** Validate the Health Check for the Object Server
+         */
+        SendHealthCheck healthCheck = new SendHealthCheck(serverIpAddr, OBJECT_SERVER_TCP_PORT, healthCheckAccessToken, threadCount);
+        healthCheck.execute();
+
+        waitForTestsToComplete(threadCount);
 
         /*
         ** Create an extra Storage Server and set the address for the Chunk Manager Service so that it can be accessed
