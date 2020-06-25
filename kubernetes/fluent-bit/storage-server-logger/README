@@ -1,0 +1,13 @@
+To build the fluent-storage-logger Docker image:
+  
+docker build -f Dockerfile -t fluent-storage-logger:1 .
+
+This is the image that is used in the Kubernetes POD. The current version of fluent-bit that is used to push
+the logs from Storage Server services to ElasticSearch. Multiple Storage Servers run within the same image to
+simplify deployment in this version of the code. In reality, the would be a different version of deployment
+for each instance of the Storage Server service.
+
+There is likely a question about why there is a different fluent-bit instance per service. In this case it is
+to simplify the storage-logger.conf file. There is a Index and Tag_Key that is added to the log statements when
+they are pushed that is used to make searching and categorizing logs easier in Elasticsearch. This is a quick and
+easy way to accomplish that.

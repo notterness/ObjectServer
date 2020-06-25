@@ -1,0 +1,120 @@
+  apiVersion: apps/v1
+  kind: Deployment 
+  metadata:
+    name: webutils-site
+  spec:
+    selector:
+      matchLabels:
+        app: webutils-site
+        tier: backend
+        track: stable
+    replicas: 1
+    template:
+      metadata:
+        labels:
+          app: webutils-site
+          tier: backend
+          track: stable
+      spec:
+        containers:
+          - 
+            name: storage-servers
+            image: storageserver:1
+            imagePullPolicy: Never
+            ports:
+              - 
+                containerPort: 5010
+            volumeMounts:
+              -
+                name: storage-log-volume 
+                mountPath: /usr/src/myapp/logs
+          -
+            name: chunkmgr
+            image: chunkmgr:1
+            imagePullPolicy: Never
+            ports:
+              -
+                containerPort: 5001
+            volumeMounts:
+              -
+                name: chunk-log-volume
+                mountPath: /usr/src/myapp/logs
+          -
+            name: object-server
+            image: objectserver:1
+            imagePullPolicy: Never
+            ports:
+              - 
+                containerPort: 5001
+            volumeMounts:
+              - 
+                name: object-log-volume
+                mountPath: /usr/src/myapp/logs
+              - 
+                name: kube-config-volume
+                mountPath: /usr/src/myapp/config
+          -
+            name: fluent-storage-logger
+            image: fluent-storage-logger:1
+            imagePullPolicy: Never
+            volumeMounts:
+              - 
+                name: storage-log-volume
+                mountPath: /var/log
+              -
+                name: fluent-logs
+                mountPath: /var/log/td-agent
+          -
+            name: fluent-object-logger
+            image: fluent-object-logger:1
+            imagePullPolicy: Never
+            volumeMounts:
+              - 
+                name: object-log-volume
+                mountPath: /var/log
+          -
+            name: fluent-chunk-logger
+            image: fluent-chunk-logger:1
+            imagePullPolicy: Never
+            volumeMounts:
+              -
+                name: chunk-log-volume
+                mountPath: /var/log
+          -
+            name: socat
+            image: socat:1
+            imagePullPolicy: Never
+            ports:
+              -
+                containerPort: 1234
+            volumeMounts:
+              -
+                name: docker-sock
+                mountPath: /var/run/docker.sock
+        volumes:
+          - 
+            name: log-volume
+            hostPath:
+              path: /Users/notterness/WebServer/webserver/logs
+          -
+            name: fluent-logs 
+            hostPath:
+              path: /Users/notterness/fluent-bit/logs
+          -
+            name: kube-config-volume
+            hostPath:
+              path: /Users/notterness/.kube
+          -
+            name: storage-log-volume
+            emptyDir: {}
+          -
+            name: object-log-volume
+            emptyDir: {}
+          -
+            name: chunk-log-volume
+            emptyDir: {}
+          -
+            name: docker-sock
+            hostPath:
+              path: /var/run/docker.sock
+

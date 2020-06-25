@@ -1,0 +1,11 @@
+To build the fluent-object-logger Docker image:
+
+docker build -f Dockerfile -t fluent-object-logger:1 .
+
+This is the image that is used in the Kubernetes POD. The current version of fluent-bit that is used to push
+the logs from Object Server service to ElasticSearch.
+
+There is likely a question about why there is a different fluent-bit instance per service. In this case it is
+to simplify the object-logger.conf file. There is a Index and Tag_Key that is added to the log statements when
+they are pushed that is used to make searching and categorizing logs easier in Elasticsearch. This is a quick and
+easy way to accomplish that.

@@ -1,0 +1,38 @@
+version: "3"
+services:
+  socat:
+    container_name: socat
+    image: bobrik/socat
+    command: TCP-LISTEN:1234,fork UNIX-CONNECT:/var/run/docker.sock
+    expose:
+      - "1234"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      sample_network:
+        aliases:
+          - socat
+
+  rabbitmq:
+    container_name: rabbit
+    image: rabbitmq:3-management-alpine
+    expose:
+      - "5672"
+      - "15672"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - ./init/rabbit/rabbitmq.config:/etc/rabbitmq/rabbitmq.config:ro
+      - ./init/rabbit/definitions.json:/etc/rabbitmq/definitions.json:ro
+    networks:
+      sample_network:
+        aliases:
+          - rabbitmq
+
+networks:
+  sample_network:
+
+volumes:
+  pgdata:
+

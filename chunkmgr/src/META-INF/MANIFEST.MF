@@ -1,5 +1,5 @@
 Manifest-Version: 1.0
-Main-Class: com.webutils.storageserver.StorageServerMain
+Main-Class: com.webutils.chunkmgr.ChunkAllocMain
 Class-Path: client-java-7.0.0.jar jul-to-slf4j-1.7.26.jar jackson-module
  -jaxb-annotations-2.10.2.jar jackson-dataformat-yaml-2.10.2.jar sundr-c
  odegen-0.19.2.jar jakarta.xml.bind-api-2.3.2.jar joda-time-2.9.3.jar cl
@@ -18,8 +18,9 @@ Class-Path: client-java-7.0.0.jar jul-to-slf4j-1.7.26.jar jackson-module
  agger-annotations-1.5.22.jar bcprov-jdk15on-1.61.jar animal-sniffer-ann
  otations-1.14.jar kubernetes-client-4.6.1.jar log4j-docker-2.13.1.jar r
  esourcecify-annotations-0.19.2.jar jackson-databind-2.10.2.jar jackson-
- core-2.10.2.jar commons-compress-1.19.jar log4j-slf4j-impl-2.13.0.jar j
- akarta.activation-api-1.2.1.jar builder-annotations-0.19.2.jar generex-
- 1.0.2.jar log4j-kubernetes-2.13.1.jar commons-codec-1.11.jar okhttp-3.1
- 2.8.jar log4j-api-2.13.0.jar sundr-core-0.19.2.jar
+ core-2.10.2.jar alpn-boot-8.1.13.v20181017.jar commons-compress-1.19.ja
+ r log4j-slf4j-impl-2.13.0.jar jakarta.activation-api-1.2.1.jar builder-
+ annotations-0.19.2.jar generex-1.0.2.jar log4j-kubernetes-2.13.1.jar co
+ mmons-codec-1.11.jar okhttp-3.12.8.jar log4j-api-2.13.0.jar sundr-core-
+ 0.19.2.jar
 
