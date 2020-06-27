@@ -20,8 +20,10 @@ import org.eclipse.jetty.http.HttpField;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.Hashtable;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 // Server class
@@ -186,14 +188,12 @@ public class TestMain {
             **   to already be up and running for it to work. In general, it can simply be commented out as the code
             **   is not needed to run the tests in the IntelliJ environment.
              */
-            /*
             KubernetesInfo kubeInfo = new KubernetesInfo(flavor);
             try {
                 kubernetesPodIp = kubeInfo.getExternalKubeIp();
             } catch (IOException io_ex) {
                 System.out.println("IOException: " + io_ex.getMessage());
             }
-            */
         }
 
         AtomicInteger threadCount = new AtomicInteger(1);
@@ -338,6 +338,16 @@ public class TestMain {
              */
             try {
                 serverIpAddr = InetAddress.getLocalHost();
+
+                KubernetesInfo k8Info = new KubernetesInfo(flavor);
+
+                Map<String, Integer> storageServersInfo = new Hashtable<>();
+                try {
+                    k8Info.getStorageServerPorts(storageServersInfo);
+                } catch (IOException io_ex) {
+                    System.out.println("Unable to obtain Storage Server NodePorts - IOException: " + io_ex.getMessage());
+                }
+
             } catch (UnknownHostException ex) {
                 System.out.println("Unknown LocalHost");
                 serverIpAddr = InetAddress.getLoopbackAddress();

@@ -2,4 +2,4 @@ FROM openjdk:13
 COPY ./out/chunkmgr_jar /usr/src/myapp
 WORKDIR /usr/src/myapp
 CMD ["java", "-jar", "chunkmgr.jar", "5001", "kubernetes"]
-EXPOSE 3306 5001
+EXPOSE 3306 5002
