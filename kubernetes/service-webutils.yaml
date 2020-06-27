@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: frontend
+  name: webutils-service
+  namespace: default 
+spec:
+  selector:
+    app: webutils-site
+  ports:
+  - name: object-server
+    protocol: TCP
+    port: 5001
+    targetPort: 5001
+  - name: chunk-mgr 
+    protocol: TCP
+    port: 5002
+    targetPort: 5002
+  - name: storage-server-0
+    protocol: TCP
+    port: 5010
+    targetPort: 5010
+  - name: storage-server-1
+    protocol: TCP
+    port: 5011
+    targetPort: 5011
+  - name: storage-server-2
+    protocol: TCP
+    port: 5012
+    targetPort: 5012
+  - name: storage-server-3
+    protocol: TCP
+    port: 5013
+    targetPort: 5013
+  type: NodePort
+    

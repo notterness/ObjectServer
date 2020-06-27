@@ -1,26 +1,26 @@
 Manifest-Version: 1.0
 Main-Class: com.webutils.chunkmgr.ChunkAllocMain
-Class-Path: client-java-7.0.0.jar jul-to-slf4j-1.7.26.jar jackson-module
- -jaxb-annotations-2.10.2.jar jackson-dataformat-yaml-2.10.2.jar sundr-c
- odegen-0.19.2.jar jakarta.xml.bind-api-2.3.2.jar joda-time-2.9.3.jar cl
- ient-java-api-7.0.0.jar jsr305-3.0.2.jar woodstox-core-6.0.3.jar j2objc
- -annotations-1.1.jar slf4j-api-1.7.28.jar gson-2.8.0.jar kubernetes-mod
- el-4.6.1.jar protobuf-java-3.4.0.jar kubernetes-model-common-4.6.1.jar 
- snakeyaml-1.25.jar commons-collections4-4.1.jar jackson-dataformat-xml-
- 2.10.2.jar bcprov-ext-jdk15on-1.61.jar gson-fire-1.8.3.jar bcpkix-jdk15
- on-1.61.jar commons-lang3-3.7.jar jaxb-api-2.3.0.jar guava-25.1-jre.jar
-  error_prone_annotations-2.1.3.jar zjsonpatch-0.3.0.jar checker-qual-2.
- 0.0.jar jetty-http-9.4.25.v20191220.jar mysql-connector-java-8.0.19.jar
-  jetty-io-9.4.25.v20191220.jar okio-1.15.0.jar logging-interceptor-3.14
- .3.jar log4j-core-2.13.0.jar joda-convert-1.2.jar javax.annotation-api-
- 1.3.2.jar automaton-1.11-8.jar jetty-util-9.4.25.v20191220.jar stax2-ap
- i-4.2.jar client-java-proto-7.0.0.jar jackson-annotations-2.10.2.jar sw
- agger-annotations-1.5.22.jar bcprov-jdk15on-1.61.jar animal-sniffer-ann
- otations-1.14.jar kubernetes-client-4.6.1.jar log4j-docker-2.13.1.jar r
- esourcecify-annotations-0.19.2.jar jackson-databind-2.10.2.jar jackson-
- core-2.10.2.jar alpn-boot-8.1.13.v20181017.jar commons-compress-1.19.ja
- r log4j-slf4j-impl-2.13.0.jar jakarta.activation-api-1.2.1.jar builder-
- annotations-0.19.2.jar generex-1.0.2.jar log4j-kubernetes-2.13.1.jar co
- mmons-codec-1.11.jar okhttp-3.12.8.jar log4j-api-2.13.0.jar sundr-core-
- 0.19.2.jar
+Class-Path: jackson-dataformat-yaml-2.10.2.jar javax.annotation-api-1.3.
+ 2.jar mysql-connector-java-8.0.19.jar log4j-kubernetes-2.13.1.jar j2obj
+ c-annotations-1.1.jar logging-interceptor-3.14.3.jar slf4j-api-1.7.28.j
+ ar bcprov-ext-jdk15on-1.61.jar woodstox-core-6.0.3.jar okio-1.15.0.jar 
+ jackson-annotations-2.10.2.jar resourcecify-annotations-0.21.0.jar joda
+ -time-2.9.3.jar client-java-api-8.0.1-SNAPSHOT.jar kubernetes-client-4.
+ 6.1.jar bcprov-jdk15on-1.61.jar jetty-io-9.4.25.v20191220.jar generex-1
+ .0.2.jar log4j-api-2.13.0.jar animal-sniffer-annotations-1.14.jar proto
+ buf-java-3.4.0.jar snakeyaml-1.25.jar client-java-proto-7.0.0.jar clien
+ t-java-7.0.0.jar builder-annotations-0.21.0.jar checker-qual-2.0.0.jar 
+ alpn-boot-8.1.13.v20181017.jar jackson-databind-2.10.2.jar kubernetes-m
+ odel-4.6.1.jar stax2-api-4.2.jar swagger-annotations-1.5.22.jar jackson
+ -core-2.10.2.jar automaton-1.11-8.jar jetty-http-9.4.25.v20191220.jar e
+ rror_prone_annotations-2.1.3.jar log4j-slf4j-impl-2.13.0.jar zjsonpatch
+ -0.3.0.jar gson-2.8.0.jar log4j-docker-2.13.1.jar jakarta.activation-ap
+ i-1.2.1.jar commons-codec-1.11.jar jul-to-slf4j-1.7.26.jar sundr-core-0
+ .21.0.jar jsr305-3.0.2.jar jackson-module-jaxb-annotations-2.10.2.jar j
+ akarta.xml.bind-api-2.3.2.jar jaxb-api-2.3.0.jar sundr-codegen-0.21.0.j
+ ar okhttp-3.12.8.jar log4j-core-2.13.0.jar gson-fire-1.8.3.jar joda-con
+ vert-1.2.jar kubernetes-model-common-4.6.1.jar jetty-util-9.4.25.v20191
+ 220.jar commons-collections4-4.1.jar bcpkix-jdk15on-1.61.jar commons-co
+ mpress-1.19.jar guava-25.1-jre.jar commons-lang3-3.7.jar jackson-datafo
+ rmat-xml-2.10.2.jar
 

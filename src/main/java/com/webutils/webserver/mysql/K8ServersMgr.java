@@ -25,7 +25,7 @@ import java.util.Set;
  **
  **   WebServerFlavor.DOCKER_OBJECT_SERVER_TEST - This is when everything is running in different Docker images. This
  **     is not currently used for anything.
- **   WebServerFlavor.KUBERNETES_OBJECT_SERVER_TEST - This is teh default configuration and is when the Object Server,
+ **   WebServerFlavor.KUBERNETES_OBJECT_SERVER_TEST - This is the default configuration and is when the Object Server,
  **     ChunkMgr and Storage Servers are all running within a Kubernetes POD.
  **
  ** NOTE: This is only used by the Object Storage Docker Image running within the webutils-site Kubernetes POD deployment.
@@ -38,10 +38,9 @@ public class K8ServersMgr extends ServerIdentifierTableMgr {
     private static final String GET_K8_STORAGE_SERVER = "SELECT serverName, K8ServerIpAddr, K8ServerPort  FROM ServerIdentifier WHERE serverName = '";
     private static final String GET_SERVER_QUERY_END = "'";
 
-    private static final String UPDATE_K8_SERVER = "INSERT INTO k8PodServiceInfo(k8ServerIpAddr, k8ServerPort) " +
-            "VALUES(?, ?) WHERE serverName = ?";
-    private static final String UPDATE_K8_SERVERS = "INSERT INTO k8PodServiceInfo(k8ServerIpAddr, k8ServerPort) " +
-            "VALUES(?, ?)";
+    private static final String UPDATE_K8_SERVER = "UPDATE ServerIdentifier SET k8ServerIpAddr=?, k8ServerPort=? " +
+            "WHERE serverName = ?";
+    private static final String UPDATE_K8_SERVERS = "UPDATE ServerIdentifier SET k8ServerIpAddr=?, k8ServerPort=?";
 
     private static final String STORAGE_SERVER_REQUEST = "SELECT serverId, serverName, k8ServerIpAddr, k8ServerPort FROM ServerIdentifier " +
             "WHERE serverType = ? storageTier = ? AND disabled = 0 ORDER BY usedChunks ASC, totalAllocations ASC, lastAllocationTime DESC";
@@ -58,6 +57,7 @@ public class K8ServersMgr extends ServerIdentifierTableMgr {
      **     "storage-server-1"
      **     "storage-server-2"
      **     "storage-server-3"
+     **     more storage server will follow the same pattern.
      */
     public boolean getServer(final String serverName, final List<ServerIdentifier> serverList) {
         LOG.info("K8ServersMgr getServer() serverName: " + serverName + " dockerImage: " + isDockerImage() +
@@ -89,9 +89,9 @@ public class K8ServersMgr extends ServerIdentifierTableMgr {
         String k8IpAddr = k8Info.waitForInternalK8Ip();
         if (k8IpAddr != null) {
             /*
-             ** Always drop and repopulate the Kubernetes storage server tables since the IP address
+             ** Always clear and repopulate the Kubernetes storage server fields since the IP address
              **   for the POD will likely change between startups.
-             ** Recreate the tables that provide the IP address and Port mappings for the Storage Servers when accessed
+             ** Recreate the fields that provide the IP address and Port mappings for the Storage Servers when accessed
              **   from within the POD.
              */
             clearK8Servers();
@@ -141,11 +141,8 @@ public class K8ServersMgr extends ServerIdentifierTableMgr {
                         stmt.executeUpdate();
                     }
                 } catch (SQLException sqlEx) {
-                    LOG.error("SQLException: " + sqlEx.getMessage());
-                    System.out.println("SQLState: " + sqlEx.getSQLState());
-                    System.out.println("VendorError: " + sqlEx.getErrorCode());
-
-                    return;
+                    LOG.error("populateK8Servers() SQLException: " + sqlEx.getMessage());
+                    LOG.error("populateK8Servers() SQLException: " + sqlEx.getMessage());
                 } finally {
                     if (stmt != null) {
                         try {
@@ -169,7 +166,7 @@ public class K8ServersMgr extends ServerIdentifierTableMgr {
     }
 
     /*
-     ** This will drop the Kubernetes storage server values. These are managed separately from the
+     ** This will clear the Kubernetes storage server values. These are managed separately from the
      **   since those can change with each startup
      */
     public void clearK8Servers() {
@@ -187,8 +184,8 @@ public class K8ServersMgr extends ServerIdentifierTableMgr {
                 stmt.setNull(2, Types.INTEGER);
                 stmt.executeUpdate();
             } catch (SQLException sqlEx) {
-                LOG.error("SQLException: " + sqlEx.getMessage());
-                System.out.println("SQLState: " + sqlEx.getSQLState());
+                LOG.error("clearK8Servers() SQLException: " + sqlEx.getMessage());
+                System.out.println("clearK8Servers() SQLException: " + sqlEx.getMessage());
                 System.out.println("VendorError: " + sqlEx.getErrorCode());
             }
             finally {
