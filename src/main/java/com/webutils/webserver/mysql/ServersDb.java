@@ -162,7 +162,7 @@ public abstract class ServersDb {
     **   then create the tables. The tables that are created are dependent upon who the caller is and the application
     **   type that is running (test code within IntelliJ, Docker image or Kubernetes POD).
      */
-    public void checkAndSetupStorageServers() {
+    public void checkAndSetupServices() {
 
         /*
         ** When the database is created, the local mock Storage Server IP addresses and Ports are populated no

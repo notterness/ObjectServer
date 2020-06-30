@@ -12,7 +12,7 @@ import com.webutils.webserver.requestcontext.WebServerFlavor;
 import java.net.InetAddress;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class CreateChunkMgrService {
+public class CreateService {
 
     static WebServerFlavor flavor = WebServerFlavor.CLI_CLIENT;
 
@@ -21,7 +21,8 @@ public class CreateChunkMgrService {
 
     private final ClientCommandInterface cli;
 
-    CreateChunkMgrService(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount) {
+    CreateService(final String serviceName, final int serviceTcpPort, final InetAddress serverIpAddr,
+                  final int serverTcpPort, AtomicInteger testCount) {
 
         MemoryManager cliMemoryManager = new MemoryManager(flavor);
 
@@ -31,9 +32,9 @@ public class CreateChunkMgrService {
         cliClient = new NioCliClient(clientContextPool);
         cliClient.start();
 
-        CreateServerObjectParams params = new CreateServerObjectParams("chunk-mgr-service", "localhost",
-                5002, 0, StorageTierEnum.INVALID_TIER);
-        params.setOpcClientRequestId("CreateChunkMgrService-6-1-2020.01");
+        CreateServerObjectParams params = new CreateServerObjectParams(serviceName, "localhost", serviceTcpPort,
+                0, StorageTierEnum.INVALID_TIER);
+        params.setOpcClientRequestId("CreateService-6-1-2020.01");
 
         cli = new ClientCommandInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
                 params, testCount);

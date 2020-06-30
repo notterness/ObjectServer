@@ -17,6 +17,11 @@ public class ClientRequestContext extends RequestContext {
 
     private static final Logger LOG = LoggerFactory.getLogger(ClientRequestContext.class);
 
+    /*
+     ** The following Map is used to indicate that a Storage Server has responded.
+     */
+    private final Map<ServerIdentifier, Integer> serviceResponse;
+
 
     /*
      ** The following Map is used to keep track of when the HTTP Request is sent to the
@@ -37,6 +42,8 @@ public class ClientRequestContext extends RequestContext {
          ** Setup the map for the HTTP Request Sent
          */
         this.httpRequestSent = new HashMap<>();
+
+        this.serviceResponse = new HashMap<>();
 
         this.allObjectDataWritten = new AtomicBoolean(false);
     }
@@ -75,25 +82,32 @@ public class ClientRequestContext extends RequestContext {
     }
 
     /*
-     ** The following are stubs until I sort out how the RequestContext and RequestContext pool objects should be
-     **   properly handled.
+     ** The following are used to keep track of the HTTP Response from the service.
      */
     public boolean hasStorageServerResponseArrived(final ServerIdentifier storageServerId) {
-        LOG.error("hasStorageServerResponseArrived() Invalid function");
-        return false;
+        Integer responseSent = serviceResponse.get(storageServerId);
+        return (responseSent != null);
     }
 
     public int getStorageResponseResult(final ServerIdentifier storageServerId) {
-        LOG.error("getStorageResponseResult() Invalid function");
+        Integer responseSent = serviceResponse.get(storageServerId);
+        if (responseSent != null) {
+            return responseSent;
+        }
         return -1;
     }
 
     public void setStorageServerResponse(final ServerIdentifier storageServerId, final int result) {
-        LOG.error("setStorageServerResponse() Invalid function");
+        Integer storageServerResult = result;
+        serviceResponse.put(storageServerId, storageServerResult);
     }
 
     public void removeStorageServerResponse(final ServerIdentifier storageServerId) {
-        LOG.error("removeStorageServerResponse() Invalid function");
+        if (serviceResponse.remove(storageServerId) == null) {
+            LOG.warn("RequestContext[" + getRequestId() + "] HTTP Response remove failed targetPort: " +
+                    storageServerId.getServerIpAddress() + ":" + storageServerId.getServerTcpPort() +
+                    ":" + storageServerId.getChunkNumber());
+        }
     }
 
     public BufferManager getStorageServerWriteBufferManager() {

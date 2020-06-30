@@ -3,7 +3,6 @@ package com.webutils.webserver.kubernetes;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import io.kubernetes.client.openapi.ApiClient;
 import io.kubernetes.client.openapi.ApiException;
-import io.kubernetes.client.openapi.Configuration;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
 import io.kubernetes.client.openapi.models.*;
 import io.kubernetes.client.util.ClientBuilder;
@@ -14,12 +13,16 @@ import org.slf4j.LoggerFactory;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 public class KubernetesInfo {
 
     private static final Logger LOG = LoggerFactory.getLogger(KubernetesInfo.class);
+
+    private static final int MAX_K8_RETRIES = 10;
+    private static final int MAX_TEST_RETRIES = 3;
 
     final WebServerFlavor flavor;
 
@@ -29,6 +32,9 @@ public class KubernetesInfo {
         this.flavor = flavor;
     }
 
+    /*
+    ** This waits for internal IP address to be valid (or times out)
+     */
     public String waitForInternalK8Ip() {
         /*
          ** This simply waits until the IP address can be obtained to insure that the POD is up and running.
@@ -37,21 +43,20 @@ public class KubernetesInfo {
          */
         String k8IpAddr = null;
 
-        KubernetesInfo kubeInfo = new KubernetesInfo(flavor);
         int retryCount = 0;
         int maxRetryCount;
         if (flavor == WebServerFlavor.KUBERNETES_OBJECT_SERVER_TEST) {
-            maxRetryCount = 10;
+            maxRetryCount = MAX_K8_RETRIES;
         } else {
-            maxRetryCount = 3;
+            maxRetryCount = MAX_TEST_RETRIES;
         }
 
         while ((k8IpAddr == null) && (retryCount < maxRetryCount)) {
             try {
-                k8IpAddr = kubeInfo.getInternalKubeIp();
+                k8IpAddr = getInternalK8Ip();
             } catch (IOException io_ex) {
                 System.out.println("IOException: " + io_ex.getMessage());
-                LOG.error("checkAndSetupStorageServers() - IOException: " + io_ex.getMessage());
+                LOG.error("waitForInternalK8Ip() - IOException: " + io_ex.getMessage());
                 k8IpAddr = null;
             }
 
@@ -70,21 +75,63 @@ public class KubernetesInfo {
         return k8IpAddr;
     }
 
-
-    public String getExternalKubeIp() throws IOException {
-
+    /*
+     ** This waits for external IP address to be valid (or times out)
+     */
+    public String waitForExternalK8Ip() {
         /*
-        ** File path to the KubeConfig - for images running within a Docker container, there must be a mapping between
-        **    /usr/src/myapp/config/config to /Users/notterness/.kube/config
-        **
-        ** For the Kubernetes images this is setup in the deployment-webutils.yaml file.
-        ** For Docker runs, it is in the command line to run the Docker container.
+         ** This simply waits until the IP address can be obtained to insure that the POD is up and running.
+         **
+         ** NOTE: There must be a better way to determine if the POD has been started...
+         */
+        String k8IpAddr = null;
+
+        int retryCount = 0;
+        int maxRetryCount;
+        if (flavor == WebServerFlavor.KUBERNETES_OBJECT_SERVER_TEST) {
+            maxRetryCount = MAX_K8_RETRIES;
+        } else {
+            maxRetryCount = MAX_TEST_RETRIES;
+        }
+
+        while ((k8IpAddr == null) && (retryCount < maxRetryCount)) {
+            try {
+                k8IpAddr = getExternalK8Ip();
+            } catch (IOException io_ex) {
+                System.out.println("IOException: " + io_ex.getMessage());
+                LOG.error("waitForExternalK8Ip() - IOException: " + io_ex.getMessage());
+                k8IpAddr = null;
+            }
+
+            if (k8IpAddr == null) {
+                try {
+                    TimeUnit.SECONDS.sleep(10);
+                } catch (InterruptedException intEx) {
+                    LOG.error("Trying to obtain external Kubernetes IP " + intEx.getMessage());
+                    break;
+                }
+
+                retryCount++;
+            }
+        }
+
+        return k8IpAddr;
+    }
+
+    public void getK8Info() throws IOException {
+        /*
+         ** File path to the KubeConfig - for images running within a Docker container, there must be a mapping between
+         **    /usr/src/myapp/config/config to /Users/notterness/.kube/config
+         **
+         ** For the Kubernetes images this is setup in the deployment-webutils.yaml file.
+         ** For Docker runs, it is in the command line to run the Docker container.
          */
         String kubeConfigPath = getKubeConfigPath();
 
         // loading the out-of-cluster config, a kubeconfig from file-system
         ApiClient client = ClientBuilder.kubeconfig(KubeConfig.loadKubeConfig(new FileReader(kubeConfigPath))).build();
         CoreV1Api api = new CoreV1Api(client);
+
 
         try {
             /*
@@ -136,8 +183,8 @@ public class KubernetesInfo {
                 }
             }
         } catch (ApiException api_ex) {
-            System.out.println("getExternalKubeIp(1) - V1 API exception: " + api_ex.getMessage());
-            LOG.error("getExternalKubeIp(1) - V1 API exception: " + api_ex.getMessage());
+            System.out.println("getK8Info(1) - V1 API exception: " + api_ex.getMessage());
+            LOG.error("getK8Info(1) - V1 API exception: " + api_ex.getMessage());
         }
 
         try {
@@ -149,7 +196,7 @@ public class KubernetesInfo {
                     System.out.println("ENDPOINT:  " + endpoint.getMetadata().getName());
 
                     /*
-                    ** Just to display information
+                     ** Just to display information
                      */
                     List<V1EndpointSubset> subsets = endpoint.getSubsets();
                     for (V1EndpointSubset subset : subsets) {
@@ -164,9 +211,32 @@ public class KubernetesInfo {
                 }
             }
         } catch (ApiException api_ex) {
-            System.out.println("getExternalKubeIp(2) - V1 API exception: " + api_ex.getMessage());
-            LOG.error("getExternalKubeIp(2) - V1 API exception: " + api_ex.getMessage());
+            System.out.println("getK8Info(2) - V1 API exception: " + api_ex.getMessage());
+            LOG.error("getK8Info(2) - V1 API exception: " + api_ex.getMessage());
         }
+    }
+
+    /*
+    ** This obtains the external IP (how services or programs running outside of the POD can access the services
+    **   running within the POD) of the webutils-site POD. THis is dependent upon the type of service defined
+    **   in the service-webutils.yaml file. Currently it is a fairly basic service and the IP address that is
+    **   exposed is defined by the "LoadBalancer Ingress" field shown by running the "kubectl describe service"
+    **   command.
+     */
+    public String getExternalK8Ip() throws IOException {
+
+        /*
+        ** File path to the KubeConfig - for images running within a Docker container, there must be a mapping between
+        **    /usr/src/myapp/config/config to /Users/notterness/.kube/config
+        **
+        ** For the Kubernetes images this is setup in the deployment-webutils.yaml file.
+        ** For Docker runs, it is in the command line to run the Docker container.
+         */
+        String kubeConfigPath = getKubeConfigPath();
+
+        // loading the out-of-cluster config, a kubeconfig from file-system
+        ApiClient client = ClientBuilder.kubeconfig(KubeConfig.loadKubeConfig(new FileReader(kubeConfigPath))).build();
+        CoreV1Api api = new CoreV1Api(client);
 
         /*
          ** The following block of code obtains a list of services being run by Kubernetes. This is pretty simple in that
@@ -187,20 +257,31 @@ public class KubernetesInfo {
             for (V1Service service : services.getItems()) {
                 System.out.println("SERVICE:  " + service.getMetadata().getName());
 
-                V1ServiceSpec spec = service.getSpec();
+                V1ServiceStatus serviceStatus = service.getStatus();
+                V1LoadBalancerStatus balancerStatus = serviceStatus.getLoadBalancer();
+                System.out.println("LoadBalancer: " + balancerStatus.toString());
 
-                externalPodIp = spec.getClusterIP();
-                System.out.println("  spec - clusterIP: " + spec.getClusterIP());
-
-                List<V1ServicePort> ports = spec.getPorts();
-                for (V1ServicePort port : ports) {
-                    System.out.println("    name: " + port.getName() + " port: " + port.getPort() + " protocol: " + port.getProtocol() +
-                            " targetPort: " + port.getTargetPort() + " NodePort: " + port.getNodePort());
+                List<V1LoadBalancerIngress> ingressList = balancerStatus.getIngress();
+                if (ingressList != null) {
+                    /*
+                    ** Only going to pull the first IP address from the ingress list no matter how matter are present.
+                    **   To fix this would require a change to the database table to allow for multiple ingress
+                    **   IP addresses.
+                     */
+                    ListIterator<V1LoadBalancerIngress> iter = ingressList.listIterator();
+                    if (iter.hasNext()) {
+                        V1LoadBalancerIngress ingress = iter.next();
+                        externalPodIp = ingress.getIp();
+                        if (externalPodIp == null) {
+                            externalPodIp = ingress.getHostname();
+                        }
+                    }
                 }
+                System.out.println("  LoadBalancer Ingress IP: " + externalPodIp);
             }
         } catch (ApiException api_ex) {
-            System.out.println("getExternalKubeIp(3) - V1 API exception: " + api_ex.getMessage());
-            LOG.error("getExternalKubeIp(3) - V1 API exception: " + api_ex.getMessage());
+            System.out.println("getExternalKubeIp() - V1 API exception: " + api_ex.getMessage());
+            LOG.error("getExternalKubeIp() - V1 API exception: " + api_ex.getMessage());
         }
 
         return externalPodIp;
@@ -210,7 +291,7 @@ public class KubernetesInfo {
     ** This will not return a valid IP until after the service has started. The service will take time to start so, the
     **   caller of this will need to sleep and retry if null is rreturned.
      */
-    public String getInternalKubeIp() throws IOException {
+    public String getInternalK8Ip() throws IOException {
 
         // file path to your KubeConfig
         String kubeConfigPath = getKubeConfigPath();
@@ -233,7 +314,7 @@ public class KubernetesInfo {
 
             for (V1Endpoints endpoint : endpoints.getItems()) {
                 System.out.println("ENDPOINT:  " + endpoint.getMetadata().getName());
-                LOG.info("ENDPOINT:  " + endpoint.getMetadata().getName());
+                LOG.info("ENDPOINT:  " + endpoint.getMetadata().getName() );
 
                 List<V1EndpointSubset> subsets = endpoint.getSubsets();
                 for (V1EndpointSubset subset : subsets) {
@@ -241,6 +322,7 @@ public class KubernetesInfo {
 
                     for (V1EndpointAddress addr : endpointAddrList) {
                         System.out.println("  subset V1EndpointAddr ip: " + addr.getIp());
+                        System.out.println("  LoadBalancer Ingress ip: ");
                         LOG.info("  subset V1EndpointAddr ip: " + addr.getIp());
 
                         internalPodIp = addr.getIp();
@@ -264,9 +346,62 @@ public class KubernetesInfo {
      ** This returns a Map<Storage Server Name or Object Server Name:String, NodePort:Integer> of all of the Object and
      **   Storage Servers found in the webutils-service.
      **
+     ** NOTE: Port is what is used to communicate with the Docker Image from inside the POD.
+     */
+    public int getServicePorts(Map<String, Integer> serversInfo) throws IOException {
+        /*
+         ** File path to the KubeConfig - for images running within a Docker container, there must be a mapping between
+         **    /usr/src/myapp/config/config to /Users/notterness/.kube/config
+         **
+         ** For the Kubernetes images this is setup in the deployment-webutils.yaml file.
+         ** For Docker runs, it is in the command line to run the Docker container.
+         */
+        String kubeConfigPath = getKubeConfigPath();
+
+        ApiClient client = ClientBuilder.kubeconfig(KubeConfig.loadKubeConfig(new FileReader(kubeConfigPath))).build();
+
+        int servicePortCount = 0;
+        CoreV1Api api = new CoreV1Api(client);
+        try {
+            /*
+             ** Use the fieldSelector to only search for services associated with webutils-site. There should only
+             **   be a single service that matches the search, but leaving the limit at 5 just to be sure.
+             */
+            String fieldSelector = "metadata.name=webutils-service";
+            V1ServiceList services = api.listServiceForAllNamespaces(true, null, fieldSelector, null,
+                    5, null, null, 100, false);
+
+            for (V1Service service : services.getItems()) {
+                System.out.println("SERVICE:  " + service.getMetadata().getName());
+
+                V1ServiceSpec spec = service.getSpec();
+
+                System.out.println("  spec - clusterIP: " + spec.getClusterIP());
+
+                List<V1ServicePort> ports = spec.getPorts();
+                for (V1ServicePort port : ports) {
+                    System.out.println("    name: " + port.getName() + " port: " + port.getPort() + " protocol: " + port.getProtocol() +
+                            " targetPort: " + port.getTargetPort() + " NodePort: " + port.getNodePort());
+
+                    serversInfo.put(port.getName(), port.getPort());
+                    servicePortCount++;
+                }
+            }
+        } catch (ApiException api_ex) {
+            System.out.println("getStorageServerNodePorts() - V1 API exception: " + api_ex.getMessage());
+            LOG.error("getStorageServerNodePorts() - V1 API exception: " + api_ex.getMessage());
+        }
+
+        return servicePortCount;
+    }
+
+    /*
+     ** This returns a Map<Storage Server Name or Object Server Name:String, NodePort:Integer> of all of the Object and
+     **   Storage Servers found in the webutils-service.
+     **
      ** NOTE: NodePort is what is used to communicate with the Docker Image from outside the POD.
      */
-    public int getNodePorts(Map<String, Integer> serversInfo) throws IOException {
+    public int getServiceNodePorts(Map<String, Integer> serversInfo) throws IOException {
         /*
          ** File path to the KubeConfig - for images running within a Docker container, there must be a mapping between
          **    /usr/src/myapp/config/config to /Users/notterness/.kube/config

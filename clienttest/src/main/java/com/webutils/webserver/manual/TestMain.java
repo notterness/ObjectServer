@@ -96,7 +96,7 @@ public class TestMain {
         ** The following builds a default configuration. It sets up the different databases if they are not already
         **   present. It then populates some initial information to allow the tests to run.
          */
-        serverTableMgr.checkAndSetupStorageServers();
+        serverTableMgr.checkAndSetupServices();
         objectStorageDbSetup.checkAndSetupObjectStorageDb();
         accessControlDb.checkAndSetupAccessControls();
 
@@ -178,7 +178,7 @@ public class TestMain {
         if (flavor == WebServerFlavor.INTEGRATION_KUBERNETES_TESTS) {
             KubernetesInfo kubeInfo = new KubernetesInfo(flavor);
             try {
-                kubernetesPodIp = kubeInfo.getExternalKubeIp();
+                kubernetesPodIp = kubeInfo.getExternalK8Ip();
             } catch (IOException io_ex) {
                 System.out.println("IOException: " + io_ex.getMessage());
             }
@@ -188,12 +188,14 @@ public class TestMain {
             **   to already be up and running for it to work. In general, it can simply be commented out as the code
             **   is not needed to run the tests in the IntelliJ environment.
              */
+            /*
             KubernetesInfo kubeInfo = new KubernetesInfo(flavor);
             try {
                 kubernetesPodIp = kubeInfo.getExternalKubeIp();
             } catch (IOException io_ex) {
                 System.out.println("IOException: " + io_ex.getMessage());
             }
+            */
         }
 
         AtomicInteger threadCount = new AtomicInteger(1);
@@ -360,15 +362,27 @@ public class TestMain {
         SendHealthCheck healthCheck = new SendHealthCheck(serverIpAddr, OBJECT_SERVER_TCP_PORT, healthCheckAccessToken, threadCount);
         healthCheck.execute();
 
+        /*
+         ** Validate the Health Check for the ChunkMgr Service
+         */
+        SendHealthCheck chunkMgrHealthCheck = new SendHealthCheck(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, healthCheckAccessToken, threadCount);
+        chunkMgrHealthCheck.execute();
+
         waitForTestsToComplete(threadCount);
 
         /*
         ** Create an extra Storage Server and set the address for the Chunk Manager Service so that it can be accessed
          */
-        PostCreateServer createServer = new PostCreateServer(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
+        PostCreateServer createServer = new PostCreateServer(baseTcpPort + 3, serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
         createServer.execute();
-        CreateChunkMgrService createChunkMgrService = new CreateChunkMgrService(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
+
+        CreateService createChunkMgrService = new CreateService("chunk-mgr-service", CHUNK_MGR_SERVICE_TCP_PORT,
+                serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
         createChunkMgrService.execute();
+
+        CreateService createObjectServerService = new CreateService("object-server", OBJECT_SERVER_TCP_PORT,
+                serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
+        createObjectServerService.execute();
 
         waitForTestsToComplete(threadCount);
 

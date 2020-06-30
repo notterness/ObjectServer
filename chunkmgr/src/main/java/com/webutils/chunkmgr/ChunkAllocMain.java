@@ -40,10 +40,10 @@ public class ChunkAllocMain {
             try {
                 serverTcpPort = Integer.parseInt(args[0]);
             } catch (NumberFormatException ex) {
-                serverTcpPort = 5001;
+                serverTcpPort = 5002;
             }
         } else {
-            serverTcpPort = 5001;
+            serverTcpPort = 5002;
         }
 
         /*

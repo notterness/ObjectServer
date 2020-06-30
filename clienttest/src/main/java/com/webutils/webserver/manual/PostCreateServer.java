@@ -22,7 +22,7 @@ public class PostCreateServer {
 
     private final ClientCommandInterface cli;
 
-    PostCreateServer(final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount) {
+    PostCreateServer(final int storageServerPort, final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount) {
 
         MemoryManager cliMemoryManager = new MemoryManager(flavor);
 
@@ -33,7 +33,7 @@ public class PostCreateServer {
         cliClient.start();
 
         CreateServerObjectParams params = new CreateServerObjectParams("storage-server-4", "localhost",
-                5013, 10, StorageTierEnum.STANDARD_TIER);
+                storageServerPort, 10, StorageTierEnum.STANDARD_TIER);
         params.setOpcClientRequestId("PostCreateServer-5-20-2020.01");
 
         cli = new ClientCommandInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort, params, testCount);
