@@ -80,9 +80,9 @@ public class K8ServersMgr extends ServerIdentifierTableMgr {
      **   then create the tables. The tables that are created are dependent upon who the caller is and the application
      **   type that is running (test code within IntelliJ, Docker image or Kubernetes POD).
      */
-    public void checkAndSetupStorageServers() {
+    public void checkAndSetupServices() {
 
-        super.checkAndSetupStorageServers();
+        super.checkAndSetupServices();
 
         KubernetesInfo k8Info = new KubernetesInfo(flavor);
 
@@ -100,18 +100,18 @@ public class K8ServersMgr extends ServerIdentifierTableMgr {
              ** Obtain the list of Storage Servers and their NodePorts (this is the port number that is exposed outside the
              **   POD).
              */
-            Map<String, Integer> storageServersInfo = new Hashtable<>();
+            Map<String, Integer> serviceInfo = new Hashtable<>();
             try {
-                int count = k8Info.getStorageServerPorts(storageServersInfo);
+                int count = k8Info.getServicePorts(serviceInfo);
                 if (count != 0) {
-                    populateK8Servers(k8IpAddr, storageServersInfo);
+                    populateK8Servers(k8IpAddr, serviceInfo);
                 } else {
-                    System.out.println("No Storage Server NodePorts - checkAndSetupStorageServers()");
-                    LOG.error("No Storage Server NodePorts - checkAndSetupStorageServers()");
+                    System.out.println("No Service Ports - checkAndSetupStorageServers()");
+                    LOG.error("No Service Ports - checkAndSetupStorageServers()");
                 }
             } catch (IOException io_ex) {
-                System.out.println("Unable to obtain Storage Server NodePorts - IOException: " + io_ex.getMessage());
-                LOG.error("Unable to obtain Storage Server NodePorts - checkAndSetupStorageServers() - IOException: " + io_ex.getMessage());
+                System.out.println("Unable to obtain Service Ports - IOException: " + io_ex.getMessage());
+                LOG.error("Unable to obtain Service Ports - checkAndSetupStorageServers() - IOException: " + io_ex.getMessage());
             }
         }
     }

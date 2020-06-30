@@ -28,6 +28,7 @@
         <module>objectserver</module>
         <module>clienttest</module>
         <module>chunkmgr</module>
+        <module>healthcheck</module>
     </modules>
 
     <dependencies>

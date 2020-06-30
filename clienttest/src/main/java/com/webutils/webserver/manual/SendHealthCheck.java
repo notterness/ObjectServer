@@ -20,7 +20,7 @@ public class SendHealthCheck {
 
     private final ClientServiceRequest cli;
 
-    SendHealthCheck(final InetAddress serverIpAddr, final int serverTcpPort, final String accessToken,
+    public SendHealthCheck(final InetAddress serverIpAddr, final int serverTcpPort, final String accessToken,
                     AtomicInteger testCount) {
 
         MemoryManager cliMemoryManager = new MemoryManager(flavor);
@@ -32,7 +32,7 @@ public class SendHealthCheck {
         cliClient.start();
 
         HealthCheckParams params = new HealthCheckParams(false, false, accessToken);
-        params.setOpcClientRequestId("HealthCheck-6-22-2020.01");
+        params.setOpcClientRequestId("HealthCheck-6-22-2020.01-" + testCount);
 
         cli = new ClientServiceRequest(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
                 params, null, testCount);

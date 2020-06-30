@@ -3,6 +3,7 @@ package com.webutils.objectserver;
 
 import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
 import com.webutils.webserver.memory.MemoryManager;
+import com.webutils.webserver.mysql.K8PodServersMgr;
 import com.webutils.webserver.mysql.K8ServersMgr;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
 import com.webutils.webserver.mysql.LocalServersMgr;
@@ -51,15 +52,21 @@ public class WebServerMain {
             serverTableMgr = new LocalServersMgr(flavor);
         }
 
+        for (String s: args) {
+            System.out.println(s);
+        }
+
         /*
         ** If this Object Server is running as a Docker Image or within a Kubernetes POD, it will need to access the
         **   database to obtain IP addresses.
          */
-        serverTableMgr.checkAndSetupStorageServers();
+        serverTableMgr.checkAndSetupServices();
 
-        for (String s: args) {
-            System.out.println(s);
-        }
+        /*
+        ** Setup the external IP and ports for the services running within the POD
+         */
+        K8PodServersMgr podServersMgr = new K8PodServersMgr(flavor);
+        podServersMgr.checkAndSetupServices();
 
         MemoryManager memoryManager = new MemoryManager(flavor);
         ObjectServerContextPool requestContextPool = new ObjectServerContextPool(flavor, memoryManager, serverTableMgr);

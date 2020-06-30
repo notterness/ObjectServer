@@ -30,10 +30,9 @@ public class K8PodServersMgr extends ServerIdentifierTableMgr {
     private static final String GET_K8_POD_SERVER = "SELECT serverName, K8PodServerIpAddr, K8SPodServerPort FROM ServerIdentifier WHERE serverName='";
     private static final String GET_QUERY_END = "';";
 
-    private static final String UPDATE_K8_POD_SERVERS = "INSERT INTO k8LocalStorageServerInfo(k8PodServerIpAddr, k8PosServerPort) " +
-            "VALUES(?, ?)";
-    private static final String UPDATE_K8_POD_SERVER = "INSERT INTO k8LocalStorageServerInfo(k8PodServerIpAddr, k8PosServerPort) " +
-            "VALUES(?, ?) WHERE serverName = ?";
+    private static final String UPDATE_K8_POD_SERVER = "UPDATE ServerIdentifier SET k8PodServerIpAddr=?, k8PodServerPort=? " +
+            "WHERE serverName = ?";
+    private static final String UPDATE_K8_POD_SERVERS = "UPDATE ServerIdentifier SET k8PodServerIpAddr=?, k8PodServerPort=?";
 
     private static final String STORAGE_SERVER_REQUEST = "SELECT serverId, serverName, k8PodServerIpAddr, k8PosServerPort FROM ServerIdentifier " +
             "WHERE serverType = ? AND storageTier = ? AND disabled = 0 ORDER BY usedChunks ASC, totalAllocations ASC, lastAllocationTime DESC";
@@ -60,9 +59,11 @@ public class K8PodServersMgr extends ServerIdentifierTableMgr {
      ** This will return a specific server (if one exists) based upon the passed in serverName. Currently, the only
      **   server names that are valid are:
      **     "object-server"
+     **     "chunk-mgr-service"
      **     "storage-server-1"
      **     "storage-server-2"
      **     "storage-server-3"
+     **     "storage-server-4"
      */
     public boolean getServer(final String serverName, final List<ServerIdentifier> serverList) {
         LOG.info("K8PodServersMgr getServer() serverName: " + serverName + " dockerImage: " + isDockerImage() +
@@ -84,16 +85,14 @@ public class K8PodServersMgr extends ServerIdentifierTableMgr {
     }
 
     /*
-    ** This updates the IP addresses and Ports for the Servers that will be accessed by the Client Test code.
-    **
-    ** NOTE: Since this is only called by the Client Test code, the expectation is that the StorageServers database is
-    **   already setup and the tables are created.
+    ** This updates the IP addresses and Ports for the Services that will be accessed by the code outside of the
+    **   webutils Kubernetes POD.
      */
-    public void checkAndSetupStorageServers() {
+    public void checkAndSetupServices() {
 
         KubernetesInfo k8Info = new KubernetesInfo(flavor);
 
-        String k8IpAddr = k8Info.waitForInternalK8Ip();
+        String k8IpAddr = k8Info.waitForExternalK8Ip();
         if (k8IpAddr != null) {
             /*
              ** Always drop and repopulate the Kubernetes storage server tables since the IP address
@@ -107,18 +106,18 @@ public class K8PodServersMgr extends ServerIdentifierTableMgr {
              ** Obtain the list of Storage Servers and their NodePorts (this is the port number that is exposed outside the
              **   POD).
              */
-            Map<String, Integer> storageServersInfo = new Hashtable<>();
+            Map<String, Integer> serviceInfo = new Hashtable<>();
             try {
-                int count = k8Info.getStorageServerPorts(storageServersInfo);
+                int count = k8Info.getServiceNodePorts(serviceInfo);
                 if (count != 0) {
-                    populateK8PodServers(k8IpAddr, storageServersInfo);
+                    populateK8PodServers(k8IpAddr, serviceInfo);
                 } else {
-                    System.out.println("No Storage Server NodePorts - checkAndSetupStorageServers()");
-                    LOG.error("No Storage Server NodePorts - checkAndSetupStorageServers()");
+                    System.out.println("No Service NodePorts - checkAndSetupStorageServers()");
+                    LOG.error("No Service NodePorts - checkAndSetupStorageServers()");
                 }
             } catch (IOException io_ex) {
-                System.out.println("Unable to obtain Storage Server NodePorts - IOException: " + io_ex.getMessage());
-                LOG.error("Unable to obtain Storage Server NodePorts - checkAndSetupStorageServers() - IOException: " + io_ex.getMessage());
+                System.out.println("Unable to obtain Service NodePorts - IOException: " + io_ex.getMessage());
+                LOG.error("Unable to obtain Service NodePorts - checkAndSetupStorageServers() - IOException: " + io_ex.getMessage());
             }
         }
     }
@@ -131,7 +130,7 @@ public class K8PodServersMgr extends ServerIdentifierTableMgr {
     private void populateK8PodServers(final String k8IpAddr, final Map<String, Integer> storageServersInfo) {
         if (k8IpAddr != null) {
 
-            LOG.info("populateK8Servers() IP Address: " + k8IpAddr);
+            LOG.info("populateK8PodServers() IP Address: " + k8IpAddr);
             Connection conn = getServersDbConn();
 
             if (conn != null) {
@@ -172,7 +171,7 @@ public class K8PodServersMgr extends ServerIdentifierTableMgr {
                 closeStorageServerDbConn(conn);
             }
         } else {
-            LOG.error("populateK8Servers() IP Address is NULL");
+            LOG.error("populateK8PodServers() IP Address is NULL");
         }
     }
 
