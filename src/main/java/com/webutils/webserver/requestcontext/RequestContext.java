@@ -271,6 +271,21 @@ public abstract class RequestContext {
     public void performOperationWork() {
         List<Operation> operationsToRun = new ArrayList<>();
 
+        /*
+        ** workQueue is instantiated as a LinkedBlockingQueue which was done to allow the queue to be bounded in
+        **   size.
+        ** The "blocking" feature of the LinkedBlockingQueue was not used here to allow for the operations to be
+        **   atomically marked as on the queue or not (this is done in an external function and on a per operation
+        **   basis). This is done to prevent an operation from being placed on the queue multiple times (which could
+        **   have some weird side effects when operations have completed, but they are still on the workQueue).
+        **   The problem is that multiple threads can put an operation on the workQueue and using the workQueue.contains()
+        **   followed by workQueue.put() is not an atomic operation.
+        **
+        ** The other feature needed for this thread pulling work off the workQueue is missing from the
+        **   LinkedBlockingQueue as well. Ideally, the following would also be there:
+        **     -> Currently only the poll() operation has a timeout. Since the goal is to take all the "ready to
+        **        run" operations off the queue in a single operation, the drainTo() should also have a timeout.
+         */
         try {
             queueMutex.lock();
             try {
@@ -302,6 +317,9 @@ public abstract class RequestContext {
              **   wait time has elapsed. Currently, this is an ordered queue and everything
              **   on the queue has the same wait time so only the head element needs to be
              **   checked for the elapsed timeout.
+             **
+             ** NOTE: This could use a DelayQueue since the timedWaitQueue implies order by when the item is placed
+             **   on the queue.
              */
             Operation operation;
             do {
