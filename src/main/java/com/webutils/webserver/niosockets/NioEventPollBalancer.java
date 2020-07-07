@@ -99,6 +99,8 @@ public class NioEventPollBalancer {
             eventPollThreadPool[i] = null;
             pollThread.stop();
         }
+
+        // TODO: implement join() to make sure threads are actually shut down
     }
 
     /*

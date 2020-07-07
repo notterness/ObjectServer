@@ -51,10 +51,6 @@ public class ChunkAllocMain {
          **   -> Both the Docker and Kubernetes images use "host.docker.internal" to
          **      access resources that are running on the same system, but outside of
          **      the Docker container. In the current code, this is just the MySQL database.
-         **   -> For the Docker image, the "dockerServerIdentifier" MySQL table is used to
-         **      lookup the addresses of the Storage Servers.
-         **   -> For the normal and Kubernetes images, the "localServerIdentifier" MySQL table
-         **      is used to lookup the addresses of the Storage Servers.
          */
         if (args.length == 2) {
             if (args[1].compareTo("docker") == 0) {
