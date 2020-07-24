@@ -1,6 +1,7 @@
 package com.webutils.webserver.mysql;
 
 import com.webutils.webserver.http.HttpRequestInfo;
+import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.requestcontext.WebServerFlavor;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -26,6 +27,8 @@ public class UserTableMgr extends AccessControlDb {
     private final static String GET_TENANCY_FROM_TOKEN = "SELECT tenancyId FROM TenancyUser WHERE accessToken = UNHEX(?)";
 
     private final static String GET_USER_ID = "SELECT userId FROM TenancyUser WHERE userName = AES_ENCRYPT(?, ?) AND tenancyId = ?";
+
+    private final static String GET_USER_UID_FROM_VALUES = "SELECT BIN_TO_UUID(userUID) userUID FROM TenancyUser WHERE userName = AES_ENCRYPT(?, ?) AND tenancyId = ?";
 
     private final static String GET_USER_NAME_AND_ID = "SELECT userName, tenancyId FROM TenancyUser WHERE accessToken = UNHEX(?)";
 
@@ -98,6 +101,11 @@ public class UserTableMgr extends AccessControlDb {
 
         int accessRights = 0;
 
+        return createTenancyUser(httpInfo, userName, passphrase, password, accessRights, tenancyId, tenancyUID);
+    }
+
+    public int createTenancyUser(final HttpRequestInfo httpInfo, final String userName, final String passphrase,
+                                 final String password, final int accessRights, final int tenancyId, final String tenancyUID) {
         /*
         ** The fields for the CREATE_USER are:
         **   1 - userName
@@ -373,6 +381,50 @@ public class UserTableMgr extends AccessControlDb {
         return userId;
     }
 
+    public String getUserUID(final String userName, final String passphrase, final int tenancyId) {
+        String userUID = null;
+
+        Connection conn = getAccessControlDbConn();
+
+        if (conn != null) {
+            PreparedStatement stmt = null;
+
+            try {
+                /*
+                 ** The fields for the GET_USER_UID are:
+                 **   1 - userName
+                 **   2 - passphrase
+                 **   3 - tenancyId
+                 */
+                stmt = conn.prepareStatement(GET_USER_UID_FROM_VALUES);
+                stmt.setString(1, userName);
+                stmt.setString(2, passphrase);
+                stmt.setInt(3, tenancyId);
+                ResultSet rs = stmt.executeQuery();
+                if (rs.next()) {
+                    userUID = rs.getString(1);
+                }
+                rs.close();
+            } catch (SQLException sqlEx) {
+                LOG.error("getUserUID() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                System.out.println("SQLException: " + sqlEx.getMessage());
+            } finally {
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    } catch (SQLException sqlEx) {
+                        LOG.error("getUserUID() close SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
+                        System.out.println("SQLException: " + sqlEx.getMessage());
+                    }
+                }
+            }
+
+            closeAccessControlDbConn(conn);
+        }
+
+        return userUID;
+    }
+
     public String getCreatedByFromAccessToken(final String accessToken) {
         String createdBy = null;
 
@@ -436,10 +488,9 @@ public class UserTableMgr extends AccessControlDb {
     }
 
 
-    private int validateFields(final HttpRequestInfo httpInfo) {
+    public int validateFields(final HttpRequestInfo httpInfo, final String tenancyName, final String customerName, final String userName,
+                               final String password) {
 
-        String customerName = httpInfo.getCustomerName();
-        String tenancyName = httpInfo.getTenancy();
         if ((customerName == null) || (tenancyName == null)) {
             String failureMessage = "{\r\n  \"code\":" + HttpStatus.PRECONDITION_FAILED_412 +
                     "\r\n  \"message\": \"Unable to access Tenancy information\"" +
@@ -464,8 +515,6 @@ public class UserTableMgr extends AccessControlDb {
             return HttpStatus.PRECONDITION_FAILED_412;
         }
 
-        String userName = httpInfo.getUserName();
-        String password = httpInfo.getUserPassword();
         if ((userName == null) || (password == null)) {
             String tmp;
             if (password == null) {

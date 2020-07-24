@@ -1,6 +1,7 @@
 package com.webutils.webserver.mysql;
 
 import com.webutils.webserver.requestcontext.WebServerFlavor;
+import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,8 +41,8 @@ public class TenancyTableMgr extends AccessControlDb {
         this.objectUniqueId = -1;
     }
 
-    public boolean createTenancyEntry(final String customerName, final String tenancyName, final String customerPassphrase) {
-        boolean success = true;
+    public int createTenancyEntry(final String customerName, final String tenancyName, final String customerPassphrase) {
+        int status = HttpStatus.OK_200;
 
         /*
         ** First check if there is already a record for this Tenancy and Customer
@@ -49,9 +50,8 @@ public class TenancyTableMgr extends AccessControlDb {
         String tenancyUID = getTenancyUID(customerName, tenancyName);
         if (tenancyUID != null) {
             LOG.warn("This Tenancy already exists. customer: " + customerName + " tenancyName: " + tenancyName);
-            return true;
+            return HttpStatus.FOUND_302;
         }
-
 
         Connection conn = getAccessControlDbConn();
 
@@ -80,7 +80,7 @@ public class TenancyTableMgr extends AccessControlDb {
                 LOG.error("createTenancyEntry() SQLException: " + sqlEx.getMessage() + " SQLState: " + sqlEx.getSQLState());
                 System.out.println("SQLException: " + sqlEx.getMessage());
 
-                success = false;
+                status = HttpStatus.INTERNAL_SERVER_ERROR_500;
             } finally {
                 if (stmt != null) {
                     try {
@@ -98,7 +98,7 @@ public class TenancyTableMgr extends AccessControlDb {
             closeAccessControlDbConn(conn);
         }
 
-        return success;
+        return status;
     }
 
     /*

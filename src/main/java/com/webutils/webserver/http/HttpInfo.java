@@ -37,8 +37,10 @@ abstract public class HttpInfo {
     private static final String OBJECT_NAME = "/o";
     private static final String NAMESPACE_NAME = "/n";
     private static final String BUCKET_NAME = "/b";
-    private static final String TEST_TYPE = "/t";
+    private static final String TEST_TYPE = "/T";
     private static final String LIST_TYPE = "/l";
+    private static final String TENANCY_NAME_URI = "/t";
+    private static final String USER_NAME_URI = "/u";
     private static final String HEALTH_CHECK = "/health";
 
     public static final String TENANCY_NAME = "tenancy-name";
@@ -100,7 +102,8 @@ abstract public class HttpInfo {
      */
     protected final Map<String, List<String>> headers;
 
-    private final String[] uriFields = {OBJECT_NAME, BUCKET_NAME, NAMESPACE_NAME, LIST_TYPE, TEST_TYPE, HEALTH_CHECK};
+    private final String[] uriFields = {TENANCY_NAME_URI, USER_NAME_URI, OBJECT_NAME, BUCKET_NAME, NAMESPACE_NAME,
+            LIST_TYPE, TEST_TYPE, HEALTH_CHECK};
 
     protected boolean headerComplete;
 
@@ -305,11 +308,16 @@ abstract public class HttpInfo {
 
                 if (startingIndex == lastIndex) {
                     /*
-                    ** Nothing to do with this field as it is at the end of the string unless it is "/health" in
-                    **   which case, add an entry with the value set to "true" to indicate this is a Health Check
-                    **   command.
+                    ** Nothing to do with this field as it is at the end of the string unless it is either
+                    **   "/health", "/t" or "/u"
+                    **   in which case, add an entry with the value set to "true" to indicate this is a
+                    **   Health Check, PUT Tenancy or PUT user command.
                      */
                     if (extractedUriField.equalsIgnoreCase(HEALTH_CHECK)) {
+                        objectUriInfoMap.put(uriField, "true");
+                    } else if (extractedUriField.equalsIgnoreCase(TENANCY_NAME_URI)) {
+                        objectUriInfoMap.put(uriField, "true");
+                    } else if (extractedUriField.equalsIgnoreCase(USER_NAME_URI)) {
                         objectUriInfoMap.put(uriField, "true");
                     }
                     continue;
@@ -447,14 +455,31 @@ abstract public class HttpInfo {
 
     /*
     ** The following are used to pull specific fields from the parsed URI (PathParams)
-    **    getTenancy() -
+    **    getTenancySetInUri() - "/t/" field in the URI
+    **    getUserSetInUri() - "/u/" field in the URI
     **    getNamespace() - "/n/" field in the URI
     **    getBucket() - "/b/" field in the URI
     **    getObject() - "/o/" field in the URI
     **    isHealthCheck() - "/health" field in the URI
-    **    getTestType() - "/t/" field in the URI - NOT FOR PRODUCTION
+    **    getTestType() - "/T/" field in the URI - NOT FOR PRODUCTION
     **
      */
+    /*
+     ** Return if the "Tenancy" (TENANCY_NAME_URI) that was parsed from the HTTP uri
+     */
+    public boolean getTenancySetInUri() {
+        String tenancy = objectUriInfoMap.get(TENANCY_NAME_URI);
+        return ( (tenancy != null) && tenancy.equals("true") );
+    }
+
+    /*
+     ** Return if the "User" (USER_NAME_URI) that was parsed from the HTTP uri
+     */
+    public boolean getUserSetInUri() {
+        String user = objectUriInfoMap.get(USER_NAME_URI);
+        return ( (user != null) && user.equals("true") );
+    }
+
     /*
      ** Return the "namespace" (NAMESPACE_NAME) that was parsed from the HTTP uri
      */

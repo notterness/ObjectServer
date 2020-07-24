@@ -1,9 +1,8 @@
 package com.webutils.webserver.common;
 
-import com.webutils.webserver.http.ContentParser;
-import com.webutils.webserver.http.CreateBucketPostContent;
 import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpResponseInfo;
+import com.webutils.webserver.http.CreateTenancyPostContent;
 import org.eclipse.jetty.http.HttpStatus;
 
 import java.nio.ByteBuffer;
@@ -12,25 +11,28 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 
-public class PostBucketParams extends ObjectParams {
+public class PostTenancyParams extends ObjectParams {
 
     private String sha256Digest;
 
-    private final String accessToken;
+    private final String tenancyName;
+    private final String customerName;
+    private final String passphrase;
 
-    public PostBucketParams(final String namespace, final String bucket, final String accessToken) {
+    public PostTenancyParams(final String tenancy, final String customer, final String passphrase) {
 
-        super(namespace, bucket, null, null);
+        super(null, null, null, null);
 
-        this.accessToken = accessToken;
+        this.tenancyName = tenancy;
+        this.customerName = customer;
+        this.passphrase = passphrase;
         this.sha256Digest = null;
     }
 
     /*
-     ** This builds the PostBucket method headers. The following headers and if they are required:
+     ** This builds the PostTenancy method headers. The following headers and if they are required:
      **
-     **   namespaceName (required) "/n/" - This is the namespace that holds the Bucket where the Object(s) will be kept.
-     **   bucketName (required) "/b/" - This has not content, just the "/b/" is provided for the URI.
+     **   namespaceName (required) "/c/" - This is set to indicate that the is to setup a customer tenancy.
      **
      **   Host (required) - Who is sending the request.
      **   opc-client-request-id (not required) - A unique identifier for this request provided by the client to allow
@@ -39,19 +41,18 @@ public class PostBucketParams extends ObjectParams {
      **
      **   Content-Length (required) - The size in bytes of the bucket content information.
      **
-     ** NOTE: This will be noted in multiple places. The hierarchy of how an object is saved is the following:
+     ** NOTE: The following are the parameters in the content that are required to create a Teanancy:
      **    Tenancy - This acts as the highest construct and provides an organization of all resources owned by a
      **      client (a client can also have multiple tenancies, but they are distinct and resources cannot be
      **      shared across tenancies).
-     **    Namespace - Each region within a tenancy will have a unique namespace where all the buckets within a region
-     **      are placed.
-     **    Bucket - A client can create as many buckets as they desire within a namespace. The buckets provide a method
-     **      to group objects.
+     **    Customer Name - This is the owner of the Tenancy.
+     **    Passphrase - This is a customer provided passphrase that is used to encrypt information related to this
+     **      tenancy.
      */
     public String constructRequest() {
         String contentStr = buildContent();
 
-        String request = "POST /n/" + namespaceName + "/b/ HTTP/1.1\n";
+        String request = "POST /t HTTP/1.1\n";
 
         if (hostName != null) {
             request += "Host: " + hostName + "\n";
@@ -70,10 +71,6 @@ public class PostBucketParams extends ObjectParams {
             request += HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n";
         }
 
-        if (accessToken != null) {
-            request += HttpInfo.ACCESS_TOKEN + ": " + accessToken + "\n";
-        }
-
         request += HttpInfo.CONTENT_SHA256 + ": " + sha256Digest + "\n" +
                 HttpInfo.CONTENT_LENGTH + ": " + contentStr.length() + "\n\n" +
                 contentStr;
@@ -82,7 +79,7 @@ public class PostBucketParams extends ObjectParams {
     }
 
     /*
-     ** This displays the results from the PostBucket method.
+     ** This displays the results from the PostTenancy method.
      **
      ** TODO: Allow the results to be dumped to a file and possibly allow a format that allows for easier parsing by
      **   the client.
@@ -107,8 +104,8 @@ public class PostBucketParams extends ObjectParams {
 
         if (httpInfo.getResponseStatus() == HttpStatus.OK_200) {
             /*
-            ** FIXME: At some point the response needs to be displayed for a successful CreateBucket to echo
-            **   back a bunch of the key value pairs.
+             ** FIXME: At some point the response needs to be displayed for a successful CreateTenancy to echo
+             **   back a bunch of the key value pairs.
              */
         } else {
             String responseBody = httpInfo.getResponseBody();
@@ -121,19 +118,9 @@ public class PostBucketParams extends ObjectParams {
     private String buildContent() {
         String contentString =
                 "{\n" +
-                        "  \"" + ContentParser.COMPARTMENT_ID_ATTRIBUTE + "\": \"clienttest.compartment.12345.abcde\",\n" +
-                        "  \"" + CreateBucketPostContent.NAMESPACE_ATTRIBUTE + "\": \"" + namespaceName + "\",\n" +
-                        "  \"" + CreateBucketPostContent.NAME_ATTRIBUTE + "\": \"" + bucketName + "\",\n" +
-                        "  \"" + CreateBucketPostContent.EVENTS_ENABLED_ATTRIBUTE + "\": false,\n" +
-                        "  \"" + ContentParser.FREE_FORM_TAG + "\": {\"Test_1\": \"Test_2\"}, \n" +
-                        "  \"" + ContentParser.DEFINED_TAGS + "\":\n" +
-                        "  {\n" +
-                        "    \"MyTags\":\n" +
-                        "    {\n" +
-                        "      \"TestTag_1\": \"ABC\", \n" +
-                        "      \"TestTag_2\": \"123\", \n" +
-                        "    }\n" +
-                        "  }\n" +
+                        "  \"" + CreateTenancyPostContent.TENANCY_NAME_ATTRIBUTE + "\": \"" + tenancyName + "\",\n" +
+                        "  \"" + CreateTenancyPostContent.CUSTOMER_ATTRIBUTE + "\": \"" + customerName + "\",\n" +
+                        "  \"" + CreateTenancyPostContent.PASSPHRASE_ATTRIBUTE + "\": \"" +  passphrase + "\"\n" +
                         "}\n";
 
         Sha256Digest digest = new Sha256Digest();

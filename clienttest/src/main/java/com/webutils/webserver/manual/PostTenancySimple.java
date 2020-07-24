@@ -1,6 +1,6 @@
 package com.webutils.webserver.manual;
 
-import com.webutils.webserver.common.PostBucketParams;
+import com.webutils.webserver.common.PostTenancyParams;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.LocalServersMgr;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
@@ -11,7 +11,7 @@ import com.webutils.webserver.requestcontext.WebServerFlavor;
 import java.net.InetAddress;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class PostBucketSimple {
+public class PostTenancySimple {
 
     static WebServerFlavor flavor = WebServerFlavor.CLI_CLIENT;
 
@@ -20,8 +20,8 @@ public class PostBucketSimple {
 
     private final ClientCommandInterface cli;
 
-    PostBucketSimple(final String namespace, final String bucketName, final InetAddress serverIpAddr,
-                     final int serverTcpPort, final String accessToken, AtomicInteger testCount) {
+    PostTenancySimple(final String customer, final String tenancy, final String passphrase,
+                      final InetAddress serverIpAddr, final int serverTcpPort, AtomicInteger testCount) {
 
         MemoryManager cliMemoryManager = new MemoryManager(flavor);
 
@@ -31,8 +31,8 @@ public class PostBucketSimple {
         cliClient = new NioCliClient(clientContextPool);
         cliClient.start();
 
-        PostBucketParams params = new PostBucketParams(namespace, bucketName, accessToken);
-        params.setOpcClientRequestId("PostBucketsSimple-6-12-2020.01");
+        PostTenancyParams params = new PostTenancyParams(tenancy, customer, passphrase);
+        params.setOpcClientRequestId("PostTenancySimple-7-22-2020.01");
 
         cli = new ClientCommandInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort, params, testCount);
     }
@@ -46,5 +46,6 @@ public class PostBucketSimple {
 
         clientContextPool.stop(eventThreadId);
     }
+
 
 }

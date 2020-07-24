@@ -1,5 +1,6 @@
 package com.webutils.webserver.manual;
 
+import com.webutils.accountmgr.requestcontext.AccountMgrContextPool;
 import com.webutils.chunkmgr.requestcontext.ChunkAllocContextPool;
 import com.webutils.objectserver.requestcontext.ObjectServerContextPool;
 import com.webutils.storageserver.requestcontext.StorageServerContextPool;
@@ -38,6 +39,7 @@ public class TestMain {
 
         final int OBJECT_SERVER_TCP_PORT = 5001;
         final int CHUNK_MGR_SERVICE_TCP_PORT = 5002;
+        final int ACCOUNT_MGR_SERVICE_TCP_PORT = 5003;
 
         final int NUMBER_TEST_STORAGE_SERVERS = 4;
         final int STORAGE_SERVER_BASE_ID_OFFSET = 100;
@@ -103,20 +105,21 @@ public class TestMain {
         /*
          ** Create the Administrator Tenancy to use for the test cases
          */
-        String adminName = "Administrator";
+        String adminCustomerName = "Administrator Tenancy";
         String adminTenancyName = "AdministratorTenancy-Global";
 
         TenancyTableMgr tenancyMgr = new TenancyTableMgr(flavor);
-        tenancyMgr.createTenancyEntry(adminName, adminTenancyName, "admin-passphrase");
-        int tenancyId = tenancyMgr.getTenancyId(adminName, adminTenancyName);
+        tenancyMgr.createTenancyEntry(adminCustomerName, adminTenancyName, "admin-passphrase");
+        int tenancyId = tenancyMgr.getTenancyId(adminCustomerName, adminTenancyName);
 
         /*
         ** Create the user to send the Health Check commands
          */
+        String adminName = "Administrator";
         HttpRequestInfo httpHealthCheckInfo = new TenancyUserHttpRequestInfo();
         HttpField adminTenancyField = new HttpField(HttpInfo.TENANCY_NAME, adminTenancyName);
         httpHealthCheckInfo.addHeaderValue(adminTenancyField);
-        HttpField adminCustomerField = new HttpField(HttpInfo.CUSTOMER_NAME, adminName);
+        HttpField adminCustomerField = new HttpField(HttpInfo.CUSTOMER_NAME, adminCustomerName);
         httpHealthCheckInfo.addHeaderValue(adminCustomerField);
 
         String healthCheckUserName = "HealthCheckAdmin@test.com";
@@ -202,6 +205,7 @@ public class TestMain {
 
         NioServerHandler nioServer;
         NioServerHandler chunkAllocNioServer;
+        NioServerHandler accountMgrNioServer;
         NioServerHandler[] nioStorageServer = new NioServerHandler[NUMBER_TEST_STORAGE_SERVERS];
 
         if (flavor == WebServerFlavor.INTEGRATION_TESTS) {
@@ -229,13 +233,25 @@ public class TestMain {
             nioServer.start();
 
             /*
-            ** Setup the Chunk Mgr (this is used to manage the Storage Servers and the Chunk allocation/deallocation.
+             ** Setup the Chunk Mgr (this is used to manage the Storage Servers and the Chunk allocation/deallocation).
              */
             MemoryManager chunkAllocMemoryManager = new MemoryManager(flavor);
-            ChunkAllocContextPool chunkAllocContextPool = new ChunkAllocContextPool(flavor, chunkAllocMemoryManager, serverTableMgr);
+            ChunkAllocContextPool chunkAllocContextPool = new ChunkAllocContextPool(flavor, chunkAllocMemoryManager,
+                    serverTableMgr);
 
-            chunkAllocNioServer = new NioServerHandler(CHUNK_MGR_SERVICE_TCP_PORT, NioServerHandler.CHUNK_ALLOC_BASE_ID, chunkAllocContextPool);
+            chunkAllocNioServer = new NioServerHandler(CHUNK_MGR_SERVICE_TCP_PORT, NioServerHandler.CHUNK_ALLOC_BASE_ID,
+                    chunkAllocContextPool);
             chunkAllocNioServer.start();
+
+            /*
+             ** Setup the Account Manager (this is used to manage customer Tenancies and users).
+             */
+            MemoryManager AccountMgrMemoryManager = new MemoryManager(flavor);
+            AccountMgrContextPool accountMgrContextPool = new AccountMgrContextPool(flavor, AccountMgrMemoryManager, serverTableMgr);
+
+            accountMgrNioServer = new NioServerHandler(ACCOUNT_MGR_SERVICE_TCP_PORT, NioServerHandler.ACCOUNT_MGR_ALLOC_BASE_ID,
+                    accountMgrContextPool);
+            accountMgrNioServer.start();
 
             /*
             ** Setup the Storage Servers
@@ -359,19 +375,33 @@ public class TestMain {
         /*
         ** Validate the Health Check for the Object Server
          */
-        SendHealthCheck healthCheck = new SendHealthCheck(serverIpAddr, OBJECT_SERVER_TCP_PORT, healthCheckAccessToken, threadCount);
+        SendHealthCheck healthCheck = new SendHealthCheck(serverIpAddr, OBJECT_SERVER_TCP_PORT, healthCheckAccessToken,
+                threadCount);
         healthCheck.execute();
 
         /*
          ** Validate the Health Check for the ChunkMgr Service
          */
-        SendHealthCheck chunkMgrHealthCheck = new SendHealthCheck(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, healthCheckAccessToken, threadCount);
+        SendHealthCheck chunkMgrHealthCheck = new SendHealthCheck(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT,
+                healthCheckAccessToken, threadCount);
         chunkMgrHealthCheck.execute();
+
+        /*
+         ** Validate the Health Check for the AccountMgr Service
+         */
+        SendHealthCheck accountMgrHealthCheck = new SendHealthCheck(serverIpAddr, ACCOUNT_MGR_SERVICE_TCP_PORT,
+                healthCheckAccessToken, threadCount);
+        accountMgrHealthCheck.execute();
 
         waitForTestsToComplete(threadCount);
 
         /*
-        ** Create an extra Storage Server and set the address for the Chunk Manager Service so that it can be accessed
+        ** Create an extra Storage Server and set the address for the Chunk Manager, Object Server and Account Manager
+        **   services so that they can be accessed.
+        **
+        ** NOTE: The serverIpAddr and the serverTcpPort (in this case CHUNK_MGR_SERVICE_TCP_PORT) point to the Chunk
+        **   Manager Service. This is the service that keeps track of the different services in the database (more or
+        **   less performs the role of a DHCP lookup).
          */
         PostCreateServer createServer = new PostCreateServer(baseTcpPort + 3, serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
         createServer.execute();
@@ -384,6 +414,33 @@ public class TestMain {
                 serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
         createObjectServerService.execute();
 
+        CreateService createAccountMgrService = new CreateService("account-mgr-service", ACCOUNT_MGR_SERVICE_TCP_PORT,
+                serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
+        createAccountMgrService.execute();
+
+        waitForTestsToComplete(threadCount);
+
+        /*
+         ** Create a test Tenancy to validate the POST Tenancy method works with the Account Manager service
+         */
+        final String testCustomerName = "testCustomer-1";
+        final String testTenancyName = "Tenancy-Test-Post";
+        final String testTenancyPassphrase = "test-passphrase";
+
+        threadCount.incrementAndGet();
+
+        PostTenancySimple postTenancy = new PostTenancySimple(testCustomerName, testTenancyName, testTenancyPassphrase,
+                serverIpAddr, ACCOUNT_MGR_SERVICE_TCP_PORT, threadCount);
+        postTenancy.execute();
+
+        final String testUser_1 = "TestUser1@test.com";
+        final String testUser_1_Password = "testpassword";
+        final int testUser_1_Permissions = 0x20;
+
+        PostUserSimple postUser = new PostUserSimple(testCustomerName, testTenancyName, testUser_1, testUser_1_Password,
+                testUser_1_Permissions, serverIpAddr, ACCOUNT_MGR_SERVICE_TCP_PORT, threadCount);
+        postUser.execute();
+
         waitForTestsToComplete(threadCount);
 
         /*
@@ -395,7 +452,7 @@ public class TestMain {
         testClient.start();
 
         String bucketName = "CreateBucket_Simple";
-        PostBucketSimple postBucket = new PostBucketSimple(tenancyName, namespace, bucketName, serverIpAddr, OBJECT_SERVER_TCP_PORT,
+        PostBucketSimple postBucket = new PostBucketSimple(namespace, bucketName, serverIpAddr, OBJECT_SERVER_TCP_PORT,
                 accessToken, threadCount);
         postBucket.execute();
 
