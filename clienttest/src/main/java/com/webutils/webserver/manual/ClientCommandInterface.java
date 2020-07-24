@@ -68,6 +68,8 @@ public class ClientCommandInterface extends ClientInterface {
 
         HttpResponseInfo httpResponseInfo = new HttpResponseInfo(clientContext.getRequestId());
         objectServer.setHttpInfo(httpResponseInfo);
+        System.out.println("\nSTARTING ClientCommandInterface - " + requestParams.getOpcClientRequestId());
+
         ClientCommandSend cmdSend = new ClientCommandSend(this, clientContext, memoryManager, objectServer,
                 requestParams);
         cmdSend.initialize();

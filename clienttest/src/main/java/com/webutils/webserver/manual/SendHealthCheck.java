@@ -32,7 +32,7 @@ public class SendHealthCheck {
         cliClient.start();
 
         HealthCheckParams params = new HealthCheckParams(false, false, accessToken);
-        params.setOpcClientRequestId("HealthCheck-6-22-2020.01-" + testCount);
+        params.setOpcClientRequestId("HealthCheck-6-22-2020.01-" + serverTcpPort);
 
         cli = new ClientServiceRequest(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
                 params, null, testCount);

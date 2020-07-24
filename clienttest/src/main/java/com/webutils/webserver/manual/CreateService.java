@@ -34,7 +34,7 @@ public class CreateService {
 
         CreateServerObjectParams params = new CreateServerObjectParams(serviceName, "localhost", serviceTcpPort,
                 0, StorageTierEnum.INVALID_TIER);
-        params.setOpcClientRequestId("CreateService-6-1-2020.01");
+        params.setOpcClientRequestId("CreateService-6-1-2020.01-" + serviceName);
 
         cli = new ClientCommandInterface(cliClient, cliMemoryManager, serverIpAddr, serverTcpPort,
                 params, testCount);
