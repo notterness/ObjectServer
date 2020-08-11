@@ -71,8 +71,12 @@ public class FileReadBufferMetering implements Operation {
 
         for (int i = 0; i < buffersToAllocate; i++) {
             ByteBuffer buffer = memoryManager.poolMemAlloc(MemoryManager.XFER_BUFFER_SIZE, fileReadBufferMgr, operationType);
-
-            fileReadBufferMgr.offer(bufferMeteringPointer, buffer);
+            if (buffer != null) {
+                fileReadBufferMgr.offer(bufferMeteringPointer, buffer);
+            } else {
+                LOG.error("FileReadBufferMetering initialize() null buffer [" + i + "]");
+                break;
+            }
         }
 
         /*

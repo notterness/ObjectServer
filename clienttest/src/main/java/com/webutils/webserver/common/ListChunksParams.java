@@ -81,7 +81,7 @@ public class ListChunksParams extends ObjectParams {
         }
 
         if (serverName != null) {
-            request += ContentParser.SERVER_NAME + ": " + serverName + "\n";
+            request += ContentParser.SERVICE_NAME + ": " + serverName + "\n";
         }
 
         if (chunkStatus != ChunkStatusEnum.INVALID_CHUNK_STATUS) {

@@ -59,7 +59,7 @@ public class K8ServersMgr extends ServerIdentifierTableMgr {
      **     "storage-server-3"
      **     more storage server will follow the same pattern.
      */
-    public boolean getServer(final String serverName, final List<ServerIdentifier> serverList) {
+    public int getServer(final String serverName, final List<ServerIdentifier> serverList) {
         LOG.info("K8ServersMgr getServer() serverName: " + serverName + " dockerImage: " + isDockerImage() +
                 " k8Image: " + isKubernetesImage());
 
@@ -68,7 +68,7 @@ public class K8ServersMgr extends ServerIdentifierTableMgr {
         return super.retrieveServers(queryStr, serverList, 0);
     }
 
-    public boolean getStorageServers(final List<ServerIdentifier> servers, final int chunkNumber) {
+    public int getStorageServers(final List<ServerIdentifier> servers, final int chunkNumber) {
         LOG.info("K8ServersMgr getStorageServers() dockerImage: " + isDockerImage() + " k8Image: " +
                 isKubernetesImage());
 

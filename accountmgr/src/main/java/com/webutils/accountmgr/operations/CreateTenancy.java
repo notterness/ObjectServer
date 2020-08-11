@@ -29,7 +29,7 @@ public class CreateTenancy implements Operation {
     private final Operation completeCallback;
 
     /*
-     ** Used to insure that the database operations to create the bucket do not get run multiple times.
+     ** Used to insure that the database operations to create the Tenancy do not get run multiple times.
      */
     private boolean tenancyCreated;
 

@@ -65,7 +65,7 @@ public class K8PodServersMgr extends ServerIdentifierTableMgr {
      **     "storage-server-3"
      **     "storage-server-4"
      */
-    public boolean getServer(final String serverName, final List<ServerIdentifier> serverList) {
+    public int getServer(final String serverName, final List<ServerIdentifier> serverList) {
         LOG.info("K8PodServersMgr getServer() serverName: " + serverName + " dockerImage: " + isDockerImage() +
                 " k8Image: " + isKubernetesImage());
 
@@ -77,7 +77,7 @@ public class K8PodServersMgr extends ServerIdentifierTableMgr {
     /*
     ** This returns a list of Storage Servers and their IP addresses and Ports they are visible on.
      */
-    public boolean getStorageServers(final List<ServerIdentifier> servers, final int chunkNumber) {
+    public int getStorageServers(final List<ServerIdentifier> servers, final int chunkNumber) {
         LOG.info("K8PodServersMgr getStorageServers() dockerImage: " + isDockerImage() + " k8Image: " +
                 isKubernetesImage());
 

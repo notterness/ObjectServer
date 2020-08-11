@@ -1,11 +1,9 @@
 package com.webutils.chunkmgr.operations;
 
-import com.webutils.chunkmgr.http.ListServersGetContent;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpInfo;
 import com.webutils.webserver.http.HttpRequestInfo;
-import com.webutils.webserver.http.ListChunkInfo;
 import com.webutils.webserver.http.StorageTierEnum;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.mysql.ServerIdentifierTableMgr;
@@ -110,6 +108,8 @@ public class ListServers implements Operation {
     }
 
     /*
+    ** This returns either the list of "storage-server-*" if the serverName is set to null or the information about a
+    **   specific server if one is provided in the serverName header.
      */
     public void execute() {
         if (!listCreated) {
@@ -117,7 +117,12 @@ public class ListServers implements Operation {
             StorageTierEnum tier = requestContext.getHttpInfo().getStorageTier();
             String serverName = requestContext.getHttpInfo().getServerName();
 
-            int status = serverTableMgr.getOrderedStorageServers(servers, tier, 0);
+            int status;
+            if (serverName == null) {
+                status = serverTableMgr.getOrderedStorageServers(servers, tier, 0);
+            } else {
+                status = serverTableMgr.getServer(serverName, servers);
+            }
             if (status == HttpStatus.OK_200) {
                 sendHeaderAndResponse();
             } else {

@@ -231,7 +231,7 @@ public class ServerIdentifier {
         if (initialEntry) {
             body.append("{\r\n  \"data\": [\r\n");
         }
-        body.append("  \"" + ContentParser.SERVER_NAME + "\": \"" + serverName + "\"\n");
+        body.append("  \"" + ContentParser.SERVICE_NAME + "\": \"" + serverName + "\"\n");
         body.append("    {\n");
         body.append("       \"storage-id\": \"" + serverId + "\"\n");
         //body.append("       \"server-uid\": \"" +  + "\"\n");

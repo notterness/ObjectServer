@@ -19,12 +19,12 @@ public class AccountMgrHttpRequestInfo extends HttpRequestInfo {
      */
     public void setHeaderComplete() {
 
+        boolean tenancySet = getTenancySetInUri();
         switch (httpMethod) {
             case PUT_METHOD:
                 break;
 
             case POST_METHOD:
-                boolean tenancySet = getTenancySetInUri();
                 boolean userSet = getUserSetInUri();
                 if (tenancySet) {
                     /*
@@ -42,14 +42,26 @@ public class AccountMgrHttpRequestInfo extends HttpRequestInfo {
                 break;
 
             case GET_METHOD:
-                String listType = getListType();
+                String tenancyName = getTenancyFromUri();
                 if (isHealthCheck()) {
                     /*
                      ** This is the Health Check request meaning the URI had "/health" in it.
                      */
                     LOG.info("Setting httpMethod to HEALTH_CHECK");
                     httpMethod = HttpMethodEnum.HEALTH_CHECK;
-                } else if (listType != null) {
+                } else if (tenancySet) {
+                    /*
+                     ** This is the GetTenancyId from the AccessToken method. This is the case when just "/t" is
+                     **   passed in the URI
+                     */
+                    LOG.info("Setting httpMethod to GET_TENANCY_ID");
+                    httpMethod = HttpMethodEnum.GET_TENANCY_ID;
+                } else if (tenancyName != null) {
+                    /*
+                     ** This is the GetAccessToken method.
+                     */
+                    LOG.info("Setting httpMethod to GET_ACCESS_TOKEN");
+                    httpMethod = HttpMethodEnum.GET_ACCESS_TOKEN;
                 }
                 break;
 

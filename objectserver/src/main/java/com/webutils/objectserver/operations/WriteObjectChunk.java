@@ -183,8 +183,8 @@ public class WriteObjectChunk implements Operation {
                 ServerIdentifierTableMgr serverTableMgr = requestContext.getServerTableMgr();
                 if (serverTableMgr != null) {
                     List<ServerIdentifier> servers = new LinkedList<>();
-                    boolean found = serverTableMgr.getServer("chunk-mgr-service", servers);
-                    if (found) {
+                    int status = serverTableMgr.getServer("chunk-mgr-service", servers);
+                    if (status == HttpStatus.OK_200) {
                         chunkMgrService = servers.get(0);
                         chunkMgrService.setHttpInfo(httpInfo);
                     } else {
@@ -194,10 +194,10 @@ public class WriteObjectChunk implements Operation {
                          ** Nothing more can be done, might as well return an error
                          */
                         LOG.warn("Unable to obtain address for chunkMgrService");
-                        String failureMessage = "{\r\n  \"code\":" + HttpStatus.INTERNAL_SERVER_ERROR_500 +
+                        String failureMessage = "{\r\n  \"code\":" + status +
                                 "\r\n  \"message\": \"Unable to obtain address for Chunk Manager Service\"" +
                                 "\r\n}";
-                        objectCreateInfo.setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
+                        objectCreateInfo.setParseFailureCode(status, failureMessage);
                         currState = ExecutionState.WRITE_STORAGE_CHUNK_CALLBACK;
                         event();
                         break;

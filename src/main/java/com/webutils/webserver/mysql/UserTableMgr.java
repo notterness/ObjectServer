@@ -250,6 +250,10 @@ public class UserTableMgr extends AccessControlDb {
             return null;
         }
 
+        return getAccessToken(userName, password, passphrase, tenancyId);
+    }
+
+    public String getAccessToken(final String userName, final String password, final String passphrase, final int tenancyId) {
         Connection conn = getAccessControlDbConn();
 
         String accessTokenStr = null;

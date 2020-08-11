@@ -3,6 +3,7 @@ package com.webutils.webserver.operations;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.common.ObjectParams;
+import com.webutils.webserver.http.ContentParser;
 import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.manual.ClientInterface;
 import com.webutils.webserver.memory.MemoryManager;
@@ -42,6 +43,8 @@ public class ClientCommandSend implements Operation {
 
     private final ObjectParams requestParams;
 
+    private final ContentParser contentParser;
+
     private final MemoryManager memoryManager;
 
     /*
@@ -70,6 +73,7 @@ public class ClientCommandSend implements Operation {
     /*
      ** The response buffer metering is used by the WritObjectToFile operation
      */
+    private BufferManager responseBufferManager;
     private BufferReadMetering responseBufferMetering;
 
     private BufferManagerPointer httpBufferPointer;
@@ -92,16 +96,24 @@ public class ClientCommandSend implements Operation {
     private final IoInterface objectServerConn;
 
     /*
+    ** The following is the default handler when the content is being displayed in a text format on the console.
      */
     public ClientCommandSend(final ClientInterface clientInterface, final ClientRequestContext requestContext,
+                             final MemoryManager memoryManager, final ServerIdentifier server,
+                             final ObjectParams requestParams) {
+        this(clientInterface, requestContext, memoryManager,server, requestParams, null);
+    }
+
+    public ClientCommandSend(final ClientInterface clientInterface, final ClientRequestContext requestContext,
                            final MemoryManager memoryManager, final ServerIdentifier server,
-                           final ObjectParams requestParams) {
+                           final ObjectParams requestParams, final ContentParser contentParser) {
 
         this.clientInterface = clientInterface;
         this.requestContext = requestContext;
+        this.memoryManager = memoryManager;
         this.objectServer = server;
         this.requestParams = requestParams;
-        this.memoryManager = memoryManager;
+        this.contentParser = contentParser;
 
         /*
          ** Obtain the HttpResponseInfo for this request.
@@ -198,7 +210,7 @@ public class ClientCommandSend implements Operation {
 
             case SEND_CONTENT_DATA:
                 currState = ExecutionState.WAITING_FOR_RESPONSE_HEADER;
-                setupFileWrite();
+                teardownRequestWriteOps();
                 event();
                 break;
 
@@ -244,11 +256,23 @@ public class ClientCommandSend implements Operation {
 
             case CONTENT_PROCESSED:
                 boolean parseError = requestContext.getHttpParseError();
+
+                /*
+                ** getAllObjectDataWritten() returns the allObjectDataWritten flag that is set when either the content
+                **   data has been processed by the ConvertRespBodyToString operation or the WriteObjectToFile operation
+                **   has completed.
+                ** Currently, the ParseContentBuffers operation uses the setPostContentParsed() method in the request
+                **   context to inform higher levels that it is complete so that flag needs to be checked as well.
+                **
+                ** FIXME: Consolidate the flags
+                 */
                 boolean allDataWritten = requestContext.getAllObjectDataWritten();
-                LOG.info("CONTENT_PROCESSED  allDataWritten: " + allDataWritten +
+                boolean contentParsed = requestContext.postMethodContentParsed();
+
+                LOG.info("CONTENT_PROCESSED  allDataWritten: " + allDataWritten + " contentParsed: " + contentParsed +
                         " parseError: " + parseError);
 
-                if (allDataWritten) {
+                if (allDataWritten ||contentParsed) {
                     objectServer.setResponseStatus(HttpStatus.OK_200);
 
                     LOG.info("chunk read from Object Server complete");
@@ -300,15 +324,16 @@ public class ClientCommandSend implements Operation {
                 objectServer.getServerTcpPort());
 
         /*
+        ** The following will tear down WRITE_TO_CLIENT and BUILD_REQUEST_HEADER if they have not already been
+        **  taken care of.
+         */
+        teardownRequestWriteOps();
+
+        /*
          ** The following must be called in order to make sure that the BufferManagerPointer
          **   dependencies are torn down in the correct order. The pointers in
          **   headerWriter are dependent upon the pointers in headerBuilder. But, if there was
          */
-        Operation headerWriter = requestHandlerOps.remove(OperationTypeEnum.WRITE_TO_CLIENT);
-        if (headerWriter != null) {
-            headerWriter.complete();
-        }
-
         Operation headerBuilder = requestHandlerOps.remove(OperationTypeEnum.BUILD_OBJECT_GET_HEADER);
         if (headerBuilder != null) {
             headerBuilder.complete();
@@ -330,6 +355,21 @@ public class ClientCommandSend implements Operation {
         Operation convertBodyToStr = requestHandlerOps.remove(OperationTypeEnum.CONVERT_RESP_BODY_TO_STR);
         if (convertBodyToStr != null) {
             convertBodyToStr.complete();
+        }
+
+        /*
+        ** Depending upon the response content, there is the possibility (assuming a content parser was provided) that
+        **   one of the following operations was instantiated. In that case, they must be completed prior to the
+        **   READ_BUFFER operation being completed due to the BufferPointer dependencies.
+         */
+        Operation parseContent = requestHandlerOps.remove(OperationTypeEnum.PARSE_CONTENT);
+        if (parseContent != null) {
+            parseContent.complete();
+        }
+
+        Operation parseErrorContent = requestHandlerOps.remove(OperationTypeEnum.PARSE_ERROR_CONTENT);
+        if (parseErrorContent != null) {
+            parseErrorContent.complete();
         }
 
         Operation readBuffer = requestHandlerOps.remove(OperationTypeEnum.READ_BUFFER);
@@ -358,6 +398,7 @@ public class ClientCommandSend implements Operation {
          **   from the Storage Server
          */
         responseBufferMetering.complete();
+        responseBufferManager = null;
 
         /*
          ** Clear the HTTP Request sent for this Storage Server
@@ -454,8 +495,8 @@ public class ClientCommandSend implements Operation {
         BufferManagerPointer respBufferPointer = responseBufferMetering.initialize();
 
         /*
-         ** For each Storage Server, setup a HandleChunkWriteConnError operation that is used when there
-         **   is an error communicating with the StorageServer.
+         ** For each service, setup a HandleChunkWriteConnError operation that is used when there
+         **   is an error communicating with the service.
          */
         HandleClientError errorHandler = new HandleClientError(requestContext, this);
         requestHandlerOps.put(errorHandler.getOperationType(), errorHandler);
@@ -488,7 +529,7 @@ public class ClientCommandSend implements Operation {
          **   to hold the response buffers as they are read in from the Object Server.
          **
          */
-        BufferManager responseBufferManager = requestContext.getClientReadBufferManager();
+        responseBufferManager = requestContext.getClientReadBufferManager();
 
         /*
          ** Setup the operations to read in the HTTP Response header and process it
@@ -524,9 +565,14 @@ public class ClientCommandSend implements Operation {
     }
 
     /*
-     ** This is used to setup the write of the clients file to the Object Server
+     ** This is used to tear down the request write operations after the request has been sent (either successfully or
+     **   not).
+     ** This is called from two different places so that the normal path can be handled and in complete(). If this is
+     **   called via the complete() path and the request ran successfully, the two Operations will have already been
+     **   removed from the map. So, need to check they are present prior to calling the complete() method for the
+     **   operations.
      */
-    private void setupFileWrite() {
+    private void teardownRequestWriteOps() {
 
         /*
          ** First tear down the BuildRequestHeader and WriteToClient operations. The WriteToClient needs to be
@@ -534,10 +580,14 @@ public class ClientCommandSend implements Operation {
          **   BuildRequestHeader.
          */
         Operation writeToClient = requestHandlerOps.remove(OperationTypeEnum.WRITE_TO_CLIENT);
-        writeToClient.complete();
+        if (writeToClient != null) {
+            writeToClient.complete();
+        }
 
         Operation buildPutHeader = requestHandlerOps.remove(OperationTypeEnum.BUILD_REQUEST_HEADER);
-        buildPutHeader.complete();
+        if (buildPutHeader != null) {
+            buildPutHeader.complete();
+        }
     }
 
 
@@ -555,15 +605,35 @@ public class ClientCommandSend implements Operation {
         Operation httpRespHandler = requestHandlerOps.remove(OperationTypeEnum.RESPONSE_HANDLER);
         httpRespHandler.complete();
 
-        if (httpInfo.getContentLength() != 0) {
-            /*
-             ** The next Operations are run once the response header has been received. This is to convert the bytes
-             **   read in into a String.
-             */
-            ConvertRespBodyToString convertToStr = new ConvertRespBodyToString(requestContext, httpBufferPointer,
-                    responseBufferMetering, httpInfo, this);
-            requestHandlerOps.put(convertToStr.getOperationType(), convertToStr);
-            convertToStr.initialize();
+        int contentLength = httpInfo.getContentLength();
+        LOG.info("ClientCommandSend.startContentRead() contentLength: " + contentLength);
+
+        if (contentLength != 0) {
+            if (contentParser == null) {
+                /*
+                 ** The next Operations are run once the response header has been received. This is to convert the bytes
+                 **   read in into a String.
+                 */
+                ConvertRespBodyToString convertToStr = new ConvertRespBodyToString(requestContext, httpBufferPointer,
+                        responseBufferMetering, httpInfo, this);
+                requestHandlerOps.put(convertToStr.getOperationType(), convertToStr);
+                convertToStr.initialize();
+            } else {
+                Operation parseContent;
+                if (httpInfo.getResponseStatus() == HttpStatus.OK_200) {
+                    /*
+                     ** The next Operations are run once the response header has been received. This is to convert the response
+                     **   content into a usable form.
+                     */
+                    parseContent = new ParseContentBuffers(requestContext, responseBufferManager, httpBufferPointer,
+                            responseBufferMetering, contentParser, contentLength, this);
+                } else {
+                    parseContent = new ParseErrorContent(requestContext, responseBufferManager, httpBufferPointer,
+                            responseBufferMetering, contentLength, httpInfo, this);
+                }
+                requestHandlerOps.put(parseContent.getOperationType(), parseContent);
+                parseContent.initialize();
+            }
 
             return true;
         }

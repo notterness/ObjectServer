@@ -1,10 +1,7 @@
 package com.webutils.accountmgr.operations;
 
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
-import com.webutils.webserver.http.CreateUserPostContent;
-import com.webutils.webserver.http.HttpInfo;
-import com.webutils.webserver.http.HttpRequestInfo;
-import com.webutils.webserver.http.HttpResponseInfo;
+import com.webutils.webserver.http.*;
 import com.webutils.webserver.mysql.TenancyTableMgr;
 import com.webutils.webserver.mysql.UserTableMgr;
 import com.webutils.webserver.operations.Operation;
@@ -14,25 +11,25 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CreateUser implements Operation {
+public class GetAccessToken implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(CreateUser.class);
+    private static final Logger LOG = LoggerFactory.getLogger(GetAccessToken.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    private final OperationTypeEnum operationType = OperationTypeEnum.CREATE_USER;
+    private final OperationTypeEnum operationType = OperationTypeEnum.GET_ACCESS_TOKEN;
 
     private final RequestContext requestContext;
 
-    private final CreateUserPostContent createUserContent;
+    private final GetAccessTokenContent getAccessTokenContent;
 
     private final Operation completeCallback;
 
     /*
-     ** Used to insure that the database operations to create the User do not get run multiple times.
+     ** Used to insure that the database operations to obtain the Access Token do not get run multiple times.
      */
-    private boolean userCreated;
+    private boolean tokenObtained;
 
     /*
      ** The following are used to insure that an Operation is never on more than one queue and that
@@ -41,13 +38,13 @@ public class CreateUser implements Operation {
      */
     private boolean onExecutionQueue;
 
-    public CreateUser(final RequestContext requestContext, final CreateUserPostContent createUserContent,
-                         final Operation completeCb) {
+    public GetAccessToken(final RequestContext requestContext, final GetAccessTokenContent getAccessTokenContent,
+                      final Operation completeCb) {
         this.requestContext = requestContext;
-        this.createUserContent = createUserContent;
+        this.getAccessTokenContent = getAccessTokenContent;
         this.completeCallback = completeCb;
 
-        userCreated = false;
+        tokenObtained = false;
 
         /*
          ** This starts out not being on any queue
@@ -77,14 +74,14 @@ public class CreateUser implements Operation {
     /*
      */
     public void execute() {
-        if (!userCreated) {
+        if (!tokenObtained) {
             TenancyTableMgr tenancyMgr = new TenancyTableMgr(requestContext.getWebServerFlavor());
             UserTableMgr userMgr = new UserTableMgr(requestContext.getWebServerFlavor());
 
-            String tenancyName = createUserContent.getTenancyName();
-            String customerName = createUserContent.getCustomer();
-            String userName = createUserContent.getUser();
-            String password = createUserContent.getPassword();
+            String tenancyName = requestContext.getHttpInfo().getTenancyFromUri();
+            String customerName = getAccessTokenContent.getCustomer();
+            String userName = getAccessTokenContent.getUser();
+            String password = getAccessTokenContent.getPassword();
 
             int validationStatus = userMgr.validateFields(requestContext.getHttpInfo(), tenancyName, customerName,
                     userName, password);
@@ -97,44 +94,30 @@ public class CreateUser implements Operation {
                 String tenancyUID = tenancyMgr.getTenancyUID(tenancyId);
                 if ((passphrase == null) || (tenancyId == -1) || (tenancyUID == null)) {
                     String failureMessage = "{\r\n  \"code\": " + HttpStatus.NOT_FOUND_404 +
-                            "\r\n  \"message\": \"Tenancy not found: " + tenancyName + "\"" +
+                            "\r\n  \"message\": \"GetAccessToken failed: " + tenancyName + "\"" +
                             "\r\n}";
                     requestContext.getHttpInfo().setParseFailureCode(HttpStatus.NOT_FOUND_404, failureMessage);
 
-                    LOG.warn("CreateUser failed - tenancyId, tenancyUID or passphrase not found: " + tenancyName +
+                    LOG.warn("GetAccessToken failed - tenancyId, tenancyUID or passphrase not found: " + tenancyName +
                             " " + tenancyId + " " + passphrase + " " + tenancyUID);
                 } else {
-                    /*
-                     ** Now make sure this user does not already exist
-                     */
-                    int accessRights = createUserContent.getPermissions();
-
-                    if (userMgr.getUserId(userName, passphrase, tenancyId) == -1) {
-                        int status = userMgr.createTenancyUser(requestContext.getHttpInfo(), userName, passphrase, password,
-                                accessRights, tenancyId, tenancyUID);
-                        if (status == HttpStatus.OK_200) {
-                            requestContext.getHttpInfo().setResponseHeaders(buildSuccessHeader(userMgr, userName, passphrase, tenancyId));
-                        } else {
-                            String failureMessage = "{\r\n  \"code\":" + status +
-                                    "\r\n  \"message\": \"Unable to create not found (passphrase missing): " + tenancyName + "\"" +
-                                    "\r\n}";
-                            requestContext.getHttpInfo().setParseFailureCode(HttpStatus.INTERNAL_SERVER_ERROR_500, failureMessage);
-
-                            LOG.warn("CreateUser failed status: " + HttpStatus.INTERNAL_SERVER_ERROR_500);
-                        }
+                    String accessToken = userMgr.getAccessToken(userName, password, passphrase, tenancyId);
+                    if (accessToken != null) {
+                        requestContext.getHttpInfo().setResponseHeaders(buildSuccessHeader(userMgr, userName, passphrase,
+                                tenancyId, accessToken));
                     } else {
                         String failureMessage = "{\r\n  \"code\":" + HttpStatus.FOUND_302 +
-                                "\r\n  \"message\": \"User already present: " + userName + "\"" +
+                                "\r\n  \"message\": \"AccessToken not present: " + userName + "\"" +
                                 "\r\n}";
                         requestContext.getHttpInfo().setParseFailureCode(HttpStatus.FOUND_302, failureMessage);
 
-                        LOG.warn("CreateUser failed - already present: " + userName);
+                        LOG.warn("GetAccessToken failed: " + userName);
                     }
                 }
             }
             completeCallback.complete();
 
-            userCreated = true;
+            tokenObtained = true;
         }
     }
 
@@ -203,9 +186,10 @@ public class CreateUser implements Operation {
      **   opc-client-request-id - If the client passed one in, otherwise it it will not be returned
      **   opc-request-id
      **   ETag - This is the generated objectUID that is unique to this User
+     **   accessToken - The access token that is being returned.
      */
     private String buildSuccessHeader(final UserTableMgr userMgr, final String userName, final String passphrase,
-                                      final int tenancyId) {
+                                      final int tenancyId, final String accessToken) {
         String successHeader;
 
         String userUID = userMgr.getUserUID(userName, passphrase, tenancyId);
@@ -217,10 +201,12 @@ public class CreateUser implements Operation {
             if (opcClientRequestId != null) {
                 successHeader = HttpInfo.CLIENT_OPC_REQUEST_ID + ": " + opcClientRequestId + "\n" +
                         HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
-                        HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + userUID + "\n";
+                        HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + userUID + "\n" +
+                        HttpInfo.ACCESS_TOKEN + ": " + accessToken + "\n";
             } else {
                 successHeader = HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId + "\n" +
-                        HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + userUID + "\n";
+                        HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + userUID + "\n" +
+                        HttpInfo.ACCESS_TOKEN + ": " + accessToken + "\n";
             }
 
             //LOG.info(successHeader);

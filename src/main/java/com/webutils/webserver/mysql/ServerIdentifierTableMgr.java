@@ -37,8 +37,8 @@ public abstract class ServerIdentifierTableMgr extends ServersDb {
      **     "storage-server-2"
      **     "storage-server-3"
      */
-    public boolean retrieveServers(final String sqlQuery, final List<ServerIdentifier> servers, final int chunkNumber) {
-        boolean success = false;
+    public int retrieveServers(final String sqlQuery, final List<ServerIdentifier> servers, final int chunkNumber) {
+        int status = HttpStatus.NOT_FOUND_404;
 
         Connection conn = getServersDbConn();
 
@@ -77,7 +77,7 @@ public abstract class ServerIdentifierTableMgr extends ServersDb {
                                 LOG.info("StorageServer host: " + serverName + " " + inetAddress.toString() + " port: " +
                                         tcpPort);
 
-                                success = true;
+                                status = HttpStatus.OK_200;
                             } catch (UnknownHostException ex) {
                                 LOG.warn("retrieveServers() Unknown host: " + rs.getString(1) + " " + ex.getMessage());
                             }
@@ -85,6 +85,8 @@ public abstract class ServerIdentifierTableMgr extends ServersDb {
                     } catch (SQLException sqlEx) {
                         System.out.println("retrieveServers() rs.next() SQLException: " + sqlEx.getMessage());
                         LOG.warn("retrieveServers() rs.next() SQLException: " + sqlEx.getMessage());
+
+                        status = HttpStatus.INTERNAL_SERVER_ERROR_500;
                     }
 
                     try {
@@ -108,11 +110,11 @@ public abstract class ServerIdentifierTableMgr extends ServersDb {
             closeStorageServerDbConn(conn);
         }
 
-        if (!success) {
+        if (status != HttpStatus.OK_200) {
             servers.clear();
         }
 
-        return success;
+        return status;
     }
 
     public int createServer(final String serverName, final String serverIp, final int port, final int chunksPerStorageServer,
@@ -197,8 +199,8 @@ public abstract class ServerIdentifierTableMgr extends ServersDb {
         return getUID(getServerUIDStr);
     }
 
-    public abstract boolean getServer(final String serverName, final List<ServerIdentifier> serverList);
-    public abstract boolean getStorageServers(final List<ServerIdentifier> servers, final int chunkNumber);
+    public abstract int getServer(final String serverName, final List<ServerIdentifier> serverList);
+    public abstract int getStorageServers(final List<ServerIdentifier> servers, final int chunkNumber);
     public abstract int getOrderedStorageServers(final List<ServerIdentifier> servers, final StorageTierEnum storageTier, final int chunkNumber);
 
 

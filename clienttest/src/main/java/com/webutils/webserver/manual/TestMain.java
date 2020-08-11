@@ -41,6 +41,8 @@ public class TestMain {
         final int CHUNK_MGR_SERVICE_TCP_PORT = 5002;
         final int ACCOUNT_MGR_SERVICE_TCP_PORT = 5003;
 
+        final String ACCOUNT_MGR_SERVICE = "account-mgr-service";
+
         final int NUMBER_TEST_STORAGE_SERVERS = 4;
         final int STORAGE_SERVER_BASE_ID_OFFSET = 100;
 
@@ -414,7 +416,7 @@ public class TestMain {
                 serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
         createObjectServerService.execute();
 
-        CreateService createAccountMgrService = new CreateService("account-mgr-service", ACCOUNT_MGR_SERVICE_TCP_PORT,
+        CreateService createAccountMgrService = new CreateService(ACCOUNT_MGR_SERVICE, ACCOUNT_MGR_SERVICE_TCP_PORT,
                 serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
         createAccountMgrService.execute();
 
@@ -427,12 +429,13 @@ public class TestMain {
         final String testTenancyName = "Tenancy-Test-Post";
         final String testTenancyPassphrase = "test-passphrase";
 
-        threadCount.incrementAndGet();
-
         PostTenancySimple postTenancy = new PostTenancySimple(testCustomerName, testTenancyName, testTenancyPassphrase,
                 serverIpAddr, ACCOUNT_MGR_SERVICE_TCP_PORT, threadCount);
         postTenancy.execute();
 
+        /*
+         ** Create a test user to validate the POST User method works with the Account Manager service
+         */
         final String testUser_1 = "TestUser1@test.com";
         final String testUser_1_Password = "testpassword";
         final int testUser_1_Permissions = 0x20;
@@ -440,6 +443,18 @@ public class TestMain {
         PostUserSimple postUser = new PostUserSimple(testCustomerName, testTenancyName, testUser_1, testUser_1_Password,
                 testUser_1_Permissions, serverIpAddr, ACCOUNT_MGR_SERVICE_TCP_PORT, threadCount);
         postUser.execute();
+
+        waitForTestsToComplete(threadCount);
+
+        /*
+         ** Obtain the access token from the Account Manager Service for the test user.
+         */
+        GetAccountMgrServiceInfo getAccountMgrInfo = new GetAccountMgrServiceInfo(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT, threadCount);
+        getAccountMgrInfo.execute();
+
+        GetAccessTokenSimple obtainToken = new GetAccessTokenSimple(serverIpAddr, CHUNK_MGR_SERVICE_TCP_PORT,
+                ACCOUNT_MGR_SERVICE, testCustomerName, testTenancyName, testUser_1, testUser_1_Password, threadCount);
+        obtainToken.execute();
 
         waitForTestsToComplete(threadCount);
 

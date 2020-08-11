@@ -3,6 +3,8 @@ package com.webutils.webserver.http;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.*;
 
 public abstract class ContentParser {
@@ -19,10 +21,10 @@ public abstract class ContentParser {
     /*
     ** These are used by multiple content parsers, so they are kept in the base class
      */
-    public static final String SERVER_NAME = "storage-server-name";
+    public static final String SERVICE_NAME = "service-name";
     public static final String STORAGE_ID = "storage-id";
-    public static final String SERVER_IP = "storage-server-ip";
-    public static final String SERVER_PORT = "storage-server-port";
+    public static final String SERVER_IP = "server-ip";
+    public static final String SERVER_PORT = "server-port";
     public static final String CHUNK_UID = "chunk-etag";
 
 
@@ -345,7 +347,7 @@ public abstract class ContentParser {
      **   Intelligent-Tiering - Moves data between fast and slow disk depending on access patterns. Always uses 3
      **     copies of the data.
      **   Standard-IA (Infrequent Access) - 3 copies on slow disk
-     **   OneZone (Another form of Infrequent Access with less redundacy) - 2 copies of the data on slow disk.
+     **   OneZone (Another form of Infrequent Access with less redundancy) - 2 copies of the data on slow disk.
      **   Archive (slower access than Standard-IA) -
      **   DeepArchive (slowest access of all, data may be kept on offline storage) -
      **
@@ -362,6 +364,82 @@ public abstract class ContentParser {
         }
 
         return storageTier;
+    }
+
+    /*
+     ** The following is used to extract the following Strings from the response:
+     **   service-name
+     **   chunk-etag
+     **   chunk-location
+     */
+    protected String getStr(final Map<String, String> subCategory, final String requestedStr) {
+        String str = subCategory.get(requestedStr);
+
+        if (str == null) {
+            LOG.warn(requestedStr + " attribute is missing");
+        }
+        return str;
+    }
+
+    /*
+     ** The following is used to pull out the "storage-server-ip". This needs to handle the case where the hostname
+     **   string is something like:
+     **     "localhost/127.0.0.1"
+     **    This is the purpose of the StringTokenizer() used below.
+     */
+    protected InetAddress getServerIp(final Map<String, String> subCategory) {
+        String str = subCategory.get(SERVER_IP);
+
+        //LOG.info("serverIp: " + str);
+
+        InetAddress inetAddress = null;
+        if (str != null) {
+            String hostName;
+
+            StringTokenizer stk = new StringTokenizer(str, " /");
+            if (stk.hasMoreTokens()) {
+                hostName = stk.nextToken();
+            } else {
+                hostName = str;
+            }
+
+            try {
+                inetAddress = InetAddress.getByName(hostName);
+            } catch (UnknownHostException ex) {
+                LOG.warn("IP address results in unknown host: " + str + " ex: " + ex.getMessage());
+            }
+        } else {
+            LOG.warn(SERVER_IP + " attribute is missing");
+        }
+
+        return inetAddress;
+    }
+
+    /*
+     ** The following is used to obtain the "server-port" for the allocated chunk
+     */
+    protected int getServerPort(final Map<String, String> subCategory) {
+        String portStr = subCategory.get(SERVER_PORT);
+        int port = -1;
+
+        if (portStr != null) {
+            try {
+                port = Integer.parseInt(portStr);
+
+                /*
+                 ** Make sure it is a positive integer
+                 */
+                if (port < 0) {
+                    LOG.warn("storage-server-port must be a positive integer - " + port);
+                    port = -1;
+                }
+            } catch (NumberFormatException ex) {
+                LOG.warn(SERVER_PORT + " is invalid: " + portStr);
+            }
+        } else {
+            LOG.warn("storage-server-port attribute is missing");
+        }
+        return port;
     }
 
 
