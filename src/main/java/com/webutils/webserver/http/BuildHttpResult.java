@@ -206,5 +206,16 @@ public class BuildHttpResult {
         HttpInfo.str_to_bb(respBuffer, tmpStr);
     }
 
+    public void buildGettOkResponse(final ByteBuffer respBuffer) {
+        String respHeader = httpRequestInfo.getResponseHeaders();
+
+        String tmpStr = "HTTP/1.1 200 OK" +
+                "\r\n" +
+                respHeader +
+                HttpInfo.CONTENT_LENGTH + ": 0\n\n";
+
+        HttpInfo.str_to_bb(respBuffer, tmpStr);
+    }
+
 
 }

@@ -65,6 +65,8 @@ public class FixedSizeBufferPool {
             inUseQueue.add(tracker);
 
             return tracker.getBuffer();
+        } else {
+            LOG.error("poolMemAlloc() freeQueue: " + freeQueue.size() + " inUseQueue: " + inUseQueue.size());
         }
         return null;
     }

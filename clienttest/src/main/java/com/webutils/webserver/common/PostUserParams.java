@@ -36,24 +36,26 @@ public class PostUserParams extends ObjectParams {
     }
 
     /*
-     ** This builds the PostTenancy method headers. The following headers and if they are required:
+     ** This builds the PostUser method headers. The following headers and if they are required:
      **
-     **   namespaceName (required) "/c/" - This is set to indicate that the is to setup a customer tenancy.
+     **   User Name (required) "/u" - This is set to indicate that the is to setup a customer tenancy user.
      **
      **   Host (required) - Who is sending the request.
      **   opc-client-request-id (not required) - A unique identifier for this request provided by the client to allow
      **     then to track their requests.
      **   x-content-sha256 (required) - The computed Sha256 Digest for the content related to the bucket.
      **
-     **   Content-Length (required) - The size in bytes of the bucket content information.
+     **   Content-Length (required) - The size in bytes of the create user content information.
      **
-     ** NOTE: The following are the parameters in the content that are required to create a Teanancy:
+     ** NOTE: The following are the parameters in the content that are required to create a User:
      **    Tenancy - This acts as the highest construct and provides an organization of all resources owned by a
      **      client (a client can also have multiple tenancies, but they are distinct and resources cannot be
      **      shared across tenancies).
      **    Customer Name - This is the owner of the Tenancy.
-     **    Passphrase - This is a customer provided passphrase that is used to encrypt information related to this
-     **      tenancy.
+     **    User Name - The name of the user being created within the custmer tenancy.
+     **    Password - The password for the user.
+     **    Permissions - The permissions for the user within the tenancy. This is what operations the user is allowed
+     **      to perform.
      */
     public String constructRequest() {
         String contentStr = buildContent();
@@ -85,7 +87,7 @@ public class PostUserParams extends ObjectParams {
     }
 
     /*
-     ** This displays the results from the PostTenancy method.
+     ** This displays the results from the PostUser method.
      **
      ** TODO: Allow the results to be dumped to a file and possibly allow a format that allows for easier parsing by
      **   the client.
@@ -108,9 +110,14 @@ public class PostUserParams extends ObjectParams {
             System.out.println(HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId);
         }
 
+        String etag = httpInfo.getResponseEtag();
+        if (etag != null) {
+            System.out.println(HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + etag);
+        }
+
         if (httpInfo.getResponseStatus() == HttpStatus.OK_200) {
             /*
-             ** FIXME: At some point the response needs to be displayed for a successful CreateTenancy to echo
+             ** FIXME: At some point the response needs to be displayed for a successful CreateUser to echo
              **   back a bunch of the key value pairs.
              */
         } else {

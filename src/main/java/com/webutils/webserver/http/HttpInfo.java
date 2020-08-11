@@ -465,11 +465,19 @@ abstract public class HttpInfo {
     **
      */
     /*
-     ** Return if the "Tenancy" (TENANCY_NAME_URI) that was parsed from the HTTP uri
+     ** Return if the "Tenancy" (TENANCY_NAME_URI) that was parsed from the HTTP uri. This is ths case when only "/t"
+     **  is passed in the URI and there is not information associated with the "/t".
      */
     public boolean getTenancySetInUri() {
         String tenancy = objectUriInfoMap.get(TENANCY_NAME_URI);
         return ( (tenancy != null) && tenancy.equals("true") );
+    }
+
+    /*
+     ** Return if the "Tenancy" (TENANCY_NAME_URI) that was parsed from the HTTP uri
+     */
+    public String getTenancyFromUri() {
+        return objectUriInfoMap.get(TENANCY_NAME_URI);
     }
 
     /*

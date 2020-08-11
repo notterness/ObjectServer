@@ -117,12 +117,15 @@ public class AccountMgrSendFinalStatus implements Operation {
                 if (resultCode == HttpStatus.OK_200) {
                     switch (requestContext.getHttpInfo().getMethod())   {
                         case GET_METHOD:
-                            resultBuilder.buildAllocateChunksOkResponse(respBuffer);
+                        case GET_ACCESS_TOKEN:
+                            resultBuilder.buildGettOkResponse(respBuffer);
                             break;
 
                         case PUT_METHOD:
                             break;
 
+                        case POST_TENANCY_METHOD:
+                        case POST_USER_METHOD:
                         case POST_METHOD:
                             resultBuilder.buildPostOkResponse(respBuffer);
                             break;

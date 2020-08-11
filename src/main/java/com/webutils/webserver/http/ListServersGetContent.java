@@ -1,11 +1,25 @@
-package com.webutils.chunkmgr.http;
+package com.webutils.webserver.http;
 
-import com.webutils.webserver.http.ContentParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
+/*
+** The content data for the ListServers call takes the following form:
+*
+** {
+**  "data": [
+**   "service-name": "account-mgr-service"
+**     {
+**        "storage-id": "-1"
+**        "server-ip": "localhost/127.0.0.1"
+**        "server-port": "5003"
+**        "storage-server-read-errors": "0"
+**     }
+**   ]
+** }
+ */
 public class ListServersGetContent extends ContentParser {
 
     private static final Logger LOG = LoggerFactory.getLogger(ListServersGetContent.class);
@@ -19,7 +33,7 @@ public class ListServersGetContent extends ContentParser {
     }
 
     /*
-     ** This is used to validate that the required fields are present for the AllocateChunks method.
+     ** This is used to validate that the required fields are present for the ListServer method.
      **   The required fields are:
      **     "object-chunk-number" - The chunks being allocated on various storage servers to provide the redundancy for
      **        the specified chunk for an object.

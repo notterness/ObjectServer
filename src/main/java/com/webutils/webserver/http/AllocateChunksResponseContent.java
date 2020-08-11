@@ -23,10 +23,10 @@ public class AllocateChunksResponseContent extends ContentParser {
     **   {
     **      "chunk-chunkIndex":
     **       {
-    **          "storage-server-name": "  server.getServerName()  "
+    **          "service-name": "  server.getServerName()  "
     **          "storage-id": " server.getServerId() "
-    **          "storage-server-ip": " server.getServerIpAddress().toString() "
-    **          "storage-server-port": " server.getServerTcpPort() "
+    **          "server-ip": " server.getServerIpAddress().toString() "
+    **          "server-port": " server.getServerTcpPort() "
     **          "chunk-id": " server.getChunkId() "
     **          "chunk-uid": " server.getChunkUID() "
     **          "chunk-lba": " server.getChunkLBA() "
@@ -42,7 +42,7 @@ public class AllocateChunksResponseContent extends ContentParser {
          */
         requiredSubAttributes = new LinkedList<>();
 
-        requiredSubAttributes.add(SERVER_NAME);
+        requiredSubAttributes.add(SERVICE_NAME);
         requiredSubAttributes.add(STORAGE_ID);
         requiredSubAttributes.add(SERVER_IP);
         requiredSubAttributes.add(SERVER_PORT);
@@ -132,10 +132,10 @@ public class AllocateChunksResponseContent extends ContentParser {
 
             Map<String, String> subCategory = entry.getValue();
 
-            String serverName = getStr(subCategory, SERVER_NAME);
+            String serverName = getStr(subCategory, SERVICE_NAME);
             InetAddress inetAddress = getServerIp(subCategory);
             if (inetAddress != null) {
-                int port = getChunkServerPort(subCategory);
+                int port = getServerPort(subCategory);
                 ServerIdentifier server = new ServerIdentifier(serverName, inetAddress, port, chunkNumber);
 
                 LOG.info("extractContent() serverName: " + serverName + " chunkUID: " + getStr(subCategory, CHUNK_UID));
@@ -218,82 +218,6 @@ public class AllocateChunksResponseContent extends ContentParser {
             LOG.warn("chunk-lba attribute is missing");
         }
         return lba;
-    }
-
-    /*
-     ** The following is used to obtain the "storage-server-port" for the allocated chunk
-     */
-    private int getChunkServerPort(final Map<String, String> subCategory) {
-        String portStr = subCategory.get(SERVER_PORT);
-        int port = -1;
-
-        if (portStr != null) {
-            try {
-                port = Integer.parseInt(portStr);
-
-                /*
-                 ** Make sure it is a positive integer
-                 */
-                if (port < 0) {
-                    LOG.warn("storage-server-port must be a positive integer - " + port);
-                    port = -1;
-                }
-            } catch (NumberFormatException ex) {
-                LOG.warn("storage-server-port is invalid: " + portStr);
-            }
-        } else {
-            LOG.warn("storage-server-port attribute is missing");
-        }
-        return port;
-    }
-
-    /*
-    ** The following is used to extract the following Strings from the response:
-    **   storage-server-name
-    **   chunk-etag
-    **   chunk-location
-     */
-    private String getStr(final Map<String, String> subCategory, final String requestedStr) {
-        String str = subCategory.get(requestedStr);
-
-        if (str == null) {
-            LOG.warn(requestedStr + " attribute is missing");
-        }
-        return str;
-    }
-
-    /*
-    ** The following is used to pull out the "storage-server-ip". This needs to handle the case where the hostname
-    **   string is something like:
-    **     "localhost/127.0.0.1"
-    **    This is the purpose of the StringTokenizer() used below.
-     */
-    private InetAddress getServerIp(final Map<String, String> subCategory) {
-        String str = subCategory.get(SERVER_IP);
-
-        //LOG.info("serverIp: " + str);
-
-        InetAddress inetAddress = null;
-        if (str != null) {
-            String hostName;
-
-            StringTokenizer stk = new StringTokenizer(str, " /");
-            if (stk.hasMoreTokens()) {
-                hostName = stk.nextToken();
-            } else {
-                hostName = str;
-            }
-
-            try {
-                inetAddress = InetAddress.getByName(hostName);
-            } catch (UnknownHostException ex) {
-                LOG.warn("IP address results in unknown host: " + str + " ex: " + ex.getMessage());
-            }
-        } else {
-            LOG.warn(SERVER_IP + " attribute is missing");
-        }
-
-        return inetAddress;
     }
 
 }

@@ -3,7 +3,6 @@ package com.webutils.webserver.common;
 import com.webutils.webserver.http.ContentParser;
 import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.requestcontext.ServerIdentifier;
-import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -90,7 +89,7 @@ public abstract class DeleteChunksParams extends ObjectParams {
         for (ServerIdentifier server : servers) {
             body.append("  \"chunk-" + chunkIndex + "\":\n");
             body.append("    {\n");
-            body.append("       \"" + ContentParser.SERVER_NAME + "\": \"" + server.getServerName() + "\"\n");
+            body.append("       \"" + ContentParser.SERVICE_NAME + "\": \"" + server.getServerName() + "\"\n");
             body.append("       \"" + ContentParser.CHUNK_UID + "\": \"" + server.getChunkUID() + "\"\n");
             body.append("    }\n");
 

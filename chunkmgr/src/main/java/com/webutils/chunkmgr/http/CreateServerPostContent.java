@@ -20,7 +20,7 @@ public class CreateServerPostContent extends ContentParser {
         /*
          ** Fill in the list of required attributes so they are easy to check
          */
-        requiredAttributes.add(SERVER_NAME);
+        requiredAttributes.add(SERVICE_NAME);
         requiredAttributes.add(SERVER_IP);
         requiredAttributes.add(SERVER_PORT);
         requiredAttributes.add(STORAGE_SERVER_NUM_CHUNKS);
@@ -123,7 +123,7 @@ public class CreateServerPostContent extends ContentParser {
     }
 
     public String getServerName() {
-        return params.get(SERVER_NAME);
+        return params.get(SERVICE_NAME);
     }
 
     public String getCompartmentId() {

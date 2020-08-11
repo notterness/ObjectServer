@@ -83,7 +83,7 @@ public class CreateServerObjectParams extends ObjectParams {
     private String buildContent() {
         String contentString = new String(
                 "{\n" +
-                        "  \"" + ContentParser.SERVER_NAME + "\": \"" + serverName + "\",\n" +
+                        "  \"" + ContentParser.SERVICE_NAME + "\": \"" + serverName + "\",\n" +
                         "  \"\"" + ContentParser.SERVER_IP + "\": \"" + ipAddr + "\",\n" +
                         "  \"\"" + ContentParser.SERVER_PORT + "\": \"" + port + "\",\n" +
                         "  \"allocated-chunks\": \"" + numChunks + "\",\n" +

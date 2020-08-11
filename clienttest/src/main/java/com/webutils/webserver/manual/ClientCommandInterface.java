@@ -1,6 +1,7 @@
 package com.webutils.webserver.manual;
 
 import com.webutils.webserver.common.ObjectParams;
+import com.webutils.webserver.http.ContentParser;
 import com.webutils.webserver.http.HttpResponseInfo;
 import com.webutils.webserver.memory.MemoryManager;
 import com.webutils.webserver.niosockets.EventPollThread;
@@ -17,18 +18,30 @@ public class ClientCommandInterface extends ClientInterface {
 
     private final ObjectParams requestParams;
 
+    private final ContentParser contentParser;
+
     private final NioCliClient client;
     private final EventPollThread eventThread;
     private final int eventThreadId;
 
     private static final String clientName = "ObjectCLI/0.0.1";
 
+    /*
+    ** There are two forms of the ClientCommandInterface. The first just uses the parser provided by ConvertRespBodyToString
+    **   to build a String that can be output on the console. The second uses a passed in ContentParser to pull the
+    **   information returned in the content response into a form that can be used by the caller.
+     */
     ClientCommandInterface(final NioCliClient cliClient, final MemoryManager memoryManger, final InetAddress serverIpAddr, final int serverTcpPort,
                            final ObjectParams requestParams, AtomicInteger testCount) {
+        this(cliClient, memoryManger, serverIpAddr, serverTcpPort, requestParams, null, testCount);
+    }
 
+    ClientCommandInterface(final NioCliClient cliClient, final MemoryManager memoryManger, final InetAddress serverIpAddr, final int serverTcpPort,
+                           final ObjectParams requestParams, final ContentParser contentParser, AtomicInteger testCount) {
         super(cliClient, memoryManger, serverIpAddr, serverTcpPort, testCount);
 
         this.requestParams = requestParams;
+        this.contentParser = contentParser;
 
         /*
          ** The testClient is responsible for providing the threads the Operation(s) will run on and the
@@ -40,9 +53,10 @@ public class ClientCommandInterface extends ClientInterface {
     }
 
     /*
-     **
+    ** This is used to execute a CLI request that is part of a chained operation. It will not release
+    **   the memory and will not decrement the number of running commands.
      */
-    public void execute() {
+    public void executeWithoutMemPoolRelease() {
         /*
          ** Allocate a RequestContext
          */
@@ -71,7 +85,7 @@ public class ClientCommandInterface extends ClientInterface {
         System.out.println("\nSTARTING ClientCommandInterface - " + requestParams.getOpcClientRequestId());
 
         ClientCommandSend cmdSend = new ClientCommandSend(this, clientContext, memoryManager, objectServer,
-                requestParams);
+                requestParams, contentParser);
         cmdSend.initialize();
 
         /*
@@ -94,10 +108,37 @@ public class ClientCommandInterface extends ClientInterface {
         cmdSend.complete();
 
         client.releaseContext(clientContext);
+    }
 
+    /*
+    ** This is the standard execute() function if there are not multiple operations that are chained and using
+    **   the same memory pool
+     */
+    public void execute() {
+        executeWithoutMemPoolRelease();
+
+        /*
+        ** Now release the memory in the pool and then decrement the running test count.
+         */
         memoryManager.verifyMemoryPools(clientName);
 
         runningTestCount.decrementAndGet();
     }
 
+    /*
+    ** This is used if the CLI command the used the executeWithoutMemPoolRelease() had and
+    **   error and the request that was to follow it will not be run.
+     */
+    public void cleanup() {
+        /*
+         ** Now release the memory in the pool and then decrement the running test count.
+         */
+        memoryManager.verifyMemoryPools(clientName);
+
+        runningTestCount.decrementAndGet();
+    }
+
+    public void decrementCount() {
+        runningTestCount.decrementAndGet();
+    }
 }

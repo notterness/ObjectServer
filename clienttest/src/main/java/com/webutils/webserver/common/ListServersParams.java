@@ -23,13 +23,26 @@ public class ListServersParams extends ObjectParams {
     private final String serverName;
     private final int limit;
 
+    /*
+    ** If usingParser is set to true, there will not be any output unless there was an error returned from
+    **   the server.
+     */
+    private final boolean usingParser;
+
     public ListServersParams(final StorageTierEnum tier, final String serverName, final int limit) {
+
+        this(tier, serverName, limit, false);
+    }
+
+    public ListServersParams(final StorageTierEnum tier, final String serverName, final int limit,
+                             final boolean usingParser) {
 
         super(null, null, null, null);
 
         this.tier = Objects.requireNonNullElse(tier, StorageTierEnum.INVALID_TIER);
         this.serverName = serverName;
         this.limit = limit;
+        this.usingParser = usingParser;
     }
 
     /*
@@ -95,27 +108,28 @@ public class ListServersParams extends ObjectParams {
      */
     public void outputResults(final HttpResponseInfo httpInfo) {
         /*
-         ** If the status is good (ListChunks returns 200 if successful), then display the following:
+         ** If the status is good (ListServers returns 200 if successful), then display the following:
          **   opc-client-request-id
          **   opc-request-id
          */
         if (httpInfo.getResponseStatus() == HttpStatus.OK_200) {
-            System.out.println("Status: 200");
-            String opcClientRequestId = httpInfo.getOpcClientRequestId();
-            if (opcClientRequestId != null) {
-                System.out.println("opc-client-request-id: " + opcClientRequestId);
-            }
+            if (!usingParser) {
+                System.out.println("Status: 200");
+                String opcClientRequestId = httpInfo.getOpcClientRequestId();
+                if (opcClientRequestId != null) {
+                    System.out.println("opc-client-request-id: " + opcClientRequestId);
+                }
 
-            String opcRequestId = httpInfo.getOpcRequestId();
-            if (opcRequestId != null) {
-                System.out.println("opc-request-id: " + opcRequestId);
-            }
+                String opcRequestId = httpInfo.getOpcRequestId();
+                if (opcRequestId != null) {
+                    System.out.println("opc-request-id: " + opcRequestId);
+                }
 
-            String responseBody = httpInfo.getResponseBody();
-            if (responseBody != null) {
-                System.out.println(responseBody);
+                String responseBody = httpInfo.getResponseBody();
+                if (responseBody != null) {
+                    System.out.println(responseBody);
+                }
             }
-
         } else if (httpInfo.getResponseStatus() == HttpStatus.METHOD_NOT_ALLOWED_405) {
             System.out.println("Status: " + httpInfo.getResponseStatus());
             String allowableMethods = httpInfo.getAllowableMethods();
@@ -130,6 +144,5 @@ public class ListServersParams extends ObjectParams {
             }
         }
     }
-
 
 }

@@ -34,7 +34,7 @@ public class DeleteChunksContent  extends ContentParser {
          */
         requiredSubAttributes = new LinkedList<>();
 
-        requiredSubAttributes.add(SERVER_NAME);
+        requiredSubAttributes.add(SERVICE_NAME);
         requiredSubAttributes.add(CHUNK_UID);
     }
 
@@ -114,7 +114,7 @@ public class DeleteChunksContent  extends ContentParser {
 
             Map<String, String> subCategory = entry.getValue();
 
-            String serverName = getStr(subCategory, SERVER_NAME);
+            String serverName = getStr(subCategory, SERVICE_NAME);
             ChunkDeleteInfo chunkInfo = new ChunkDeleteInfo(serverName, getStr(subCategory, CHUNK_UID));
 
             chunks.add(chunkInfo);
@@ -124,21 +124,6 @@ public class DeleteChunksContent  extends ContentParser {
          ** Done with the data, clear all the places it is held
          */
         clearAllMaps();
-    }
-
-    /*
-     ** The following is used to extract the following Strings from the response:
-     **   storage-server-name
-     **   chunk-etag
-     **   chunk-location
-     */
-    private String getStr(final Map<String, String> subCategory, final String requestedStr) {
-        String str = subCategory.get(requestedStr);
-
-        if (str == null) {
-            LOG.warn(requestedStr + " attribute is missing");
-        }
-        return str;
     }
 
 }

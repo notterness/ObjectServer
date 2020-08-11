@@ -236,7 +236,7 @@ public class AllocateChunks implements Operation {
         for (ServerIdentifier server : allocatedServers) {
             body.append("  \"chunk-").append(chunkIndex).append("\":\n");
             body.append("    {\n");
-            body.append("       \"" + ContentParser.SERVER_NAME + "\": \"").append(server.getServerName()).append("\"\n");
+            body.append("       \"" + ContentParser.SERVICE_NAME + "\": \"").append(server.getServerName()).append("\"\n");
             body.append("       \"" + ContentParser.STORAGE_ID + "\": \"").append(server.getServerId()).append("\"\n");
             body.append("       \"" + ContentParser.SERVER_IP + "\": \"").append(server.getServerIpAddress().toString()).append("\"\n");
             body.append("       \"" + ContentParser.SERVER_PORT + "\": \"").append(server.getServerTcpPort()).append("\"\n");

@@ -1,10 +1,10 @@
 package com.webutils.accountmgr.operations;
 
-import com.webutils.webserver.http.CreateTenancyPostContent;
 import com.webutils.accountmgr.requestcontext.AccountMgrRequestContext;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.common.Sha256ResultHandler;
+import com.webutils.webserver.http.GetAccessTokenContent;
 import com.webutils.webserver.operations.ComputeSha256Digest;
 import com.webutils.webserver.operations.Operation;
 import com.webutils.webserver.operations.OperationTypeEnum;
@@ -15,14 +15,14 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.*;
 
-public class SetupTenancyPost implements Operation {
+public class SetupAccessTokenGet implements Operation {
 
-    private static final Logger LOG = LoggerFactory.getLogger(SetupTenancyPost.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SetupAccessTokenGet.class);
 
     /*
      ** A unique identifier for this Operation so it can be tracked.
      */
-    private final OperationTypeEnum operationType = OperationTypeEnum.SETUP_TENANCY_POST;
+    private final OperationTypeEnum operationType = OperationTypeEnum.SETUP_ACCESS_TOKEN_GET;
 
     private final AccountMgrRequestContext requestContext;
 
@@ -30,9 +30,9 @@ public class SetupTenancyPost implements Operation {
 
     private final Operation completeCallback;
 
-    private final CreateTenancyPostContent createTenancyPostContent;
+    private final GetAccessTokenContent getAccessTokenContent;
 
-    private CreateTenancy createTenancy;
+    private GetAccessToken getToken;
 
     private final Sha256ResultHandler updator;
 
@@ -49,31 +49,31 @@ public class SetupTenancyPost implements Operation {
      **
      ** The following is a map of all of the created Operations to handle this request.
      */
-    private final Map<OperationTypeEnum, Operation> PostHandlerOperations;
+    private final Map<OperationTypeEnum, Operation> GetHandlerOperations;
 
     private boolean setupMethodDone;
     private boolean waitingOnOperations;
 
     /*
-     ** This is used to setup the initial Operation dependencies required to handle the CreateTenancy POST
+     ** This is used to setup the initial Operation dependencies required to handle the GetAccessToken GET
      **   method.
-     ** The completeCb will call the DetermineRequest operation's event() method when the POST completes.
+     ** The completeCb will call the DetermineRequest operation's event() method when the GET completes.
      */
-    public SetupTenancyPost(final AccountMgrRequestContext requestContext, final Operation metering,
-                           final Operation completeCb) {
+    public SetupAccessTokenGet(final AccountMgrRequestContext requestContext, final Operation metering,
+                            final Operation completeCb) {
 
         this.requestContext = requestContext;
         this.metering = metering;
         this.completeCallback = completeCb;
 
-        this.createTenancyPostContent = new CreateTenancyPostContent();
+        this.getAccessTokenContent = new GetAccessTokenContent();
 
         this.updator = requestContext.getSha256ResultHandler();
 
         /*
          ** Setup the list of Operations currently used to handle the V2 PUT
          */
-        PostHandlerOperations = new HashMap<>();
+        GetHandlerOperations = new HashMap<>();
 
         /*
          ** This starts out not being on any queue
@@ -115,21 +115,21 @@ public class SetupTenancyPost implements Operation {
             BufferManagerPointer readBufferPointer = requestContext.getReadBufferPointer();
 
             /*
-             ** Once the parsing of the POST content data has taken place and the Sha-256 digest is determined to be valid,
-             **   then the Tenancy and its contents need to be created in the database.
+             ** Once the parsing of the GET content data has taken place and the Sha-256 digest is determined to be valid,
+             **   then the access token can be pulled from the database and returned.
              */
-            createTenancy = new CreateTenancy(requestContext, createTenancyPostContent, this);
-            PostHandlerOperations.put(createTenancy.getOperationType(), createTenancy);
-            createTenancy.initialize();
+            getToken = new GetAccessToken(requestContext, getAccessTokenContent, this);
+            GetHandlerOperations.put(getToken.getOperationType(), getToken);
+            getToken.initialize();
 
             /*
-             ** Setup the Parser to pull the information out of the POST content. This will put the information into
+             ** Setup the Parser to pull the information out of the GET content. This will put the information into
              **   a temporary structure and once the Sha-256 digest completes (assuming it is successful) the setup
              **   of the tenancy will take place.
              */
             ParseContentBuffers parseContentBuffers = new ParseContentBuffers(requestContext, readBufferPointer,
-                    metering, createTenancyPostContent, this);
-            PostHandlerOperations.put(parseContentBuffers.getOperationType(), parseContentBuffers);
+                    metering, getAccessTokenContent, this);
+            GetHandlerOperations.put(parseContentBuffers.getOperationType(), parseContentBuffers);
             parseContentBuffers.initialize();
 
             /*
@@ -142,7 +142,7 @@ public class SetupTenancyPost implements Operation {
             callbackList.add(this);
 
             ComputeSha256Digest computeSha256Digest = new ComputeSha256Digest(requestContext, callbackList, readBufferPointer, updator);
-            PostHandlerOperations.put(computeSha256Digest.getOperationType(), computeSha256Digest);
+            GetHandlerOperations.put(computeSha256Digest.getOperationType(), computeSha256Digest);
             computeSha256Digest.initialize();
 
             /*
@@ -166,23 +166,23 @@ public class SetupTenancyPost implements Operation {
              **   parsing is complete and a second time when the ComputeSha256Digest has completed.
              */
             if (updator.getSha256DigestComplete() && requestContext.postMethodContentParsed()) {
-                LOG.info("SetupTenancyPost[" + requestContext.getRequestId() + "] Sha-256 and Parsing done");
+                LOG.info("SetupAccessTokenGet[" + requestContext.getRequestId() + "] Sha-256 and Parsing done");
 
                 /*
                  ** Cleanup the operations
                  */
-                Operation contentParser = PostHandlerOperations.get(OperationTypeEnum.PARSE_CONTENT);
+                Operation contentParser = GetHandlerOperations.get(OperationTypeEnum.PARSE_CONTENT);
                 contentParser.complete();
-                PostHandlerOperations.remove(OperationTypeEnum.PARSE_CONTENT);
+                GetHandlerOperations.remove(OperationTypeEnum.PARSE_CONTENT);
 
                 /*
                  ** Since the Sha-256 digest runs on a compute thread, it handles it's own complete() call. For that
                  **   reason, simply remove it from the PostHandlerOperations map.
                  */
-                PostHandlerOperations.remove(OperationTypeEnum.COMPUTE_SHA256_DIGEST);
+                GetHandlerOperations.remove(OperationTypeEnum.COMPUTE_SHA256_DIGEST);
 
                 if (updator.checkContentSha256()) {
-                    createTenancy.event();
+                    getToken.event();
                 } else {
                     /*
                      ** There was an error with the passed in or computed Sha-256 digest, so an error needs to be
@@ -193,7 +193,7 @@ public class SetupTenancyPost implements Operation {
 
                 waitingOnOperations = false;
             } else {
-                LOG.info("SetupTenancyPost[" + requestContext.getRequestId() + "] not completed Sha-256 digestComplete: " +
+                LOG.info("SetupAccessTokenGet[" + requestContext.getRequestId() + "] not completed Sha-256 digestComplete: " +
                         updator.getSha256DigestComplete() + " POST content parsed: " + requestContext.postMethodContentParsed());
             }
         } else {
@@ -213,15 +213,15 @@ public class SetupTenancyPost implements Operation {
          ** Call the complete() methods for all of the Operations created to handle the POST method that did not have
          **   ordering dependencies due to the registrations with the BufferManager(s).
          */
-        Collection<Operation> createdOperations = PostHandlerOperations.values();
+        Collection<Operation> createdOperations = GetHandlerOperations.values();
         for (Operation createdOperation : createdOperations) {
             createdOperation.complete();
         }
-        PostHandlerOperations.clear();
+        GetHandlerOperations.clear();
 
         completeCallback.event();
 
-        LOG.info("SetupTenancyPost[" + requestContext.getRequestId() + "] completed");
+        LOG.info("SetupAccessTokenGet[" + requestContext.getRequestId() + "] completed");
     }
 
     /*
@@ -240,19 +240,19 @@ public class SetupTenancyPost implements Operation {
      **
      */
     public void markRemovedFromQueue(final boolean delayedExecutionQueue) {
-        //LOG.info("SetupTenancyPost[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
+        //LOG.info("SetupAccessTokenGet[" + requestContext.getRequestId() + "] markRemovedFromQueue(" + delayedExecutionQueue + ")");
         if (delayedExecutionQueue) {
-            LOG.warn("SetupTenancyPost[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SetupAccessTokenGet[" + requestContext.getRequestId() + "] markRemovedFromQueue(true) not supposed to be on delayed queue");
         } else if (onExecutionQueue){
             onExecutionQueue = false;
         } else {
-            LOG.warn("SetupTenancyPost[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
+            LOG.warn("SetupAccessTokenGet[" + requestContext.getRequestId() + "] markRemovedFromQueue(false) not on a queue");
         }
     }
 
     public void markAddedToQueue(final boolean delayedExecutionQueue) {
         if (delayedExecutionQueue) {
-            LOG.warn("SetupTenancyPost[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
+            LOG.warn("SetupAccessTokenGet[" + requestContext.getRequestId() + "] markAddToQueue(true) not supposed to be on delayed queue");
         } else {
             onExecutionQueue = true;
         }
@@ -267,8 +267,7 @@ public class SetupTenancyPost implements Operation {
     }
 
     public boolean hasWaitTimeElapsed() {
-        LOG.warn("SetupTenancyPost[" + requestContext.getRequestId() +
-                "] hasWaitTimeElapsed() not supposed to be on delayed queue");
+        LOG.warn("SetupAccessTokenGet[" + requestContext.getRequestId() + "] hasWaitTimeElapsed() not supposed to be on delayed queue");
         return true;
     }
 
@@ -280,7 +279,7 @@ public class SetupTenancyPost implements Operation {
         LOG.info(" " + level + ":    requestId[" + requestContext.getRequestId() + "] type: " + operationType);
         LOG.info("   -> Operations Created By " + operationType);
 
-        Collection<Operation> createdOperations = PostHandlerOperations.values();
+        Collection<Operation> createdOperations = GetHandlerOperations.values();
         for (Operation createdOperation : createdOperations) {
             createdOperation.dumpCreatedOperations(level + 1);
         }

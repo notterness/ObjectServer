@@ -1,9 +1,6 @@
 package com.webutils.accountmgr.requestcontext;
 
-import com.webutils.accountmgr.operations.AccountMgrDetermineRequest;
-import com.webutils.accountmgr.operations.AccountMgrSendFinalStatus;
-import com.webutils.accountmgr.operations.SetupTenancyPost;
-import com.webutils.accountmgr.operations.SetupUserPost;
+import com.webutils.accountmgr.operations.*;
 import com.webutils.webserver.buffermgr.BufferManager;
 import com.webutils.webserver.buffermgr.BufferManagerPointer;
 import com.webutils.webserver.http.HttpMethodEnum;
@@ -189,6 +186,9 @@ public class AccountMgrRequestContext extends RequestContext {
 
         SetupUserPost createUserHandler = new SetupUserPost(this, metering, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.POST_USER_METHOD, createUserHandler);
+
+        SetupAccessTokenGet getAccessTokenHandler = new SetupAccessTokenGet(this, metering, determineRequest);
+        supportedHttpRequests.put(HttpMethodEnum.GET_ACCESS_TOKEN, getAccessTokenHandler);
 
         HandleHealthCheck healthCheck = new HandleHealthCheck(this, determineRequest);
         supportedHttpRequests.put(HttpMethodEnum.HEALTH_CHECK, healthCheck);

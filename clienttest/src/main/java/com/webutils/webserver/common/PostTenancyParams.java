@@ -102,6 +102,11 @@ public class PostTenancyParams extends ObjectParams {
             System.out.println(HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId);
         }
 
+        String etag = httpInfo.getResponseEtag();
+        if (etag != null) {
+            System.out.println(HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + etag);
+        }
+
         if (httpInfo.getResponseStatus() == HttpStatus.OK_200) {
             /*
              ** FIXME: At some point the response needs to be displayed for a successful CreateTenancy to echo
