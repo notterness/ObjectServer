@@ -87,6 +87,14 @@ public class GetAccessTokenParams extends ObjectParams {
             System.out.println(HttpInfo.OPC_REQUEST_ID + ": " + opcRequestId);
         }
 
+        /*
+        ** This etag is the one associated with the user who the request is for.
+         */
+        String etag = httpInfo.getResponseEtag();
+        if (etag != null) {
+            System.out.println(HttpResponseInfo.RESPONSE_HEADER_ETAG + ": " + etag);
+        }
+
         String accessToken = httpInfo.getAccessToken();
         if (accessToken != null) {
             System.out.println(HttpInfo.ACCESS_TOKEN + ":" + accessToken);

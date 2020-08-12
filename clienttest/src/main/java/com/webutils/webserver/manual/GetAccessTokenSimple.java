@@ -41,7 +41,12 @@ public class GetAccessTokenSimple {
     private final String password;
 
     /*
+    ** This uses chained CLI commands to obtain the access token from the Account Manager Service.
     **
+    ** The first step is to obtain the IP address and Port for the Account Manager Service from the
+    **   Chunk Manager Service (really should be renamed). The Chunk Manager Service provides two primary
+    **   services, the ownership of service IPs and Port and the management of chunks of data on the
+    **   various Storage Servers.
      */
     private final AtomicInteger testCount;
 
