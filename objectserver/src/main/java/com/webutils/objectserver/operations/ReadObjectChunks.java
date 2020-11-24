@@ -160,18 +160,22 @@ public class ReadObjectChunks implements Operation {
     public void execute() {
         switch (currState) {
             case DETERMINE_STORAGE_SERVERS:
+                /*
+                 ** Compute the required chunks
+                 */
+                int requiredChunks = objectInfo.getContentLength() / requestContext.getChunkSize();
+                if ((objectInfo.getContentLength() % requestContext.getChunkSize()) != 0) {
+                    requiredChunks++;
+                }
+
+                totalChunksToProcess = 0;
+
                 {
                     /*
-                    ** Compute the required chunks
-                     */
-                    int requiredChunks = objectInfo.getContentLength() / requestContext.getChunkSize();
-                    if ((objectInfo.getContentLength() % requestContext.getChunkSize()) != 0) {
-                        requiredChunks++;
-                    }
-
-                    /*
                      ** Find one chunk for each chunkIndex and request the data for that chunk. Also, make sure that the
-                     **   chunk has not been marked offline.
+                     **   chunk has not been marked offline. Each chunk can potentially be serviced by multiple
+                     **   Storage Servers (multiple copies of the data) so even if one is offline, there is the
+                     **   potential that another can be used to satisfy the request.
                      */
                     int chunkIndexToFind = 0;
                     for (ServerIdentifier server : objectInfo.getChunkList()) {
@@ -202,7 +206,10 @@ public class ReadObjectChunks implements Operation {
                             totalChunksToProcess);
                 }
 
-                if (totalChunksToProcess == totalChunksToProcess) {
+                /*
+                ** Make sure that there is a Storage Server available to handle each chunk read request.
+                 */
+                if (requiredChunks == totalChunksToProcess) {
                     currState = ExecutionState.SETUP_CHUNK_READ;
                     /*
                      ** Fall through
