@@ -2,7 +2,6 @@ package com.webutils.webserver.niosockets;
 
 import com.webutils.webserver.requestcontext.ClientContextPool;
 import com.webutils.webserver.requestcontext.ClientRequestContext;
-import com.webutils.webserver.requestcontext.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
