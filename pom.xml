@@ -76,7 +76,7 @@
         <dependency>
             <groupId>org.eclipse.jetty</groupId>
             <artifactId>jetty-http</artifactId>
-            <version>9.4.30.v20200611</version>
+            <version>9.4.48.v20220622</version>
         </dependency>
 
         <dependency>
